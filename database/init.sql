@@ -28,6 +28,37 @@ CREATE TABLE IF NOT EXISTS visitantes (
   primera_visita TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS vehiculos (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  visitante_id UUID NOT NULL REFERENCES visitantes(id) ON DELETE CASCADE,
+  placa VARCHAR(20) NOT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS registros_acceso (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  visitante_id UUID NOT NULL REFERENCES visitantes(id) ON DELETE RESTRICT,
+  residente_id UUID NOT NULL REFERENCES residentes(id) ON DELETE RESTRICT,
+  vehiculo_id UUID REFERENCES vehiculos(id) ON DELETE SET NULL,
+  agente_id UUID NOT NULL REFERENCES usuarios(id) ON DELETE RESTRICT,
+  tipo VARCHAR(10) NOT NULL CHECK (tipo IN ('entrada', 'salida')),
+  timestamp_entrada TIMESTAMP NOT NULL DEFAULT NOW(),
+  timestamp_salida TIMESTAMP,
+  autorizado BOOLEAN NOT NULL DEFAULT TRUE,
+  notas TEXT
+);
+
+CREATE TABLE IF NOT EXISTS pagos (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  residente_id UUID NOT NULL REFERENCES residentes(id) ON DELETE RESTRICT,
+  monto DECIMAL(10,2) NOT NULL CHECK (monto > 0),
+  fecha_pago TIMESTAMP NOT NULL DEFAULT NOW(),
+  metodo VARCHAR(20) NOT NULL CHECK (metodo IN ('efectivo', 'transferencia')),
+  estado VARCHAR(20) NOT NULL DEFAULT 'pendiente' CHECK (estado IN ('pendiente', 'aprobado', 'rechazado')),
+  comprobante VARCHAR(500),
+  registrado_por UUID NOT NULL REFERENCES usuarios(id) ON DELETE RESTRICT
+);
+
 INSERT INTO usuarios (nombre, email, password_hash, rol) VALUES
   ('Admin SecureGate', 'admin@securegate.com', 'hash_demo', 'admin'),
   ('Agente Garita 1', 'agente1@securegate.com', 'hash_demo', 'agente')
