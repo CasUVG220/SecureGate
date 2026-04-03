@@ -59,6 +59,35 @@ CREATE TABLE IF NOT EXISTS pagos (
   registrado_por UUID NOT NULL REFERENCES usuarios(id) ON DELETE RESTRICT
 );
 
+CREATE TABLE IF NOT EXISTS cargos_automaticos (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  registro_acceso_id UUID NOT NULL REFERENCES registros_acceso(id) ON DELETE RESTRICT,
+  residente_id UUID NOT NULL REFERENCES residentes(id) ON DELETE RESTRICT,
+  monto DECIMAL(10,2) NOT NULL CHECK (monto > 0),
+  descripcion VARCHAR(255),
+  aplicado BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS configuracion_cargos (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  nombre VARCHAR(100) NOT NULL,
+  monto DECIMAL(10,2) NOT NULL CHECK (monto > 0),
+  activo BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS preautorizaciones (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  residente_id UUID NOT NULL REFERENCES residentes(id) ON DELETE CASCADE,
+  nombre_visitante VARCHAR(150) NOT NULL,
+  numero_dpi VARCHAR(20),
+  fecha_inicio DATE NOT NULL,
+  fecha_fin DATE,
+  activo BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
 INSERT INTO usuarios (nombre, email, password_hash, rol) VALUES
   ('Admin SecureGate', 'admin@securegate.com', 'hash_demo', 'admin'),
   ('Agente Garita 1', 'agente1@securegate.com', 'hash_demo', 'agente')
