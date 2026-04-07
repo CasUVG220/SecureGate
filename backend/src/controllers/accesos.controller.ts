@@ -1,0 +1,104 @@
+import { Request, Response } from 'express';
+import pool from '../db/pool';
+
+export const registrarAcceso = async (req: Request, res: Response) => {
+  const { nombre_visitante, numero_dpi, foto, residente_id, agente_id, placa, notas } = req.body;
+
+  if (!nombre_visitante || !numero_dpi || !residente_id || !agente_id) {
+    return res.status(400).json({
+      error: 'Campos requeridos: nombre_visitante, numero_dpi, residente_id, agente_id',
+    });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    // 1. Verificar que el residente existe
+    const residenteResult = await client.query(
+      'SELECT id, estado_pago FROM residentes WHERE id = $1',
+      [residente_id]
+    );
+    if (residenteResult.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Residente no encontrado' });
+    }
+
+    // 2. Verificar que el agente existe
+    const agenteResult = await client.query(
+      "SELECT id FROM usuarios WHERE id = $1 AND activo = TRUE AND rol IN ('agente', 'admin')",
+      [agente_id]
+    );
+    if (agenteResult.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Agente no encontrado o inactivo' });
+    }
+
+    // 3. Upsert visitante por numero_dpi
+    const visitanteExistente = await client.query(
+      'SELECT id FROM visitantes WHERE numero_dpi = $1',
+      [numero_dpi]
+    );
+    let visitante_id: string;
+    let visitante: object;
+    if (visitanteExistente.rows.length > 0) {
+      visitante_id = visitanteExistente.rows[0].id;
+      const v = await client.query('SELECT * FROM visitantes WHERE id = $1', [visitante_id]);
+      visitante = v.rows[0];
+    } else {
+      const nuevoVisitante = await client.query(
+        'INSERT INTO visitantes (nombre, numero_dpi, foto) VALUES ($1, $2, $3) RETURNING *',
+        [nombre_visitante, numero_dpi, foto || null]
+      );
+      visitante_id = nuevoVisitante.rows[0].id;
+      visitante = nuevoVisitante.rows[0];
+    }
+
+    // 4. Registrar vehículo si se proporcionó placa
+    let vehiculo_id: string | null = null;
+    if (placa) {
+      const vehiculoResult = await client.query(
+        'INSERT INTO vehiculos (visitante_id, placa) VALUES ($1, $2) RETURNING id',
+        [visitante_id, placa]
+      );
+      vehiculo_id = vehiculoResult.rows[0].id;
+    }
+
+    // 5. Crear registro de acceso
+    const registroResult = await client.query(
+      `INSERT INTO registros_acceso (visitante_id, residente_id, vehiculo_id, agente_id, tipo, notas)
+       VALUES ($1, $2, $3, $4, 'entrada', $5)
+       RETURNING *`,
+      [visitante_id, residente_id, vehiculo_id, agente_id, notas || null]
+    );
+    const registro = registroResult.rows[0];
+
+    // 6. Generar cargo automático si el residente está en mora
+    let cargo_generado = null;
+    const estado_pago = residenteResult.rows[0].estado_pago;
+    if (estado_pago === 'mora') {
+      const configResult = await client.query(
+        'SELECT id, nombre, monto FROM configuracion_cargos WHERE activo = TRUE LIMIT 1'
+      );
+      if (configResult.rows.length > 0) {
+        const config = configResult.rows[0];
+        const cargoResult = await client.query(
+          `INSERT INTO cargos_automaticos (registro_acceso_id, residente_id, monto, descripcion)
+           VALUES ($1, $2, $3, $4)
+           RETURNING *`,
+          [registro.id, residente_id, config.monto, `Cargo por acceso con mora — ${config.nombre}`]
+        );
+        cargo_generado = cargoResult.rows[0];
+      }
+    }
+
+    await client.query('COMMIT');
+
+    res.status(201).json({ registro, visitante, cargo_generado });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    res.status(500).json({ error: 'Error al registrar acceso', detail: String(error) });
+  } finally {
+    client.release();
+  }
+};
