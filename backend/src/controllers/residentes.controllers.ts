@@ -5,9 +5,9 @@ export const getResidentes = async (_req: Request, res: Response) => {
   try {
     const result = await pool.query(
       `SELECT r.id, r.usuario_id, r.numero_casa, r.estado_pago, r.telefono, r.saldo_pendiente,
-              u.nombre, u.email
-       FROM residentes r
-       JOIN usuarios u ON r.usuario_id = u.id
+              u.nombre, u.email 
+       FROM residentes r 
+       JOIN usuarios u ON r.usuario_id = u.id 
        ORDER BY r.numero_casa`
     );
     res.json(result.rows);
@@ -18,18 +18,21 @@ export const getResidentes = async (_req: Request, res: Response) => {
 
 export const getResidenteById = async (req: Request, res: Response) => {
   const { id } = req.params;
+
   try {
     const result = await pool.query(
       `SELECT r.id, r.usuario_id, r.numero_casa, r.estado_pago, r.telefono, r.saldo_pendiente,
-              u.nombre, u.email
-       FROM residentes r
-       JOIN usuarios u ON r.usuario_id = u.id
+              u.nombre, u.email 
+       FROM residentes r 
+       JOIN usuarios u ON r.usuario_id = u.id 
        WHERE r.id = $1`,
       [id]
     );
+
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Residente no encontrado' });
     }
+
     res.json(result.rows[0]);
   } catch (error) {
     res.status(500).json({ error: 'Error al obtener residente', detail: String(error) });
@@ -38,32 +41,42 @@ export const getResidenteById = async (req: Request, res: Response) => {
 
 export const createResidente = async (req: Request, res: Response) => {
   const { nombre, email, password, numero_casa, telefono } = req.body;
+
   if (!nombre || !email || !password || !numero_casa) {
     return res.status(400).json({ error: 'Campos requeridos: nombre, email, password, numero_casa' });
   }
+
   const client = await pool.connect();
+
   try {
     await client.query('BEGIN');
+
     const usuarioResult = await client.query(
-      `INSERT INTO usuarios (nombre, email, password_hash, rol)
-       VALUES ($1, $2, $3, 'residente')
+      `INSERT INTO usuarios (nombre, email, password_hash, rol) 
+       VALUES ($1, $2, $3, 'residente') 
        RETURNING id`,
       [nombre, email, password]
     );
+
     const usuario_id = usuarioResult.rows[0].id;
+
     const residenteResult = await client.query(
-      `INSERT INTO residentes (usuario_id, numero_casa, telefono)
-       VALUES ($1, $2, $3)
+      `INSERT INTO residentes (usuario_id, numero_casa, telefono) 
+       VALUES ($1, $2, $3) 
        RETURNING *`,
       [usuario_id, numero_casa, telefono || null]
     );
+
     await client.query('COMMIT');
+
     res.status(201).json({ ...residenteResult.rows[0], nombre, email });
   } catch (error: any) {
     await client.query('ROLLBACK');
+
     if (error.code === '23505') {
       return res.status(409).json({ error: 'El email o numero_casa ya existe' });
     }
+
     res.status(500).json({ error: 'Error al crear residente', detail: String(error) });
   } finally {
     client.release();
@@ -73,43 +86,52 @@ export const createResidente = async (req: Request, res: Response) => {
 export const updateResidente = async (req: Request, res: Response) => {
   const { id } = req.params;
   const { numero_casa, estado_pago, telefono, saldo_pendiente } = req.body;
+
   const estadosValidos = ['al_dia', 'mora', 'pendiente'];
+
   if (estado_pago && !estadosValidos.includes(estado_pago)) {
     return res.status(400).json({ error: 'estado_pago debe ser: al_dia, mora o pendiente' });
   }
+
   try {
     const result = await pool.query(
-      `UPDATE residentes
+      `UPDATE residentes 
        SET numero_casa     = COALESCE($1, numero_casa),
            estado_pago     = COALESCE($2, estado_pago),
            telefono        = COALESCE($3, telefono),
            saldo_pendiente = COALESCE($4, saldo_pendiente)
-       WHERE id = $5
+       WHERE id = $5 
        RETURNING *`,
       [numero_casa || null, estado_pago || null, telefono || null, saldo_pendiente ?? null, id]
     );
+
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Residente no encontrado' });
     }
+
     res.json(result.rows[0]);
   } catch (error: any) {
     if (error.code === '23505') {
       return res.status(409).json({ error: 'El numero_casa ya existe' });
     }
+
     res.status(500).json({ error: 'Error al actualizar residente', detail: String(error) });
   }
 };
 
 export const deleteResidente = async (req: Request, res: Response) => {
   const { id } = req.params;
+
   try {
     const result = await pool.query(
       'DELETE FROM residentes WHERE id = $1 RETURNING id',
       [id]
     );
+
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Residente no encontrado' });
     }
+
     res.json({ message: 'Residente eliminado correctamente', id: result.rows[0].id });
   } catch (error) {
     res.status(500).json({ error: 'Error al eliminar residente', detail: String(error) });
@@ -118,33 +140,38 @@ export const deleteResidente = async (req: Request, res: Response) => {
 
 export const getResidentePago = async (req: Request, res: Response) => {
   const { id } = req.params;
+
   try {
     const r = await pool.query(
       'SELECT estado_pago, saldo_pendiente FROM residentes WHERE id = $1',
       [id]
     );
+
     if (r.rows.length === 0) {
       return res.status(404).json({ error: 'Residente no encontrado' });
     }
 
     const pagos = await pool.query(
-      `SELECT id, monto, fecha_pago, metodo, estado
-       FROM pagos WHERE residente_id = $1
-       ORDER BY fecha_pago DESC LIMIT 5`,
+      `SELECT id, monto, fecha_pago, metodo, estado 
+       FROM pagos 
+       WHERE residente_id = $1 
+       ORDER BY fecha_pago DESC 
+       LIMIT 5`,
       [id]
     );
 
     const cargos = await pool.query(
-      `SELECT id, monto, descripcion, created_at
-       FROM cargos_automaticos WHERE residente_id = $1 AND aplicado = FALSE
+      `SELECT id, monto, descripcion, created_at 
+       FROM cargos_automaticos 
+       WHERE residente_id = $1 AND aplicado = FALSE 
        ORDER BY created_at DESC`,
       [id]
     );
 
     res.json({
-      estado_pago:       r.rows[0].estado_pago,
-      saldo_pendiente:   r.rows[0].saldo_pendiente,
-      pagos_recientes:   pagos.rows,
+      estado_pago: r.rows[0].estado_pago,
+      saldo_pendiente: r.rows[0].saldo_pendiente,
+      pagos_recientes: pagos.rows,
       cargos_pendientes: cargos.rows,
     });
   } catch (error) {
