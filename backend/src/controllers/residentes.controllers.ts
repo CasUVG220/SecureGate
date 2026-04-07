@@ -115,3 +115,39 @@ export const deleteResidente = async (req: Request, res: Response) => {
     res.status(500).json({ error: 'Error al eliminar residente', detail: String(error) });
   }
 };
+
+export const getResidentePago = async (req: Request, res: Response) => {
+  const { id } = req.params;
+  try {
+    const r = await pool.query(
+      'SELECT estado_pago, saldo_pendiente FROM residentes WHERE id = $1',
+      [id]
+    );
+    if (r.rows.length === 0) {
+      return res.status(404).json({ error: 'Residente no encontrado' });
+    }
+
+    const pagos = await pool.query(
+      `SELECT id, monto, fecha_pago, metodo, estado
+       FROM pagos WHERE residente_id = $1
+       ORDER BY fecha_pago DESC LIMIT 5`,
+      [id]
+    );
+
+    const cargos = await pool.query(
+      `SELECT id, monto, descripcion, created_at
+       FROM cargos_automaticos WHERE residente_id = $1 AND aplicado = FALSE
+       ORDER BY created_at DESC`,
+      [id]
+    );
+
+    res.json({
+      estado_pago:       r.rows[0].estado_pago,
+      saldo_pendiente:   r.rows[0].saldo_pendiente,
+      pagos_recientes:   pagos.rows,
+      cargos_pendientes: cargos.rows,
+    });
+  } catch (error) {
+    res.status(500).json({ error: 'Error al obtener estado de pago', detail: String(error) });
+  }
+};
