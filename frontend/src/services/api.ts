@@ -49,54 +49,6 @@ export const registrarAcceso = async (data: AccesoPayload): Promise<AccesoResult
   return body;
 };
 
-export interface ResidenteInput {
-  nombre: string;
-  email: string;
-  password: string;
-  numero_casa: string;
-  telefono?: string;
-}
-
-export interface ResidenteUpdate {
-  numero_casa?: string;
-  estado_pago?: string;
-  telefono?: string;
-  saldo_pendiente?: number;
-}
-
-export const createResidente = async (data: ResidenteInput): Promise<Residente> => {
-  const res = await fetch(`${BASE_URL}/api/residentes`, {
-    method: 'POST',
-    headers: authHeaders(),
-    body: JSON.stringify(data),
-  });
-  const body = await res.json();
-  if (!res.ok) throw new Error(body.error || 'Error al crear residente');
-  return body;
-};
-
-export const updateResidente = async (id: string, data: ResidenteUpdate): Promise<Residente> => {
-  const res = await fetch(`${BASE_URL}/api/residentes/${id}`, {
-    method: 'PUT',
-    headers: authHeaders(),
-    body: JSON.stringify(data),
-  });
-  const body = await res.json();
-  if (!res.ok) throw new Error(body.error || 'Error al actualizar residente');
-  return body;
-};
-
-export const deleteResidente = async (id: string): Promise<void> => {
-  const res = await fetch(`${BASE_URL}/api/residentes/${id}`, {
-    method: 'DELETE',
-    headers: authHeaders(),
-  });
-  if (!res.ok) {
-    const body = await res.json();
-    throw new Error(body.error || 'Error al eliminar residente');
-  }
-};
-
 export const decodeTokenPayload = (token: string): Record<string, unknown> | null => {
   try {
     const payload = token.split('.')[1];
