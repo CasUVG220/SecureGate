@@ -1,14 +1,16 @@
 import { Router } from 'express';
 import pool from '../db/pool';
-import residentesRouter from './residentes.routes';
 import authRouter from './auth.routes';
+import residentesRouter from './residentes.routes';
 import accesosRouter from './accesos.routes';
+import cargosRouter from './cargos.routes';
 
 const router = Router();
 
-router.use('/residentes', residentesRouter);
+router.use('/auth', authRouter);
 router.use('/residentes', residentesRouter);
 router.use('/accesos', accesosRouter);
+router.use('/cargos', cargosRouter);
 
 router.get('/status', async (req, res) => {
   try {
