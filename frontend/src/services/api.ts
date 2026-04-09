@@ -1,5 +1,9 @@
+let envUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+if (envUrl.includes('localhost') && typeof window !== 'undefined' && window.location.hostname !== 'localhost') {
+  envUrl = `${window.location.protocol}//${window.location.hostname}:3000`;
+}
+const BASE_URL = envUrl;
 
-const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 
 const getToken = (): string => localStorage.getItem('token') || '';
 
