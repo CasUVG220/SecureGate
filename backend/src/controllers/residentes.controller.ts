@@ -53,7 +53,7 @@ export const createResidente = async (req: Request, res: Response) => {
 
     const usuarioResult = await client.query(
       `INSERT INTO usuarios (nombre, email, password_hash, rol) 
-       VALUES ($1, $2, $3, 'residente') 
+       VALUES ($1, $2, crypt($3, gen_salt('bf', 10)), 'residente') 
        RETURNING id`,
       [nombre, email, password]
     );

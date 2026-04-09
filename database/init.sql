@@ -89,8 +89,13 @@ CREATE TABLE IF NOT EXISTS preautorizaciones (
 );
 
 INSERT INTO usuarios (nombre, email, password_hash, rol) VALUES
-  ('Admin SecureGate', 'admin@securegate.com', 'hash_demo', 'admin'),
-  ('Agente Garita 1', 'agente1@securegate.com', 'hash_demo', 'agente')
+  ('Admin SecureGate', 'admin@securegate.com',  crypt('admin123',  gen_salt('bf', 10)), 'admin'),
+  ('Agente Garita 1',  'agente1@securegate.com', crypt('agente123', gen_salt('bf', 10)), 'agente'),
+  ('Residente Demo',   'r1@securegate.com',      crypt('res123',    gen_salt('bf', 10)), 'residente')
 ON CONFLICT (email) DO NOTHING;
+
+INSERT INTO residentes (usuario_id, numero_casa, estado_pago)
+  SELECT id, 'A-01', 'al_dia' FROM usuarios WHERE email = 'r1@securegate.com'
+ON CONFLICT (numero_casa) DO NOTHING;
 
 SELECT 'SecureGate DB inicializada correctamente' as mensaje;
