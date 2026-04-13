@@ -86,7 +86,7 @@ export const registrarAcceso = async (req: Request, res: Response) => {
           `INSERT INTO cargos_automaticos (registro_acceso_id, residente_id, monto, descripcion)
            VALUES ($1, $2, $3, $4)
            RETURNING *`,
-          [registro.id, residente_id, config.monto, `Cargo por acceso con mora — ${config.nombre}`]
+          [registro.id, residente_id, config.monto, Cargo por acceso con mora — ${config.nombre}]
         );
         cargo_generado = cargoResult.rows[0];
       }
@@ -100,5 +100,55 @@ export const registrarAcceso = async (req: Request, res: Response) => {
     res.status(500).json({ error: 'Error al registrar acceso', detail: String(error) });
   } finally {
     client.release();
+  }
+};
+
+export const registrarSalida = async (req: Request, res: Response) => {
+  const { id } = req.params;
+  try {
+    const result = await pool.query(
+      `UPDATE registros_acceso
+       SET tipo = 'salida', timestamp_salida = NOW()
+       WHERE id = $1 AND timestamp_salida IS NULL
+       RETURNING *`,
+      [id]
+    );
+    if (result.rows.length === 0) {
+      const existe = await pool.query('SELECT id, timestamp_salida FROM registros_acceso WHERE id = $1', [id]);
+      if (existe.rows.length === 0) {
+        return res.status(404).json({ error: 'Registro de acceso no encontrado' });
+      }
+      return res.status(409).json({ error: 'La salida ya fue registrada para este acceso' });
+    }
+    res.json(result.rows[0]);
+  } catch (error) {
+    res.status(500).json({ error: 'Error al registrar salida', detail: String(error) });
+  }
+};
+
+export const registrarSalidaPut = async (req: Request, res: Response) => {
+  const { id } = req.params;
+  try {
+    const existe = await pool.query(
+      'SELECT id, timestamp_salida FROM registros_acceso WHERE id = $1',
+      [id]
+    );
+    if (existe.rows.length === 0) {
+      return res.status(404).json({ error: 'Registro de acceso no encontrado' });
+    }
+    if (existe.rows[0].timestamp_salida !== null) {
+      return res.status(409).json({ error: 'La salida ya fue registrada para este acceso' });
+    }
+
+    const result = await pool.query(
+      `UPDATE registros_acceso
+       SET timestamp_salida = NOW()
+       WHERE id = $1
+       RETURNING *`,
+      [id]
+    );
+    res.json(result.rows[0]);
+  } catch (error) {
+    res.status(500).json({ error: 'Error al registrar salida', detail: String(error) });
   }
 };
