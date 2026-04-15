@@ -4,7 +4,6 @@ if (envUrl.includes('localhost') && typeof window !== 'undefined' && window.loca
 }
 const BASE_URL = envUrl;
 
-
 const getToken = (): string => localStorage.getItem('token') || '';
 
 const authHeaders = (): HeadersInit => ({
@@ -116,6 +115,38 @@ export const login = async (email: string, password: string): Promise<LoginResul
   const body = await res.json();
   if (!res.ok) throw new Error(body.error || 'Credenciales incorrectas');
   return body;
+};
+
+export interface AccesoActivo {
+  registro_id: string;
+  timestamp_entrada: string;
+  visitante: { id: string; nombre: string; numero_dpi: string };
+  residente: { id: string; numero_casa: string; nombre: string };
+  placa: string;
+}
+
+/** Retorna null cuando no hay acceso activo (404), lanza Error para otros fallos */
+export const getAccesoActivo = async (placa: string): Promise<AccesoActivo | null> => {
+  const res = await fetch(
+    `${BASE_URL}/api/accesos/activo?placa=${encodeURIComponent(placa)}`,
+    { headers: authHeaders() }
+  );
+  if (res.status === 404) return null;
+  const body = await res.json();
+  if (!res.ok) throw new Error(body.error || 'Error al buscar acceso activo');
+  return body as AccesoActivo;
+};
+
+export const registrarSalidaVehiculo = async (
+  registroId: string
+): Promise<Record<string, unknown>> => {
+  const res = await fetch(`${BASE_URL}/api/accesos/${encodeURIComponent(registroId)}/salida`, {
+    method: 'PUT',
+    headers: authHeaders(),
+  });
+  const body = await res.json();
+  if (!res.ok) throw new Error(body.error || 'Error al registrar salida');
+  return body as Record<string, unknown>;
 };
 
 export const decodeTokenPayload = (token: string): Record<string, unknown> | null => {
