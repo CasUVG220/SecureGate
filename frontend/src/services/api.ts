@@ -149,6 +149,62 @@ export const registrarSalidaVehiculo = async (
   return body as Record<string, unknown>;
 };
 
+export interface Pago {
+  id: string;
+  residente_id: string;
+  monto: string;
+  fecha_pago: string;
+  metodo: 'efectivo' | 'transferencia';
+  estado: 'pendiente' | 'aprobado' | 'rechazado';
+  comprobante: string | null;
+  registrado_por: string;
+  numero_casa: string;
+  residente_nombre: string;
+}
+
+export interface PagoInput {
+  residente_id: string;
+  monto: number;
+  comprobante?: string;
+}
+
+export const getPagos = async (): Promise<Pago[]> => {
+  const res = await fetch(`${BASE_URL}/api/pagos`, { headers: authHeaders() });
+  if (!res.ok) throw new Error('Error al cargar pagos');
+  return res.json();
+};
+
+export const createPago = async (data: PagoInput): Promise<Pago> => {
+  const res = await fetch(`${BASE_URL}/api/pagos`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify(data),
+  });
+  const body = await res.json();
+  if (!res.ok) throw new Error(body.error || 'Error al crear pago');
+  return body as Pago;
+};
+
+export const aprobarPago = async (id: string): Promise<Pago> => {
+  const res = await fetch(`${BASE_URL}/api/pagos/${encodeURIComponent(id)}/aprobar`, {
+    method: 'PUT',
+    headers: authHeaders(),
+  });
+  const body = await res.json();
+  if (!res.ok) throw new Error(body.error || 'Error al aprobar pago');
+  return body as Pago;
+};
+
+export const rechazarPago = async (id: string): Promise<Pago> => {
+  const res = await fetch(`${BASE_URL}/api/pagos/${encodeURIComponent(id)}/rechazar`, {
+    method: 'PUT',
+    headers: authHeaders(),
+  });
+  const body = await res.json();
+  if (!res.ok) throw new Error(body.error || 'Error al rechazar pago');
+  return body as Pago;
+};
+
 export const decodeTokenPayload = (token: string): Record<string, unknown> | null => {
   try {
     const payload = token.split('.')[1];
