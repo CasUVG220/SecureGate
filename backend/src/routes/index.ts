@@ -4,6 +4,7 @@ import authRouter from './auth.routes';
 import residentesRouter from './residentes.routes';
 import accesosRouter from './accesos.routes';
 import cargosRouter from './cargos.routes';
+import pagosRouter from './pagos.routes';
 
 const router = Router();
 
@@ -11,6 +12,7 @@ router.use('/auth', authRouter);
 router.use('/residentes', residentesRouter);
 router.use('/accesos', accesosRouter);
 router.use('/cargos', cargosRouter);
+router.use('/pagos', pagosRouter);
 
 router.get('/status', async (req, res) => {
   try {
@@ -24,5 +26,3 @@ router.get('/status', async (req, res) => {
     res.status(500).json({ backend: 'conectado', base_datos: 'error', error: String(error) });
   }
 });
-
-export default router;
