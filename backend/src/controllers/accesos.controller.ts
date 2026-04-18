@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import pool from '../db/pool';
+import { checkPreautorizacion } from './preautorizaciones.controller';
 
 export const registrarAcceso = async (req: Request, res: Response) => {
   const { nombre_visitante, numero_dpi, foto, residente_id, agente_id, placa, notas } = req.body;
@@ -35,6 +36,10 @@ export const registrarAcceso = async (req: Request, res: Response) => {
     }
 
     // 3. Upsert visitante por numero_dpi
+    // 3. Verificar preautorización (lectura simple, no afecta la transacción)
+    const preautorizado = await checkPreautorizacion(numero_dpi, residente_id);
+
+    // 4. Upsert visitante por numero_dpi
     const visitanteExistente = await client.query(
       'SELECT id FROM visitantes WHERE numero_dpi = $1',
       [numero_dpi]
@@ -55,6 +60,7 @@ export const registrarAcceso = async (req: Request, res: Response) => {
     }
 
     // 4. Registrar vehículo si se proporcionó placa
+    // 5. Registrar vehículo si se proporcionó placa
     let vehiculo_id: string | null = null;
     if (placa) {
       const vehiculoResult = await client.query(
@@ -65,6 +71,7 @@ export const registrarAcceso = async (req: Request, res: Response) => {
     }
 
     // 5. Crear registro de acceso
+    // 6. Crear registro de acceso
     const registroResult = await client.query(
       `INSERT INTO registros_acceso (visitante_id, residente_id, vehiculo_id, agente_id, tipo, notas)
        VALUES ($1, $2, $3, $4, 'entrada', $5)
@@ -74,6 +81,7 @@ export const registrarAcceso = async (req: Request, res: Response) => {
     const registro = registroResult.rows[0];
 
     // 6. Generar cargo automático si el residente está en mora
+    // 7. Generar cargo automático si el residente está en mora
     let cargo_generado = null;
     const estado_pago = residenteResult.rows[0].estado_pago;
     if (estado_pago === 'mora') {
@@ -86,7 +94,7 @@ export const registrarAcceso = async (req: Request, res: Response) => {
           `INSERT INTO cargos_automaticos (registro_acceso_id, residente_id, monto, descripcion)
            VALUES ($1, $2, $3, $4)
            RETURNING *`,
-          [registro.id, residente_id, config.monto, Cargo por acceso con mora — ${config.nombre}]
+          [registro.id, residente_id, config.monto, `Cargo por acceso con mora — ${config.nombre}`]
         );
         cargo_generado = cargoResult.rows[0];
       }
@@ -95,6 +103,7 @@ export const registrarAcceso = async (req: Request, res: Response) => {
     await client.query('COMMIT');
 
     res.status(201).json({ registro, visitante, cargo_generado });
+    res.status(201).json({ registro, visitante, cargo_generado, preautorizado });
   } catch (error) {
     await client.query('ROLLBACK');
     res.status(500).json({ error: 'Error al registrar acceso', detail: String(error) });
