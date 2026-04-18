@@ -5,6 +5,7 @@ import residentesRouter from './residentes.routes';
 import accesosRouter from './accesos.routes';
 import cargosRouter from './cargos.routes';
 import pagosRouter from './pagos.routes';
+import preautorizacionesRouter from './preautorizaciones.routes';
 
 const router = Router();
 
@@ -13,6 +14,7 @@ router.use('/residentes', residentesRouter);
 router.use('/accesos', accesosRouter);
 router.use('/cargos', cargosRouter);
 router.use('/pagos', pagosRouter);
+router.use('/preautorizaciones', preautorizacionesRouter);
 
 router.get('/status', async (req, res) => {
   try {
