@@ -34,6 +34,7 @@ export interface AccesoResult {
   registro: Record<string, unknown>;
   visitante: Record<string, unknown>;
   cargo_generado: Record<string, unknown> | null;
+  preautorizado: boolean;
 }
 
 export const getResidentes = async (): Promise<Residente[]> => {
