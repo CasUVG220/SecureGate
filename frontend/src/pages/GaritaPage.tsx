@@ -114,7 +114,14 @@ export default function GaritaPage() {
           {result ? (
             <div className="space-y-4">
               <div className="bg-green-50 border border-green-300 rounded-xl p-6">
-                <h2 className="text-green-700 font-bold text-lg mb-1">Acceso registrado</h2>
+                <div className="flex items-start justify-between gap-3 mb-1">
+                  <h2 className="text-green-700 font-bold text-lg">Acceso registrado</h2>
+                  {result.preautorizado && (
+                    <span className="inline-flex items-center gap-1 bg-green-100 border border-green-400 text-green-700 text-xs font-semibold px-2.5 py-1 rounded-full whitespace-nowrap">
+                      ✓ Visita preautorizada
+                    </span>
+                  )}
+                </div>
                 <p className="text-green-600 text-sm">
                   Visitante: <strong>{(result.visitante as Record<string, string>).nombre}</strong>
                   &nbsp;— DPI: {(result.visitante as Record<string, string>).numero_dpi}
