@@ -27,7 +27,7 @@ Los procesos manuales en garitas de seguridad generan:
 ### Solucion SecureGate
 
 - OCR automatico de DPI via Google Cloud Vision API
-- Ingreso manual de placa vehicular por el agente de garita
+- OCR automatico de placa vehicular via Google Cloud Vision API
 - Verificacion instantanea del estado de pago del residente
 - Generacion automatica de cargos por mora (sin bloquear el acceso)
 - Trazabilidad completa de todos los accesos
@@ -70,7 +70,7 @@ SecureGate sigue el patron **MVC (Modelo-Vista-Controlador)** con separacion en 
 | Backend | Node.js + TypeScript | I/O no bloqueante para operaciones concurrentes |
 | Frontend | React + Tailwind CSS | Componentes reutilizables, UI reactiva |
 | Base de datos | PostgreSQL 15 | ACID + UUID nativo + FK estrictas |
-| OCR DPI | Google Cloud Vision API | Alta precision en documentos guatemaltecos |
+| OCR DPI + Placa | Google Cloud Vision API | Alta precision en documentos y placas guatemaltecas |
 | Contenedores | Docker + Docker Compose | Entorno reproducible en cualquier maquina |
 | Despliegue | Railway | PostgreSQL gestionado con backups automaticos |
 
@@ -224,21 +224,23 @@ docker compose exec db psql -U sguser -d securegate
 ### Flujo principal de garita
 
 1. Visitante llega a la garita
-2. Agente escanea el DPI con la camara — Google Cloud Vision extrae los datos
-3. Agente ingresa la placa del vehiculo manualmente
-4. Agente ingresa el numero de casa del visitante
+2. Agente activa el escaner de DPI — Google Cloud Vision extrae nombre y numero de DPI automaticamente
+3. Agente activa el reconocimiento de placa — Google Cloud Vision lee la placa del vehiculo automaticamente
+4. Agente selecciona o confirma el numero de casa destino
 5. Sistema verifica estado de pago del residente
 6. Si hay mora — genera cargo automatico (sin bloquear la entrada)
-7. Agente autoriza o deniega el acceso
-8. Sistema registra hora de entrada y salida
+7. Agente presiona **AUTORIZAR ENTRADA** o **DENEGAR ENTRADA**
+8. Sistema registra hora de entrada; la tabla de ultimos ingresos se actualiza en tiempo real
 
 ### Modulos del sistema
 
 | Modulo | Usuarios | Funcionalidad |
 |--------|---------|---------------|
-| Terminal de Garita | Agente de seguridad | OCR de DPI y de placa, verificacion, autorizacion |
-| Dashboard Admin | Administrador | Gestion de residentes, reportes, configuracion de cargos |
-| Gestion de Pagos | Administrador | Registro de pagos en efectivo, aprobacion de transferencias |
+| Terminal de Garita | Agente de seguridad | Escaner de DPI por camara, reconocimiento automatico de placa, campos de visitante autocompletados, botones AUTORIZAR / DENEGAR, tabla de ultimos ingresos |
+| Dashboard Admin | Administrador | Estadisticas de accesos, residentes en mora, pagos pendientes, tabla de accesos recientes |
+| Gestion de Residentes | Administrador | Alta, edicion y baja de residentes, control de estado de pago |
+| Gestion de Pagos | Administrador | Registro de pagos en efectivo, aprobacion de transferencias, historial |
+| Preautorizaciones | Administrador | Registro de visitas anticipadas por rango de fechas |
 
 ### Metodos de pago soportados
 
@@ -247,12 +249,52 @@ docker compose exec db psql -U sguser -d securegate
 
 ---
 
+## Requisitos Funcionales — Identificacion Automatica (OCR)
+
+### RF-OCR-01: Escaneo automatico de DPI
+
+| Atributo | Detalle |
+|----------|---------|
+| Actor | Agente de garita |
+| Disparador | Agente presiona "Escanear DPI" en la Terminal de Garita |
+| Proceso | La camara captura el frente del DPI guatemalteco y lo envia a Google Cloud Vision API |
+| Extraccion | El sistema extrae y autocompleta: **Nombre completo** y **Numero de DPI** |
+| Salida esperada | Campos "Nombre del Visitante" y "Numero de DPI" se rellenan automaticamente en el formulario |
+| Fallback | Si Vision API no puede leer el documento, los campos quedan editables para ingreso manual |
+
+### RF-OCR-02: Reconocimiento automatico de placa vehicular
+
+| Atributo | Detalle |
+|----------|---------|
+| Actor | Agente de garita |
+| Disparador | Agente activa el modulo de "Reconocimiento de Placa" en la Terminal de Garita |
+| Proceso | La camara apunta a la placa del vehiculo y envia la imagen a Google Cloud Vision API |
+| Extraccion | El sistema extrae el numero de placa guatemalteca (formato P-XXXXXX o letras+numeros) |
+| Salida esperada | Campo "Numero de Placa" se rellena automaticamente |
+| Fallback | Si la lectura falla (mala iluminacion, angulo), el agente puede ingresar la placa manualmente |
+
+### RF-OCR-03: Pantalla de garita orientada al agente
+
+La Terminal de Garita presenta:
+- **Panel izquierdo:** vista de camara en tiempo real para escaneo de DPI + boton "Escanear DPI", y seccion separada para reconocimiento de placa
+- **Panel derecho:** formulario con datos del visitante autocompletados (Nombre, DPI, Placa, Casa/Unidad)
+- **Acciones:** boton **AUTORIZAR ENTRADA** (verde) y boton **DENEGAR ENTRADA** (rojo)
+- **Historial:** tabla "Ultimos Ingresos" con columnas Hora, Visitante, Placa, Unidad, Estado
+
+---
+
 ## API Externa
 
 ### Google Cloud Vision API
-- **Uso:** Reconocimiento optico del DPI y del plate guatemalteco
-- **Precision:** Alta en documentos impresos
+
+| Caso de uso | Endpoint Vision | Descripcion |
+|-------------|----------------|-------------|
+| Escaneo de DPI | `DOCUMENT_TEXT_DETECTION` | Extrae texto estructurado del documento de identidad guatemalteco |
+| Reconocimiento de placa | `TEXT_DETECTION` | Lee la cadena alfanumerica de la placa vehicular |
+
 - **Precio:** Primeras 1,000 llamadas/mes gratuitas, luego $1.50/1,000
+- **Latencia tipica:** 300–800 ms por imagen
+- **Requisito:** Variable de entorno `GOOGLE_CLOUD_API_KEY` configurada en `.env`
 
 ---
 
