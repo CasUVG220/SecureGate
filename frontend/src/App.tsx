@@ -8,7 +8,6 @@ import PreautPage from './pages/PreautPage';
 import DashboardPage from './pages/DashboardPage';
 import { decodeTokenPayload } from './services/api';
 
-type Page = 'garita' | 'salida' | 'residentes' | 'pagos' | 'preaut';
 type Page = 'garita' | 'salida' | 'residentes' | 'pagos' | 'preaut' | 'dashboard';
 
 function App() {
@@ -21,6 +20,7 @@ function App() {
   });
   const [page, setPage] = useState<Page>(() =>
     userRol === 'admin' ? 'residentes' : 'garita'
+    userRol === 'admin' ? 'dashboard' : 'garita'
   );
 
   const handleLogin = (token: string, rol: string) => {
@@ -28,6 +28,7 @@ function App() {
     setUserRol(rol);
     setIsAuthenticated(true);
     setPage(rol === 'admin' ? 'residentes' : 'garita');
+    setPage(rol === 'admin' ? 'dashboard' : 'garita');
   };
 
   const handleLogout = () => {
@@ -60,10 +61,13 @@ function App() {
       <nav className="bg-gray-950 border-b border-gray-800 px-6 py-2 flex gap-4 items-center">
         {navBtn('Terminal Garita', 'garita')}
         {navBtn('Registrar Salida', 'salida')}
+        {isAdmin && navBtn('Dashboard', 'dashboard')}
         {isAdmin && navBtn('Residentes', 'residentes')}
         {isAdmin && navBtn('Pagos', 'pagos')}
         {isAdmin && navBtn('Preautorizaciones', 'preaut')}
         {isAdmin && navBtn('Dashboard', 'dashboard')}
+        {navBtn('Terminal Garita', 'garita')}
+        {!isAdmin && navBtn('Registrar Salida', 'salida')}
         <div className="ml-auto">
           <button
             onClick={handleLogout}
