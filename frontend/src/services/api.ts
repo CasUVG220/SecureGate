@@ -257,6 +257,25 @@ export const deletePreautorizacion = async (id: string): Promise<void> => {
   }
 };
 
+export interface DashboardData {
+  accesos_hoy: number;
+  residentes_mora: number;
+  pagos_pendientes: number;
+  accesos_recientes: Array<{
+    id: string;
+    nombre_visitante: string;
+    numero_casa: string;
+    timestamp_entrada: string;
+    timestamp_salida: string | null;
+  }>;
+}
+
+export const getDashboard = async (): Promise<DashboardData> => {
+  const res = await fetch(`${BASE_URL}/api/dashboard`, { headers: authHeaders() });
+  if (!res.ok) throw new Error('Error al cargar el dashboard');
+  return res.json();
+};
+
 export const decodeTokenPayload = (token: string): Record<string, unknown> | null => {
   try {
     const payload = token.split('.')[1];
