@@ -18,6 +18,7 @@ export interface Residente {
   email: string;
   estado_pago: 'al_dia' | 'mora' | 'pendiente';
   saldo_pendiente: string;
+  telefono?: string;
 }
 
 export interface AccesoPayload {

@@ -19,7 +19,6 @@ function App() {
     return (payload?.rol as string) || '';
   });
   const [page, setPage] = useState<Page>(() =>
-    userRol === 'admin' ? 'residentes' : 'garita'
     userRol === 'admin' ? 'dashboard' : 'garita'
   );
 
@@ -27,7 +26,6 @@ function App() {
     localStorage.setItem('token', token);
     setUserRol(rol);
     setIsAuthenticated(true);
-    setPage(rol === 'admin' ? 'residentes' : 'garita');
     setPage(rol === 'admin' ? 'dashboard' : 'garita');
   };
 
@@ -59,13 +57,10 @@ function App() {
   return (
     <div className="min-h-screen bg-gray-900">
       <nav className="bg-gray-950 border-b border-gray-800 px-6 py-2 flex gap-4 items-center">
-        {navBtn('Terminal Garita', 'garita')}
-        {navBtn('Registrar Salida', 'salida')}
         {isAdmin && navBtn('Dashboard', 'dashboard')}
         {isAdmin && navBtn('Residentes', 'residentes')}
         {isAdmin && navBtn('Pagos', 'pagos')}
         {isAdmin && navBtn('Preautorizaciones', 'preaut')}
-        {isAdmin && navBtn('Dashboard', 'dashboard')}
         {navBtn('Terminal Garita', 'garita')}
         {!isAdmin && navBtn('Registrar Salida', 'salida')}
         <div className="ml-auto">

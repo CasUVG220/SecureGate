@@ -71,3 +71,5 @@ router.get('/status', async (req, res) => {
     res.status(500).json({ backend: 'conectado', base_datos: 'error', error: String(error) });
   }
 });
+
+export default router;
