@@ -138,6 +138,38 @@ export const deleteResidente = async (req: Request, res: Response) => {
   }
 };
 
+export const getResidenteMe = async (req: Request, res: Response) => {
+  const usuarioId = req.user?.id;
+
+  try {
+    const r = await pool.query(
+      `SELECT r.id, r.numero_casa, r.estado_pago, r.saldo_pendiente, r.telefono,
+              u.nombre, u.email
+       FROM residentes r
+       JOIN usuarios u ON r.usuario_id = u.id
+       WHERE r.usuario_id = $1`,
+      [usuarioId]
+    );
+
+    if (r.rows.length === 0) {
+      return res.status(404).json({ error: 'Residente no encontrado para este usuario' });
+    }
+
+    const pagos = await pool.query(
+      `SELECT id, monto, fecha_pago, metodo, estado
+       FROM pagos
+       WHERE residente_id = $1
+       ORDER BY fecha_pago DESC
+       LIMIT 10`,
+      [r.rows[0].id]
+    );
+
+    res.json({ ...r.rows[0], pagos_recientes: pagos.rows });
+  } catch (error) {
+    res.status(500).json({ error: 'Error al obtener datos del residente', detail: String(error) });
+  }
+};
+
 export const getResidentePago = async (req: Request, res: Response) => {
   const { id } = req.params;
 
