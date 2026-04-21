@@ -258,6 +258,29 @@ export const deletePreautorizacion = async (id: string): Promise<void> => {
   }
 };
 
+export interface ResidenteMe {
+  id: string;
+  numero_casa: string;
+  estado_pago: 'al_dia' | 'mora' | 'pendiente';
+  saldo_pendiente: string;
+  telefono: string | null;
+  nombre: string;
+  email: string;
+  pagos_recientes: Array<{
+    id: string;
+    monto: string;
+    fecha_pago: string;
+    metodo: string;
+    estado: string;
+  }>;
+}
+
+export const getResidenteMe = async (): Promise<ResidenteMe> => {
+  const res = await fetch(`${BASE_URL}/api/residentes/me`, { headers: authHeaders() });
+  if (!res.ok) throw new Error('Error al cargar tus datos');
+  return res.json();
+};
+
 export interface DashboardData {
   accesos_hoy: number;
   residentes_mora: number;
