@@ -82,6 +82,7 @@ CREATE TABLE IF NOT EXISTS preautorizaciones (
   residente_id UUID NOT NULL REFERENCES residentes(id) ON DELETE CASCADE,
   nombre_visitante VARCHAR(150) NOT NULL,
   numero_dpi VARCHAR(20),
+  placa VARCHAR(20),
   fecha_inicio DATE NOT NULL,
   fecha_fin DATE,
   activo BOOLEAN NOT NULL DEFAULT TRUE,
