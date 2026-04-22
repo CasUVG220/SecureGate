@@ -208,3 +208,28 @@ export const registrarSalidaPut = async (req: Request, res: Response) => {
     res.status(500).json({ error: 'Error al registrar salida', detail: String(error) });
   }
 };
+
+
+export const getMisAccesos = async (req: Request, res: Response) => {
+  const usuarioId = req.user?.id;
+  try {
+    const r = await pool.query('SELECT id FROM residentes WHERE usuario_id = $1', [usuarioId]);
+    if (r.rows.length === 0) return res.status(404).json({ error: 'Residente no encontrado' });
+    const residenteId = r.rows[0].id;
+
+    const result = await pool.query(
+      `SELECT ra.id, ra.timestamp_entrada, ra.timestamp_salida,
+              v.nombre AS nombre_visitante, v.numero_dpi, ve.placa
+       FROM registros_acceso ra
+       JOIN visitantes v ON ra.visitante_id = v.id
+       LEFT JOIN vehiculos ve ON ra.vehiculo_id = ve.id
+       WHERE ra.residente_id = $1
+       ORDER BY ra.timestamp_entrada DESC
+       LIMIT 20`,
+      [residenteId]
+    );
+    res.json(result.rows);
+  } catch (error) {
+    res.status(500).json({ error: 'Error al obtener historial de accesos', detail: String(error) });
+  }
+};

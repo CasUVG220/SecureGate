@@ -212,6 +212,7 @@ export interface Preautorizacion {
   residente_id: string;
   nombre_visitante: string;
   numero_dpi: string | null;
+  placa: string | null;
   fecha_inicio: string;
   fecha_fin: string | null;
   activo: boolean;
@@ -224,9 +225,66 @@ export interface PreautorizacionInput {
   residente_id: string;
   nombre_visitante: string;
   numero_dpi?: string;
+  placa?: string;
   fecha_inicio: string;
   fecha_fin?: string;
 }
+
+export interface MiPreautorizacion {
+  id: string;
+  nombre_visitante: string;
+  numero_dpi: string | null;
+  placa: string | null;
+  fecha_inicio: string;
+  fecha_fin: string | null;
+  activo: boolean;
+  created_at: string;
+}
+
+export interface MiVisita {
+  id: string;
+  timestamp_entrada: string;
+  timestamp_salida: string | null;
+  nombre_visitante: string;
+  numero_dpi: string;
+  placa: string | null;
+}
+
+export const getMisPreautorizaciones = async (): Promise<MiPreautorizacion[]> => {
+  const res = await fetch(`${BASE_URL}/api/preautorizaciones/mis`, { headers: authHeaders() });
+  if (!res.ok) throw new Error('Error al cargar preautorizaciones');
+  return res.json();
+};
+
+export const createMisPreautorizacion = async (
+  data: Omit<PreautorizacionInput, 'residente_id'>
+): Promise<MiPreautorizacion> => {
+  const res = await fetch(`${BASE_URL}/api/preautorizaciones/mis`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify(data),
+  });
+  const body = await res.json();
+  if (!res.ok) throw new Error(body.error || 'Error al crear preautorización');
+  return body as MiPreautorizacion;
+};
+
+export const deleteMisPreautorizacion = async (id: string): Promise<void> => {
+  const res = await fetch(
+    `${BASE_URL}/api/preautorizaciones/mis/${encodeURIComponent(id)}`,
+    { method: 'DELETE', headers: authHeaders() }
+  );
+  if (!res.ok) {
+    const body = await res.json();
+    throw new Error(body.error || 'Error al eliminar preautorización');
+  }
+};
+
+export const getMisAccesos = async (): Promise<MiVisita[]> => {
+  const res = await fetch(`${BASE_URL}/api/accesos/mis`, { headers: authHeaders() });
+  if (!res.ok) throw new Error('Error al cargar historial de accesos');
+  return res.json();
+};
 
 export const getPreautorizaciones = async (): Promise<Preautorizacion[]> => {
   const res = await fetch(`${BASE_URL}/api/preautorizaciones`, { headers: authHeaders() });
