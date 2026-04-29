@@ -6,6 +6,7 @@ import accesosRouter from './accesos.routes';
 import cargosRouter from './cargos.routes';
 import pagosRouter from './pagos.routes';
 import preautorizacionesRouter from './preautorizaciones.routes';
+import ocrRouter from './ocr.routes';
 
 const router = Router();
 
@@ -15,6 +16,7 @@ router.use('/accesos', accesosRouter);
 router.use('/cargos', cargosRouter);
 router.use('/pagos', pagosRouter);
 router.use('/preautorizaciones', preautorizacionesRouter);
+router.use('/ocr', ocrRouter);
 
 router.get('/dashboard', async (_req, res) => {
   try {
