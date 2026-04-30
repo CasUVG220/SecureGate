@@ -1,3 +1,7 @@
+frontend/src/services/api.ts
+
+
+
 let envUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 if (envUrl.includes('localhost') && typeof window !== 'undefined' && window.location.hostname !== 'localhost') {
   envUrl = `${window.location.protocol}//${window.location.hostname}:3000`;
@@ -365,4 +369,15 @@ export const decodeTokenPayload = (token: string): Record<string, unknown> | nul
   } catch {
     return null;
   }
+};
+
+export const scanDPI = async (
+  base64: string
+): Promise<{ nombre: string; numero_dpi: string }> => {
+  const res = await fetch(`${BASE_URL}/api/ocr/dpi`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ image: base64 }),
+  });
+  return res.json();
 };
