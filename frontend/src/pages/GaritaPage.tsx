@@ -4,6 +4,7 @@ import {
   registrarAcceso,
   decodeTokenPayload,
   scanDPI,
+  scanPlaca,
   type Residente,
   type AccesoResult,
 } from '../services/api';
@@ -25,11 +26,12 @@ export default function GaritaPage() {
   const [agenteNombre, setAgenteNombre] = useState<string>('');
   const [sinSesion, setSinSesion]   = useState(false);
 
-  // DPI OCR state
-  const [dpiCam, setDpiCam]   = useState(false);
-  const [dpiOcr, setDpiOcr]   = useState(false);
-  const [ocring, setOcring]   = useState(false);
-  const [ocrMsg, setOcrMsg]   = useState<string | null>(null);
+  // OCR state — scanMode drives which field is being scanned
+  const [scanMode, setScanMode] = useState<'dpi' | 'placa' | null>(null);
+  const [dpiOcr, setDpiOcr]     = useState(false);
+  const [placaOcr, setPlacaOcr] = useState(false);
+  const [ocring, setOcring]     = useState(false);
+  const [ocrMsg, setOcrMsg]     = useState<string | null>(null);
 
   const videoRef  = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -45,9 +47,9 @@ export default function GaritaPage() {
       .catch(() => setError('No se pudo cargar la lista de residentes.'));
   }, []);
 
-  // Start / stop camera for DPI
+  // Start / stop camera when scanMode changes
   useEffect(() => {
-    if (!dpiCam) return;
+    if (!scanMode) return;
     let cancelled = false;
     navigator.mediaDevices
       .getUserMedia({ video: { facingMode: 'environment' } })
@@ -62,16 +64,16 @@ export default function GaritaPage() {
       streamRef.current?.getTracks().forEach(t => t.stop());
       streamRef.current = null;
     };
-  }, [dpiCam]);
+  }, [scanMode]);
 
-  const closeDpiCam = () => {
+  const closeCam = () => {
     streamRef.current?.getTracks().forEach(t => t.stop());
     streamRef.current = null;
-    setDpiCam(false);
+    setScanMode(null);
     setOcrMsg(null);
   };
 
-  const handleCaptureDpi = async () => {
+  const handleCapture = async () => {
     const video  = videoRef.current;
     const canvas = canvasRef.current;
     if (!video || !canvas) return;
@@ -84,20 +86,31 @@ export default function GaritaPage() {
     setOcring(true);
     setOcrMsg(null);
     try {
-      const res = await scanDPI(base64);
-      if (res.nombre || res.numero_dpi) {
-        setForm(prev => ({
-          ...prev,
-          nombre_visitante: res.nombre || prev.nombre_visitante,
-          numero_dpi:       res.numero_dpi || prev.numero_dpi,
-        }));
-        setDpiOcr(true);
-        closeDpiCam();
-      } else {
-        setOcrMsg('No se pudo leer el DPI, ingrese manualmente');
+      if (scanMode === 'dpi') {
+        const res = await scanDPI(base64);
+        if (res.nombre || res.numero_dpi) {
+          setForm(prev => ({
+            ...prev,
+            nombre_visitante: res.nombre || prev.nombre_visitante,
+            numero_dpi:       res.numero_dpi || prev.numero_dpi,
+          }));
+          setDpiOcr(true);
+          closeCam();
+        } else {
+          setOcrMsg('No se pudo leer el DPI, ingrese manualmente');
+        }
+      } else if (scanMode === 'placa') {
+        const res = await scanPlaca(base64);
+        if (res.placa) {
+          setForm(prev => ({ ...prev, placa: res.placa }));
+          setPlacaOcr(true);
+          closeCam();
+        } else {
+          setOcrMsg('No se pudo leer la placa, ingrese manualmente');
+        }
       }
     } catch {
-      setOcrMsg('No se pudo leer el DPI, ingrese manualmente');
+      setOcrMsg('Error al procesar la imagen, ingrese manualmente');
     } finally {
       setOcring(false);
     }
@@ -140,6 +153,7 @@ export default function GaritaPage() {
     setResult(null);
     setError(null);
     setDpiOcr(false);
+    setPlacaOcr(false);
   };
 
   if (sinSesion) {
@@ -153,15 +167,17 @@ export default function GaritaPage() {
     );
   }
 
+  const camTitle = scanMode === 'dpi' ? '📷 Escanear DPI' : '📷 Escanear placa';
+
   return (
     <div className="min-h-screen bg-gray-900 text-gray-100 flex flex-col">
-      {/* DPI camera modal */}
-      {dpiCam && (
+      {/* Camera modal — shared for DPI and placa */}
+      {scanMode && (
         <div className="fixed inset-0 bg-gray-900/80 flex items-center justify-center z-50 p-4">
           <div className="bg-gray-800 rounded-2xl p-6 w-full max-w-md space-y-4 shadow-2xl">
             <div className="flex items-center justify-between">
-              <h3 className="text-white font-semibold">📷 Escanear DPI</h3>
-              <button onClick={closeDpiCam} className="text-gray-400 hover:text-white text-xl leading-none">✕</button>
+              <h3 className="text-white font-semibold">{camTitle}</h3>
+              <button onClick={closeCam} className="text-gray-400 hover:text-white text-xl leading-none">✕</button>
             </div>
             <div className="bg-gray-900 rounded-xl overflow-hidden aspect-video">
               <video ref={videoRef} autoPlay playsInline className="w-full h-full object-cover" />
@@ -174,13 +190,13 @@ export default function GaritaPage() {
             )}
             <div className="flex gap-3">
               <button
-                onClick={handleCaptureDpi}
+                onClick={handleCapture}
                 disabled={ocring}
                 className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-semibold py-2.5 rounded-xl transition-colors"
               >
                 {ocring ? 'Procesando...' : 'Capturar'}
               </button>
-              <button onClick={closeDpiCam} className="bg-gray-700 hover:bg-gray-600 text-gray-200 font-medium px-4 py-2.5 rounded-xl transition-colors">
+              <button onClick={closeCam} className="bg-gray-700 hover:bg-gray-600 text-gray-200 font-medium px-4 py-2.5 rounded-xl transition-colors">
                 Cerrar cámara
               </button>
             </div>
@@ -248,7 +264,7 @@ export default function GaritaPage() {
                   <label className="text-sm text-gray-300">Nombre del visitante *</label>
                   <div className="flex items-center gap-2">
                     {dpiOcr && <span className="text-xs bg-green-600 text-white px-2 py-0.5 rounded-full font-medium">OCR</span>}
-                    <button type="button" onClick={() => setDpiCam(true)} className="text-xs text-blue-400 hover:text-blue-300 transition-colors">
+                    <button type="button" onClick={() => setScanMode('dpi')} className="text-xs text-blue-400 hover:text-blue-300 transition-colors">
                       📷 Escanear DPI
                     </button>
                   </div>
@@ -293,8 +309,17 @@ export default function GaritaPage() {
                 </select>
               </div>
 
+              {/* Placa + placa scan button */}
               <div>
-                <label className="block text-sm text-gray-300 mb-1">Placa del vehículo</label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-sm text-gray-300">Placa del vehículo</label>
+                  <div className="flex items-center gap-2">
+                    {placaOcr && <span className="text-xs bg-green-600 text-white px-2 py-0.5 rounded-full font-medium">OCR</span>}
+                    <button type="button" onClick={() => setScanMode('placa')} className="text-xs text-blue-400 hover:text-blue-300 transition-colors">
+                      📷 Escanear placa
+                    </button>
+                  </div>
+                </div>
                 <input
                   name="placa"
                   value={form.placa}
