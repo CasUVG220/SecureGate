@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   getResidentes,
   registrarAcceso,
   decodeTokenPayload,
+  scanDPI,
   type Residente,
   type AccesoResult,
 } from '../services/api';
@@ -16,54 +17,115 @@ const EMPTY_FORM = {
 };
 
 export default function GaritaPage() {
-  const [form, setForm] = useState(EMPTY_FORM);
+  const [form, setForm]             = useState(EMPTY_FORM);
   const [residentes, setResidentes] = useState<Residente[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<AccesoResult | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading]       = useState(false);
+  const [result, setResult]         = useState<AccesoResult | null>(null);
+  const [error, setError]           = useState<string | null>(null);
   const [agenteNombre, setAgenteNombre] = useState<string>('');
-  const [sinSesion, setSinSesion] = useState(false);
+  const [sinSesion, setSinSesion]   = useState(false);
+
+  // DPI OCR state
+  const [dpiCam, setDpiCam]   = useState(false);
+  const [dpiOcr, setDpiOcr]   = useState(false);
+  const [ocring, setOcring]   = useState(false);
+  const [ocrMsg, setOcrMsg]   = useState<string | null>(null);
+
+  const videoRef  = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
 
   useEffect(() => {
     const token = localStorage.getItem('token');
-    if (!token) {
-      setSinSesion(true);
-      return;
-    }
+    if (!token) { setSinSesion(true); return; }
     const payload = decodeTokenPayload(token);
     if (payload) setAgenteNombre((payload.nombre as string) || (payload.email as string));
-
     getResidentes()
       .then(setResidentes)
       .catch(() => setError('No se pudo cargar la lista de residentes.'));
   }, []);
 
+  // Start / stop camera for DPI
+  useEffect(() => {
+    if (!dpiCam) return;
+    let cancelled = false;
+    navigator.mediaDevices
+      .getUserMedia({ video: { facingMode: 'environment' } })
+      .then(stream => {
+        if (cancelled) { stream.getTracks().forEach(t => t.stop()); return; }
+        streamRef.current = stream;
+        if (videoRef.current) videoRef.current.srcObject = stream;
+      })
+      .catch(() => setOcrMsg('No se pudo acceder a la cámara.'));
+    return () => {
+      cancelled = true;
+      streamRef.current?.getTracks().forEach(t => t.stop());
+      streamRef.current = null;
+    };
+  }, [dpiCam]);
+
+  const closeDpiCam = () => {
+    streamRef.current?.getTracks().forEach(t => t.stop());
+    streamRef.current = null;
+    setDpiCam(false);
+    setOcrMsg(null);
+  };
+
+  const handleCaptureDpi = async () => {
+    const video  = videoRef.current;
+    const canvas = canvasRef.current;
+    if (!video || !canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    canvas.width  = video.videoWidth  || 640;
+    canvas.height = video.videoHeight || 480;
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    const base64 = canvas.toDataURL('image/jpeg', 0.9).replace(/^data:image\/jpeg;base64,/, '');
+    setOcring(true);
+    setOcrMsg(null);
+    try {
+      const res = await scanDPI(base64);
+      if (res.nombre || res.numero_dpi) {
+        setForm(prev => ({
+          ...prev,
+          nombre_visitante: res.nombre || prev.nombre_visitante,
+          numero_dpi:       res.numero_dpi || prev.numero_dpi,
+        }));
+        setDpiOcr(true);
+        closeDpiCam();
+      } else {
+        setOcrMsg('No se pudo leer el DPI, ingrese manualmente');
+      }
+    } catch {
+      setOcrMsg('No se pudo leer el DPI, ingrese manualmente');
+    } finally {
+      setOcring(false);
+    }
+  };
+
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
   ) => {
-    setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
+    setForm(prev => ({ ...prev, [e.target.name]: e.target.value }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     setResult(null);
-
     const token = localStorage.getItem('token');
     if (!token) { setSinSesion(true); return; }
-
     const payload = decodeTokenPayload(token);
     if (!payload?.id) { setError('Token inválido. Vuelve a iniciar sesión.'); return; }
-
     setLoading(true);
     try {
       const data = await registrarAcceso({
         nombre_visitante: form.nombre_visitante,
-        numero_dpi: form.numero_dpi,
-        residente_id: form.residente_id,
-        agente_id: payload.id as string,
-        placa: form.placa || undefined,
-        notas: form.notas || undefined,
+        numero_dpi:       form.numero_dpi,
+        residente_id:     form.residente_id,
+        agente_id:        payload.id as string,
+        placa:            form.placa || undefined,
+        notas:            form.notas || undefined,
       });
       setResult(data);
     } catch (err: unknown) {
@@ -77,6 +139,7 @@ export default function GaritaPage() {
     setForm(EMPTY_FORM);
     setResult(null);
     setError(null);
+    setDpiOcr(false);
   };
 
   if (sinSesion) {
@@ -84,9 +147,7 @@ export default function GaritaPage() {
       <div className="min-h-screen bg-gray-900 flex items-center justify-center">
         <div className="bg-red-50 border border-red-300 rounded-xl p-8 text-center max-w-sm">
           <p className="text-red-700 font-semibold text-lg">Sesión no iniciada</p>
-          <p className="text-red-600 text-sm mt-2">
-            Inicia sesión para acceder a la terminal de garita.
-          </p>
+          <p className="text-red-600 text-sm mt-2">Inicia sesión para acceder a la terminal de garita.</p>
         </div>
       </div>
     );
@@ -94,6 +155,39 @@ export default function GaritaPage() {
 
   return (
     <div className="min-h-screen bg-gray-900 text-gray-100 flex flex-col">
+      {/* DPI camera modal */}
+      {dpiCam && (
+        <div className="fixed inset-0 bg-gray-900/80 flex items-center justify-center z-50 p-4">
+          <div className="bg-gray-800 rounded-2xl p-6 w-full max-w-md space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between">
+              <h3 className="text-white font-semibold">📷 Escanear DPI</h3>
+              <button onClick={closeDpiCam} className="text-gray-400 hover:text-white text-xl leading-none">✕</button>
+            </div>
+            <div className="bg-gray-900 rounded-xl overflow-hidden aspect-video">
+              <video ref={videoRef} autoPlay playsInline className="w-full h-full object-cover" />
+            </div>
+            <canvas ref={canvasRef} className="hidden" />
+            {ocrMsg && (
+              <div className="text-sm px-3 py-2 rounded-lg bg-red-50 border border-red-200 text-red-700">
+                {ocrMsg}
+              </div>
+            )}
+            <div className="flex gap-3">
+              <button
+                onClick={handleCaptureDpi}
+                disabled={ocring}
+                className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-semibold py-2.5 rounded-xl transition-colors"
+              >
+                {ocring ? 'Procesando...' : 'Capturar'}
+              </button>
+              <button onClick={closeDpiCam} className="bg-gray-700 hover:bg-gray-600 text-gray-200 font-medium px-4 py-2.5 rounded-xl transition-colors">
+                Cerrar cámara
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <header className="bg-gray-800 border-b border-gray-700 px-6 py-4 flex items-center justify-between">
         <div>
@@ -109,8 +203,6 @@ export default function GaritaPage() {
 
       <main className="flex-1 flex items-start justify-center px-4 py-10">
         <div className="w-full max-w-lg">
-
-          {/* Result card */}
           {result ? (
             <div className="space-y-4">
               <div className="bg-green-50 border border-green-300 rounded-xl p-6">
@@ -128,47 +220,39 @@ export default function GaritaPage() {
                 </p>
                 <p className="text-green-600 text-sm mt-1">
                   Entrada:{' '}
-                  {new Date(
-                    (result.registro as Record<string, string>).timestamp_entrada
-                  ).toLocaleString('es-GT')}
+                  {new Date((result.registro as Record<string, string>).timestamp_entrada).toLocaleString('es-GT')}
                 </p>
               </div>
-
               {result.cargo_generado && (
                 <div className="bg-yellow-50 border border-yellow-400 rounded-xl p-6">
                   <h3 className="text-yellow-700 font-bold mb-1">Cargo automático generado</h3>
-                  <p className="text-yellow-700 text-sm">
-                    {(result.cargo_generado as Record<string, string>).descripcion}
-                  </p>
-                  <p className="text-yellow-800 font-semibold mt-1">
-                    Monto: Q{(result.cargo_generado as Record<string, string>).monto}
-                  </p>
-                  <p className="text-yellow-600 text-xs mt-1">
-                    El residente tiene pagos pendientes. Se notificó al administrador.
-                  </p>
+                  <p className="text-yellow-700 text-sm">{(result.cargo_generado as Record<string, string>).descripcion}</p>
+                  <p className="text-yellow-800 font-semibold mt-1">Monto: Q{(result.cargo_generado as Record<string, string>).monto}</p>
+                  <p className="text-yellow-600 text-xs mt-1">El residente tiene pagos pendientes. Se notificó al administrador.</p>
                 </div>
               )}
-
-              <button
-                onClick={handleNuevaEntrada}
-                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-xl transition-colors"
-              >
+              <button onClick={handleNuevaEntrada} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-xl transition-colors">
                 Nueva entrada
               </button>
             </div>
           ) : (
-            /* Registration form */
             <form onSubmit={handleSubmit} className="bg-gray-800 rounded-2xl p-8 space-y-5 shadow-xl">
               <h2 className="text-lg font-bold text-white">Registro de entrada</h2>
-
               {error && (
-                <div className="bg-red-50 border border-red-300 rounded-lg px-4 py-3 text-red-700 text-sm">
-                  {error}
-                </div>
+                <div className="bg-red-50 border border-red-300 rounded-lg px-4 py-3 text-red-700 text-sm">{error}</div>
               )}
 
+              {/* Nombre + DPI scan button */}
               <div>
-                <label className="block text-sm text-gray-300 mb-1">Nombre del visitante *</label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-sm text-gray-300">Nombre del visitante *</label>
+                  <div className="flex items-center gap-2">
+                    {dpiOcr && <span className="text-xs bg-green-600 text-white px-2 py-0.5 rounded-full font-medium">OCR</span>}
+                    <button type="button" onClick={() => setDpiCam(true)} className="text-xs text-blue-400 hover:text-blue-300 transition-colors">
+                      📷 Escanear DPI
+                    </button>
+                  </div>
+                </div>
                 <input
                   name="nombre_visitante"
                   value={form.nombre_visitante}
@@ -201,10 +285,9 @@ export default function GaritaPage() {
                   className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-blue-500 transition-colors"
                 >
                   <option value="">Seleccionar casa...</option>
-                  {residentes.map((r) => (
+                  {residentes.map(r => (
                     <option key={r.id} value={r.id}>
-                      Casa {r.numero_casa} — {r.nombre}
-                      {r.estado_pago === 'mora' ? ' ⚠ MORA' : ''}
+                      Casa {r.numero_casa} — {r.nombre}{r.estado_pago === 'mora' ? ' ⚠ MORA' : ''}
                     </option>
                   ))}
                 </select>
