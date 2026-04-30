@@ -41,6 +41,13 @@ const parseDpi = (text: string): { nombre: string; numero_dpi: string } => {
   return { nombre, numero_dpi };
 };
 
+const parsePlaca = (text: string): string => {
+  const upper = text.toUpperCase().replace(/[^A-Z0-9\-\s]/g, ' ');
+  const matches = upper.match(/[A-Z]{1,3}[-\s]?[0-9A-Z]{3,6}/g);
+  if (!matches || matches.length === 0) return '';
+  return matches.sort((a, b) => b.length - a.length)[0].trim().replace(/\s+/g, '-');
+};
+
 export const scanDpi = async (req: Request, res: Response) => {
   const { image } = req.body as { image?: string };
   if (!image) return res.status(400).json({ error: 'image requerida' });
@@ -51,5 +58,18 @@ export const scanDpi = async (req: Request, res: Response) => {
     res.json({ nombre, numero_dpi, texto_completo });
   } catch {
     res.json({ nombre: '', numero_dpi: '', texto_completo: '', error: 'No se pudo leer el DPI' });
+  }
+};
+
+export const scanPlaca = async (req: Request, res: Response) => {
+  const { image } = req.body as { image?: string };
+  if (!image) return res.status(400).json({ error: 'image requerida' });
+
+  try {
+    const texto_completo = await callVision(image);
+    const placa = parsePlaca(texto_completo);
+    res.json({ placa, texto_completo });
+  } catch {
+    res.json({ placa: '', error: 'No se pudo leer la placa' });
   }
 };
