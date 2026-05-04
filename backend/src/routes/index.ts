@@ -7,6 +7,7 @@ import cargosRouter from './cargos.routes';
 import pagosRouter from './pagos.routes';
 import preautorizacionesRouter from './preautorizaciones.routes';
 import ocrRouter from './ocr.routes';
+import reportesRouter from './reportes.routes';
 
 const router = Router();
 
@@ -17,6 +18,7 @@ router.use('/cargos', cargosRouter);
 router.use('/pagos', pagosRouter);
 router.use('/preautorizaciones', preautorizacionesRouter);
 router.use('/ocr', ocrRouter);
+router.use('/reportes', reportesRouter);
 
 router.get('/dashboard', async (_req, res) => {
   try {
@@ -73,5 +75,3 @@ router.get('/status', async (req, res) => {
     res.status(500).json({ backend: 'conectado', base_datos: 'error', error: String(error) });
   }
 });
-
-export default router;
