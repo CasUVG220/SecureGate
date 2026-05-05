@@ -70,21 +70,8 @@ export default function SalidaPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-900 text-gray-100 flex flex-col">
-      {/* Header */}
-      <header className="bg-gray-800 border-b border-gray-700 px-6 py-4 flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-bold tracking-tight">SecureGate</h1>
-          <p className="text-xs text-gray-400">Registrar Salida</p>
-        </div>
-        {agenteNombre && (
-          <span className="text-sm text-gray-300">
-            Agente: <span className="font-medium text-white">{agenteNombre}</span>
-          </span>
-        )}
-      </header>
-
-      <main className="flex-1 flex items-start justify-center px-4 py-10">
+    <div className="text-gray-100">
+      <main className="flex items-start justify-center px-4 py-10">
         <div className="w-full max-w-lg space-y-4">
 
           {/* Search form — always visible */}

@@ -55,9 +55,9 @@ router.get('/dashboard', async (_req, res) => {
     ]);
 
     res.json({
-      accesos_hoy: accesosHoy.rows[0].total,
-      residentes_mora: residentesMora.rows[0].total,
-      pagos_pendientes: pagosPendientes.rows[0].total,
+      accesos_hoy:       accesosHoy.rows[0].total,
+      residentes_mora:   residentesMora.rows[0].total,
+      pagos_pendientes:  pagosPendientes.rows[0].total,
       accesos_recientes: accesosRecientes.rows,
     });
   } catch (error) {
@@ -77,3 +77,5 @@ router.get('/status', async (req, res) => {
     res.status(500).json({ backend: 'conectado', base_datos: 'error', error: String(error) });
   }
 });
+
+export default router;

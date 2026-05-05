@@ -6,155 +6,193 @@ import {
   scanDPI,
   scanPlaca,
   type Residente,
-  type AccesoResult,
 } from '../services/api';
+
+interface UltimoIngreso {
+  id: string;
+  hora: string;
+  visitante: string;
+  placa: string;
+  unidad: string;
+  estado: 'Autorizado' | 'Denegado';
+}
 
 const EMPTY_FORM = {
   nombre_visitante: '',
   numero_dpi: '',
   residente_id: '',
   placa: '',
-  notas: '',
 };
 
 export default function GaritaPage() {
-  const [form, setForm]             = useState(EMPTY_FORM);
-  const [residentes, setResidentes] = useState<Residente[]>([]);
-  const [loading, setLoading]       = useState(false);
-  const [result, setResult]         = useState<AccesoResult | null>(null);
-  const [error, setError]           = useState<string | null>(null);
-  const [agenteNombre, setAgenteNombre] = useState<string>('');
-  const [sinSesion, setSinSesion]   = useState(false);
+  const [form, setForm]               = useState(EMPTY_FORM);
+  const [residentes, setResidentes]   = useState<Residente[]>([]);
+  const [loading, setLoading]         = useState(false);
+  const [error, setError]             = useState<string | null>(null);
+  const [sinSesion, setSinSesion]     = useState(false);
+  const [dpiOcr, setDpiOcr]           = useState(false);
+  const [placaOcr, setPlacaOcr]       = useState(false);
+  const [ocringDpi, setOcringDpi]     = useState(false);
+  const [ocringPlaca, setOcringPlaca] = useState(false);
+  const [ocrDpiMsg, setOcrDpiMsg]     = useState<string | null>(null);
+  const [ocrPlacaMsg, setOcrPlacaMsg] = useState<string | null>(null);
+  const [ultimosIngresos, setUltimosIngresos] = useState<UltimoIngreso[]>([]);
+  const [casaSearch, setCasaSearch]   = useState('');
+  const [casaOpen, setCasaOpen]       = useState(false);
 
-  // OCR state — scanMode drives which field is being scanned
-  const [scanMode, setScanMode] = useState<'dpi' | 'placa' | null>(null);
-  const [dpiOcr, setDpiOcr]     = useState(false);
-  const [placaOcr, setPlacaOcr] = useState(false);
-  const [ocring, setOcring]     = useState(false);
-  const [ocrMsg, setOcrMsg]     = useState<string | null>(null);
-
-  const videoRef  = useRef<HTMLVideoElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const streamRef = useRef<MediaStream | null>(null);
+  const dpiVideoRef   = useRef<HTMLVideoElement>(null);
+  const placaVideoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef     = useRef<HTMLCanvasElement>(null);
+  const streamRef     = useRef<MediaStream | null>(null);
 
   useEffect(() => {
     const token = localStorage.getItem('token');
     if (!token) { setSinSesion(true); return; }
-    const payload = decodeTokenPayload(token);
-    if (payload) setAgenteNombre((payload.nombre as string) || (payload.email as string));
     getResidentes()
       .then(setResidentes)
       .catch(() => setError('No se pudo cargar la lista de residentes.'));
-  }, []);
 
-  // Start / stop camera when scanMode changes
-  useEffect(() => {
-    if (!scanMode) return;
-    let cancelled = false;
     navigator.mediaDevices
       .getUserMedia({ video: { facingMode: 'environment' } })
       .then(stream => {
-        if (cancelled) { stream.getTracks().forEach(t => t.stop()); return; }
         streamRef.current = stream;
-        if (videoRef.current) videoRef.current.srcObject = stream;
+        if (dpiVideoRef.current)   dpiVideoRef.current.srcObject = stream;
+        if (placaVideoRef.current) placaVideoRef.current.srcObject = stream;
       })
-      .catch(() => setOcrMsg('No se pudo acceder a la cámara.'));
+      .catch(() => { /* camera unavailable */ });
+
     return () => {
-      cancelled = true;
       streamRef.current?.getTracks().forEach(t => t.stop());
       streamRef.current = null;
     };
-  }, [scanMode]);
+  }, []);
 
-  const closeCam = () => {
-    streamRef.current?.getTracks().forEach(t => t.stop());
-    streamRef.current = null;
-    setScanMode(null);
-    setOcrMsg(null);
-  };
-
-  const handleCapture = async () => {
+  const captureFrame = (videoRef: React.RefObject<HTMLVideoElement>): string | null => {
     const video  = videoRef.current;
     const canvas = canvasRef.current;
-    if (!video || !canvas) return;
+    if (!video || !canvas) return null;
     const ctx = canvas.getContext('2d');
-    if (!ctx) return;
+    if (!ctx) return null;
     canvas.width  = video.videoWidth  || 640;
     canvas.height = video.videoHeight || 480;
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-    const base64 = canvas.toDataURL('image/jpeg', 0.9).replace(/^data:image\/jpeg;base64,/, '');
-    setOcring(true);
-    setOcrMsg(null);
+    return canvas.toDataURL('image/jpeg', 0.9).replace(/^data:image\/jpeg;base64,/, '');
+  };
+
+  const handleCaptureDpi = async () => {
+    const base64 = captureFrame(dpiVideoRef);
+    if (!base64) return;
+    setOcringDpi(true);
+    setOcrDpiMsg(null);
     try {
-      if (scanMode === 'dpi') {
-        const res = await scanDPI(base64);
-        if (res.nombre || res.numero_dpi) {
-          setForm(prev => ({
-            ...prev,
-            nombre_visitante: res.nombre || prev.nombre_visitante,
-            numero_dpi:       res.numero_dpi || prev.numero_dpi,
-          }));
-          setDpiOcr(true);
-          closeCam();
-        } else {
-          setOcrMsg('No se pudo leer el DPI, ingrese manualmente');
-        }
-      } else if (scanMode === 'placa') {
-        const res = await scanPlaca(base64);
-        if (res.placa) {
-          setForm(prev => ({ ...prev, placa: res.placa }));
-          setPlacaOcr(true);
-          closeCam();
-        } else {
-          setOcrMsg('No se pudo leer la placa, ingrese manualmente');
-        }
+      const res = await scanDPI(base64);
+      if (res.nombre || res.numero_dpi) {
+        setForm(prev => ({
+          ...prev,
+          nombre_visitante: res.nombre || prev.nombre_visitante,
+          numero_dpi:       res.numero_dpi || prev.numero_dpi,
+        }));
+        setDpiOcr(true);
+      } else {
+        setOcrDpiMsg('No se pudo leer el DPI');
       }
     } catch {
-      setOcrMsg('Error al procesar la imagen, ingrese manualmente');
+      setOcrDpiMsg('Error al procesar imagen');
     } finally {
-      setOcring(false);
+      setOcringDpi(false);
     }
   };
 
-  const handleChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
-  ) => {
+  const handleCapturePlaca = async () => {
+    const base64 = captureFrame(placaVideoRef);
+    if (!base64) return;
+    setOcringPlaca(true);
+    setOcrPlacaMsg(null);
+    try {
+      const res = await scanPlaca(base64);
+      if (res.placa) {
+        setForm(prev => ({ ...prev, placa: res.placa }));
+        setPlacaOcr(true);
+      } else {
+        setOcrPlacaMsg('No se pudo leer la placa');
+      }
+    } catch {
+      setOcrPlacaMsg('Error al procesar imagen');
+    } finally {
+      setOcringPlaca(false);
+    }
+  };
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setForm(prev => ({ ...prev, [e.target.name]: e.target.value }));
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const resetForm = () => {
+    setForm(EMPTY_FORM);
+    setCasaSearch('');
+    setDpiOcr(false);
+    setPlacaOcr(false);
     setError(null);
-    setResult(null);
+    setOcrDpiMsg(null);
+    setOcrPlacaMsg(null);
+  };
+
+  const handleAutorizar = async () => {
+    if (!form.nombre_visitante || !form.numero_dpi || !form.residente_id) {
+      setError('Nombre, DPI y casa destino son requeridos.');
+      return;
+    }
+    setError(null);
     const token = localStorage.getItem('token');
     if (!token) { setSinSesion(true); return; }
     const payload = decodeTokenPayload(token);
-    if (!payload?.id) { setError('Token inválido. Vuelve a iniciar sesión.'); return; }
+    if (!payload?.id) { setError('Token inválido.'); return; }
     setLoading(true);
     try {
-      const data = await registrarAcceso({
+      await registrarAcceso({
         nombre_visitante: form.nombre_visitante,
         numero_dpi:       form.numero_dpi,
         residente_id:     form.residente_id,
         agente_id:        payload.id as string,
         placa:            form.placa || undefined,
-        notas:            form.notas || undefined,
       });
-      setResult(data);
+      const residente = residentes.find(r => r.id === form.residente_id);
+      setUltimosIngresos(prev => [{
+        id:        crypto.randomUUID(),
+        hora:      new Date().toLocaleTimeString('es-GT'),
+        visitante: form.nombre_visitante,
+        placa:     form.placa || '—',
+        unidad:    residente ? `Casa ${residente.numero_casa}` : '—',
+        estado:    'Autorizado',
+      }, ...prev].slice(0, 10));
+      resetForm();
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Error desconocido');
+      setError(err instanceof Error ? err.message : 'Error al registrar');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleNuevaEntrada = () => {
-    setForm(EMPTY_FORM);
-    setResult(null);
-    setError(null);
-    setDpiOcr(false);
-    setPlacaOcr(false);
+  const handleDenegar = () => {
+    const residente = residentes.find(r => r.id === form.residente_id);
+    setUltimosIngresos(prev => [{
+      id:        crypto.randomUUID(),
+      hora:      new Date().toLocaleTimeString('es-GT'),
+      visitante: form.nombre_visitante || 'Desconocido',
+      placa:     form.placa || '—',
+      unidad:    residente ? `Casa ${residente.numero_casa}` : '—',
+      estado:    'Denegado',
+    }, ...prev].slice(0, 10));
+    resetForm();
   };
+
+  const selectedResidente = residentes.find(r => r.id === form.residente_id);
+  const filteredResidentes = casaSearch
+    ? residentes.filter(r =>
+        r.numero_casa.toLowerCase().includes(casaSearch.toLowerCase()) ||
+        r.nombre.toLowerCase().includes(casaSearch.toLowerCase())
+      )
+    : residentes;
 
   if (sinSesion) {
     return (
@@ -167,191 +205,215 @@ export default function GaritaPage() {
     );
   }
 
-  const camTitle = scanMode === 'dpi' ? '📷 Escanear DPI' : '📷 Escanear placa';
-
   return (
-    <div className="min-h-screen bg-gray-900 text-gray-100 flex flex-col">
-      {/* Camera modal — shared for DPI and placa */}
-      {scanMode && (
-        <div className="fixed inset-0 bg-gray-900/80 flex items-center justify-center z-50 p-4">
-          <div className="bg-gray-800 rounded-2xl p-6 w-full max-w-md space-y-4 shadow-2xl">
-            <div className="flex items-center justify-between">
-              <h3 className="text-white font-semibold">{camTitle}</h3>
-              <button onClick={closeCam} className="text-gray-400 hover:text-white text-xl leading-none">✕</button>
-            </div>
-            <div className="bg-gray-900 rounded-xl overflow-hidden aspect-video">
-              <video ref={videoRef} autoPlay playsInline className="w-full h-full object-cover" />
-            </div>
-            <canvas ref={canvasRef} className="hidden" />
-            {ocrMsg && (
-              <div className="text-sm px-3 py-2 rounded-lg bg-red-50 border border-red-200 text-red-700">
-                {ocrMsg}
-              </div>
+    <div className="flex h-full text-gray-100">
+      <canvas ref={canvasRef} className="hidden" />
+
+      {/* Left column — always-on cameras */}
+      <div className="w-1/2 flex flex-col gap-3 p-4 border-r border-gray-700 min-h-0">
+
+        {/* DPI scanner */}
+        <div className="flex-1 bg-gray-800 rounded-2xl flex flex-col shadow-xl overflow-hidden min-h-0">
+          <div className="flex items-center gap-2 px-4 py-2.5 border-b border-gray-700 shrink-0">
+            <span className="text-sm font-semibold text-gray-200">Escáner de DPI</span>
+            {dpiOcr && (
+              <span className="text-xs bg-emerald-600 text-white px-2 py-0.5 rounded-full font-medium">OCR</span>
             )}
-            <div className="flex gap-3">
-              <button
-                onClick={handleCapture}
-                disabled={ocring}
-                className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-semibold py-2.5 rounded-xl transition-colors"
-              >
-                {ocring ? 'Procesando...' : 'Capturar'}
-              </button>
-              <button onClick={closeCam} className="bg-gray-700 hover:bg-gray-600 text-gray-200 font-medium px-4 py-2.5 rounded-xl transition-colors">
-                Cerrar cámara
-              </button>
+          </div>
+          <div className="flex-1 bg-gray-900 min-h-0 overflow-hidden">
+            <video ref={dpiVideoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
+          </div>
+          {ocrDpiMsg && (
+            <p className="px-4 py-1 text-xs text-red-400 border-t border-gray-700 shrink-0">{ocrDpiMsg}</p>
+          )}
+          <div className="p-3 border-t border-gray-700 shrink-0">
+            <button
+              onClick={handleCaptureDpi}
+              disabled={ocringDpi}
+              className="w-full bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-semibold py-2 rounded-xl transition-colors text-sm"
+            >
+              {ocringDpi ? 'Procesando...' : 'Escanear Documento'}
+            </button>
+          </div>
+        </div>
+
+        {/* Plate scanner */}
+        <div className="flex-1 bg-gray-800 rounded-2xl flex flex-col shadow-xl overflow-hidden min-h-0">
+          <div className="flex items-center gap-2 px-4 py-2.5 border-b border-gray-700 shrink-0">
+            <span className="text-sm font-semibold text-gray-200">Reconocimiento de Placa</span>
+            {placaOcr && (
+              <span className="text-xs bg-emerald-600 text-white px-2 py-0.5 rounded-full font-medium">OCR</span>
+            )}
+          </div>
+          <div className="flex-1 bg-gray-900 min-h-0 overflow-hidden">
+            <video ref={placaVideoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
+          </div>
+          {ocrPlacaMsg && (
+            <p className="px-4 py-1 text-xs text-red-400 border-t border-gray-700 shrink-0">{ocrPlacaMsg}</p>
+          )}
+          <div className="p-3 border-t border-gray-700 shrink-0">
+            <button
+              onClick={handleCapturePlaca}
+              disabled={ocringPlaca}
+              className="w-full bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-semibold py-2 rounded-xl transition-colors text-sm"
+            >
+              {ocringPlaca ? 'Procesando...' : 'Escanear Placa'}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Right column — form + actions + log */}
+      <div className="w-1/2 flex flex-col gap-3 p-4 overflow-y-auto">
+
+        {/* Datos del visitante */}
+        <div className="bg-gray-800 rounded-2xl p-5 shadow-xl space-y-4 shrink-0">
+          <h2 className="text-base font-bold text-white">Datos del Visitante</h2>
+
+          {error && (
+            <div className="bg-red-900/40 border border-red-700 rounded-lg px-4 py-2 text-red-300 text-sm">
+              {error}
+            </div>
+          )}
+
+          <div className="grid grid-cols-2 gap-3">
+            {/* Nombre */}
+            <div>
+              <label className="block text-xs text-gray-400 mb-1">Nombre *</label>
+              <input
+                name="nombre_visitante"
+                value={form.nombre_visitante}
+                onChange={handleChange}
+                placeholder="Juan Pérez"
+                className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm placeholder-gray-400 focus:outline-none focus:border-blue-500 transition-colors"
+              />
+            </div>
+
+            {/* DPI */}
+            <div>
+              <label className="block text-xs text-gray-400 mb-1">DPI *</label>
+              <input
+                name="numero_dpi"
+                value={form.numero_dpi}
+                onChange={handleChange}
+                placeholder="1234567890101"
+                className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm placeholder-gray-400 focus:outline-none focus:border-blue-500 transition-colors"
+              />
+            </div>
+
+            {/* Placa */}
+            <div>
+              <label className="block text-xs text-gray-400 mb-1">Placa</label>
+              <input
+                name="placa"
+                value={form.placa}
+                onChange={handleChange}
+                placeholder="P-123ABC"
+                className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm placeholder-gray-400 focus:outline-none focus:border-blue-500 transition-colors"
+              />
+            </div>
+
+            {/* Casa / Unidad autocomplete */}
+            <div className="relative">
+              <label className="block text-xs text-gray-400 mb-1">Casa / Unidad *</label>
+              <input
+                value={selectedResidente
+                  ? `Casa ${selectedResidente.numero_casa} — ${selectedResidente.nombre}`
+                  : casaSearch}
+                onChange={e => {
+                  setCasaSearch(e.target.value);
+                  setForm(prev => ({ ...prev, residente_id: '' }));
+                  setCasaOpen(true);
+                }}
+                onFocus={() => setCasaOpen(true)}
+                onBlur={() => setTimeout(() => setCasaOpen(false), 150)}
+                placeholder="Buscar casa..."
+                className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm placeholder-gray-400 focus:outline-none focus:border-blue-500 transition-colors"
+              />
+              {casaOpen && filteredResidentes.length > 0 && (
+                <ul className="absolute z-20 w-full bg-gray-700 border border-gray-600 rounded-lg mt-1 max-h-36 overflow-y-auto shadow-2xl">
+                  {filteredResidentes.map(r => (
+                    <li
+                      key={r.id}
+                      onMouseDown={() => {
+                        setForm(prev => ({ ...prev, residente_id: r.id }));
+                        setCasaSearch('');
+                        setCasaOpen(false);
+                      }}
+                      className="px-3 py-2 text-sm text-white hover:bg-gray-600 cursor-pointer flex items-center justify-between"
+                    >
+                      <span>Casa {r.numero_casa} — {r.nombre}</span>
+                      {r.estado_pago === 'mora' && (
+                        <span className="text-yellow-400 text-xs font-semibold">⚠ MORA</span>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
           </div>
         </div>
-      )}
 
-      {/* Header */}
-      <header className="bg-gray-800 border-b border-gray-700 px-6 py-4 flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-bold tracking-tight">SecureGate</h1>
-          <p className="text-xs text-gray-400">Terminal de Garita</p>
+        {/* Action buttons */}
+        <div className="grid grid-cols-2 gap-3 shrink-0">
+          <button
+            onClick={handleAutorizar}
+            disabled={loading}
+            className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-bold py-5 rounded-2xl transition-colors text-sm tracking-widest shadow-xl"
+          >
+            {loading ? 'REGISTRANDO...' : 'AUTORIZAR ENTRADA'}
+          </button>
+          <button
+            onClick={handleDenegar}
+            className="bg-red-600 hover:bg-red-500 text-white font-bold py-5 rounded-2xl transition-colors text-sm tracking-widest shadow-xl"
+          >
+            DENEGAR ENTRADA
+          </button>
         </div>
-        {agenteNombre && (
-          <span className="text-sm text-gray-300">
-            Agente: <span className="font-medium text-white">{agenteNombre}</span>
-          </span>
-        )}
-      </header>
 
-      <main className="flex-1 flex items-start justify-center px-4 py-10">
-        <div className="w-full max-w-lg">
-          {result ? (
-            <div className="space-y-4">
-              <div className="bg-green-50 border border-green-300 rounded-xl p-6">
-                <div className="flex items-start justify-between gap-3 mb-1">
-                  <h2 className="text-green-700 font-bold text-lg">Acceso registrado</h2>
-                  {result.preautorizado && (
-                    <span className="inline-flex items-center gap-1 bg-green-100 border border-green-400 text-green-700 text-xs font-semibold px-2.5 py-1 rounded-full whitespace-nowrap">
-                      ✓ Visita preautorizada
-                    </span>
-                  )}
-                </div>
-                <p className="text-green-600 text-sm">
-                  Visitante: <strong>{(result.visitante as Record<string, string>).nombre}</strong>
-                  &nbsp;— DPI: {(result.visitante as Record<string, string>).numero_dpi}
-                </p>
-                <p className="text-green-600 text-sm mt-1">
-                  Entrada:{' '}
-                  {new Date((result.registro as Record<string, string>).timestamp_entrada).toLocaleString('es-GT')}
-                </p>
-              </div>
-              {result.cargo_generado && (
-                <div className="bg-yellow-50 border border-yellow-400 rounded-xl p-6">
-                  <h3 className="text-yellow-700 font-bold mb-1">Cargo automático generado</h3>
-                  <p className="text-yellow-700 text-sm">{(result.cargo_generado as Record<string, string>).descripcion}</p>
-                  <p className="text-yellow-800 font-semibold mt-1">Monto: Q{(result.cargo_generado as Record<string, string>).monto}</p>
-                  <p className="text-yellow-600 text-xs mt-1">El residente tiene pagos pendientes. Se notificó al administrador.</p>
-                </div>
-              )}
-              <button onClick={handleNuevaEntrada} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-xl transition-colors">
-                Nueva entrada
-              </button>
-            </div>
+        {/* Últimos Ingresos */}
+        <div className="bg-gray-800 rounded-2xl overflow-hidden shadow-xl shrink-0">
+          <div className="px-5 py-3 border-b border-gray-700">
+            <h3 className="text-sm font-bold text-white">Últimos Ingresos</h3>
+          </div>
+          {ultimosIngresos.length === 0 ? (
+            <p className="text-gray-500 text-xs px-5 py-5 text-center">
+              Sin registros en esta sesión.
+            </p>
           ) : (
-            <form onSubmit={handleSubmit} className="bg-gray-800 rounded-2xl p-8 space-y-5 shadow-xl">
-              <h2 className="text-lg font-bold text-white">Registro de entrada</h2>
-              {error && (
-                <div className="bg-red-50 border border-red-300 rounded-lg px-4 py-3 text-red-700 text-sm">{error}</div>
-              )}
-
-              {/* Nombre + DPI scan button */}
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="text-sm text-gray-300">Nombre del visitante *</label>
-                  <div className="flex items-center gap-2">
-                    {dpiOcr && <span className="text-xs bg-green-600 text-white px-2 py-0.5 rounded-full font-medium">OCR</span>}
-                    <button type="button" onClick={() => setScanMode('dpi')} className="text-xs text-blue-400 hover:text-blue-300 transition-colors">
-                      📷 Escanear DPI
-                    </button>
-                  </div>
-                </div>
-                <input
-                  name="nombre_visitante"
-                  value={form.nombre_visitante}
-                  onChange={handleChange}
-                  required
-                  placeholder="Juan Pérez"
-                  className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-white placeholder-gray-400 focus:outline-none focus:border-blue-500 transition-colors"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm text-gray-300 mb-1">Número de DPI *</label>
-                <input
-                  name="numero_dpi"
-                  value={form.numero_dpi}
-                  onChange={handleChange}
-                  required
-                  placeholder="1234567890101"
-                  className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-white placeholder-gray-400 focus:outline-none focus:border-blue-500 transition-colors"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm text-gray-300 mb-1">Casa destino *</label>
-                <select
-                  name="residente_id"
-                  value={form.residente_id}
-                  onChange={handleChange}
-                  required
-                  className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-blue-500 transition-colors"
-                >
-                  <option value="">Seleccionar casa...</option>
-                  {residentes.map(r => (
-                    <option key={r.id} value={r.id}>
-                      Casa {r.numero_casa} — {r.nombre}{r.estado_pago === 'mora' ? ' ⚠ MORA' : ''}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Placa + placa scan button */}
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="text-sm text-gray-300">Placa del vehículo</label>
-                  <div className="flex items-center gap-2">
-                    {placaOcr && <span className="text-xs bg-green-600 text-white px-2 py-0.5 rounded-full font-medium">OCR</span>}
-                    <button type="button" onClick={() => setScanMode('placa')} className="text-xs text-blue-400 hover:text-blue-300 transition-colors">
-                      📷 Escanear placa
-                    </button>
-                  </div>
-                </div>
-                <input
-                  name="placa"
-                  value={form.placa}
-                  onChange={handleChange}
-                  placeholder="P-123ABC (opcional)"
-                  className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-white placeholder-gray-400 focus:outline-none focus:border-blue-500 transition-colors"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm text-gray-300 mb-1">Notas</label>
-                <textarea
-                  name="notas"
-                  value={form.notas}
-                  onChange={handleChange}
-                  rows={2}
-                  placeholder="Observaciones (opcional)"
-                  className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-white placeholder-gray-400 focus:outline-none focus:border-blue-500 transition-colors resize-none"
-                />
-              </div>
-
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-semibold py-3 rounded-xl transition-colors"
-              >
-                {loading ? 'Registrando...' : 'Registrar entrada'}
-              </button>
-            </form>
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="border-b border-gray-700 text-gray-400 text-left">
+                  <th className="px-4 py-2 font-medium">Hora</th>
+                  <th className="px-4 py-2 font-medium">Visitante</th>
+                  <th className="px-4 py-2 font-medium">Placa</th>
+                  <th className="px-4 py-2 font-medium">Unidad</th>
+                  <th className="px-4 py-2 font-medium">Estado</th>
+                </tr>
+              </thead>
+              <tbody>
+                {ultimosIngresos.map(ing => (
+                  <tr key={ing.id} className="border-b border-gray-700/50 last:border-0">
+                    <td className="px-4 py-2 text-gray-300">{ing.hora}</td>
+                    <td className="px-4 py-2 text-white font-medium">{ing.visitante}</td>
+                    <td className="px-4 py-2 text-gray-300 uppercase">{ing.placa}</td>
+                    <td className="px-4 py-2 text-gray-300">{ing.unidad}</td>
+                    <td className="px-4 py-2">
+                      <span className={`inline-block px-2 py-0.5 rounded-full font-semibold ${
+                        ing.estado === 'Autorizado'
+                          ? 'bg-emerald-900/60 text-emerald-400 border border-emerald-700'
+                          : 'bg-red-900/60 text-red-400 border border-red-700'
+                      }`}>
+                        {ing.estado}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           )}
         </div>
-      </main>
+      </div>
     </div>
   );
 }

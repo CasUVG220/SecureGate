@@ -107,11 +107,12 @@ export const aprobarPago = async (req: Request, res: Response) => {
 
 export const rechazarPago = async (req: Request, res: Response) => {
   const { id } = req.params;
+  const { comentario_rechazo } = req.body ?? {};
   try {
     const result = await pool.query(
-      `UPDATE pagos SET estado = 'rechazado' WHERE id = $1
-       AND estado = 'pendiente' RETURNING *`,
-      [id]
+      `UPDATE pagos SET estado = 'rechazado', comentario_rechazo = $2
+       WHERE id = $1 AND estado = 'pendiente' RETURNING *`,
+      [id, comentario_rechazo || null]
     );
     if (result.rows.length === 0) {
       const existe = await pool.query('SELECT id, estado FROM pagos WHERE id = $1', [id]);
@@ -123,5 +124,74 @@ export const rechazarPago = async (req: Request, res: Response) => {
     res.json(result.rows[0]);
   } catch (error) {
     res.status(500).json({ error: 'Error al rechazar pago', detail: String(error) });
+  }
+};
+
+export const crearTransferencia = async (req: Request, res: Response) => {
+  const usuario_id = req.user?.id;
+  const { monto, referencia, banco, fecha_transferencia, comprobante } = req.body;
+
+  if (!monto || !referencia || !banco || !fecha_transferencia) {
+    return res.status(400).json({ error: 'Campos requeridos: monto, referencia, banco, fecha_transferencia' });
+  }
+  if (Number(monto) <= 0) {
+    return res.status(400).json({ error: 'El monto debe ser mayor a 0' });
+  }
+
+  try {
+    const residente = await pool.query(
+      'SELECT id FROM residentes WHERE usuario_id = $1', [usuario_id]
+    );
+    if (residente.rows.length === 0) {
+      return res.status(404).json({ error: 'Residente no encontrado' });
+    }
+    const result = await pool.query(
+      `INSERT INTO pagos (residente_id, monto, metodo, estado, referencia, banco, fecha_transferencia, comprobante, registrado_por)
+       VALUES ($1, $2, 'transferencia', 'pendiente', $3, $4, $5, $6, $7)
+       RETURNING *`,
+      [residente.rows[0].id, monto, referencia, banco, fecha_transferencia, comprobante || null, usuario_id]
+    );
+    res.status(201).json(result.rows[0]);
+  } catch (error) {
+    res.status(500).json({ error: 'Error al registrar comprobante', detail: String(error) });
+  }
+};
+
+export const getPendientesVerificacion = async (_req: Request, res: Response) => {
+  try {
+    const result = await pool.query(
+      `SELECT p.*,
+              r.numero_casa, r.saldo_pendiente, r.estado_pago,
+              u.nombre AS residente_nombre, u.email AS residente_email,
+              r.telefono AS residente_telefono
+       FROM pagos p
+       JOIN residentes r ON p.residente_id = r.id
+       JOIN usuarios   u ON r.usuario_id   = u.id
+       WHERE p.metodo = 'transferencia' AND p.estado = 'pendiente'
+       ORDER BY p.fecha_pago ASC`
+    );
+    res.json(result.rows);
+  } catch (error) {
+    res.status(500).json({ error: 'Error al obtener pagos pendientes', detail: String(error) });
+  }
+};
+
+export const getMisPagos = async (req: Request, res: Response) => {
+  const usuario_id = req.user?.id;
+  try {
+    const residente = await pool.query(
+      'SELECT id FROM residentes WHERE usuario_id = $1', [usuario_id]
+    );
+    if (residente.rows.length === 0) {
+      return res.status(404).json({ error: 'Residente no encontrado' });
+    }
+    const result = await pool.query(
+      `SELECT * FROM pagos WHERE residente_id = $1
+       ORDER BY fecha_pago DESC LIMIT 20`,
+      [residente.rows[0].id]
+    );
+    res.json(result.rows);
+  } catch (error) {
+    res.status(500).json({ error: 'Error al obtener pagos', detail: String(error) });
   }
 };

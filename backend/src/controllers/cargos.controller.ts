@@ -115,3 +115,4 @@ export const aplicarCargo = async (req: Request, res: Response) => {
   } finally {
     client.release();
   }
+};
