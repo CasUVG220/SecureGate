@@ -1,416 +1,235 @@
-let envUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000';
-if (envUrl.includes('localhost') && typeof window !== 'undefined' && window.location.hostname !== 'localhost') {
-  envUrl = `${window.location.protocol}//${window.location.hostname}:3000`;
-}
-const BASE_URL = envUrl;
+import { useEffect, useState } from 'react';
+import {
+  getConfigCargos,
+  createConfigCargo,
+  updateConfigCargo,
+  deleteConfigCargo,
+  type ConfigCargo,
+} from '../services/api';
 
-const getToken = (): string => localStorage.getItem('token') || '';
+const EMPTY_FORM = { nombre: '', monto: '' };
 
-const authHeaders = (): HeadersInit => ({
-  'Content-Type': 'application/json',
-  Authorization: `Bearer ${getToken()}`,
-});
+export default function ConfigCargosPage() {
+  const [configs, setConfigs]     = useState<ConfigCargo[]>([]);
+  const [loading, setLoading]     = useState(true);
+  const [error, setError]         = useState<string | null>(null);
+  const [showModal, setShowModal] = useState(false);
+  const [editTarget, setEditTarget] = useState<ConfigCargo | null>(null);
+  const [form, setForm]           = useState(EMPTY_FORM);
+  const [saving, setSaving]       = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [togglingId, setTogglingId] = useState<string | null>(null);
 
-export interface Residente {
-  id: string;
-  numero_casa: string;
-  nombre: string;
-  email: string;
-  estado_pago: 'al_dia' | 'mora' | 'pendiente';
-  saldo_pendiente: string;
-  telefono?: string;
-}
+  const load = () => {
+    setLoading(true);
+    getConfigCargos()
+      .then(setConfigs)
+      .catch(() => setError('No se pudo cargar la configuración de cargos.'))
+      .finally(() => setLoading(false));
+  };
 
-export interface AccesoPayload {
-  nombre_visitante: string;
-  numero_dpi: string;
-  foto?: string;
-  residente_id: string;
-  agente_id: string;
-  placa?: string;
-  notas?: string;
-}
+  useEffect(() => { load(); }, []);
 
-export interface AccesoResult {
-  registro: Record<string, unknown>;
-  visitante: Record<string, unknown>;
-  cargo_generado: Record<string, unknown> | null;
-  preautorizado: boolean;
-}
+  const openCreate = () => {
+    setEditTarget(null);
+    setForm(EMPTY_FORM);
+    setFormError(null);
+    setShowModal(true);
+  };
 
-export const getResidentes = async (): Promise<Residente[]> => {
-  const res = await fetch(`${BASE_URL}/api/residentes`, { headers: authHeaders() });
-  if (!res.ok) throw new Error('Error al cargar residentes');
-  return res.json();
-};
+  const openEdit = (cfg: ConfigCargo) => {
+    setEditTarget(cfg);
+    setForm({ nombre: cfg.nombre, monto: cfg.monto });
+    setFormError(null);
+    setShowModal(true);
+  };
 
-export const registrarAcceso = async (data: AccesoPayload): Promise<AccesoResult> => {
-  const res = await fetch(`${BASE_URL}/api/accesos`, {
-    method: 'POST',
-    headers: authHeaders(),
-    body: JSON.stringify(data),
-  });
-  const body = await res.json();
-  if (!res.ok) throw new Error(body.error || 'Error al registrar acceso');
-  return body;
-};
+  const closeModal = () => { setShowModal(false); setEditTarget(null); };
 
-export interface ResidenteInput {
-  nombre: string;
-  email: string;
-  password: string;
-  numero_casa: string;
-  telefono?: string;
-}
+  const handleSave = async () => {
+    if (!form.nombre.trim()) { setFormError('El nombre es requerido.'); return; }
+    const monto = parseFloat(form.monto);
+    if (!form.monto || isNaN(monto) || monto < 1) { setFormError('El monto debe ser mayor a 0.'); return; }
+    setFormError(null);
+    setSaving(true);
+    try {
+      if (editTarget) {
+        const updated = await updateConfigCargo(editTarget.id, { nombre: form.nombre.trim(), monto });
+        setConfigs(prev => prev.map(c => c.id === updated.id ? updated : c));
+      } else {
+        const created = await createConfigCargo({ nombre: form.nombre.trim(), monto });
+        setConfigs(prev => [...prev, created]);
+      }
+      closeModal();
+    } catch (err: unknown) {
+      setFormError(err instanceof Error ? err.message : 'Error al guardar');
+    } finally {
+      setSaving(false);
+    }
+  };
 
-export interface ResidenteUpdate {
-  numero_casa?: string;
-  estado_pago?: string;
-  telefono?: string;
-  saldo_pendiente?: number;
-}
+  const handleToggle = async (cfg: ConfigCargo) => {
+    setTogglingId(cfg.id);
+    try {
+      const updated = await updateConfigCargo(cfg.id, { activo: !cfg.activo });
+      setConfigs(prev => prev.map(c => c.id === updated.id ? updated : c));
+    } catch {
+      setError('No se pudo cambiar el estado.');
+    } finally {
+      setTogglingId(null);
+    }
+  };
 
-export const createResidente = async (data: ResidenteInput): Promise<Residente> => {
-  const res = await fetch(`${BASE_URL}/api/residentes`, {
-    method: 'POST',
-    headers: authHeaders(),
-    body: JSON.stringify(data),
-  });
-  const body = await res.json();
-  if (!res.ok) throw new Error(body.error || 'Error al crear residente');
-  return body;
-};
+  const handleDelete = async (cfg: ConfigCargo) => {
+    if (!window.confirm(`¿Desactivar "${cfg.nombre}"?`)) return;
+    try {
+      await deleteConfigCargo(cfg.id);
+      setConfigs(prev => prev.map(c => c.id === cfg.id ? { ...c, activo: false } : c));
+    } catch {
+      setError('No se pudo eliminar la configuración.');
+    }
+  };
 
-export const updateResidente = async (id: string, data: ResidenteUpdate): Promise<Residente> => {
-  const res = await fetch(`${BASE_URL}/api/residentes/${id}`, {
-    method: 'PUT',
-    headers: authHeaders(),
-    body: JSON.stringify(data),
-  });
-  const body = await res.json();
-  if (!res.ok) throw new Error(body.error || 'Error al actualizar residente');
-  return body;
-};
+  return (
+    <div className="min-h-screen bg-gray-900 text-gray-100 px-4 py-10">
+      {/* Modal */}
+      {showModal && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+          <div className="bg-gray-800 rounded-2xl p-6 w-full max-w-sm space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between">
+              <h3 className="text-white font-semibold">
+                {editTarget ? 'Editar configuración' : 'Nueva configuración'}
+              </h3>
+              <button onClick={closeModal} className="text-gray-400 hover:text-white text-xl leading-none">✕</button>
+            </div>
 
-export const deleteResidente = async (id: string): Promise<void> => {
-  const res = await fetch(`${BASE_URL}/api/residentes/${id}`, {
-    method: 'DELETE',
-    headers: authHeaders(),
-  });
-  if (!res.ok) {
-    const body = await res.json();
-    throw new Error(body.error || 'Error al eliminar residente');
-  }
-};
+            {formError && (
+              <p className="text-sm text-red-400">{formError}</p>
+            )}
 
-export interface LoginResult {
-  token: string;
-  usuario: { id: string; nombre: string; email: string; rol: string };
-}
+            <div>
+              <label className="block text-sm text-gray-400 mb-1">Nombre *</label>
+              <input
+                type="text"
+                value={form.nombre}
+                onChange={e => setForm(p => ({ ...p, nombre: e.target.value }))}
+                placeholder="Cargo por mora mensual"
+                className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white placeholder-gray-400 focus:outline-none focus:border-blue-500 transition-colors"
+              />
+            </div>
 
-export const login = async (email: string, password: string): Promise<LoginResult> => {
-  const res = await fetch(`${BASE_URL}/api/auth/login`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email, password }),
-  });
-  const body = await res.json();
-  if (!res.ok) throw new Error(body.error || 'Credenciales incorrectas');
-  return body;
-};
+            <div>
+              <label className="block text-sm text-gray-400 mb-1">Monto (Q) *</label>
+              <input
+                type="number"
+                min="1"
+                step="0.01"
+                value={form.monto}
+                onChange={e => setForm(p => ({ ...p, monto: e.target.value }))}
+                placeholder="50.00"
+                className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white placeholder-gray-400 focus:outline-none focus:border-blue-500 transition-colors"
+              />
+            </div>
 
-export interface AccesoActivo {
-  registro_id: string;
-  timestamp_entrada: string;
-  visitante: { id: string; nombre: string; numero_dpi: string };
-  residente: { id: string; numero_casa: string; nombre: string };
-  placa: string;
-}
+            <div className="flex gap-3 pt-1">
+              <button
+                onClick={handleSave}
+                disabled={saving}
+                className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-semibold py-2 rounded-xl transition-colors"
+              >
+                {saving ? 'Guardando...' : 'Guardar'}
+              </button>
+              <button
+                onClick={closeModal}
+                className="bg-gray-700 hover:bg-gray-600 text-gray-200 font-medium px-4 py-2 rounded-xl transition-colors"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
-/** Retorna null cuando no hay acceso activo (404), lanza Error para otros fallos */
-export const getAccesoActivo = async (placa: string): Promise<AccesoActivo | null> => {
-  const res = await fetch(
-    `${BASE_URL}/api/accesos/activo?placa=${encodeURIComponent(placa)}`,
-    { headers: authHeaders() }
+      <div className="max-w-3xl mx-auto space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-xl font-bold text-white">Configuración de Cargos</h1>
+            <p className="text-sm text-gray-400 mt-1">Reglas de cargo automático por mora.</p>
+          </div>
+          <button
+            onClick={openCreate}
+            className="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-4 py-2 rounded-xl text-sm transition-colors"
+          >
+            + Nueva configuración
+          </button>
+        </div>
+
+        {error && (
+          <div className="bg-red-50 border border-red-300 rounded-lg px-4 py-3 text-red-700 text-sm">{error}</div>
+        )}
+
+        <div className="bg-gray-800 rounded-2xl overflow-hidden shadow-xl">
+          {loading ? (
+            <p className="text-gray-400 text-sm px-6 py-8 text-center">Cargando...</p>
+          ) : configs.length === 0 ? (
+            <p className="text-gray-400 text-sm px-6 py-8 text-center">No hay configuraciones registradas.</p>
+          ) : (
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-gray-700 text-gray-400 text-left">
+                  <th className="px-5 py-3 font-medium">Nombre</th>
+                  <th className="px-5 py-3 font-medium">Monto</th>
+                  <th className="px-5 py-3 font-medium">Estado</th>
+                  <th className="px-5 py-3 font-medium text-right">Acciones</th>
+                </tr>
+              </thead>
+              <tbody>
+                {configs.map((cfg, i) => (
+                  <tr
+                    key={cfg.id}
+                    className={`border-b border-gray-700/50 last:border-0 ${i % 2 === 0 ? '' : 'bg-gray-700/20'}`}
+                  >
+                    <td className="px-5 py-3 text-white font-medium">{cfg.nombre}</td>
+                    <td className="px-5 py-3 text-gray-200">Q{parseFloat(cfg.monto).toFixed(2)}</td>
+                    <td className="px-5 py-3">
+                      <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-semibold ${
+                        cfg.activo
+                          ? 'bg-green-100 text-green-700'
+                          : 'bg-gray-600 text-gray-300'
+                      }`}>
+                        {cfg.activo ? 'Activo' : 'Inactivo'}
+                      </span>
+                    </td>
+                    <td className="px-5 py-3 text-right space-x-3 whitespace-nowrap">
+                      <button
+                        onClick={() => openEdit(cfg)}
+                        className="text-blue-400 hover:text-blue-300 transition-colors"
+                      >
+                        Editar
+                      </button>
+                      <button
+                        onClick={() => handleToggle(cfg)}
+                        disabled={togglingId === cfg.id}
+                        className="text-yellow-400 hover:text-yellow-300 disabled:opacity-40 transition-colors"
+                      >
+                        {cfg.activo ? 'Desactivar' : 'Activar'}
+                      </button>
+                      {cfg.activo && (
+                        <button
+                          onClick={() => handleDelete(cfg)}
+                          className="text-red-400 hover:text-red-300 transition-colors"
+                        >
+                          Eliminar
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </div>
+    </div>
   );
-  if (res.status === 404) return null;
-  const body = await res.json();
-  if (!res.ok) throw new Error(body.error || 'Error al buscar acceso activo');
-  return body as AccesoActivo;
-};
-
-export const registrarSalidaVehiculo = async (
-  registroId: string
-): Promise<Record<string, unknown>> => {
-  const res = await fetch(`${BASE_URL}/api/accesos/${encodeURIComponent(registroId)}/salida`, {
-    method: 'PUT',
-    headers: authHeaders(),
-  });
-  const body = await res.json();
-  if (!res.ok) throw new Error(body.error || 'Error al registrar salida');
-  return body as Record<string, unknown>;
-};
-
-export interface Pago {
-  id: string;
-  residente_id: string;
-  monto: string;
-  fecha_pago: string;
-  metodo: 'efectivo' | 'transferencia';
-  estado: 'pendiente' | 'aprobado' | 'rechazado';
-  comprobante: string | null;
-  registrado_por: string;
-  numero_casa: string;
-  residente_nombre: string;
 }
-
-export interface PagoInput {
-  residente_id: string;
-  monto: number;
-  comprobante?: string;
-}
-
-export const getPagos = async (): Promise<Pago[]> => {
-  const res = await fetch(`${BASE_URL}/api/pagos`, { headers: authHeaders() });
-  if (!res.ok) throw new Error('Error al cargar pagos');
-  return res.json();
-};
-
-export const createPago = async (data: PagoInput): Promise<Pago> => {
-  const res = await fetch(`${BASE_URL}/api/pagos`, {
-    method: 'POST',
-    headers: authHeaders(),
-    body: JSON.stringify(data),
-  });
-  const body = await res.json();
-  if (!res.ok) throw new Error(body.error || 'Error al crear pago');
-  return body as Pago;
-};
-
-export const aprobarPago = async (id: string): Promise<Pago> => {
-  const res = await fetch(`${BASE_URL}/api/pagos/${encodeURIComponent(id)}/aprobar`, {
-    method: 'PUT',
-    headers: authHeaders(),
-  });
-  const body = await res.json();
-  if (!res.ok) throw new Error(body.error || 'Error al aprobar pago');
-  return body as Pago;
-};
-
-export const rechazarPago = async (id: string): Promise<Pago> => {
-  const res = await fetch(`${BASE_URL}/api/pagos/${encodeURIComponent(id)}/rechazar`, {
-    method: 'PUT',
-    headers: authHeaders(),
-  });
-  const body = await res.json();
-  if (!res.ok) throw new Error(body.error || 'Error al rechazar pago');
-  return body as Pago;
-};
-
-export interface Preautorizacion {
-  id: string;
-  residente_id: string;
-  nombre_visitante: string;
-  numero_dpi: string | null;
-  placa: string | null;
-  fecha_inicio: string;
-  fecha_fin: string | null;
-  activo: boolean;
-  created_at: string;
-  numero_casa: string;
-  residente_nombre: string;
-}
-
-export interface PreautorizacionInput {
-  residente_id: string;
-  nombre_visitante: string;
-  numero_dpi?: string;
-  placa?: string;
-  fecha_inicio: string;
-  fecha_fin?: string;
-}
-
-export interface MiPreautorizacion {
-  id: string;
-  nombre_visitante: string;
-  numero_dpi: string | null;
-  placa: string | null;
-  fecha_inicio: string;
-  fecha_fin: string | null;
-  activo: boolean;
-  created_at: string;
-}
-
-export interface MiVisita {
-  id: string;
-  timestamp_entrada: string;
-  timestamp_salida: string | null;
-  nombre_visitante: string;
-  numero_dpi: string;
-  placa: string | null;
-}
-
-export const getMisPreautorizaciones = async (): Promise<MiPreautorizacion[]> => {
-  const res = await fetch(`${BASE_URL}/api/preautorizaciones/mis`, { headers: authHeaders() });
-  if (!res.ok) throw new Error('Error al cargar preautorizaciones');
-  return res.json();
-};
-
-export const createMisPreautorizacion = async (
-  data: Omit<PreautorizacionInput, 'residente_id'>
-): Promise<MiPreautorizacion> => {
-  const res = await fetch(`${BASE_URL}/api/preautorizaciones/mis`, {
-    method: 'POST',
-    headers: authHeaders(),
-    body: JSON.stringify(data),
-  });
-  const body = await res.json();
-  if (!res.ok) throw new Error(body.error || 'Error al crear preautorización');
-  return body as MiPreautorizacion;
-};
-
-export const deleteMisPreautorizacion = async (id: string): Promise<void> => {
-  const res = await fetch(
-    `${BASE_URL}/api/preautorizaciones/mis/${encodeURIComponent(id)}`,
-    { method: 'DELETE', headers: authHeaders() }
-  );
-  if (!res.ok) {
-    const body = await res.json();
-    throw new Error(body.error || 'Error al eliminar preautorización');
-  }
-};
-
-export const getMisAccesos = async (): Promise<MiVisita[]> => {
-  const res = await fetch(`${BASE_URL}/api/accesos/mis`, { headers: authHeaders() });
-  if (!res.ok) throw new Error('Error al cargar historial de accesos');
-  return res.json();
-};
-
-export const getPreautorizaciones = async (): Promise<Preautorizacion[]> => {
-  const res = await fetch(`${BASE_URL}/api/preautorizaciones`, { headers: authHeaders() });
-  if (!res.ok) throw new Error('Error al cargar preautorizaciones');
-  return res.json();
-};
-
-export const createPreautorizacion = async (
-  data: PreautorizacionInput
-): Promise<Preautorizacion> => {
-  const res = await fetch(`${BASE_URL}/api/preautorizaciones`, {
-    method: 'POST',
-    headers: authHeaders(),
-    body: JSON.stringify(data),
-  });
-  const body = await res.json();
-  if (!res.ok) throw new Error(body.error || 'Error al crear preautorización');
-  return body as Preautorizacion;
-};
-
-export const deletePreautorizacion = async (id: string): Promise<void> => {
-  const res = await fetch(
-    `${BASE_URL}/api/preautorizaciones/${encodeURIComponent(id)}`,
-    { method: 'DELETE', headers: authHeaders() }
-  );
-  if (!res.ok) {
-    const body = await res.json();
-    throw new Error(body.error || 'Error al eliminar preautorización');
-  }
-};
-
-export interface ResidenteMe {
-  id: string;
-  numero_casa: string;
-  estado_pago: 'al_dia' | 'mora' | 'pendiente';
-  saldo_pendiente: string;
-  telefono: string | null;
-  nombre: string;
-  email: string;
-  pagos_recientes: Array<{
-    id: string;
-    monto: string;
-    fecha_pago: string;
-    metodo: string;
-    estado: string;
-  }>;
-}
-
-export const getResidenteMe = async (): Promise<ResidenteMe> => {
-  const res = await fetch(`${BASE_URL}/api/residentes/me`, { headers: authHeaders() });
-  if (!res.ok) throw new Error('Error al cargar tus datos');
-  return res.json();
-};
-
-export interface DashboardData {
-  accesos_hoy: number;
-  residentes_mora: number;
-  pagos_pendientes: number;
-  accesos_recientes: Array<{
-    id: string;
-    nombre_visitante: string;
-    numero_casa: string;
-    timestamp_entrada: string;
-    timestamp_salida: string | null;
-  }>;
-}
-
-export const getDashboard = async (): Promise<DashboardData> => {
-  const res = await fetch(`${BASE_URL}/api/dashboard`, { headers: authHeaders() });
-  if (!res.ok) throw new Error('Error al cargar el dashboard');
-  return res.json();
-};
-
-export const decodeTokenPayload = (token: string): Record<string, unknown> | null => {
-  try {
-    const payload = token.split('.')[1];
-    return JSON.parse(atob(payload));
-  } catch {
-    return null;
-  }
-};
-
-export const scanDPI = async (
-  base64: string
-): Promise<{ nombre: string; numero_dpi: string }> => {
-  const res = await fetch(`${BASE_URL}/api/ocr/dpi`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ image: base64 }),
-  });
-  return res.json();
-};
-
-export const scanPlaca = async (
-  base64: string
-): Promise<{ placa: string }> => {
-  const res = await fetch(`${BASE_URL}/api/ocr/placa`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ image: base64 }),
-  });
-  return res.json();
-};
-
-const downloadCSV = async (url: string, filename: string): Promise<void> => {
-  const res = await fetch(url, { headers: authHeaders() });
-  if (!res.ok) return;
-  const blob = await res.blob();
-  const href = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = href;
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(href);
-};
-
-export const downloadReporteAccesos = (desde: string, hasta: string): void => {
-  void downloadCSV(
-    `${BASE_URL}/api/reportes/accesos?desde=${encodeURIComponent(desde)}&hasta=${encodeURIComponent(hasta)}`,
-    `accesos_${desde}_${hasta}.csv`
-  );
-};
-
-export const downloadReportePagos = (desde: string, hasta: string): void => {
-  void downloadCSV(
-    `${BASE_URL}/api/reportes/pagos?desde=${encodeURIComponent(desde)}&hasta=${encodeURIComponent(hasta)}`,
-    `pagos_${desde}_${hasta}.csv`
-  );
-};
