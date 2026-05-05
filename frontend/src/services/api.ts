@@ -388,3 +388,29 @@ export const scanPlaca = async (
   });
   return res.json();
 };
+
+const downloadCSV = async (url: string, filename: string): Promise<void> => {
+  const res = await fetch(url, { headers: authHeaders() });
+  if (!res.ok) return;
+  const blob = await res.blob();
+  const href = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = href;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(href);
+};
+
+export const downloadReporteAccesos = (desde: string, hasta: string): void => {
+  void downloadCSV(
+    `${BASE_URL}/api/reportes/accesos?desde=${encodeURIComponent(desde)}&hasta=${encodeURIComponent(hasta)}`,
+    `accesos_${desde}_${hasta}.csv`
+  );
+};
+
+export const downloadReportePagos = (desde: string, hasta: string): void => {
+  void downloadCSV(
+    `${BASE_URL}/api/reportes/pagos?desde=${encodeURIComponent(desde)}&hasta=${encodeURIComponent(hasta)}`,
+    `pagos_${desde}_${hasta}.csv`
+  );
+};

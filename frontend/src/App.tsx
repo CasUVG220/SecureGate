@@ -7,9 +7,11 @@ import PagosPage from './pages/PagosPage';
 import PreautPage from './pages/PreautPage';
 import DashboardPage from './pages/DashboardPage';
 import ResidentePage from './pages/ResidentePage';
+import ReportesPage from './pages/ReportesPage';
 import { decodeTokenPayload } from './services/api';
 
-type AdminPage  = 'dashboard' | 'residentes' | 'pagos' | 'preaut';
+type AdminPage = 'dashboard' | 'residentes' | 'pagos' | 'preaut';
+type AdminPage = 'dashboard' | 'residentes' | 'pagos' | 'preaut' | 'reportes';
 type AgentePage = 'garita' | 'salida';
 type Page = AdminPage | AgentePage;
 
@@ -84,9 +86,8 @@ function App() {
     <button
       key={target}
       onClick={() => setPage(target)}
-      className={`text-sm font-medium px-3 py-1.5 rounded-lg transition-colors ${
-        page === target ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-gray-200'
-      }`}
+      className={`text-sm font-medium px-3 py-1.5 rounded-lg transition-colors ${page === target ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-gray-200'
+        }`}
     >
       {label}
     </button>
@@ -97,16 +98,18 @@ function App() {
     return (
       <div className="min-h-screen bg-gray-900">
         <nav className="bg-gray-950 border-b border-gray-800 px-6 py-2 flex gap-4 items-center">
-          {navBtn('Dashboard',         'dashboard')}
-          {navBtn('Residentes',        'residentes')}
-          {navBtn('Pagos',             'pagos')}
+          {navBtn('Dashboard', 'dashboard')}
+          {navBtn('Residentes', 'residentes')}
+          {navBtn('Pagos', 'pagos')}
           {navBtn('Preautorizaciones', 'preaut')}
+          {navBtn('Reportes', 'reportes')}
           <div className="ml-auto">{logoutBtn(handleLogout)}</div>
         </nav>
-        {page === 'dashboard'  && <DashboardPage />}
+        {page === 'dashboard' && <DashboardPage />}
         {page === 'residentes' && <ResidentesPage />}
-        {page === 'pagos'      && <PagosPage />}
-        {page === 'preaut'     && <PreautPage />}
+        {page === 'pagos' && <PagosPage />}
+        {page === 'preaut' && <PreautPage />}
+        {page === 'reportes' && <ReportesPage />}
       </div>
     );
   }
@@ -115,7 +118,7 @@ function App() {
   return (
     <div className="min-h-screen bg-gray-900">
       <nav className="bg-gray-950 border-b border-gray-800 px-6 py-2 flex gap-4 items-center">
-        {navBtn('Terminal Garita',  'garita')}
+        {navBtn('Terminal Garita', 'garita')}
         {navBtn('Registrar Salida', 'salida')}
         <div className="ml-auto">{logoutBtn(handleLogout)}</div>
       </nav>
