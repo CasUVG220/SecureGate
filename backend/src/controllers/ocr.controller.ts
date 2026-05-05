@@ -20,25 +20,89 @@ const callVision = async (base64: string): Promise<string> => {
   return annotations?.[0]?.description ?? '';
 };
 
-const parseDpi = (text: string): { nombre: string; numero_dpi: string } => {
-  const dpiMatch = text.match(/\b\d{13}\b/);
-  const numero_dpi = dpiMatch?.[0] ?? '';
+const SKIP_WORDS = /REPÚBLICA|GUATEMALA|LICENCIA|DOCUMENTO|IDENTIFICACIÓN|PERSONAL|CONDUCIR|RENAP|CATEGORIA|CATEGORÍA|VENCE|EMITIDA|CLASE|TIPO|FECHA|BLOOD|SANGRE|SEXO|NACIMIENTO|CENTROAMERICA|REGISTRO|NACIONAL|PERSONAS/i;
 
+const cleanName = (s: string) => s.trim().replace(/\s+/g, ' ');
+
+
+const parseIdentificacion = (text: string): { nombre: string; numero_dpi: string } => {
+  const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+
+  // ── CUI / DPI number (always 13 digits) ──────────────────────────────────
+  const dpiMatch = text.match(/\b(\d{4}\s?\d{5}\s?\d{4})\b/);
+  const numero_dpi = dpiMatch ? dpiMatch[1].replace(/\s+/g, '') : '';
+
+  // ── Name extraction ───────────────────────────────────────────────────────
   let nombre = '';
-  const nombreMatch = text.match(/(?:Nombre|Name)\s*:?\s*([A-ZÁÉÍÓÚÜÑ][A-ZÁÉÍÓÚÜÑa-záéíóúüñ\s]+)/);
-  if (nombreMatch) {
-    nombre = nombreMatch[1].trim().replace(/\s+/g, ' ');
-  } else {
-    for (const line of text.split('\n')) {
-      const clean = line.trim();
-      if (/^[A-ZÁÉÍÓÚÜÑ][A-ZÁÉÍÓÚÜÑa-záéíóúüñ\s]{3,}$/.test(clean)) {
-        nombre = clean;
+  let nombresPart = '';
+  let apellidosPart = '';
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const upper = line.toUpperCase();
+
+    // DPI Front & License Front Strategy
+    if (upper.includes('NOMBRE') && !upper.includes('PRIMER') && !upper.includes('SEGUNDO')) {
+      const parts = line.split(/NOMBRES?(?:\s*\/\s*GIVEN\s*NAMES)?\s*[:\-]?\s*/i);
+      if (parts.length > 1 && parts[1].trim().length > 0) {
+        nombresPart = parts[1].trim();
+      } else if (i + 1 < lines.length && !nombresPart) {
+        const nextLine = lines[i + 1];
+        if (!nextLine.toUpperCase().includes('APELLIDO') && !nextLine.match(/\d/)) {
+          nombresPart = nextLine;
+        }
+      }
+    }
+
+    if (upper.includes('APELLIDO') && !upper.includes('PRIMER') && !upper.includes('SEGUNDO')) {
+      const parts = line.split(/APELLIDOS?(?:\s*\/\s*SURNAME)?\s*[:\-]?\s*/i);
+      if (parts.length > 1 && parts[1].trim().length > 0) {
+        apellidosPart = parts[1].trim();
+      } else if (i + 1 < lines.length && !apellidosPart) {
+        const nextLine = lines[i + 1];
+        if (!nextLine.toUpperCase().includes('NACIONALIDAD') && !nextLine.toUpperCase().includes('NUMERO') && !nextLine.match(/\d/)) {
+          apellidosPart = nextLine;
+        }
+      }
+    }
+  }
+
+  if (nombresPart || apellidosPart) {
+    nombre = cleanName(`${nombresPart} ${apellidosPart}`);
+  }
+
+  // Strategy 1: DPI Back (fallback)
+  if (!nombre) {
+    const pNombre = text.match(/Primer\s+Nombre\s*:?\s*([A-ZÁÉÍÓÚÜÑ][A-ZÁÉÍÓÚÜÑa-záéíóúüñ]+)/i)?.[1];
+    const sNombre = text.match(/Segundo\s+Nombre\s*:?\s*([A-ZÁÉÍÓÚÜÑ][A-ZÁÉÍÓÚÜÑa-záéíóúüñ]+)/i)?.[1];
+    const pApell  = text.match(/Primer\s+Apellido\s*:?\s*([A-ZÁÉÍÓÚÜÑ][A-ZÁÉÍÓÚÜÑa-záéíóúüñ]+)/i)?.[1];
+    const sApell  = text.match(/Segundo\s+Apellido\s*:?\s*([A-ZÁÉÍÓÚÜÑ][A-ZÁÉÍÓÚÜÑa-záéíóúüñ]+)/i)?.[1];
+
+    if (pNombre || pApell) {
+      nombre = cleanName([pNombre, sNombre, pApell, sApell].filter(Boolean).join(' '));
+    }
+  }
+
+  // Strategy 2: Single "Nombre:" field
+  if (!nombre) {
+    const m = text.match(/(?:^|\n)\s*Nombre\s*:?\s*([A-ZÁÉÍÓÚÜÑ][A-ZÁÉÍÓÚÜÑa-záéíóúüñ\s]{2,50})(?:\n|$)/im);
+    if (m) nombre = cleanName(m[1]);
+  }
+
+  // Strategy 3: Fallback — first line that looks like a person's name
+  if (!nombre) {
+    for (const line of lines) {
+      if (/\d/.test(line)) continue;
+      if (line.length < 4 || line.length > 65) continue;
+      if (SKIP_WORDS.test(line)) continue;
+      if (/^[A-ZÁÉÍÓÚÜÑ][A-ZÁÉÍÓÚÜÑa-záéíóúüñ\s]{3,}$/.test(line)) {
+        nombre = line;
         break;
       }
     }
   }
 
-  return { nombre, numero_dpi };
+  return { nombre: cleanName(nombre), numero_dpi };
 };
 
 const parsePlaca = (text: string): string => {
@@ -54,10 +118,10 @@ export const scanDpi = async (req: Request, res: Response) => {
 
   try {
     const texto_completo = await callVision(image);
-    const { nombre, numero_dpi } = parseDpi(texto_completo);
+    const { nombre, numero_dpi } = parseIdentificacion(texto_completo);
     res.json({ nombre, numero_dpi, texto_completo });
   } catch {
-    res.json({ nombre: '', numero_dpi: '', texto_completo: '', error: 'No se pudo leer el DPI' });
+    res.json({ nombre: '', numero_dpi: '', texto_completo: '', error: 'No se pudo leer el documento' });
   }
 };
 
@@ -73,3 +137,4 @@ export const scanPlaca = async (req: Request, res: Response) => {
     res.json({ placa: '', error: 'No se pudo leer la placa' });
   }
 };
+
