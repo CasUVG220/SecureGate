@@ -8,6 +8,7 @@ import pagosRouter from './pagos.routes';
 import preautorizacionesRouter from './preautorizaciones.routes';
 import ocrRouter from './ocr.routes';
 import reportesRouter from './reportes.routes';
+import configuracionCargosRouter from './configuracion-cargos.routes';
 
 const router = Router();
 
@@ -19,6 +20,7 @@ router.use('/pagos', pagosRouter);
 router.use('/preautorizaciones', preautorizacionesRouter);
 router.use('/ocr', ocrRouter);
 router.use('/reportes', reportesRouter);
+router.use('/configuracion-cargos', configuracionCargosRouter);
 
 router.get('/dashboard', async (_req, res) => {
   try {
@@ -53,9 +55,9 @@ router.get('/dashboard', async (_req, res) => {
     ]);
 
     res.json({
-      accesos_hoy:       accesosHoy.rows[0].total,
-      residentes_mora:   residentesMora.rows[0].total,
-      pagos_pendientes:  pagosPendientes.rows[0].total,
+      accesos_hoy: accesosHoy.rows[0].total,
+      residentes_mora: residentesMora.rows[0].total,
+      pagos_pendientes: pagosPendientes.rows[0].total,
       accesos_recientes: accesosRecientes.rows,
     });
   } catch (error) {
