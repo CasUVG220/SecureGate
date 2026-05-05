@@ -55,7 +55,11 @@ CREATE TABLE IF NOT EXISTS pagos (
   fecha_pago TIMESTAMP NOT NULL DEFAULT NOW(),
   metodo VARCHAR(20) NOT NULL CHECK (metodo IN ('efectivo', 'transferencia')),
   estado VARCHAR(20) NOT NULL DEFAULT 'pendiente' CHECK (estado IN ('pendiente', 'aprobado', 'rechazado')),
-  comprobante VARCHAR(500),
+  comprobante TEXT,
+  referencia VARCHAR(100),
+  banco VARCHAR(100),
+  fecha_transferencia DATE,
+  comentario_rechazo TEXT,
   registrado_por UUID NOT NULL REFERENCES usuarios(id) ON DELETE RESTRICT
 );
 

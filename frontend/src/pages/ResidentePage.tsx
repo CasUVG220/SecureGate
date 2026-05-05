@@ -5,10 +5,15 @@ import {
   createMisPreautorizacion,
   deleteMisPreautorizacion,
   getMisAccesos,
+  getMisPagos,
+  crearTransferencia,
   type ResidenteMe,
   type MiPreautorizacion,
   type MiVisita,
+  type Pago,
 } from '../services/api';
+import { Spinner } from '../components/Skeleton';
+import { useToast } from '../components/Toast';
 
 const BADGE: Record<string, string> = {
   al_dia:   'bg-green-100 text-green-700',
@@ -18,26 +23,43 @@ const BADGE: Record<string, string> = {
 const BADGE_LABEL: Record<string, string> = {
   al_dia: 'Al día', mora: 'Mora', pendiente: 'Pendiente',
 };
-const PAGO_CLASS: Record<string, string> = {
-  pendiente: 'bg-yellow-100 text-yellow-700',
-  aprobado:  'bg-green-100 text-green-700',
-  rechazado: 'bg-red-100 text-red-700',
-};
-const PAGO_LABEL: Record<string, string> = {
-  pendiente: 'Pendiente', aprobado: 'Aprobado', rechazado: 'Rechazado',
-};
 
 const today = () => new Date().toISOString().slice(0, 10);
 
 const EMPTY_FORM = { nombre_visitante: '', numero_dpi: '', placa: '', fecha_inicio: today(), fecha_fin: '' };
+const EMPTY_TRF  = { monto: '', referencia: '', banco: '', fecha_transferencia: today() };
+
+const PAGO_METODO_LABEL: Record<string, string> = { efectivo: 'Efectivo', transferencia: 'Transferencia' };
+const PAGO_ESTADO_CLASS: Record<string, string> = {
+  pendiente: 'bg-yellow-900/40 text-yellow-400 border-yellow-700/40',
+  aprobado:  'bg-green-900/40 text-green-400 border-green-700/40',
+  rechazado: 'bg-red-900/40 text-red-400 border-red-700/40',
+};
+const PAGO_ESTADO_LABEL: Record<string, string> = {
+  pendiente: 'Pendiente', aprobado: 'Completado', rechazado: 'Rechazado',
+};
 
 export default function ResidentePage() {
+  const showToast = useToast();
+
   const [data, setData]         = useState<ResidenteMe | null>(null);
   const [loading, setLoading]   = useState(true);
   const [error, setError]       = useState<string | null>(null);
 
   const [tab, setTab]           = useState<'pagos' | 'invitados'>('pagos');
 
+  // Pagos tab state
+  const [misPagos, setMisPagos]           = useState<Pago[]>([]);
+  const [pagosLoading, setPagosLoading]   = useState(false);
+  const [pagosLoaded, setPagosLoaded]     = useState(false);
+  const [showTrf, setShowTrf]             = useState(false);
+  const [trfForm, setTrfForm]             = useState(EMPTY_TRF);
+  const [imgBase64, setImgBase64]         = useState<string | null>(null);
+  const [imgPreview, setImgPreview]       = useState<string | null>(null);
+  const [enviando, setEnviando]           = useState(false);
+  const [trfError, setTrfError]           = useState<string | null>(null);
+
+  // Invitados tab state
   const [preauths, setPreauths] = useState<MiPreautorizacion[]>([]);
   const [visitas, setVisitas]   = useState<MiVisita[]>([]);
   const [invLoading, setInvLoading] = useState(false);
@@ -50,12 +72,14 @@ export default function ResidentePage() {
   const [formError, setFormError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
-  useEffect(() => {
-    getResidenteMe()
-      .then(setData)
-      .catch(() => setError('No se pudo cargar tu información.'))
-      .finally(() => setLoading(false));
-  }, []);
+  const loadPagos = () => {
+    if (pagosLoaded) return;
+    setPagosLoading(true);
+    getMisPagos()
+      .then(p => { setMisPagos(p); setPagosLoaded(true); })
+      .catch(() => showToast('No se pudo cargar el historial de pagos.', 'error'))
+      .finally(() => setPagosLoading(false));
+  };
 
   const loadInvitados = () => {
     if (invLoaded) return;
@@ -66,9 +90,70 @@ export default function ResidentePage() {
       .finally(() => setInvLoading(false));
   };
 
+  useEffect(() => {
+    getResidenteMe()
+      .then(setData)
+      .catch(() => setError('No se pudo cargar tu información.'))
+      .finally(() => setLoading(false));
+    loadPagos();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   const handleTabChange = (t: 'pagos' | 'invitados') => {
     setTab(t);
+    if (t === 'pagos') loadPagos();
     if (t === 'invitados') loadInvitados();
+  };
+
+  const handleTrfChange = (e: React.ChangeEvent<HTMLInputElement>) =>
+    setTrfForm(prev => ({ ...prev, [e.target.name]: e.target.value }));
+
+  const handleImgChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) {
+      setTrfError('La imagen no debe superar 5 MB.'); return;
+    }
+    const reader = new FileReader();
+    reader.onload = ev => {
+      const dataUrl = ev.target?.result as string;
+      setImgPreview(dataUrl);
+      setImgBase64(dataUrl.replace(/^data:[^;]+;base64,/, ''));
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const resetTrfForm = () => {
+    setShowTrf(false);
+    setTrfForm(EMPTY_TRF);
+    setImgBase64(null);
+    setImgPreview(null);
+    setTrfError(null);
+  };
+
+  const handleEnviarTransferencia = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setTrfError(null);
+    if (!trfForm.monto || !trfForm.referencia || !trfForm.banco || !trfForm.fecha_transferencia) {
+      setTrfError('Todos los campos son requeridos.'); return;
+    }
+    if (Number(trfForm.monto) <= 0) { setTrfError('El monto debe ser mayor a 0.'); return; }
+    setEnviando(true);
+    try {
+      const nuevo = await crearTransferencia({
+        monto: Number(trfForm.monto),
+        referencia: trfForm.referencia,
+        banco: trfForm.banco,
+        fecha_transferencia: trfForm.fecha_transferencia,
+        comprobante: imgBase64 || undefined,
+      });
+      setMisPagos(prev => [nuevo, ...prev]);
+      resetTrfForm();
+      showToast('Comprobante enviado. Pendiente de verificación.', 'success');
+    } catch (err: unknown) {
+      setTrfError(err instanceof Error ? err.message : 'Error al enviar');
+    } finally {
+      setEnviando(false);
+    }
   };
 
   const handleFormChange = (e: React.ChangeEvent<HTMLInputElement>) =>
@@ -113,7 +198,7 @@ export default function ResidentePage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-900 flex items-center justify-center">
+      <div className="flex items-center justify-center py-24">
         <p className="text-gray-400 text-sm">Cargando...</p>
       </div>
     );
@@ -121,9 +206,9 @@ export default function ResidentePage() {
 
   if (error && !data) {
     return (
-      <div className="min-h-screen bg-gray-900 flex items-center justify-center">
-        <div className="bg-red-50 border border-red-300 rounded-xl p-8 text-center max-w-sm">
-          <p className="text-red-700 font-semibold">{error}</p>
+      <div className="flex items-center justify-center py-24">
+        <div className="bg-red-900/40 border border-red-700 rounded-xl p-8 text-center max-w-sm">
+          <p className="text-red-300 font-semibold">{error}</p>
         </div>
       </div>
     );
@@ -132,7 +217,7 @@ export default function ResidentePage() {
   const saldo = parseFloat(data!.saldo_pendiente);
 
   return (
-    <main className="px-6 py-8 space-y-6 max-w-3xl mx-auto">
+    <main className="px-6 py-8 space-y-6 max-w-3xl mx-auto text-gray-100">
       {/* Summary card */}
       <div className="bg-gray-800 rounded-2xl p-6 shadow-xl">
         <div className="flex items-start justify-between gap-4">
@@ -161,58 +246,170 @@ export default function ResidentePage() {
       </div>
 
       {/* Tab bar */}
-      <div className="flex gap-2 border-b border-gray-700 pb-0">
+      <div className="flex rounded-xl overflow-hidden border border-gray-700">
         {(['pagos', 'invitados'] as const).map(t => (
           <button
             key={t}
             onClick={() => handleTabChange(t)}
-            className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${
+            className={`flex-1 py-2.5 text-sm font-semibold transition-colors ${
               tab === t
-                ? 'bg-gray-800 text-white border border-b-0 border-gray-700'
-                : 'text-gray-400 hover:text-gray-200'
+                ? 'bg-emerald-500 text-white'
+                : 'bg-gray-800 text-gray-400 hover:text-gray-200'
             }`}
           >
-            {t === 'pagos' ? 'Mis pagos' : 'Invitados'}
+            {t === 'pagos' ? 'Pagos' : 'Visitantes'}
           </button>
         ))}
       </div>
 
       {/* ── Tab: Pagos ── */}
       {tab === 'pagos' && (
-        <div className="bg-gray-800 rounded-2xl shadow-xl overflow-hidden">
-          <div className="px-6 py-4 border-b border-gray-700">
-            <h2 className="text-base font-semibold text-white">Historial de pagos</h2>
+        <div className="space-y-4">
+          {/* Realizar Pago card */}
+          <div className="bg-gray-800 rounded-2xl p-6 shadow-xl space-y-4">
+            <div>
+              <h2 className="text-base font-semibold text-white">Realizar Pago</h2>
+              <p className="text-sm text-gray-400 mt-0.5">
+                Saldo pendiente:{' '}
+                <span className={`font-semibold ${parseFloat(data!.saldo_pendiente) > 0 ? 'text-red-400' : 'text-emerald-400'}`}>
+                  Q{parseFloat(data!.saldo_pendiente).toFixed(2)}
+                </span>
+              </p>
+            </div>
+
+            {!showTrf ? (
+              <div className="space-y-3">
+                <button
+                  onClick={() => showToast('Pago con tarjeta próximamente disponible.', 'warning')}
+                  className="w-full flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-white font-semibold py-3 rounded-xl transition-colors"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+                  </svg>
+                  Pagar con Tarjeta
+                </button>
+                <button
+                  onClick={() => setShowTrf(true)}
+                  className="w-full flex items-center justify-center gap-2 bg-gray-700 hover:bg-gray-600 text-gray-200 font-semibold py-3 rounded-xl transition-colors border border-gray-600"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                  </svg>
+                  Subir Comprobante de Transferencia
+                </button>
+              </div>
+            ) : (
+              <form onSubmit={handleEnviarTransferencia} className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-semibold text-white">Comprobante de transferencia</h3>
+                  <button type="button" onClick={resetTrfForm}
+                    className="text-gray-400 hover:text-white text-xl leading-none">✕</button>
+                </div>
+                {trfError && (
+                  <p className="text-sm text-red-400 bg-red-900/30 border border-red-700/40 rounded-lg px-3 py-2">{trfError}</p>
+                )}
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs text-gray-400 mb-1">Monto (Q) *</label>
+                    <input type="number" name="monto" step="0.01" min="0.01" value={trfForm.monto}
+                      onChange={handleTrfChange} placeholder="850.00"
+                      className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm placeholder-gray-400 focus:outline-none focus:border-blue-500" />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-400 mb-1">Banco *</label>
+                    <input type="text" name="banco" value={trfForm.banco}
+                      onChange={handleTrfChange} placeholder="Banco Industrial"
+                      className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm placeholder-gray-400 focus:outline-none focus:border-blue-500" />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-400 mb-1">No. Referencia *</label>
+                    <input type="text" name="referencia" value={trfForm.referencia}
+                      onChange={handleTrfChange} placeholder="TRF-789456123"
+                      className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm placeholder-gray-400 focus:outline-none focus:border-blue-500" />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-400 mb-1">Fecha de transferencia *</label>
+                    <input type="date" name="fecha_transferencia" value={trfForm.fecha_transferencia}
+                      onChange={handleTrfChange}
+                      className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500" />
+                  </div>
+                </div>
+
+                {/* Image upload */}
+                <div>
+                  <label className="block text-xs text-gray-400 mb-1">Imagen del comprobante (opcional)</label>
+                  <label className="flex items-center gap-2 w-full cursor-pointer bg-gray-700 border border-dashed border-gray-500 hover:border-blue-500 rounded-lg px-3 py-2.5 transition-colors">
+                    <svg className="w-4 h-4 text-gray-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                    <span className="text-sm text-gray-400 truncate">
+                      {imgPreview ? 'Imagen seleccionada — clic para cambiar' : 'Seleccionar imagen (JPG, PNG, máx. 5 MB)'}
+                    </span>
+                    <input type="file" accept="image/*" onChange={handleImgChange} className="hidden" />
+                  </label>
+                  {imgPreview && (
+                    <div className="mt-2 relative">
+                      <img src={imgPreview} alt="Vista previa" className="w-full max-h-40 object-contain rounded-lg border border-gray-600 bg-gray-900" />
+                      <button type="button" onClick={() => { setImgBase64(null); setImgPreview(null); }}
+                        className="absolute top-1 right-1 bg-gray-900/80 hover:bg-red-900/80 text-gray-300 hover:text-red-300 rounded-full w-6 h-6 flex items-center justify-center text-xs transition-colors">
+                        ✕
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex gap-3 pt-1">
+                  <button type="submit" disabled={enviando}
+                    className="flex-1 flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-semibold py-2.5 rounded-xl transition-colors text-sm">
+                    {enviando && <Spinner size={14} />}
+                    {enviando ? 'Enviando...' : 'Enviar comprobante'}
+                  </button>
+                  <button type="button" onClick={resetTrfForm}
+                    className="bg-gray-700 hover:bg-gray-600 text-gray-200 font-medium px-4 py-2.5 rounded-xl transition-colors text-sm">
+                    Cancelar
+                  </button>
+                </div>
+              </form>
+            )}
           </div>
-          {data!.pagos_recientes.length === 0 ? (
-            <p className="text-gray-400 text-sm text-center py-10">No hay pagos registrados.</p>
-          ) : (
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-gray-700 text-gray-400 text-left">
-                  <th className="px-4 py-3 font-medium">Fecha</th>
-                  <th className="px-4 py-3 font-medium">Monto</th>
-                  <th className="px-4 py-3 font-medium">Método</th>
-                  <th className="px-4 py-3 font-medium">Estado</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data!.pagos_recientes.map(p => (
-                  <tr key={p.id} className="border-b border-gray-700 last:border-0">
-                    <td className="px-4 py-3 text-gray-300">
-                      {new Date(p.fecha_pago).toLocaleDateString('es-GT')}
-                    </td>
-                    <td className="px-4 py-3 font-medium text-white">Q{parseFloat(p.monto).toFixed(2)}</td>
-                    <td className="px-4 py-3 text-gray-300 capitalize">{p.metodo}</td>
-                    <td className="px-4 py-3">
-                      <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${PAGO_CLASS[p.estado] ?? 'bg-gray-600 text-gray-200'}`}>
-                        {PAGO_LABEL[p.estado] ?? p.estado}
-                      </span>
-                    </td>
-                  </tr>
+
+          {/* Historial de Pagos */}
+          <div>
+            <h2 className="text-base font-semibold text-white mb-3">Historial de Pagos</h2>
+            {pagosLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <Spinner size={24} />
+              </div>
+            ) : misPagos.length === 0 ? (
+              <p className="text-gray-400 text-sm text-center py-8">No hay pagos registrados.</p>
+            ) : (
+              <div className="space-y-3">
+                {misPagos.map(p => (
+                  <div key={p.id} className="bg-gray-800 rounded-xl p-4 shadow border border-gray-700 flex items-center gap-4">
+                    <div className="w-10 h-10 bg-emerald-900/40 rounded-full flex items-center justify-center border border-emerald-700/40 shrink-0">
+                      <svg className="w-5 h-5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-white font-semibold text-sm">Q{parseFloat(p.monto).toFixed(2)}</p>
+                        <span className={`text-xs font-semibold px-2.5 py-0.5 rounded-full border ${PAGO_ESTADO_CLASS[p.estado] ?? 'bg-gray-600 text-gray-200 border-gray-500'}`}>
+                          {PAGO_ESTADO_LABEL[p.estado] ?? p.estado}
+                        </span>
+                      </div>
+                      <p className="text-gray-400 text-xs mt-0.5">
+                        {new Date(p.fecha_pago).toLocaleDateString('es-GT')} | {PAGO_METODO_LABEL[p.metodo] ?? p.metodo}
+                      </p>
+                      {p.referencia && (
+                        <p className="text-gray-500 text-xs mt-0.5 font-mono">{p.referencia}</p>
+                      )}
+                    </div>
+                  </div>
                 ))}
-              </tbody>
-            </table>
-          )}
+              </div>
+            )}
+          </div>
         </div>
       )}
 

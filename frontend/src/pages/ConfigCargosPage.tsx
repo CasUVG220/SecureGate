@@ -1,134 +1,180 @@
-import { useState } from 'react';
-import GaritaPage from './pages/GaritaPage';
-import ResidentesPage from './pages/ResidentesPage';
-import LoginPage from './pages/LoginPage';
-import SalidaPage from './pages/SalidaPage';
-import PagosPage from './pages/PagosPage';
-import PreautPage from './pages/PreautPage';
-import DashboardPage from './pages/DashboardPage';
-import ResidentePage from './pages/ResidentePage';
-import ReportesPage from './pages/ReportesPage';
-import ConfigCargosPage from './pages/ConfigCargosPage';
-import { decodeTokenPayload } from './services/api';
+import { useEffect, useState } from 'react';
+import {
+  getConfigCargos, createConfigCargo, updateConfigCargo, deleteConfigCargo,
+  type ConfigCargo,
+} from '../services/api';
+import { TableSkeleton, Spinner } from '../components/Skeleton';
+import { useToast } from '../components/Toast';
 
-type AdminPage  = 'dashboard' | 'residentes' | 'pagos' | 'preaut' | 'reportes' | 'config';
-type AgentePage = 'garita' | 'salida';
-type Page = AdminPage | AgentePage;
+const EMPTY_FORM = { nombre: '', monto: '' };
 
-const logoutBtn = (onClick: () => void) => (
-  <button
-    onClick={onClick}
-    className="text-sm font-medium text-red-400 hover:text-red-300 transition-colors px-3 py-1.5"
-  >
-    Cerrar sesión
-  </button>
-);
+export default function ConfigCargosPage() {
+  const showToast = useToast();
+  const [configs, setConfigs]       = useState<ConfigCargo[]>([]);
+  const [loading, setLoading]       = useState(true);
+  const [error, setError]           = useState<string | null>(null);
+  const [showModal, setShowModal]   = useState(false);
+  const [editTarget, setEditTarget] = useState<ConfigCargo | null>(null);
+  const [form, setForm]             = useState(EMPTY_FORM);
+  const [saving, setSaving]         = useState(false);
+  const [formError, setFormError]   = useState<string | null>(null);
+  const [togglingId, setTogglingId] = useState<string | null>(null);
 
-function App() {
-  const [isAuthenticated, setIsAuthenticated] = useState(!!localStorage.getItem('token'));
-  const [userRol, setUserRol] = useState<string>(() => {
-    const token = localStorage.getItem('token');
-    if (!token) return '';
-    const payload = decodeTokenPayload(token);
-    return (payload?.rol as string) || '';
-  });
-  const [userNombre, setUserNombre] = useState<string>(() => {
-    const token = localStorage.getItem('token');
-    if (!token) return '';
-    const payload = decodeTokenPayload(token);
-    return (payload?.nombre as string) || '';
-  });
-  const [page, setPage] = useState<Page>(() =>
-    userRol === 'admin' ? 'dashboard' : 'garita'
-  );
-
-  const handleLogin = (token: string, rol: string) => {
-    localStorage.setItem('token', token);
-    const payload = decodeTokenPayload(token);
-    setUserNombre((payload?.nombre as string) || '');
-    setUserRol(rol);
-    setIsAuthenticated(true);
-    setPage(rol === 'admin' ? 'dashboard' : 'garita');
+  const load = () => {
+    setLoading(true);
+    getConfigCargos()
+      .then(setConfigs)
+      .catch(() => setError('No se pudo cargar la configuración de cargos.'))
+      .finally(() => setLoading(false));
   };
 
-  const handleLogout = () => {
-    localStorage.removeItem('token');
-    setIsAuthenticated(false);
-    setUserRol('');
-    setUserNombre('');
-    setPage('garita');
+  useEffect(() => { load(); }, []);
+
+  const openCreate = () => { setEditTarget(null); setForm(EMPTY_FORM); setFormError(null); setShowModal(true); };
+  const openEdit   = (cfg: ConfigCargo) => { setEditTarget(cfg); setForm({ nombre: cfg.nombre, monto: cfg.monto }); setFormError(null); setShowModal(true); };
+  const closeModal = () => { setShowModal(false); setEditTarget(null); };
+
+  const handleSave = async () => {
+    if (!form.nombre.trim()) { setFormError('El nombre es requerido.'); return; }
+    const monto = parseFloat(form.monto);
+    if (!form.monto || isNaN(monto) || monto < 1) { setFormError('El monto debe ser mayor a 0.'); return; }
+    setFormError(null); setSaving(true);
+    try {
+      if (editTarget) {
+        const updated = await updateConfigCargo(editTarget.id, { nombre: form.nombre.trim(), monto });
+        setConfigs(prev => prev.map(c => c.id === updated.id ? updated : c));
+        showToast('Configuración actualizada');
+      } else {
+        const created = await createConfigCargo({ nombre: form.nombre.trim(), monto });
+        setConfigs(prev => [...prev, created]);
+        showToast('Configuración creada');
+      }
+      closeModal();
+    } catch (err: unknown) {
+      setFormError(err instanceof Error ? err.message : 'Error al guardar');
+    } finally {
+      setSaving(false);
+    }
   };
 
-  if (!isAuthenticated) {
-    return <LoginPage onLogin={handleLogin} />;
-  }
+  const handleToggle = async (cfg: ConfigCargo) => {
+    setTogglingId(cfg.id);
+    try {
+      const updated = await updateConfigCargo(cfg.id, { activo: !cfg.activo });
+      setConfigs(prev => prev.map(c => c.id === updated.id ? updated : c));
+      showToast(updated.activo ? 'Configuración activada' : 'Configuración desactivada', updated.activo ? 'success' : 'warning');
+    } catch {
+      showToast('No se pudo cambiar el estado.', 'error');
+    } finally {
+      setTogglingId(null);
+    }
+  };
 
-  /* ── Residente: pantalla propia, sin nav de secciones ── */
-  if (userRol === 'residente') {
-    return (
-      <div className="min-h-screen bg-gray-900 text-gray-100">
-        <header className="bg-gray-950 border-b border-gray-800 px-6 py-3 flex items-center justify-between">
-          <div>
-            <span className="text-base font-bold tracking-tight">SecureGate</span>
-            <span className="ml-2 text-xs text-gray-400">Mi Portal</span>
-          </div>
-          <div className="flex items-center gap-4">
-            {userNombre && <span className="text-sm text-gray-300">{userNombre}</span>}
-            {logoutBtn(handleLogout)}
-          </div>
-        </header>
-        <ResidentePage />
-      </div>
-    );
-  }
+  const handleDelete = async (cfg: ConfigCargo) => {
+    if (!window.confirm(`¿Desactivar "${cfg.nombre}"?`)) return;
+    try {
+      await deleteConfigCargo(cfg.id);
+      setConfigs(prev => prev.map(c => c.id === cfg.id ? { ...c, activo: false } : c));
+      showToast('Configuración desactivada', 'warning');
+    } catch {
+      showToast('No se pudo eliminar la configuración.', 'error');
+    }
+  };
 
-  const navBtn = (label: string, target: Page) => (
-    <button
-      key={target}
-      onClick={() => setPage(target)}
-      className={`text-sm font-medium px-3 py-1.5 rounded-lg transition-colors ${
-        page === target ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-gray-200'
-      }`}
-    >
-      {label}
-    </button>
-  );
-
-  /* ── Admin: solo páginas de administración ── */
-  if (userRol === 'admin') {
-    return (
-      <div className="min-h-screen bg-gray-900">
-        <nav className="bg-gray-950 border-b border-gray-800 px-6 py-2 flex gap-4 items-center">
-          {navBtn('Dashboard',         'dashboard')}
-          {navBtn('Residentes',        'residentes')}
-          {navBtn('Pagos',             'pagos')}
-          {navBtn('Preautorizaciones', 'preaut')}
-          {navBtn('Reportes',          'reportes')}
-          {navBtn('Configuración',     'config')}
-          <div className="ml-auto">{logoutBtn(handleLogout)}</div>
-        </nav>
-        {page === 'dashboard'  && <DashboardPage />}
-        {page === 'residentes' && <ResidentesPage />}
-        {page === 'pagos'      && <PagosPage />}
-        {page === 'preaut'     && <PreautPage />}
-        {page === 'reportes'   && <ReportesPage />}
-        {page === 'config'     && <ConfigCargosPage />}
-      </div>
-    );
-  }
-
-  /* ── Agente: solo garita y salida ── */
   return (
-    <div className="min-h-screen bg-gray-900">
-      <nav className="bg-gray-950 border-b border-gray-800 px-6 py-2 flex gap-4 items-center">
-        {navBtn('Terminal Garita',  'garita')}
-        {navBtn('Registrar Salida', 'salida')}
-        <div className="ml-auto">{logoutBtn(handleLogout)}</div>
-      </nav>
-      {page === 'garita' && <GaritaPage />}
-      {page === 'salida' && <SalidaPage />}
+    <div className="p-6 text-gray-100 space-y-6">
+      {/* Modal */}
+      {showModal && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+          <div className="bg-gray-800 rounded-2xl p-6 w-full max-w-sm space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between">
+              <h3 className="text-white font-semibold">{editTarget ? 'Editar configuración' : 'Nueva configuración'}</h3>
+              <button onClick={closeModal} className="text-gray-400 hover:text-white text-xl leading-none">✕</button>
+            </div>
+            {formError && <p className="text-sm text-red-400">{formError}</p>}
+            <div>
+              <label className="block text-sm text-gray-400 mb-1">Nombre *</label>
+              <input type="text" value={form.nombre} onChange={e => setForm(p => ({ ...p, nombre: e.target.value }))}
+                placeholder="Cargo por mora mensual"
+                className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white placeholder-gray-400 focus:outline-none focus:border-blue-500 transition-colors" />
+            </div>
+            <div>
+              <label className="block text-sm text-gray-400 mb-1">Monto (Q) *</label>
+              <input type="number" min="1" step="0.01" value={form.monto} onChange={e => setForm(p => ({ ...p, monto: e.target.value }))}
+                placeholder="50.00"
+                className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white placeholder-gray-400 focus:outline-none focus:border-blue-500 transition-colors" />
+            </div>
+            <div className="flex gap-3 pt-1">
+              <button onClick={handleSave} disabled={saving}
+                className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-semibold py-2 rounded-xl transition-colors flex items-center justify-center gap-2">
+                {saving && <Spinner />}
+                {saving ? 'Guardando...' : 'Guardar'}
+              </button>
+              <button onClick={closeModal} className="bg-gray-700 hover:bg-gray-600 text-gray-200 font-medium px-4 py-2 rounded-xl transition-colors">Cancelar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-xl font-bold text-white">Configuración de Cargos</h1>
+          <p className="text-sm text-gray-400 mt-0.5">Reglas de cargo automático por mora.</p>
+        </div>
+        <button onClick={openCreate}
+          className="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-4 py-2 rounded-xl text-sm transition-colors">
+          + Nueva configuración
+        </button>
+      </div>
+
+      {error && (
+        <div className="bg-red-900/40 border border-red-700 rounded-lg px-4 py-3 text-red-300 text-sm">{error}</div>
+      )}
+
+      <div className="bg-gray-800 rounded-2xl overflow-hidden shadow-xl max-w-3xl">
+        {!loading && configs.length === 0 ? (
+          <p className="text-gray-400 text-sm px-6 py-8 text-center">No hay configuraciones registradas.</p>
+        ) : (
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-gray-700 text-gray-400 text-left">
+                <th className="px-5 py-3 font-medium">Nombre</th>
+                <th className="px-5 py-3 font-medium">Monto</th>
+                <th className="px-5 py-3 font-medium">Estado</th>
+                <th className="px-5 py-3 font-medium text-right">Acciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              {loading ? (
+                <TableSkeleton rows={4} cols={4} />
+              ) : (
+                configs.map((cfg, i) => (
+                  <tr key={cfg.id} className={`border-b border-gray-700/50 last:border-0 ${i % 2 === 0 ? '' : 'bg-gray-700/20'}`}>
+                    <td className="px-5 py-3 text-white font-medium">{cfg.nombre}</td>
+                    <td className="px-5 py-3 text-gray-200">Q{parseFloat(cfg.monto).toFixed(2)}</td>
+                    <td className="px-5 py-3">
+                      <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-semibold ${cfg.activo ? 'bg-green-100 text-green-700' : 'bg-gray-600 text-gray-300'}`}>
+                        {cfg.activo ? 'Activo' : 'Inactivo'}
+                      </span>
+                    </td>
+                    <td className="px-5 py-3 text-right space-x-3 whitespace-nowrap">
+                      <button onClick={() => openEdit(cfg)} className="text-blue-400 hover:text-blue-300 transition-colors">Editar</button>
+                      <button onClick={() => handleToggle(cfg)} disabled={togglingId === cfg.id}
+                        className="text-yellow-400 hover:text-yellow-300 disabled:opacity-40 transition-colors flex-shrink-0 inline-flex items-center gap-1">
+                        {togglingId === cfg.id && <Spinner size={12} />}
+                        {cfg.activo ? 'Desactivar' : 'Activar'}
+                      </button>
+                      {cfg.activo && (
+                        <button onClick={() => handleDelete(cfg)} className="text-red-400 hover:text-red-300 transition-colors">Eliminar</button>
+                      )}
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        )}
+      </div>
     </div>
   );
 }
-
-export default App;

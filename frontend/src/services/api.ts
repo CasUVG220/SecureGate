@@ -159,9 +159,28 @@ export interface Pago {
   metodo: 'efectivo' | 'transferencia';
   estado: 'pendiente' | 'aprobado' | 'rechazado';
   comprobante: string | null;
+  referencia: string | null;
+  banco: string | null;
+  fecha_transferencia: string | null;
+  comentario_rechazo: string | null;
   registrado_por: string;
   numero_casa: string;
   residente_nombre: string;
+}
+
+export interface PagoVerificacion extends Pago {
+  residente_email: string;
+  residente_telefono: string | null;
+  saldo_pendiente: string;
+  estado_pago: string;
+}
+
+export interface TransferenciaInput {
+  monto: number;
+  referencia: string;
+  banco: string;
+  fecha_transferencia: string;
+  comprobante?: string;
 }
 
 export interface PagoInput {
@@ -197,14 +216,38 @@ export const aprobarPago = async (id: string): Promise<Pago> => {
   return body as Pago;
 };
 
-export const rechazarPago = async (id: string): Promise<Pago> => {
+export const rechazarPago = async (id: string, comentario_rechazo?: string): Promise<Pago> => {
   const res = await fetch(`${BASE_URL}/api/pagos/${encodeURIComponent(id)}/rechazar`, {
     method: 'PUT',
     headers: authHeaders(),
+    body: JSON.stringify({ comentario_rechazo }),
   });
   const body = await res.json();
   if (!res.ok) throw new Error(body.error || 'Error al rechazar pago');
   return body as Pago;
+};
+
+export const getPendientesVerificacion = async (): Promise<PagoVerificacion[]> => {
+  const res = await fetch(`${BASE_URL}/api/pagos/pendientes-verificacion`, { headers: authHeaders() });
+  if (!res.ok) throw new Error('Error al cargar cola de verificación');
+  return res.json();
+};
+
+export const crearTransferencia = async (data: TransferenciaInput): Promise<Pago> => {
+  const res = await fetch(`${BASE_URL}/api/pagos/transferencia`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify(data),
+  });
+  const body = await res.json();
+  if (!res.ok) throw new Error(body.error || 'Error al enviar comprobante');
+  return body as Pago;
+};
+
+export const getMisPagos = async (): Promise<Pago[]> => {
+  const res = await fetch(`${BASE_URL}/api/pagos/mis`, { headers: authHeaders() });
+  if (!res.ok) throw new Error('Error al cargar historial de pagos');
+  return res.json();
 };
 
 export interface Preautorizacion {
@@ -469,3 +512,4 @@ export const deleteConfigCargo = async (id: string): Promise<void> => {
     throw new Error(body.error || 'Error al eliminar configuración');
   }
 };
+
