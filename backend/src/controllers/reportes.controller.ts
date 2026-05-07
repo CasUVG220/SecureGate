@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import pool from '../db/pool';
+import { tenantFilter } from '../utils/tenant';
 
 const escapeCSV = (value: unknown): string => {
   const str = value == null ? '' : String(value);
@@ -17,6 +18,10 @@ export const reporteAccesos = async (req: Request, res: Response) => {
     return res.status(400).json({ error: 'Parámetros desde y hasta requeridos' });
   }
 
+  const ts = tenantFilter(req.user!, 'ra');
+  const desdeOffset = ts.params.length + 1;
+  const hastaOffset = ts.params.length + 2;
+
   try {
     const result = await pool.query(
       `SELECT
@@ -33,10 +38,12 @@ export const reporteAccesos = async (req: Request, res: Response) => {
        JOIN  residentes r           ON ra.residente_id       = r.id
        LEFT JOIN vehiculos ve       ON ra.vehiculo_id        = ve.id
        LEFT JOIN cargos_automaticos ca ON ca.registro_acceso_id = ra.id
-       WHERE ra.timestamp_entrada >= $1::date
-         AND ra.timestamp_entrada <  $2::date + INTERVAL '1 day'
+       ${ts.joinClause}
+       WHERE ${ts.whereClause}
+         AND ra.timestamp_entrada >= $${desdeOffset}::date
+         AND ra.timestamp_entrada <  $${hastaOffset}::date + INTERVAL '1 day'
        ORDER BY ra.timestamp_entrada DESC`,
-      [desde, hasta]
+      [...ts.params, desde, hasta]
     );
 
     const headers = [
@@ -69,6 +76,10 @@ export const reportePagos = async (req: Request, res: Response) => {
     return res.status(400).json({ error: 'Parámetros desde y hasta requeridos' });
   }
 
+  const ts = tenantFilter(req.user!, 'p');
+  const desdeOffset = ts.params.length + 1;
+  const hastaOffset = ts.params.length + 2;
+
   try {
     const result = await pool.query(
       `SELECT
@@ -79,10 +90,12 @@ export const reportePagos = async (req: Request, res: Response) => {
          p.estado
        FROM pagos p
        JOIN residentes r ON p.residente_id = r.id
-       WHERE p.fecha_pago >= $1::date
-         AND p.fecha_pago <  $2::date + INTERVAL '1 day'
+       ${ts.joinClause}
+       WHERE ${ts.whereClause}
+         AND p.fecha_pago >= $${desdeOffset}::date
+         AND p.fecha_pago <  $${hastaOffset}::date + INTERVAL '1 day'
        ORDER BY p.fecha_pago DESC`,
-      [desde, hasta]
+      [...ts.params, desde, hasta]
     );
 
     const headers = ['fecha', 'numero_casa', 'monto', 'metodo', 'estado'];

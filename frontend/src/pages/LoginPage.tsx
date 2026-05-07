@@ -1,11 +1,13 @@
 import { useState, type FormEvent } from 'react';
 import { login } from '../services/api';
+import { useTranslation } from '../i18n/useTranslation';
 
 interface LoginPageProps {
-  onLogin: (token: string, rol: string) => void;
+  onLogin: (token: string, rol: string, usuario: Record<string, any>) => void;
 }
 
 export default function LoginPage({ onLogin }: LoginPageProps) {
+  const { t } = useTranslation();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -18,7 +20,7 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
     try {
       const result = await login(email, password);
       localStorage.setItem('token', result.token);
-      onLogin(result.token, result.usuario.rol);
+      onLogin(result.token, result.usuario.rol, result.usuario);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Error al iniciar sesión');
     } finally {
@@ -27,44 +29,52 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
   };
 
   return (
-    <div className="min-h-screen bg-gray-900 flex items-center justify-center">
-      <div className="bg-gray-800 rounded-2xl p-8 shadow-xl w-full max-w-sm">
-        <div className="text-center mb-6">
-          <h1 className="text-2xl font-bold text-white">SecureGate</h1>
-          <p className="text-gray-400 text-sm mt-1">Control de Acceso Residencial</p>
+    <div className="min-h-screen bg-dark-900 flex items-center justify-center relative overflow-hidden">
+      {/* Background Orbs */}
+      <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-brand-600/20 rounded-full blur-[120px] pointer-events-none"></div>
+      <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-purple-600/20 rounded-full blur-[120px] pointer-events-none"></div>
+
+      <div className="relative bg-dark-800/60 backdrop-blur-xl border border-white/5 rounded-3xl p-10 shadow-2xl w-full max-w-md z-10">
+        <div className="text-center mb-8">
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-brand-500 to-purple-600 mb-6 shadow-glow">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          </div>
+          <h1 className="text-3xl font-bold text-white tracking-tight">{t('login.title')}</h1>
+          <p className="text-gray-400 mt-2">{t('login.subtitle')}</p>
         </div>
 
         {error && (
-          <div className="mb-4 bg-red-900/40 border border-red-700 text-red-300 text-sm rounded-lg px-4 py-3">
+          <div className="mb-6 bg-red-500/10 border border-red-500/20 text-red-400 text-sm rounded-xl px-4 py-3 flex items-center gap-3">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
             {error}
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-5">
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1">
-              Correo electrónico
+            <label className="block text-sm font-medium text-gray-300 mb-1.5">
+              {t('login.email')}
             </label>
             <input
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
-              className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 text-sm"
-              placeholder="usuario@ejemplo.com"
+              className="w-full bg-dark-700/50 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-all text-sm"
+              placeholder={t('login.emailPlaceholder')}
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1">
-              Contraseña
+            <label className="block text-sm font-medium text-gray-300 mb-1.5">
+              {t('login.password')}
             </label>
             <input
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
-              className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 text-sm"
+              className="w-full bg-dark-700/50 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-all text-sm"
               placeholder="••••••••"
             />
           </div>
@@ -72,9 +82,9 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed text-white font-medium py-2 rounded-lg transition-colors text-sm"
+            className="w-full bg-gradient-to-r from-brand-600 to-brand-500 hover:from-brand-500 hover:to-brand-400 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold py-3 rounded-xl transition-all duration-300 shadow-glow hover:shadow-glow-lg text-sm mt-4"
           >
-            {loading ? 'Iniciando...' : 'Iniciar sesión'}
+            {loading ? t('login.submitting') : t('login.submit')}
           </button>
         </form>
       </div>

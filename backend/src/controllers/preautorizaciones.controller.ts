@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import pool from '../db/pool';
+import { tenantFilter, ownershipClause, ownershipParams } from '../utils/tenant';
 
 /** Verifica si existe una preautorización activa y vigente para el DPI + residente. */
 export const checkPreautorizacion = async (
@@ -19,15 +20,19 @@ export const checkPreautorizacion = async (
   return result.rows.length > 0;
 };
 
-export const getPreautorizaciones = async (_req: Request, res: Response) => {
+export const getPreautorizaciones = async (req: Request, res: Response) => {
+  const ts = tenantFilter(req.user!, 'p');
   try {
     const result = await pool.query(
       `SELECT p.*, r.numero_casa, u.nombre AS residente_nombre
        FROM preautorizaciones p
        JOIN residentes r ON p.residente_id = r.id
        JOIN usuarios   u ON r.usuario_id   = u.id
-       WHERE p.activo = TRUE
-       ORDER BY p.fecha_inicio DESC`
+       ${ts.joinClause}
+       WHERE ${ts.whereClause}
+         AND p.activo = TRUE
+       ORDER BY p.fecha_inicio DESC`,
+      ts.params
     );
     res.json(result.rows);
   } catch (error) {
@@ -36,7 +41,7 @@ export const getPreautorizaciones = async (_req: Request, res: Response) => {
 };
 
 export const createPreautorizacion = async (req: Request, res: Response) => {
-  const { residente_id, nombre_visitante, numero_dpi, fecha_inicio, fecha_fin } = req.body;
+  const { residente_id, nombre_visitante, numero_dpi, placa, fecha_inicio, fecha_fin } = req.body;
 
   if (!residente_id || !nombre_visitante || !fecha_inicio) {
     return res.status(400).json({
@@ -45,20 +50,23 @@ export const createPreautorizacion = async (req: Request, res: Response) => {
   }
 
   try {
+    // Get residente and their sucursal_id
     const residente = await pool.query(
-      'SELECT id FROM residentes WHERE id = $1',
+      'SELECT id, sucursal_id FROM residentes WHERE id = $1',
       [residente_id]
     );
     if (residente.rows.length === 0) {
       return res.status(404).json({ error: 'Residente no encontrado' });
     }
+    const sucursal_id: string = residente.rows[0].sucursal_id;
 
     const result = await pool.query(
       `INSERT INTO preautorizaciones
-         (residente_id, nombre_visitante, numero_dpi, fecha_inicio, fecha_fin)
-       VALUES ($1, $2, $3, $4, $5)
+         (sucursal_id, residente_id, nombre_visitante, numero_dpi, placa, fecha_inicio, fecha_fin)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
        RETURNING *`,
-      [residente_id, nombre_visitante, numero_dpi || null, fecha_inicio, fecha_fin || null]
+      [sucursal_id, residente_id, nombre_visitante, numero_dpi || null,
+       placa || null, fecha_inicio, fecha_fin || null]
     );
     res.status(201).json(result.rows[0]);
   } catch (error) {
@@ -70,13 +78,25 @@ export const deletePreautorizacion = async (req: Request, res: Response) => {
   const { id } = req.params;
   try {
     const result = await pool.query(
-      `UPDATE preautorizaciones SET activo = FALSE
-       WHERE id = $1 AND activo = TRUE
+      `UPDATE preautorizaciones
+       SET activo = FALSE
+       WHERE id = $1
+         AND activo = TRUE
+         AND ${ownershipClause('preautorizaciones', 2)}
        RETURNING id`,
-      [id]
+      [id, ...ownershipParams(req.user!)]
     );
     if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'Preautorización no encontrada o ya inactiva' });
+      const existe = await pool.query(
+        'SELECT id, activo FROM preautorizaciones WHERE id = $1', [id]
+      );
+      if (existe.rows.length === 0) {
+        return res.status(404).json({ error: 'Preautorización no encontrada' });
+      }
+      if (!existe.rows[0].activo) {
+        return res.status(404).json({ error: 'Preautorización ya inactiva' });
+      }
+      return res.status(403).json({ error: 'Sin acceso a esta preautorización' });
     }
     res.json({ message: 'Preautorización eliminada', id: result.rows[0].id });
   } catch (error) {
@@ -84,14 +104,18 @@ export const deletePreautorizacion = async (req: Request, res: Response) => {
   }
 };
 
-const getResidenteIdFromUser = async (usuarioId: string): Promise<string | null> => {
-  const r = await pool.query('SELECT id FROM residentes WHERE usuario_id = $1', [usuarioId]);
-  return r.rows.length > 0 ? r.rows[0].id : null;
+const getResidenteIdFromUser = async (
+  usuarioId: string
+): Promise<{ id: string; sucursal_id: string } | null> => {
+  const r = await pool.query(
+    'SELECT id, sucursal_id FROM residentes WHERE usuario_id = $1', [usuarioId]
+  );
+  return r.rows.length > 0 ? r.rows[0] : null;
 };
 
 export const getMisPreautorizaciones = async (req: Request, res: Response) => {
-  const residenteId = await getResidenteIdFromUser(req.user!.id);
-  if (!residenteId) return res.status(404).json({ error: 'Residente no encontrado' });
+  const residente = await getResidenteIdFromUser(req.user!.id);
+  if (!residente) return res.status(404).json({ error: 'Residente no encontrado' });
 
   try {
     const result = await pool.query(
@@ -99,7 +123,7 @@ export const getMisPreautorizaciones = async (req: Request, res: Response) => {
        FROM preautorizaciones
        WHERE residente_id = $1 AND activo = TRUE
        ORDER BY created_at DESC`,
-      [residenteId]
+      [residente.id]
     );
     res.json(result.rows);
   } catch (error) {
@@ -114,16 +138,17 @@ export const createMisPreautorizacion = async (req: Request, res: Response) => {
     return res.status(400).json({ error: 'Campos requeridos: nombre_visitante, fecha_inicio' });
   }
 
-  const residenteId = await getResidenteIdFromUser(req.user!.id);
-  if (!residenteId) return res.status(404).json({ error: 'Residente no encontrado' });
+  const residente = await getResidenteIdFromUser(req.user!.id);
+  if (!residente) return res.status(404).json({ error: 'Residente no encontrado' });
 
   try {
     const result = await pool.query(
       `INSERT INTO preautorizaciones
-         (residente_id, nombre_visitante, numero_dpi, placa, fecha_inicio, fecha_fin)
-       VALUES ($1, $2, $3, $4, $5, $6)
+         (sucursal_id, residente_id, nombre_visitante, numero_dpi, placa, fecha_inicio, fecha_fin)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
        RETURNING *`,
-      [residenteId, nombre_visitante, numero_dpi || null, placa || null, fecha_inicio, fecha_fin || null]
+      [residente.sucursal_id, residente.id, nombre_visitante,
+       numero_dpi || null, placa || null, fecha_inicio, fecha_fin || null]
     );
     res.status(201).json(result.rows[0]);
   } catch (error) {
@@ -134,15 +159,15 @@ export const createMisPreautorizacion = async (req: Request, res: Response) => {
 export const deleteMisPreautorizacion = async (req: Request, res: Response) => {
   const { id } = req.params;
 
-  const residenteId = await getResidenteIdFromUser(req.user!.id);
-  if (!residenteId) return res.status(404).json({ error: 'Residente no encontrado' });
+  const residente = await getResidenteIdFromUser(req.user!.id);
+  if (!residente) return res.status(404).json({ error: 'Residente no encontrado' });
 
   try {
     const result = await pool.query(
       `UPDATE preautorizaciones SET activo = FALSE
        WHERE id = $1 AND residente_id = $2 AND activo = TRUE
        RETURNING id`,
-      [id, residenteId]
+      [id, residente.id]
     );
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Preautorización no encontrada' });

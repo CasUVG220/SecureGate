@@ -5,8 +5,10 @@ import {
   decodeTokenPayload,
   type AccesoActivo,
 } from '../services/api';
+import { useTranslation } from '../i18n/useTranslation';
 
 export default function SalidaPage() {
+  const { t } = useTranslation();
   const [placa, setPlaca] = useState('');
   const [searching, setSearching] = useState(false);
   const [accesoActivo, setAccesoActivo] = useState<AccesoActivo | null>(null);
@@ -22,6 +24,8 @@ export default function SalidaPage() {
     const payload = decodeTokenPayload(token);
     if (payload) setAgenteNombre((payload.nombre as string) || (payload.email as string));
   }, []);
+
+  void agenteNombre;
 
   const resetBusqueda = () => {
     setAccesoActivo(null);
@@ -76,10 +80,10 @@ export default function SalidaPage() {
 
           {/* Search form — always visible */}
           <form onSubmit={handleBuscar} className="bg-gray-800 rounded-2xl p-8 shadow-xl space-y-5">
-            <h2 className="text-lg font-bold text-white">Buscar vehículo activo</h2>
+            <h2 className="text-lg font-bold text-white">{t('exit.searchTitle')}</h2>
 
             <div>
-              <label className="block text-sm text-gray-300 mb-1">Placa del vehículo *</label>
+              <label className="block text-sm text-gray-300 mb-1">{t('exit.plateLabel')} *</label>
               <input
                 value={placa}
                 onChange={(e) => setPlaca(e.target.value)}
@@ -94,7 +98,7 @@ export default function SalidaPage() {
               disabled={searching}
               className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-semibold py-3 rounded-xl transition-colors"
             >
-              {searching ? 'Buscando...' : 'Buscar'}
+              {searching ? t('common.searching') : t('common.search')}
             </button>
           </form>
 
@@ -108,38 +112,38 @@ export default function SalidaPage() {
           {/* Not found */}
           {notFound && (
             <div className="bg-gray-800 border border-gray-700 rounded-xl px-5 py-4 text-gray-400 text-sm text-center">
-              No se encontró acceso activo con la placa <span className="font-semibold text-white">{placa}</span>.
+              {t('exit.notFound')} <span className="font-semibold text-white">{placa}</span>.
             </div>
           )}
 
           {/* Active access card */}
           {accesoActivo && !salidaOk && (
             <div className="bg-gray-800 rounded-2xl p-8 shadow-xl space-y-4">
-              <h3 className="text-base font-bold text-white">Acceso activo encontrado</h3>
+              <h3 className="text-base font-bold text-white">{t('exit.activeAccessFound')}</h3>
 
               <div className="space-y-2 text-sm">
                 <div className="flex justify-between border-b border-gray-700 pb-2">
-                  <span className="text-gray-400">Placa</span>
+                  <span className="text-gray-400">{t('exit.plateLabel')}</span>
                   <span className="font-semibold text-white uppercase">{accesoActivo.placa}</span>
                 </div>
                 <div className="flex justify-between border-b border-gray-700 pb-2">
-                  <span className="text-gray-400">Visitante</span>
+                  <span className="text-gray-400">{t('exit.visitor')}</span>
                   <span className="text-white">{accesoActivo.visitante.nombre}</span>
                 </div>
                 <div className="flex justify-between border-b border-gray-700 pb-2">
-                  <span className="text-gray-400">DPI</span>
+                  <span className="text-gray-400">{t('exit.dpi')}</span>
                   <span className="text-white">{accesoActivo.visitante.numero_dpi}</span>
                 </div>
                 <div className="flex justify-between border-b border-gray-700 pb-2">
-                  <span className="text-gray-400">Casa</span>
+                  <span className="text-gray-400">{t('exit.house')}</span>
                   <span className="text-white">{accesoActivo.residente.numero_casa}</span>
                 </div>
                 <div className="flex justify-between border-b border-gray-700 pb-2">
-                  <span className="text-gray-400">Residente</span>
+                  <span className="text-gray-400">{t('exit.resident')}</span>
                   <span className="text-white">{accesoActivo.residente.nombre}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-gray-400">Hora de entrada</span>
+                  <span className="text-gray-400">{t('exit.entryTime')}</span>
                   <span className="text-white">
                     {new Date(accesoActivo.timestamp_entrada).toLocaleString('es-GT')}
                   </span>
@@ -157,7 +161,7 @@ export default function SalidaPage() {
                 disabled={registrando}
                 className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-semibold py-3 rounded-xl transition-colors"
               >
-                {registrando ? 'Registrando...' : 'Registrar Salida'}
+                {registrando ? t('exit.registering') : t('exit.registerExit')}
               </button>
             </div>
           )}
@@ -166,16 +170,16 @@ export default function SalidaPage() {
           {salidaOk && (
             <div className="space-y-4">
               <div className="bg-green-50 border border-green-300 rounded-xl p-6">
-                <h3 className="text-green-700 font-bold text-lg mb-1">Salida registrada</h3>
+                <h3 className="text-green-700 font-bold text-lg mb-1">{t('exit.exitOkTitle')}</h3>
                 <p className="text-green-600 text-sm">
-                  La salida del vehículo <strong className="uppercase">{placa}</strong> fue registrada correctamente.
+                  {t('exit.exitOkDesc')} <strong className="uppercase">{placa}</strong>
                 </p>
               </div>
               <button
                 onClick={handleNuevaBusqueda}
                 className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-xl transition-colors"
               >
-                Nueva búsqueda
+                {t('exit.newSearch')}
               </button>
             </div>
           )}

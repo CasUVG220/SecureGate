@@ -5,6 +5,7 @@ import {
 } from '../services/api';
 import { TableSkeleton, Spinner } from '../components/Skeleton';
 import { useToast } from '../components/Toast';
+import { useTranslation } from '../i18n/useTranslation';
 
 type FormMode = 'none' | 'create' | 'edit';
 
@@ -16,12 +17,15 @@ const BADGE: Record<string, string> = {
   mora:     'bg-red-100 text-red-700',
   pendiente:'bg-yellow-100 text-yellow-700',
 };
-const BADGE_LABEL: Record<string, string> = {
-  al_dia: 'Al día', mora: 'Mora', pendiente: 'Pendiente',
-};
 
 export default function ResidentesPage() {
   const showToast = useToast();
+  const { t } = useTranslation();
+
+  const BADGE_LABEL: Record<string, string> = {
+    al_dia: t('residents.current'), mora: t('residents.inDebt'), pendiente: t('residents.pending'),
+  };
+
   const [residentes, setResidentes] = useState<Residente[]>([]);
   const [loading, setLoading]       = useState(true);
   const [error, setError]           = useState<string | null>(null);
@@ -56,7 +60,8 @@ export default function ResidentesPage() {
 
   const cancelForm = () => {
     setFormMode('none'); setEditTarget(null);
-    setCreateForm(EMPTY_CREATE); setUpdateForm(EMPTY_UPDATE); setError(null);
+    setCreateForm(EMPTY_CREATE); setUpdateForm(EMPTY_UPDATE);
+    setError(null);
   };
 
   const handleCreate = async (e: React.FormEvent) => {
@@ -64,7 +69,7 @@ export default function ResidentesPage() {
     try {
       await createResidente(createForm);
       cancelForm(); cargar();
-      showToast('Residente creado correctamente');
+      showToast(t('residents.created'));
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Error al crear residente');
     } finally {
@@ -79,7 +84,7 @@ export default function ResidentesPage() {
     try {
       await updateResidente(editTarget.id, updateForm);
       cancelForm(); cargar();
-      showToast('Residente actualizado');
+      showToast(t('residents.updated'));
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Error al actualizar residente');
     } finally {
@@ -88,150 +93,170 @@ export default function ResidentesPage() {
   };
 
   const handleDelete = async (r: Residente) => {
-    if (!window.confirm(`¿Eliminar al residente de la casa ${r.numero_casa}?`)) return;
+    if (!window.confirm(`${t('residents.confirmDelete')} ${r.numero_casa}?`)) return;
     setError(null);
     try {
       await deleteResidente(r.id);
       cargar();
-      showToast('Residente eliminado', 'warning');
+      showToast(t('residents.deleted'), 'warning');
     } catch (err: unknown) {
       showToast(err instanceof Error ? err.message : 'Error al eliminar residente', 'error');
     }
   };
 
   return (
-    <div className="p-6 text-gray-100 space-y-5 max-w-6xl">
+    <div className="p-8 text-gray-100 space-y-6 max-w-7xl mx-auto">
       {error && (
-        <div className="bg-red-900/40 border border-red-700 rounded-lg px-4 py-3 text-red-300 text-sm">{error}</div>
+        <div className="bg-red-500/10 border border-red-500/20 text-red-400 text-sm rounded-xl px-4 py-3 flex items-center gap-3">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          {error}
+        </div>
       )}
 
-      {/* Create form */}
+      {/* Create resident form */}
       {formMode === 'create' && (
-        <form onSubmit={handleCreate} className="bg-gray-800 rounded-2xl p-6 space-y-4">
-          <h2 className="font-bold text-white text-lg">Nuevo residente</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <form onSubmit={handleCreate} className="bg-dark-800/60 backdrop-blur-md rounded-3xl p-8 border border-white/5 shadow-2xl space-y-6">
+          <h2 className="font-bold text-white text-xl tracking-tight">{t('residents.createTitle')}</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
             {([
-              ['nombre',     'Nombre completo', 'text',     true],
-              ['email',      'Email',           'email',    true],
-              ['password',   'Contraseña',      'password', true],
-              ['numero_casa','Casa',             'text',     true],
-              ['telefono',   'Teléfono',         'text',     false],
+              ['nombre',     t('residents.fullName'), 'text',     true],
+              ['email',      t('common.email'),       'email',    true],
+              ['password',   t('common.password'),    'password', true],
+              ['numero_casa', t('residents.house'),   'text',     true],
+              ['telefono',   t('common.phone'),       'text',     false],
             ] as [keyof ResidenteInput, string, string, boolean][]).map(([name, label, type, req]) => (
               <div key={name}>
-                <label className="block text-sm text-gray-300 mb-1">{label}{req && ' *'}</label>
+                <label className="block text-sm font-medium text-gray-300 mb-2">{label}{req && <span className="text-brand-400 ml-1">*</span>}</label>
                 <input name={name} type={type} value={createForm[name] ?? ''} onChange={handleCreateChange} required={req}
-                  className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-white placeholder-gray-400 focus:outline-none focus:border-blue-500 transition-colors" />
+                  className="w-full bg-dark-700/50 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-all text-sm" />
               </div>
             ))}
           </div>
-          <div className="flex gap-3 pt-1">
+          <div className="flex gap-3 pt-4">
             <button type="submit" disabled={saving}
-              className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-semibold px-6 py-2 rounded-xl transition-colors flex items-center gap-2">
+              className="bg-gradient-to-r from-brand-600 to-brand-500 hover:from-brand-500 hover:to-brand-400 disabled:opacity-50 text-white font-semibold px-8 py-2.5 rounded-xl transition-all shadow-glow hover:shadow-glow-lg flex items-center gap-2">
               {saving && <Spinner />}
-              {saving ? 'Guardando...' : 'Guardar'}
+              {saving ? t('common.saving') : t('common.save')}
             </button>
-            <button type="button" onClick={cancelForm} className="text-gray-400 hover:text-gray-200 px-4 py-2 rounded-xl transition-colors">Cancelar</button>
+            <button type="button" onClick={cancelForm} className="text-gray-400 hover:text-white px-6 py-2.5 rounded-xl hover:bg-white/5 transition-all font-medium">{t('common.cancel')}</button>
           </div>
         </form>
       )}
 
       {/* Edit form */}
       {formMode === 'edit' && editTarget && (
-        <form onSubmit={handleUpdate} className="bg-gray-800 rounded-2xl p-6 space-y-4">
-          <h2 className="font-bold text-white text-lg">Editar — Casa {editTarget.numero_casa}</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <form onSubmit={handleUpdate} className="bg-dark-800/60 backdrop-blur-md rounded-3xl p-8 border border-white/5 shadow-2xl space-y-6">
+          <h2 className="font-bold text-white text-xl tracking-tight">{t('residents.editTitle')} — Casa {editTarget.numero_casa}</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
             <div>
-              <label className="block text-sm text-gray-300 mb-1">Casa *</label>
+              <label className="block text-sm font-medium text-gray-300 mb-2">{t('residents.house')} <span className="text-brand-400 ml-1">*</span></label>
               <input name="numero_casa" value={updateForm.numero_casa ?? ''} onChange={handleUpdateChange} required
-                className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-blue-500 transition-colors" />
+                className="w-full bg-dark-700/50 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-all text-sm" />
             </div>
             <div>
-              <label className="block text-sm text-gray-300 mb-1">Estado de pago</label>
+              <label className="block text-sm font-medium text-gray-300 mb-2">{t('residents.paymentStatus')}</label>
               <select name="estado_pago" value={updateForm.estado_pago ?? ''} onChange={handleUpdateChange}
-                className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-blue-500 transition-colors">
-                <option value="al_dia">Al día</option>
-                <option value="mora">Mora</option>
-                <option value="pendiente">Pendiente</option>
+                className="w-full bg-dark-700/50 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-all text-sm appearance-none">
+                <option value="al_dia" className="bg-dark-800 text-white">{t('residents.current')}</option>
+                <option value="mora" className="bg-dark-800 text-white">{t('residents.inDebt')}</option>
+                <option value="pendiente" className="bg-dark-800 text-white">{t('residents.pending')}</option>
               </select>
             </div>
             <div>
-              <label className="block text-sm text-gray-300 mb-1">Teléfono</label>
+              <label className="block text-sm font-medium text-gray-300 mb-2">{t('common.phone')}</label>
               <input name="telefono" value={updateForm.telefono ?? ''} onChange={handleUpdateChange}
-                className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-blue-500 transition-colors" />
+                className="w-full bg-dark-700/50 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-all text-sm" />
             </div>
             <div>
-              <label className="block text-sm text-gray-300 mb-1">Saldo pendiente (Q)</label>
+              <label className="block text-sm font-medium text-gray-300 mb-2">{t('residents.pendingBalance')}</label>
               <input name="saldo_pendiente" type="number" min="0" step="0.01" value={updateForm.saldo_pendiente ?? 0} onChange={handleUpdateChange}
-                className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-blue-500 transition-colors" />
+                className="w-full bg-dark-700/50 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-all text-sm" />
             </div>
           </div>
-          <div className="flex gap-3 pt-1">
+          <div className="flex gap-3 pt-4">
             <button type="submit" disabled={saving}
-              className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-semibold px-6 py-2 rounded-xl transition-colors flex items-center gap-2">
+              className="bg-gradient-to-r from-brand-600 to-brand-500 hover:from-brand-500 hover:to-brand-400 disabled:opacity-50 text-white font-semibold px-8 py-2.5 rounded-xl transition-all shadow-glow hover:shadow-glow-lg flex items-center gap-2">
               {saving && <Spinner />}
-              {saving ? 'Guardando...' : 'Guardar cambios'}
+              {saving ? t('common.saving') : t('common.saveChanges')}
             </button>
-            <button type="button" onClick={cancelForm} className="text-gray-400 hover:text-gray-200 px-4 py-2 rounded-xl transition-colors">Cancelar</button>
+            <button type="button" onClick={cancelForm} className="text-gray-400 hover:text-white px-6 py-2.5 rounded-xl hover:bg-white/5 transition-all font-medium">{t('common.cancel')}</button>
           </div>
         </form>
       )}
 
       {/* Action bar */}
       {formMode === 'none' && (
-        <div className="flex justify-between items-center">
-          <h1 className="text-xl font-bold text-white">
-            Residentes
-            {!loading && <span className="ml-2 text-sm font-normal text-gray-400">({residentes.length})</span>}
+        <div className="flex justify-between items-center bg-dark-800/40 backdrop-blur-md rounded-3xl p-6 border border-white/5 shadow-lg">
+          <h1 className="text-2xl font-bold text-white tracking-tight flex items-center gap-3">
+            {t('residents.title')}
+            {!loading && <span className="px-3 py-1 bg-white/5 rounded-full text-sm font-medium text-brand-400 border border-brand-500/20">{residentes.length}</span>}
           </h1>
-          <button onClick={() => { setFormMode('create'); setError(null); }}
-            className="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-5 py-2 rounded-xl transition-colors text-sm">
-            + Nuevo residente
-          </button>
+          <div className="flex gap-3">
+            <button onClick={() => { setFormMode('create'); setError(null); }}
+              className="bg-brand-600 hover:bg-brand-500 text-white font-semibold px-6 py-2.5 rounded-xl transition-all shadow-glow hover:shadow-glow-lg text-sm flex items-center gap-2">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              {t('residents.new')}
+            </button>
+          </div>
         </div>
       )}
 
       {/* Table */}
-      <div className="bg-gray-800 rounded-2xl overflow-hidden shadow-xl">
+      <div className="bg-dark-800/40 backdrop-blur-md rounded-3xl overflow-hidden shadow-xl border border-white/5">
         {!loading && residentes.length === 0 ? (
-          <p className="text-gray-400 text-sm text-center py-10">No hay residentes registrados.</p>
+          <div className="py-20 text-center">
+            <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-white/5 mb-6 shadow-inner">
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-gray-500"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+            </div>
+            <p className="text-gray-400 text-base">{t('residents.noResidents')}</p>
+          </div>
         ) : (
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-gray-700 text-gray-400 text-left">
-                <th className="px-5 py-3 font-medium">Casa</th>
-                <th className="px-5 py-3 font-medium">Nombre</th>
-                <th className="px-5 py-3 font-medium">Email</th>
-                <th className="px-5 py-3 font-medium">Estado</th>
-                <th className="px-5 py-3 font-medium">Saldo (Q)</th>
-                <th className="px-5 py-3 font-medium">Teléfono</th>
-                <th className="px-5 py-3 font-medium">Acciones</th>
-              </tr>
-            </thead>
-            <tbody>
-              {loading ? (
-                <TableSkeleton rows={6} cols={7} />
-              ) : (
-                residentes.map((r, i) => (
-                  <tr key={r.id} className={`border-b border-gray-700 last:border-0 ${i % 2 === 1 ? 'bg-gray-700/20' : ''}`}>
-                    <td className="px-5 py-3 font-semibold text-white">{r.numero_casa}</td>
-                    <td className="px-5 py-3 text-gray-200">{r.nombre}</td>
-                    <td className="px-5 py-3 text-gray-400">{r.email}</td>
-                    <td className="px-5 py-3">
-                      <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${BADGE[r.estado_pago] ?? 'bg-gray-600 text-gray-200'}`}>
-                        {BADGE_LABEL[r.estado_pago] ?? r.estado_pago}
-                      </span>
-                    </td>
-                    <td className="px-5 py-3 text-gray-300">{parseFloat(r.saldo_pendiente).toFixed(2)}</td>
-                    <td className="px-5 py-3 text-gray-400">{r.telefono || '—'}</td>
-                    <td className="px-5 py-3 flex gap-3">
-                      <button onClick={() => openEdit(r)} className="text-blue-400 hover:text-blue-300 transition-colors">Editar</button>
-                      <button onClick={() => handleDelete(r)} className="text-red-400 hover:text-red-300 transition-colors">Eliminar</button>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-white/5 text-gray-400 text-left bg-white/[0.02]">
+                  <th className="px-6 py-4 font-semibold uppercase tracking-wider text-xs whitespace-nowrap">{t('residents.house')}</th>
+                  <th className="px-6 py-4 font-semibold uppercase tracking-wider text-xs whitespace-nowrap">{t('common.name')}</th>
+                  <th className="px-6 py-4 font-semibold uppercase tracking-wider text-xs whitespace-nowrap">{t('common.email')}</th>
+                  <th className="px-6 py-4 font-semibold uppercase tracking-wider text-xs whitespace-nowrap">{t('residents.paymentStatus')}</th>
+                  <th className="px-6 py-4 font-semibold uppercase tracking-wider text-xs whitespace-nowrap">{t('residents.balance')}</th>
+                  <th className="px-6 py-4 font-semibold uppercase tracking-wider text-xs whitespace-nowrap">{t('common.phone')}</th>
+                  <th className="px-6 py-4 font-semibold uppercase tracking-wider text-xs whitespace-nowrap text-right">{t('common.actions')}</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-white/5">
+                {loading ? (
+                  <TableSkeleton rows={6} cols={7} />
+                ) : (
+                  residentes.map((r) => (
+                    <tr key={r.id} className="hover:bg-white/[0.02] transition-colors group">
+                      <td className="px-6 py-4 font-bold text-white whitespace-nowrap">{r.numero_casa}</td>
+                      <td className="px-6 py-4 text-gray-200 font-medium whitespace-nowrap">{r.nombre}</td>
+                      <td className="px-6 py-4 text-gray-400 whitespace-nowrap">{r.email}</td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border ${r.estado_pago === 'al_dia' ? 'bg-green-500/10 text-green-400 border-green-500/20' : r.estado_pago === 'mora' ? 'bg-red-500/10 text-red-400 border-red-500/20' : 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20'}`}>
+                          {r.estado_pago === 'al_dia' && <div className="w-1.5 h-1.5 rounded-full bg-green-400"></div>}
+                          {r.estado_pago === 'mora' && <div className="w-1.5 h-1.5 rounded-full bg-red-400"></div>}
+                          {r.estado_pago === 'pendiente' && <div className="w-1.5 h-1.5 rounded-full bg-yellow-400"></div>}
+                          {BADGE_LABEL[r.estado_pago] ?? r.estado_pago}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 font-medium text-gray-300 whitespace-nowrap">{parseFloat(r.saldo_pendiente).toFixed(2)}</td>
+                      <td className="px-6 py-4 text-gray-400 whitespace-nowrap">{r.telefono || '—'}</td>
+                      <td className="px-6 py-4 flex gap-2 justify-end whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button onClick={() => openEdit(r)} className="p-2 text-brand-400 hover:text-brand-300 hover:bg-brand-500/10 rounded-lg transition-all" title={t('common.edit')}>
+                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                        </button>
+                        <button onClick={() => handleDelete(r)} className="p-2 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-lg transition-all" title={t('common.delete')}>
+                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
     </div>

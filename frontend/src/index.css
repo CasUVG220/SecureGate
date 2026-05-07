@@ -1,3 +1,64 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer base {
+  body {
+    @apply antialiased text-gray-100 selection:bg-brand-500 selection:text-white;
+  }
+  
+  /* Custom sleek scrollbar */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply bg-gray-700/50 rounded-full hover:bg-gray-600/80 transition-colors;
+  }
+  html:not(.dark) ::-webkit-scrollbar-thumb {
+    @apply bg-gray-300 rounded-full hover:bg-gray-400;
+  }
+}
+
+/* ── Light mode overrides (html without .dark class) ─────────────────────
+   These rules apply when the user switches to light mode.
+   Specificity (0,2,0) beats Tailwind utility (0,1,0) at same cascade level.
+   ───────────────────────────────────────────────────────────────────────── */
+
+/* Backgrounds */
+html:not(.dark) .bg-gray-950 { background-color: #f8fafc; }
+html:not(.dark) .bg-gray-900 { background-color: #f9fafb; }
+html:not(.dark) .bg-gray-800 { background-color: #ffffff; }
+html:not(.dark) .bg-gray-750 { background-color: #f3f4f6; }
+html:not(.dark) .bg-gray-700 { background-color: #f3f4f6; }
+html:not(.dark) .bg-gray-600 { background-color: #e5e7eb; }
+
+/* Borders */
+html:not(.dark) .border-gray-800 { border-color: #e5e7eb; }
+html:not(.dark) .border-gray-700 { border-color: #e5e7eb; }
+html:not(.dark) .border-gray-600 { border-color: #d1d5db; }
+
+/* Text — gray scale */
+html:not(.dark) .text-gray-100 { color: #1f2937; }
+html:not(.dark) .text-gray-200 { color: #374151; }
+html:not(.dark) .text-gray-300 { color: #4b5563; }
+html:not(.dark) .text-gray-400 { color: #6b7280; }
+
+/* Primary text: white → near-black, EXCEPT on colored-bg elements and buttons */
+html:not(.dark) .text-white:not(button):not([class*="bg-blue-"]):not([class*="bg-emerald-"]):not([class*="bg-red-"]):not([class*="bg-green-"]):not([class*="bg-amber-"]):not([class*="bg-teal-"]):not([class*="bg-yellow-"]):not([class*="bg-indigo-"]):not([class*="bg-purple-"]) {
+  color: #111827;
+}
+
+/* Form elements: always dark text for readability */
+html:not(.dark) input:not([type="checkbox"]):not([type="radio"]) { color: #111827; }
+html:not(.dark) select { color: #111827; }
+html:not(.dark) textarea { color: #111827; }
+html:not(.dark) input::placeholder,
+html:not(.dark) textarea::placeholder { color: #9ca3af; }
+
+/* Skeleton pulses */
+html:not(.dark) [class*="animate-pulse"] .bg-gray-700 { background-color: #e5e7eb; }
+html:not(.dark) [class*="animate-pulse"] .rounded { background-color: #e5e7eb; }

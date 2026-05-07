@@ -14,14 +14,18 @@ import {
 } from '../services/api';
 import { Spinner } from '../components/Skeleton';
 import { useToast } from '../components/Toast';
+import { useTranslation } from '../i18n/useTranslation';
 
 const BADGE: Record<string, string> = {
   al_dia:   'bg-green-100 text-green-700',
   mora:     'bg-red-100 text-red-700',
   pendiente:'bg-yellow-100 text-yellow-700',
 };
-const BADGE_LABEL: Record<string, string> = {
-  al_dia: 'Al día', mora: 'Mora', pendiente: 'Pendiente',
+
+const PAGO_ESTADO_CLASS: Record<string, string> = {
+  pendiente: 'bg-yellow-900/40 text-yellow-400 border-yellow-700/40',
+  aprobado:  'bg-green-900/40 text-green-400 border-green-700/40',
+  rechazado: 'bg-red-900/40 text-red-400 border-red-700/40',
 };
 
 const today = () => new Date().toISOString().slice(0, 10);
@@ -29,18 +33,17 @@ const today = () => new Date().toISOString().slice(0, 10);
 const EMPTY_FORM = { nombre_visitante: '', numero_dpi: '', placa: '', fecha_inicio: today(), fecha_fin: '' };
 const EMPTY_TRF  = { monto: '', referencia: '', banco: '', fecha_transferencia: today() };
 
-const PAGO_METODO_LABEL: Record<string, string> = { efectivo: 'Efectivo', transferencia: 'Transferencia' };
-const PAGO_ESTADO_CLASS: Record<string, string> = {
-  pendiente: 'bg-yellow-900/40 text-yellow-400 border-yellow-700/40',
-  aprobado:  'bg-green-900/40 text-green-400 border-green-700/40',
-  rechazado: 'bg-red-900/40 text-red-400 border-red-700/40',
-};
-const PAGO_ESTADO_LABEL: Record<string, string> = {
-  pendiente: 'Pendiente', aprobado: 'Completado', rechazado: 'Rechazado',
-};
-
 export default function ResidentePage() {
   const showToast = useToast();
+  const { t } = useTranslation();
+
+  const BADGE_LABEL: Record<string, string> = {
+    al_dia: t('residents.current'), mora: t('residents.inDebt'), pendiente: t('residents.pending'),
+  };
+  const PAGO_METODO_LABEL: Record<string, string> = { efectivo: t('payments.cash'), transferencia: t('payments.transfer') };
+  const PAGO_ESTADO_LABEL: Record<string, string> = {
+    pendiente: t('payments.pending'), aprobado: t('payments.approved'), rechazado: t('payments.rejected'),
+  };
 
   const [data, setData]         = useState<ResidenteMe | null>(null);
   const [loading, setLoading]   = useState(true);
@@ -98,10 +101,10 @@ export default function ResidentePage() {
     loadPagos();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const handleTabChange = (t: 'pagos' | 'invitados') => {
-    setTab(t);
-    if (t === 'pagos') loadPagos();
-    if (t === 'invitados') loadInvitados();
+  const handleTabChange = (tab2: 'pagos' | 'invitados') => {
+    setTab(tab2);
+    if (tab2 === 'pagos') loadPagos();
+    if (tab2 === 'invitados') loadInvitados();
   };
 
   const handleTrfChange = (e: React.ChangeEvent<HTMLInputElement>) =>
@@ -148,7 +151,7 @@ export default function ResidentePage() {
       });
       setMisPagos(prev => [nuevo, ...prev]);
       resetTrfForm();
-      showToast('Comprobante enviado. Pendiente de verificación.', 'success');
+      showToast(t('portal.receiptSent'), 'success');
     } catch (err: unknown) {
       setTrfError(err instanceof Error ? err.message : 'Error al enviar');
     } finally {
@@ -199,7 +202,7 @@ export default function ResidentePage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-24">
-        <p className="text-gray-400 text-sm">Cargando...</p>
+        <p className="text-gray-400 text-sm">{t('common.loading')}</p>
       </div>
     );
   }
@@ -222,7 +225,7 @@ export default function ResidentePage() {
       <div className="bg-gray-800 rounded-2xl p-6 shadow-xl">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <p className="text-gray-400 text-sm">Casa</p>
+            <p className="text-gray-400 text-sm">{t('portal.house')}</p>
             <p className="text-3xl font-bold text-white mt-1">{data!.numero_casa}</p>
           </div>
           <span className={`mt-1 px-3 py-1 rounded-full text-sm font-semibold ${BADGE[data!.estado_pago] ?? 'bg-gray-600 text-gray-200'}`}>
@@ -231,14 +234,14 @@ export default function ResidentePage() {
         </div>
         <div className="mt-4 pt-4 border-t border-gray-700 grid grid-cols-2 gap-4">
           <div>
-            <p className="text-gray-400 text-xs">Saldo pendiente</p>
+            <p className="text-gray-400 text-xs">{t('portal.pendingBalance')}</p>
             <p className={`text-xl font-semibold mt-0.5 ${saldo > 0 ? 'text-red-400' : 'text-green-400'}`}>
               Q{saldo.toFixed(2)}
             </p>
           </div>
           {data!.telefono && (
             <div>
-              <p className="text-gray-400 text-xs">Teléfono</p>
+              <p className="text-gray-400 text-xs">{t('common.phone')}</p>
               <p className="text-white text-sm mt-0.5">{data!.telefono}</p>
             </div>
           )}
@@ -247,17 +250,17 @@ export default function ResidentePage() {
 
       {/* Tab bar */}
       <div className="flex rounded-xl overflow-hidden border border-gray-700">
-        {(['pagos', 'invitados'] as const).map(t => (
+        {(['pagos', 'invitados'] as const).map(tabKey => (
           <button
-            key={t}
-            onClick={() => handleTabChange(t)}
+            key={tabKey}
+            onClick={() => handleTabChange(tabKey)}
             className={`flex-1 py-2.5 text-sm font-semibold transition-colors ${
-              tab === t
+              tab === tabKey
                 ? 'bg-emerald-500 text-white'
                 : 'bg-gray-800 text-gray-400 hover:text-gray-200'
             }`}
           >
-            {t === 'pagos' ? 'Pagos' : 'Visitantes'}
+            {tabKey === 'pagos' ? t('portal.payments') : t('portal.visitors')}
           </button>
         ))}
       </div>
@@ -268,9 +271,9 @@ export default function ResidentePage() {
           {/* Realizar Pago card */}
           <div className="bg-gray-800 rounded-2xl p-6 shadow-xl space-y-4">
             <div>
-              <h2 className="text-base font-semibold text-white">Realizar Pago</h2>
+              <h2 className="text-base font-semibold text-white">{t('portal.makePayment')}</h2>
               <p className="text-sm text-gray-400 mt-0.5">
-                Saldo pendiente:{' '}
+                {t('portal.pendingBalance')}:{' '}
                 <span className={`font-semibold ${parseFloat(data!.saldo_pendiente) > 0 ? 'text-red-400' : 'text-emerald-400'}`}>
                   Q{parseFloat(data!.saldo_pendiente).toFixed(2)}
                 </span>
@@ -280,13 +283,13 @@ export default function ResidentePage() {
             {!showTrf ? (
               <div className="space-y-3">
                 <button
-                  onClick={() => showToast('Pago con tarjeta próximamente disponible.', 'warning')}
+                  onClick={() => showToast(t('portal.cardComingSoon'), 'warning')}
                   className="w-full flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-white font-semibold py-3 rounded-xl transition-colors"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
                   </svg>
-                  Pagar con Tarjeta
+                  {t('portal.payCard')}
                 </button>
                 <button
                   onClick={() => setShowTrf(true)}
@@ -295,13 +298,13 @@ export default function ResidentePage() {
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
                   </svg>
-                  Subir Comprobante de Transferencia
+                  {t('portal.uploadReceipt')}
                 </button>
               </div>
             ) : (
               <form onSubmit={handleEnviarTransferencia} className="space-y-4">
                 <div className="flex items-center justify-between">
-                  <h3 className="text-sm font-semibold text-white">Comprobante de transferencia</h3>
+                  <h3 className="text-sm font-semibold text-white">{t('portal.receiptTitle')}</h3>
                   <button type="button" onClick={resetTrfForm}
                     className="text-gray-400 hover:text-white text-xl leading-none">✕</button>
                 </div>
@@ -310,25 +313,25 @@ export default function ResidentePage() {
                 )}
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-xs text-gray-400 mb-1">Monto (Q) *</label>
+                    <label className="block text-xs text-gray-400 mb-1">{t('portal.amountLabel')} *</label>
                     <input type="number" name="monto" step="0.01" min="0.01" value={trfForm.monto}
                       onChange={handleTrfChange} placeholder="850.00"
                       className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm placeholder-gray-400 focus:outline-none focus:border-blue-500" />
                   </div>
                   <div>
-                    <label className="block text-xs text-gray-400 mb-1">Banco *</label>
+                    <label className="block text-xs text-gray-400 mb-1">{t('portal.bankLabel')} *</label>
                     <input type="text" name="banco" value={trfForm.banco}
                       onChange={handleTrfChange} placeholder="Banco Industrial"
                       className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm placeholder-gray-400 focus:outline-none focus:border-blue-500" />
                   </div>
                   <div>
-                    <label className="block text-xs text-gray-400 mb-1">No. Referencia *</label>
+                    <label className="block text-xs text-gray-400 mb-1">{t('portal.reference')} *</label>
                     <input type="text" name="referencia" value={trfForm.referencia}
                       onChange={handleTrfChange} placeholder="TRF-789456123"
                       className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm placeholder-gray-400 focus:outline-none focus:border-blue-500" />
                   </div>
                   <div>
-                    <label className="block text-xs text-gray-400 mb-1">Fecha de transferencia *</label>
+                    <label className="block text-xs text-gray-400 mb-1">{t('portal.transferDate')} *</label>
                     <input type="date" name="fecha_transferencia" value={trfForm.fecha_transferencia}
                       onChange={handleTrfChange}
                       className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500" />
@@ -337,13 +340,13 @@ export default function ResidentePage() {
 
                 {/* Image upload */}
                 <div>
-                  <label className="block text-xs text-gray-400 mb-1">Imagen del comprobante (opcional)</label>
+                  <label className="block text-xs text-gray-400 mb-1">{t('portal.receiptImage')}</label>
                   <label className="flex items-center gap-2 w-full cursor-pointer bg-gray-700 border border-dashed border-gray-500 hover:border-blue-500 rounded-lg px-3 py-2.5 transition-colors">
                     <svg className="w-4 h-4 text-gray-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                     </svg>
                     <span className="text-sm text-gray-400 truncate">
-                      {imgPreview ? 'Imagen seleccionada — clic para cambiar' : 'Seleccionar imagen (JPG, PNG, máx. 5 MB)'}
+                      {imgPreview ? t('portal.imageSelected') : t('portal.selectImage')}
                     </span>
                     <input type="file" accept="image/*" onChange={handleImgChange} className="hidden" />
                   </label>
@@ -362,11 +365,11 @@ export default function ResidentePage() {
                   <button type="submit" disabled={enviando}
                     className="flex-1 flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-semibold py-2.5 rounded-xl transition-colors text-sm">
                     {enviando && <Spinner size={14} />}
-                    {enviando ? 'Enviando...' : 'Enviar comprobante'}
+                    {enviando ? t('portal.sending') : t('portal.sendReceipt')}
                   </button>
                   <button type="button" onClick={resetTrfForm}
                     className="bg-gray-700 hover:bg-gray-600 text-gray-200 font-medium px-4 py-2.5 rounded-xl transition-colors text-sm">
-                    Cancelar
+                    {t('common.cancel')}
                   </button>
                 </div>
               </form>
@@ -375,13 +378,13 @@ export default function ResidentePage() {
 
           {/* Historial de Pagos */}
           <div>
-            <h2 className="text-base font-semibold text-white mb-3">Historial de Pagos</h2>
+            <h2 className="text-base font-semibold text-white mb-3">{t('portal.payHistory')}</h2>
             {pagosLoading ? (
               <div className="flex items-center justify-center py-8">
                 <Spinner size={24} />
               </div>
             ) : misPagos.length === 0 ? (
-              <p className="text-gray-400 text-sm text-center py-8">No hay pagos registrados.</p>
+              <p className="text-gray-400 text-sm text-center py-8">{t('portal.noPayments')}</p>
             ) : (
               <div className="space-y-3">
                 {misPagos.map(p => (
@@ -417,19 +420,19 @@ export default function ResidentePage() {
       {tab === 'invitados' && (
         <div className="space-y-8">
           {invLoading ? (
-            <p className="text-gray-400 text-sm text-center py-10">Cargando...</p>
+            <p className="text-gray-400 text-sm text-center py-10">{t('common.loading')}</p>
           ) : (
             <>
               {/* Preautorizaciones */}
               <section>
                 <div className="flex items-center justify-between mb-4">
-                  <h2 className="text-base font-semibold text-white">Mis preautorizaciones</h2>
+                  <h2 className="text-base font-semibold text-white">{t('portal.myPreauths')}</h2>
                   {!showForm && (
                     <button
                       onClick={() => setShowForm(true)}
                       className="text-sm bg-blue-600 hover:bg-blue-700 text-white font-medium px-4 py-2 rounded-lg transition-colors"
                     >
-                      + Nueva
+                      {t('portal.new')}
                     </button>
                   )}
                 </div>
@@ -437,7 +440,7 @@ export default function ResidentePage() {
                 {/* Inline create form */}
                 {showForm && (
                   <form onSubmit={handleSave} className="bg-gray-800 rounded-2xl p-6 mb-4 space-y-4 shadow-xl">
-                    <h3 className="text-sm font-semibold text-white">Nueva preautorización</h3>
+                    <h3 className="text-sm font-semibold text-white">{t('portal.newPreauth')}</h3>
 
                     {formError && (
                       <div className="bg-red-50 border border-red-300 rounded-lg px-3 py-2 text-red-700 text-sm">
@@ -447,7 +450,7 @@ export default function ResidentePage() {
 
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                       <div className="sm:col-span-3">
-                        <label className="block text-xs text-gray-400 mb-1">Nombre *</label>
+                        <label className="block text-xs text-gray-400 mb-1">{t('portal.visitorName')} *</label>
                         <input
                           name="nombre_visitante"
                           value={form.nombre_visitante}
@@ -458,27 +461,27 @@ export default function ResidentePage() {
                         />
                       </div>
                       <div>
-                        <label className="block text-xs text-gray-400 mb-1">DPI</label>
+                        <label className="block text-xs text-gray-400 mb-1">{t('portal.dpi')}</label>
                         <input
                           name="numero_dpi"
                           value={form.numero_dpi}
                           onChange={handleFormChange}
-                          placeholder="opcional"
+                          placeholder={t('common.optional')}
                           className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white placeholder-gray-400 text-sm focus:outline-none focus:border-blue-500"
                         />
                       </div>
                       <div>
-                        <label className="block text-xs text-gray-400 mb-1">Placa</label>
+                        <label className="block text-xs text-gray-400 mb-1">{t('portal.plate')}</label>
                         <input
                           name="placa"
                           value={form.placa}
                           onChange={handleFormChange}
-                          placeholder="opcional"
+                          placeholder={t('common.optional')}
                           className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white placeholder-gray-400 text-sm focus:outline-none focus:border-blue-500"
                         />
                       </div>
                       <div>
-                        <label className="block text-xs text-gray-400 mb-1">Fecha inicio *</label>
+                        <label className="block text-xs text-gray-400 mb-1">{t('portal.startDate')} *</label>
                         <input
                           name="fecha_inicio"
                           type="date"
@@ -492,24 +495,26 @@ export default function ResidentePage() {
 
                     {/* Tipo */}
                     <div className="flex gap-6">
-                      {(['permanente', 'temporal'] as const).map(t => (
-                        <label key={t} className="flex items-center gap-2 cursor-pointer">
+                      {(['permanente', 'temporal'] as const).map(tipVal => (
+                        <label key={tipVal} className="flex items-center gap-2 cursor-pointer">
                           <input
                             type="radio"
                             name="tipo"
-                            value={t}
-                            checked={tipo === t}
-                            onChange={() => setTipo(t)}
+                            value={tipVal}
+                            checked={tipo === tipVal}
+                            onChange={() => setTipo(tipVal)}
                             className="accent-blue-500"
                           />
-                          <span className="text-sm text-gray-300 capitalize">{t}</span>
+                          <span className="text-sm text-gray-300 capitalize">
+                            {tipVal === 'permanente' ? t('portal.permanentLabel') : t('portal.temporal')}
+                          </span>
                         </label>
                       ))}
                     </div>
 
                     {tipo === 'temporal' && (
                       <div className="w-full sm:w-48">
-                        <label className="block text-xs text-gray-400 mb-1">Fecha fin *</label>
+                        <label className="block text-xs text-gray-400 mb-1">{t('portal.endDate')} *</label>
                         <input
                           name="fecha_fin"
                           type="date"
@@ -527,14 +532,14 @@ export default function ResidentePage() {
                         disabled={saving}
                         className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm font-medium px-5 py-2 rounded-lg transition-colors"
                       >
-                        {saving ? 'Guardando...' : 'Guardar'}
+                        {saving ? t('common.saving') : t('common.save')}
                       </button>
                       <button
                         type="button"
                         onClick={() => { setShowForm(false); setFormError(null); setForm(EMPTY_FORM); setTipo('permanente'); }}
                         className="bg-gray-700 hover:bg-gray-600 text-gray-200 text-sm font-medium px-5 py-2 rounded-lg transition-colors"
                       >
-                        Cancelar
+                        {t('common.cancel')}
                       </button>
                     </div>
                   </form>
@@ -542,7 +547,7 @@ export default function ResidentePage() {
 
                 {/* Cards */}
                 {preauths.length === 0 ? (
-                  <p className="text-gray-400 text-sm text-center py-8">No hay preautorizaciones activas.</p>
+                  <p className="text-gray-400 text-sm text-center py-8">{t('portal.noPreauths')}</p>
                 ) : (
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     {preauths.map(p => (
@@ -550,16 +555,16 @@ export default function ResidentePage() {
                         <div className="flex items-start justify-between gap-2">
                           <p className="font-semibold text-white text-sm">{p.nombre_visitante}</p>
                           <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-medium shrink-0">
-                            Activo
+                            {t('portal.active')}
                           </span>
                         </div>
                         <div className="mt-2 space-y-0.5 text-xs text-gray-400">
-                          {p.numero_dpi && <p>DPI: {p.numero_dpi}</p>}
-                          {p.placa      && <p>Placa: {p.placa}</p>}
+                          {p.numero_dpi && <p>{t('portal.dpi')}: {p.numero_dpi}</p>}
+                          {p.placa      && <p>{t('portal.plate')}: {p.placa}</p>}
                           <p className="text-gray-300 mt-1">
                             {p.fecha_fin
                               ? `${new Date(p.fecha_inicio + 'T00:00:00').toLocaleDateString('es-GT')} – ${new Date(p.fecha_fin + 'T00:00:00').toLocaleDateString('es-GT')}`
-                              : 'Permanente'}
+                              : t('portal.permanent')}
                           </p>
                         </div>
                         <button
@@ -567,7 +572,7 @@ export default function ResidentePage() {
                           disabled={deletingId === p.id}
                           className="mt-3 text-xs text-red-400 hover:text-red-300 transition-colors disabled:opacity-50"
                         >
-                          {deletingId === p.id ? 'Eliminando...' : 'Eliminar'}
+                          {deletingId === p.id ? t('portal.deleting') : t('common.delete')}
                         </button>
                       </div>
                     ))}
@@ -577,25 +582,25 @@ export default function ResidentePage() {
 
               {/* Historial */}
               <section>
-                <h2 className="text-base font-semibold text-white mb-4">Historial de visitas recientes</h2>
+                <h2 className="text-base font-semibold text-white mb-4">{t('portal.visitHistory')}</h2>
                 {visitas.length === 0 ? (
-                  <p className="text-gray-400 text-sm text-center py-8">No hay visitas registradas.</p>
+                  <p className="text-gray-400 text-sm text-center py-8">{t('portal.noVisits')}</p>
                 ) : (
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     {visitas.map(v => (
                       <div key={v.id} className="bg-gray-800 rounded-xl p-4 shadow border border-gray-700">
                         <p className="font-semibold text-white text-sm">{v.nombre_visitante}</p>
                         <div className="mt-2 space-y-0.5 text-xs text-gray-400">
-                          <p>DPI: {v.numero_dpi}</p>
-                          {v.placa && <p>Placa: {v.placa}</p>}
+                          <p>{t('portal.dpi')}: {v.numero_dpi}</p>
+                          {v.placa && <p>{t('portal.plate')}: {v.placa}</p>}
                           <p className="text-gray-300 mt-1">
-                            Entrada: {new Date(v.timestamp_entrada).toLocaleString('es-GT', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' })}
+                            {t('portal.entry')}: {new Date(v.timestamp_entrada).toLocaleString('es-GT', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' })}
                           </p>
                           {v.timestamp_salida ? (
-                            <p>Salida: {new Date(v.timestamp_salida).toLocaleString('es-GT', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' })}</p>
+                            <p>{t('portal.exit')}: {new Date(v.timestamp_salida).toLocaleString('es-GT', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' })}</p>
                           ) : (
                             <span className="inline-block bg-blue-100 text-blue-700 text-xs font-semibold px-2 py-0.5 rounded-full mt-1">
-                              Activo
+                              {t('portal.active')}
                             </span>
                           )}
                         </div>

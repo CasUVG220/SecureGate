@@ -1,14 +1,19 @@
 import { Request, Response } from 'express';
 import pool from '../db/pool';
+import { tenantFilter, ownershipClause, ownershipParams } from '../utils/tenant';
 
-export const getPagos = async (_req: Request, res: Response) => {
+export const getPagos = async (req: Request, res: Response) => {
+  const ts = tenantFilter(req.user!, 'p');
   try {
     const result = await pool.query(
       `SELECT p.*, r.numero_casa, u.nombre AS residente_nombre
        FROM pagos p
        JOIN residentes r ON p.residente_id = r.id
        JOIN usuarios   u ON r.usuario_id   = u.id
-       ORDER BY p.fecha_pago DESC`
+       ${ts.joinClause}
+       WHERE ${ts.whereClause}
+       ORDER BY p.fecha_pago DESC`,
+      ts.params
     );
     res.json(result.rows);
   } catch (error) {
@@ -31,26 +36,27 @@ export const createPago = async (req: Request, res: Response) => {
   try {
     await client.query('BEGIN');
 
+    // Get residente + sucursal_id in one query
     const residente = await client.query(
-      'SELECT id FROM residentes WHERE id = $1',
+      'SELECT id, sucursal_id FROM residentes WHERE id = $1',
       [residente_id]
     );
     if (residente.rows.length === 0) {
       await client.query('ROLLBACK');
       return res.status(404).json({ error: 'Residente no encontrado' });
     }
+    const sucursal_id: string = residente.rows[0].sucursal_id;
 
     const pagoResult = await client.query(
-      `INSERT INTO pagos (residente_id, monto, metodo, estado, comprobante, registrado_por)
-       VALUES ($1, $2, 'efectivo', 'aprobado', $3, $4)
+      `INSERT INTO pagos
+         (sucursal_id, residente_id, monto, metodo, estado, comprobante, registrado_por)
+       VALUES ($1, $2, $3, 'efectivo', 'aprobado', $4, $5)
        RETURNING *`,
-      [residente_id, monto, comprobante || null, registrado_por]
+      [sucursal_id, residente_id, monto, comprobante || null, registrado_por]
     );
 
     await client.query(
-      `UPDATE residentes
-       SET estado_pago = 'al_dia', saldo_pendiente = 0
-       WHERE id = $1`,
+      `UPDATE residentes SET estado_pago = 'al_dia', saldo_pendiente = 0 WHERE id = $1`,
       [residente_id]
     );
 
@@ -71,12 +77,18 @@ export const aprobarPago = async (req: Request, res: Response) => {
     await client.query('BEGIN');
 
     const pagoResult = await client.query(
-      'SELECT residente_id, estado FROM pagos WHERE id = $1',
-      [id]
+      `SELECT p.residente_id, p.estado
+       FROM pagos p
+       WHERE p.id = $1
+         AND ${ownershipClause('p', 2)}`,
+      [id, ...ownershipParams(req.user!)]
     );
     if (pagoResult.rows.length === 0) {
       await client.query('ROLLBACK');
-      return res.status(404).json({ error: 'Pago no encontrado' });
+      const existe = await pool.query('SELECT id FROM pagos WHERE id = $1', [id]);
+      return existe.rows.length === 0
+        ? res.status(404).json({ error: 'Pago no encontrado' })
+        : res.status(403).json({ error: 'Sin acceso a este pago' });
     }
     if (pagoResult.rows[0].estado === 'aprobado') {
       await client.query('ROLLBACK');
@@ -84,14 +96,11 @@ export const aprobarPago = async (req: Request, res: Response) => {
     }
 
     const updated = await client.query(
-      `UPDATE pagos SET estado = 'aprobado' WHERE id = $1 RETURNING *`,
-      [id]
+      `UPDATE pagos SET estado = 'aprobado' WHERE id = $1 RETURNING *`, [id]
     );
 
     await client.query(
-      `UPDATE residentes
-       SET estado_pago = 'al_dia', saldo_pendiente = 0
-       WHERE id = $1`,
+      `UPDATE residentes SET estado_pago = 'al_dia', saldo_pendiente = 0 WHERE id = $1`,
       [pagoResult.rows[0].residente_id]
     );
 
@@ -110,16 +119,23 @@ export const rechazarPago = async (req: Request, res: Response) => {
   const { comentario_rechazo } = req.body ?? {};
   try {
     const result = await pool.query(
-      `UPDATE pagos SET estado = 'rechazado', comentario_rechazo = $2
-       WHERE id = $1 AND estado = 'pendiente' RETURNING *`,
-      [id, comentario_rechazo || null]
+      `UPDATE pagos
+       SET estado = 'rechazado', comentario_rechazo = $2
+       WHERE id = $1
+         AND estado = 'pendiente'
+         AND ${ownershipClause('pagos', 3)}
+       RETURNING *`,
+      [id, comentario_rechazo || null, ...ownershipParams(req.user!)]
     );
     if (result.rows.length === 0) {
       const existe = await pool.query('SELECT id, estado FROM pagos WHERE id = $1', [id]);
       if (existe.rows.length === 0) {
         return res.status(404).json({ error: 'Pago no encontrado' });
       }
-      return res.status(409).json({ error: `El pago ya tiene estado '${existe.rows[0].estado}'` });
+      if (existe.rows[0].estado !== 'pendiente') {
+        return res.status(409).json({ error: `El pago ya tiene estado '${existe.rows[0].estado}'` });
+      }
+      return res.status(403).json({ error: 'Sin acceso a este pago' });
     }
     res.json(result.rows[0]);
   } catch (error) {
@@ -132,7 +148,9 @@ export const crearTransferencia = async (req: Request, res: Response) => {
   const { monto, referencia, banco, fecha_transferencia, comprobante } = req.body;
 
   if (!monto || !referencia || !banco || !fecha_transferencia) {
-    return res.status(400).json({ error: 'Campos requeridos: monto, referencia, banco, fecha_transferencia' });
+    return res.status(400).json({
+      error: 'Campos requeridos: monto, referencia, banco, fecha_transferencia',
+    });
   }
   if (Number(monto) <= 0) {
     return res.status(400).json({ error: 'El monto debe ser mayor a 0' });
@@ -140,16 +158,21 @@ export const crearTransferencia = async (req: Request, res: Response) => {
 
   try {
     const residente = await pool.query(
-      'SELECT id FROM residentes WHERE usuario_id = $1', [usuario_id]
+      'SELECT id, sucursal_id FROM residentes WHERE usuario_id = $1', [usuario_id]
     );
     if (residente.rows.length === 0) {
       return res.status(404).json({ error: 'Residente no encontrado' });
     }
+    const { id: residente_id, sucursal_id } = residente.rows[0];
+
     const result = await pool.query(
-      `INSERT INTO pagos (residente_id, monto, metodo, estado, referencia, banco, fecha_transferencia, comprobante, registrado_por)
-       VALUES ($1, $2, 'transferencia', 'pendiente', $3, $4, $5, $6, $7)
+      `INSERT INTO pagos
+         (sucursal_id, residente_id, monto, metodo, estado,
+          referencia, banco, fecha_transferencia, comprobante, registrado_por)
+       VALUES ($1, $2, $3, 'transferencia', 'pendiente', $4, $5, $6, $7, $8)
        RETURNING *`,
-      [residente.rows[0].id, monto, referencia, banco, fecha_transferencia, comprobante || null, usuario_id]
+      [sucursal_id, residente_id, monto, referencia, banco,
+       fecha_transferencia, comprobante || null, usuario_id]
     );
     res.status(201).json(result.rows[0]);
   } catch (error) {
@@ -157,7 +180,9 @@ export const crearTransferencia = async (req: Request, res: Response) => {
   }
 };
 
-export const getPendientesVerificacion = async (_req: Request, res: Response) => {
+export const getPendientesVerificacion = async (req: Request, res: Response) => {
+  const ts = tenantFilter(req.user!, 'p');
+  const extraOffset = ts.params.length + 1;
   try {
     const result = await pool.query(
       `SELECT p.*,
@@ -167,8 +192,12 @@ export const getPendientesVerificacion = async (_req: Request, res: Response) =>
        FROM pagos p
        JOIN residentes r ON p.residente_id = r.id
        JOIN usuarios   u ON r.usuario_id   = u.id
-       WHERE p.metodo = 'transferencia' AND p.estado = 'pendiente'
-       ORDER BY p.fecha_pago ASC`
+       ${ts.joinClause}
+       WHERE ${ts.whereClause}
+         AND p.metodo = 'transferencia'
+         AND p.estado = $${extraOffset}
+       ORDER BY p.fecha_pago ASC`,
+      [...ts.params, 'pendiente']
     );
     res.json(result.rows);
   } catch (error) {
@@ -186,8 +215,7 @@ export const getMisPagos = async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Residente no encontrado' });
     }
     const result = await pool.query(
-      `SELECT * FROM pagos WHERE residente_id = $1
-       ORDER BY fecha_pago DESC LIMIT 20`,
+      `SELECT * FROM pagos WHERE residente_id = $1 ORDER BY fecha_pago DESC LIMIT 20`,
       [residente.rows[0].id]
     );
     res.json(result.rows);

@@ -5,11 +5,13 @@ import {
 } from '../services/api';
 import { TableSkeleton, Spinner } from '../components/Skeleton';
 import { useToast } from '../components/Toast';
+import { useTranslation } from '../i18n/useTranslation';
 
 const EMPTY_FORM = { residente_id: '', nombre_visitante: '', numero_dpi: '', fecha_inicio: '', fecha_fin: '' };
 
 export default function PreautPage() {
   const showToast = useToast();
+  const { t } = useTranslation();
   const [preauths, setPreauths]     = useState<Preautorizacion[]>([]);
   const [residentes, setResidentes] = useState<Residente[]>([]);
   const [loading, setLoading]       = useState(true);
@@ -53,7 +55,7 @@ export default function PreautPage() {
       });
       setShowModal(false);
       cargar();
-      showToast('Preautorización creada');
+      showToast(t('preauth.created'));
     } catch (err: unknown) {
       setFormError(err instanceof Error ? err.message : 'Error al crear preautorización');
     } finally {
@@ -62,12 +64,12 @@ export default function PreautPage() {
   };
 
   const handleEliminar = async (id: string) => {
-    if (!window.confirm('¿Eliminar esta preautorización?')) return;
+    if (!window.confirm(t('preauth.confirmDelete'))) return;
     setDeletingId(id);
     try {
       await deletePreautorizacion(id);
       cargar();
-      showToast('Preautorización eliminada', 'warning');
+      showToast(t('preauth.deleted'), 'warning');
     } catch (err: unknown) {
       showToast(err instanceof Error ? err.message : 'Error al eliminar', 'error');
     } finally {
@@ -81,12 +83,12 @@ export default function PreautPage() {
   return (
     <div className="p-6 text-gray-100 space-y-5">
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-bold text-white">Preautorizaciones</h1>
+        <h1 className="text-xl font-bold text-white">{t('preauth.title')}</h1>
         <button
           onClick={() => { setForm(EMPTY_FORM); setFormError(null); setShowModal(true); }}
           className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors"
         >
-          + Nueva Preautorización
+          {t('preauth.new')}
         </button>
       </div>
 
@@ -96,17 +98,17 @@ export default function PreautPage() {
 
       <div className="bg-gray-800 rounded-2xl shadow-xl overflow-hidden">
         {!loading && preauths.length === 0 ? (
-          <p className="text-gray-400 text-sm text-center py-12">No hay preautorizaciones activas.</p>
+          <p className="text-gray-400 text-sm text-center py-12">{t('preauth.noPreauths')}</p>
         ) : (
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-gray-700 text-gray-400 text-left">
-                <th className="px-4 py-3 font-medium">Casa</th>
-                <th className="px-4 py-3 font-medium">Nombre visitante</th>
-                <th className="px-4 py-3 font-medium">DPI</th>
-                <th className="px-4 py-3 font-medium">Desde</th>
-                <th className="px-4 py-3 font-medium">Hasta</th>
-                <th className="px-4 py-3 font-medium">Acciones</th>
+                <th className="px-4 py-3 font-medium">{t('residents.house')}</th>
+                <th className="px-4 py-3 font-medium">{t('preauth.visitorName')}</th>
+                <th className="px-4 py-3 font-medium">{t('gate.dpi')}</th>
+                <th className="px-4 py-3 font-medium">{t('preauth.from')}</th>
+                <th className="px-4 py-3 font-medium">{t('preauth.until')}</th>
+                <th className="px-4 py-3 font-medium">{t('common.actions')}</th>
               </tr>
             </thead>
             <tbody>
@@ -124,7 +126,7 @@ export default function PreautPage() {
                       <button onClick={() => handleEliminar(p.id)} disabled={deletingId === p.id}
                         className="text-xs text-red-400 hover:text-red-300 disabled:opacity-50 font-medium transition-colors flex items-center gap-1">
                         {deletingId === p.id && <Spinner size={12} />}
-                        Eliminar
+                        {t('common.delete')}
                       </button>
                     </td>
                   </tr>
@@ -138,39 +140,39 @@ export default function PreautPage() {
       {showModal && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 px-4">
           <div className="bg-gray-800 rounded-2xl p-8 w-full max-w-md shadow-2xl">
-            <h2 className="text-lg font-bold text-white mb-6">Nueva Preautorización</h2>
+            <h2 className="text-lg font-bold text-white mb-6">{t('preauth.modalTitle')}</h2>
             {formError && (
               <div className="mb-4 bg-red-900/40 border border-red-700 rounded-lg px-4 py-3 text-red-300 text-sm">{formError}</div>
             )}
             <form onSubmit={handleCrear} className="space-y-4">
               <div>
-                <label className="block text-sm text-gray-300 mb-1">Residente *</label>
+                <label className="block text-sm text-gray-300 mb-1">{t('common.name')} *</label>
                 <select name="residente_id" value={form.residente_id} onChange={handleFormChange} required
                   className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-blue-500 transition-colors">
-                  <option value="">Seleccionar residente...</option>
+                  <option value="">{t('preauth.selectResident')}</option>
                   {residentes.map(r => (
                     <option key={r.id} value={r.id}>Casa {r.numero_casa} — {r.nombre}</option>
                   ))}
                 </select>
               </div>
               <div>
-                <label className="block text-sm text-gray-300 mb-1">Nombre del visitante *</label>
+                <label className="block text-sm text-gray-300 mb-1">{t('preauth.visitorNameLabel')} *</label>
                 <input name="nombre_visitante" value={form.nombre_visitante} onChange={handleFormChange} required placeholder="Juan Pérez"
                   className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-white placeholder-gray-400 focus:outline-none focus:border-blue-500 transition-colors" />
               </div>
               <div>
-                <label className="block text-sm text-gray-300 mb-1">DPI <span className="text-gray-500">(opcional)</span></label>
+                <label className="block text-sm text-gray-300 mb-1">{t('preauth.dpiOptional')}</label>
                 <input name="numero_dpi" value={form.numero_dpi} onChange={handleFormChange} placeholder="1234567890101"
                   className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-white placeholder-gray-400 focus:outline-none focus:border-blue-500 transition-colors" />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-sm text-gray-300 mb-1">Desde *</label>
+                  <label className="block text-sm text-gray-300 mb-1">{t('preauth.fromRequired')} *</label>
                   <input type="date" name="fecha_inicio" value={form.fecha_inicio} onChange={handleFormChange} required
                     className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2.5 text-white focus:outline-none focus:border-blue-500 transition-colors" />
                 </div>
                 <div>
-                  <label className="block text-sm text-gray-300 mb-1">Hasta <span className="text-gray-500">(opcional)</span></label>
+                  <label className="block text-sm text-gray-300 mb-1">{t('preauth.untilOptional')}</label>
                   <input type="date" name="fecha_fin" value={form.fecha_fin} onChange={handleFormChange}
                     className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2.5 text-white focus:outline-none focus:border-blue-500 transition-colors" />
                 </div>
@@ -179,11 +181,11 @@ export default function PreautPage() {
                 <button type="submit" disabled={saving}
                   className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-semibold py-2.5 rounded-lg transition-colors flex items-center justify-center gap-2">
                   {saving && <Spinner />}
-                  {saving ? 'Guardando...' : 'Guardar'}
+                  {saving ? t('common.saving') : t('common.save')}
                 </button>
                 <button type="button" onClick={() => setShowModal(false)} disabled={saving}
                   className="flex-1 bg-gray-700 hover:bg-gray-600 disabled:opacity-50 text-white font-semibold py-2.5 rounded-lg transition-colors">
-                  Cancelar
+                  {t('common.cancel')}
                 </button>
               </div>
             </form>

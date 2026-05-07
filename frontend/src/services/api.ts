@@ -105,7 +105,7 @@ export const deleteResidente = async (id: string): Promise<void> => {
 
 export interface LoginResult {
   token: string;
-  usuario: { id: string; nombre: string; email: string; rol: string };
+  usuario: { id: string; nombre: string; email: string; rol: string; idioma?: string; tema?: string };
 }
 
 export const login = async (email: string, password: string): Promise<LoginResult> => {
@@ -510,6 +510,193 @@ export const deleteConfigCargo = async (id: string): Promise<void> => {
   if (!res.ok) {
     const body = await res.json();
     throw new Error(body.error || 'Error al eliminar configuración');
+  }
+};
+
+// ── Empresas ──────────────────────────────────────────────────────────────
+
+export interface Empresa {
+  id: string;
+  nombre: string;
+  nit: string | null;
+  logo_url: string | null;
+  activo: boolean;
+  created_at: string;
+  total_sucursales: number;
+}
+
+export interface EmpresaInput {
+  nombre: string;
+  nit?: string;
+  logo_url?: string;
+}
+
+export interface EmpresaStats {
+  total_sucursales: number;
+  total_residentes: number;
+  total_accesos_hoy: number;
+  total_pagos_pendientes: number;
+  sucursales: Array<{ id: string; nombre: string; accesos_hoy: number }>;
+}
+
+export const getEmpresas = async (): Promise<Empresa[]> => {
+  const res = await fetch(`${BASE_URL}/api/empresas`, { headers: authHeaders() });
+  if (!res.ok) throw new Error('Error al cargar empresas');
+  return res.json() as Promise<Empresa[]>;
+};
+
+export const createEmpresa = async (data: EmpresaInput): Promise<Empresa> => {
+  const res = await fetch(`${BASE_URL}/api/empresas`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify(data),
+  });
+  const body = await res.json();
+  if (!res.ok) throw new Error((body as { error?: string }).error || 'Error al crear empresa');
+  return body as Empresa;
+};
+
+export const updateEmpresa = async (
+  id: string,
+  data: Partial<EmpresaInput & { activo: boolean }>
+): Promise<Empresa> => {
+  const res = await fetch(`${BASE_URL}/api/empresas/${encodeURIComponent(id)}`, {
+    method: 'PUT',
+    headers: authHeaders(),
+    body: JSON.stringify(data),
+  });
+  const body = await res.json();
+  if (!res.ok) throw new Error((body as { error?: string }).error || 'Error al actualizar empresa');
+  return body as Empresa;
+};
+
+export const getEmpresaStats = async (id: string): Promise<EmpresaStats> => {
+  const res = await fetch(
+    `${BASE_URL}/api/empresas/${encodeURIComponent(id)}/stats`,
+    { headers: authHeaders() }
+  );
+  if (!res.ok) throw new Error('Error al cargar estadísticas de empresa');
+  return res.json() as Promise<EmpresaStats>;
+};
+
+// ── Sucursales ────────────────────────────────────────────────────────────
+
+export interface Sucursal {
+  id: string;
+  empresa_id: string;
+  empresa_nombre: string;
+  nombre: string;
+  direccion: string | null;
+  tipo: string | null;
+  activo: boolean;
+  total_residentes: number;
+  total_agentes: number;
+  created_at: string;
+}
+
+export interface SucursalInput {
+  empresa_id: string;
+  nombre: string;
+  direccion?: string;
+  tipo?: string;
+}
+
+export const getSucursales = async (): Promise<Sucursal[]> => {
+  const res = await fetch(`${BASE_URL}/api/sucursales`, { headers: authHeaders() });
+  if (!res.ok) throw new Error('Error al cargar sucursales');
+  return res.json() as Promise<Sucursal[]>;
+};
+
+export const createSucursal = async (data: SucursalInput): Promise<Sucursal> => {
+  const res = await fetch(`${BASE_URL}/api/sucursales`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify(data),
+  });
+  const body = await res.json();
+  if (!res.ok) throw new Error((body as { error?: string }).error || 'Error al crear sucursal');
+  return body as Sucursal;
+};
+
+export const assignAdminSucursal = async (
+  sucursal_id: string,
+  usuario_id: string
+): Promise<unknown> => {
+  const res = await fetch(
+    `${BASE_URL}/api/sucursales/${encodeURIComponent(sucursal_id)}/admin`,
+    {
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify({ usuario_id }),
+    }
+  );
+  const body = await res.json();
+  if (!res.ok) throw new Error((body as { error?: string }).error || 'Error al asignar admin');
+  return body;
+};
+
+export const updateSucursal = async (
+  id: string,
+  data: Partial<SucursalInput & { activo: boolean }>
+): Promise<Sucursal> => {
+  const res = await fetch(`${BASE_URL}/api/sucursales/${encodeURIComponent(id)}`, {
+    method: 'PUT',
+    headers: authHeaders(),
+    body: JSON.stringify(data),
+  });
+  const body = await res.json();
+  if (!res.ok) throw new Error((body as { error?: string }).error || 'Error al actualizar sucursal');
+  return body as Sucursal;
+};
+
+// ── Usuarios (staff) ──────────────────────────────────────────────────────
+
+export interface Usuario {
+  id: string;
+  nombre: string;
+  email: string;
+  rol: string;
+  sucursal_id: string | null;
+  empresa_id: string | null;
+  sucursal_nombre: string | null;
+  activo: boolean;
+  created_at: string;
+}
+
+export interface UsuarioInput {
+  nombre: string;
+  email: string;
+  password: string;
+  rol: string;
+  sucursal_id?: string;
+}
+
+export const getUsuarios = async (): Promise<Usuario[]> => {
+  const res = await fetch(`${BASE_URL}/api/usuarios`, { headers: authHeaders() });
+  if (!res.ok) throw new Error('Error al cargar usuarios');
+  return res.json() as Promise<Usuario[]>;
+};
+
+export const createUsuario = async (data: UsuarioInput): Promise<Usuario> => {
+  const res = await fetch(`${BASE_URL}/api/usuarios`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify(data),
+  });
+  const body = await res.json();
+  if (!res.ok) throw new Error((body as { error?: string }).error || 'Error al crear usuario');
+  return body as Usuario;
+};
+
+export const updatePreferencias = async (idioma: string, tema: string): Promise<void> => {
+  const res = await fetch(`${BASE_URL}/api/usuarios/me/preferencias`, {
+    method: 'PUT',
+    headers: authHeaders(),
+    body: JSON.stringify({ idioma, tema }),
+  });
+  if (!res.ok) {
+    const body = await res.json();
+    throw new Error(body.error || 'Error al actualizar preferencias');
   }
 };
 
