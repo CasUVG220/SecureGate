@@ -7,6 +7,7 @@ import {
   scanPlaca,
   type Residente,
 } from '../services/api';
+import { useTranslation } from '../i18n/useTranslation';
 
 interface UltimoIngreso {
   id: string;
@@ -25,6 +26,7 @@ const EMPTY_FORM = {
 };
 
 export default function GaritaPage() {
+  const { t } = useTranslation();
   const [form, setForm]               = useState(EMPTY_FORM);
   const [residentes, setResidentes]   = useState<Residente[]>([]);
   const [loading, setLoading]         = useState(false);
@@ -94,10 +96,10 @@ export default function GaritaPage() {
         }));
         setDpiOcr(true);
       } else {
-        setOcrDpiMsg('No se pudo leer el DPI');
+        setOcrDpiMsg(t('gate.dpiReadFail'));
       }
     } catch {
-      setOcrDpiMsg('Error al procesar imagen');
+      setOcrDpiMsg(t('gate.imageError'));
     } finally {
       setOcringDpi(false);
     }
@@ -114,10 +116,10 @@ export default function GaritaPage() {
         setForm(prev => ({ ...prev, placa: res.placa }));
         setPlacaOcr(true);
       } else {
-        setOcrPlacaMsg('No se pudo leer la placa');
+        setOcrPlacaMsg(t('gate.plateReadFail'));
       }
     } catch {
-      setOcrPlacaMsg('Error al procesar imagen');
+      setOcrPlacaMsg(t('gate.imageError'));
     } finally {
       setOcringPlaca(false);
     }
@@ -198,8 +200,8 @@ export default function GaritaPage() {
     return (
       <div className="min-h-screen bg-gray-900 flex items-center justify-center">
         <div className="bg-red-50 border border-red-300 rounded-xl p-8 text-center max-w-sm">
-          <p className="text-red-700 font-semibold text-lg">Sesión no iniciada</p>
-          <p className="text-red-600 text-sm mt-2">Inicia sesión para acceder a la terminal de garita.</p>
+          <p className="text-red-700 font-semibold text-lg">{t('gate.noSession')}</p>
+          <p className="text-red-600 text-sm mt-2">{t('gate.noSessionDesc')}</p>
         </div>
       </div>
     );
@@ -215,7 +217,7 @@ export default function GaritaPage() {
         {/* DPI scanner */}
         <div className="flex-1 bg-gray-800 rounded-2xl flex flex-col shadow-xl overflow-hidden min-h-0">
           <div className="flex items-center gap-2 px-4 py-2.5 border-b border-gray-700 shrink-0">
-            <span className="text-sm font-semibold text-gray-200">Escáner de DPI</span>
+            <span className="text-sm font-semibold text-gray-200">{t('gate.dpiScanner')}</span>
             {dpiOcr && (
               <span className="text-xs bg-emerald-600 text-white px-2 py-0.5 rounded-full font-medium">OCR</span>
             )}
@@ -232,7 +234,7 @@ export default function GaritaPage() {
               disabled={ocringDpi}
               className="w-full bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-semibold py-2 rounded-xl transition-colors text-sm"
             >
-              {ocringDpi ? 'Procesando...' : 'Escanear Documento'}
+              {ocringDpi ? t('common.processing') : t('gate.scanDocument')}
             </button>
           </div>
         </div>
@@ -240,7 +242,7 @@ export default function GaritaPage() {
         {/* Plate scanner */}
         <div className="flex-1 bg-gray-800 rounded-2xl flex flex-col shadow-xl overflow-hidden min-h-0">
           <div className="flex items-center gap-2 px-4 py-2.5 border-b border-gray-700 shrink-0">
-            <span className="text-sm font-semibold text-gray-200">Reconocimiento de Placa</span>
+            <span className="text-sm font-semibold text-gray-200">{t('gate.plateScanner')}</span>
             {placaOcr && (
               <span className="text-xs bg-emerald-600 text-white px-2 py-0.5 rounded-full font-medium">OCR</span>
             )}
@@ -257,7 +259,7 @@ export default function GaritaPage() {
               disabled={ocringPlaca}
               className="w-full bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-semibold py-2 rounded-xl transition-colors text-sm"
             >
-              {ocringPlaca ? 'Procesando...' : 'Escanear Placa'}
+              {ocringPlaca ? t('common.processing') : t('gate.scanPlate')}
             </button>
           </div>
         </div>
@@ -268,7 +270,7 @@ export default function GaritaPage() {
 
         {/* Datos del visitante */}
         <div className="bg-gray-800 rounded-2xl p-5 shadow-xl space-y-4 shrink-0">
-          <h2 className="text-base font-bold text-white">Datos del Visitante</h2>
+          <h2 className="text-base font-bold text-white">{t('gate.visitorData')}</h2>
 
           {error && (
             <div className="bg-red-900/40 border border-red-700 rounded-lg px-4 py-2 text-red-300 text-sm">
@@ -279,7 +281,7 @@ export default function GaritaPage() {
           <div className="grid grid-cols-2 gap-3">
             {/* Nombre */}
             <div>
-              <label className="block text-xs text-gray-400 mb-1">Nombre *</label>
+              <label className="block text-xs text-gray-400 mb-1">{t('gate.visitorName')} *</label>
               <input
                 name="nombre_visitante"
                 value={form.nombre_visitante}
@@ -291,7 +293,7 @@ export default function GaritaPage() {
 
             {/* DPI */}
             <div>
-              <label className="block text-xs text-gray-400 mb-1">DPI *</label>
+              <label className="block text-xs text-gray-400 mb-1">{t('gate.dpi')} *</label>
               <input
                 name="numero_dpi"
                 value={form.numero_dpi}
@@ -303,7 +305,7 @@ export default function GaritaPage() {
 
             {/* Placa */}
             <div>
-              <label className="block text-xs text-gray-400 mb-1">Placa</label>
+              <label className="block text-xs text-gray-400 mb-1">{t('gate.plate')}</label>
               <input
                 name="placa"
                 value={form.placa}
@@ -315,7 +317,7 @@ export default function GaritaPage() {
 
             {/* Casa / Unidad autocomplete */}
             <div className="relative">
-              <label className="block text-xs text-gray-400 mb-1">Casa / Unidad *</label>
+              <label className="block text-xs text-gray-400 mb-1">{t('gate.houseUnit')} *</label>
               <input
                 value={selectedResidente
                   ? `Casa ${selectedResidente.numero_casa} — ${selectedResidente.nombre}`
@@ -327,7 +329,7 @@ export default function GaritaPage() {
                 }}
                 onFocus={() => setCasaOpen(true)}
                 onBlur={() => setTimeout(() => setCasaOpen(false), 150)}
-                placeholder="Buscar casa..."
+                placeholder={t('gate.searchHouse')}
                 className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm placeholder-gray-400 focus:outline-none focus:border-blue-500 transition-colors"
               />
               {casaOpen && filteredResidentes.length > 0 && (
@@ -344,7 +346,7 @@ export default function GaritaPage() {
                     >
                       <span>Casa {r.numero_casa} — {r.nombre}</span>
                       {r.estado_pago === 'mora' && (
-                        <span className="text-yellow-400 text-xs font-semibold">⚠ MORA</span>
+                        <span className="text-yellow-400 text-xs font-semibold">⚠ {t('gate.mora')}</span>
                       )}
                     </li>
                   ))}
@@ -361,34 +363,34 @@ export default function GaritaPage() {
             disabled={loading}
             className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-bold py-5 rounded-2xl transition-colors text-sm tracking-widest shadow-xl"
           >
-            {loading ? 'REGISTRANDO...' : 'AUTORIZAR ENTRADA'}
+            {loading ? t('gate.registering') : t('gate.authorizeEntry')}
           </button>
           <button
             onClick={handleDenegar}
             className="bg-red-600 hover:bg-red-500 text-white font-bold py-5 rounded-2xl transition-colors text-sm tracking-widest shadow-xl"
           >
-            DENEGAR ENTRADA
+            {t('gate.denyEntry')}
           </button>
         </div>
 
         {/* Últimos Ingresos */}
         <div className="bg-gray-800 rounded-2xl overflow-hidden shadow-xl shrink-0">
           <div className="px-5 py-3 border-b border-gray-700">
-            <h3 className="text-sm font-bold text-white">Últimos Ingresos</h3>
+            <h3 className="text-sm font-bold text-white">{t('gate.lastEntries')}</h3>
           </div>
           {ultimosIngresos.length === 0 ? (
             <p className="text-gray-500 text-xs px-5 py-5 text-center">
-              Sin registros en esta sesión.
+              {t('gate.noEntries')}
             </p>
           ) : (
             <table className="w-full text-xs">
               <thead>
                 <tr className="border-b border-gray-700 text-gray-400 text-left">
-                  <th className="px-4 py-2 font-medium">Hora</th>
-                  <th className="px-4 py-2 font-medium">Visitante</th>
-                  <th className="px-4 py-2 font-medium">Placa</th>
-                  <th className="px-4 py-2 font-medium">Unidad</th>
-                  <th className="px-4 py-2 font-medium">Estado</th>
+                  <th className="px-4 py-2 font-medium">{t('gate.hour')}</th>
+                  <th className="px-4 py-2 font-medium">{t('gate.visitorName')}</th>
+                  <th className="px-4 py-2 font-medium">{t('gate.plate')}</th>
+                  <th className="px-4 py-2 font-medium">{t('gate.unit')}</th>
+                  <th className="px-4 py-2 font-medium">{t('common.status')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -404,7 +406,7 @@ export default function GaritaPage() {
                           ? 'bg-emerald-900/60 text-emerald-400 border border-emerald-700'
                           : 'bg-red-900/60 text-red-400 border border-red-700'
                       }`}>
-                        {ing.estado}
+                        {ing.estado === 'Autorizado' ? t('gate.authorized') : t('gate.denied')}
                       </span>
                     </td>
                   </tr>

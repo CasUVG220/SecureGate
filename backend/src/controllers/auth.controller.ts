@@ -9,13 +9,18 @@ export const login = async (req: Request, res: Response) => {
   }
 
   try {
-    // Verify password using pgcrypto's crypt() — same function used to hash in init.sql
     const result = await pool.query(
-      `SELECT id, nombre, email, rol
-       FROM usuarios
-       WHERE email = $1
-         AND activo = TRUE
-         AND password_hash = crypt($2, password_hash)`,
+      `SELECT
+         u.id, u.nombre, u.email, u.rol,
+         u.sucursal_id,
+         u.empresa_id,
+         u.idioma, u.tema,
+         s.empresa_id AS empresa_id_via_sucursal
+       FROM usuarios u
+       LEFT JOIN sucursales s ON s.id = u.sucursal_id
+       WHERE u.email = $1
+         AND u.activo = TRUE
+         AND u.password_hash = crypt($2, u.password_hash)`,
       [email, password]
     );
 
@@ -23,11 +28,25 @@ export const login = async (req: Request, res: Response) => {
       return res.status(401).json({ error: 'Credenciales incorrectas' });
     }
 
-    const usuario = result.rows[0];
-    const payload = { id: usuario.id, nombre: usuario.nombre, email: usuario.email, rol: usuario.rol };
+    const u = result.rows[0];
+
+    // empresa_id: explicit column (admin_empresa) takes precedence,
+    // otherwise derive it from the sucursal JOIN (all roles with a sucursal_id)
+    const empresa_id: string | null = u.empresa_id ?? u.empresa_id_via_sucursal ?? null;
+    const sucursal_id: string | null = u.sucursal_id ?? null;
+
+    const payload = {
+      id: u.id,
+      nombre: u.nombre,
+      email: u.email,
+      rol: u.rol,
+      sucursal_id,
+      empresa_id,
+    };
+
     const token = jwt.sign(payload, process.env.JWT_SECRET as string, { expiresIn: '8h' });
 
-    res.json({ token, usuario: payload });
+    res.json({ token, usuario: { id: u.id, nombre: u.nombre, email: u.email, rol: u.rol, idioma: u.idioma, tema: u.tema } });
   } catch (error) {
     res.status(500).json({ error: 'Error en el servidor', detail: String(error) });
   }

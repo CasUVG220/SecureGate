@@ -7,9 +7,11 @@ import {
 } from '../services/api';
 import { Spinner } from '../components/Skeleton';
 import { useToast } from '../components/Toast';
+import { useTranslation } from '../i18n/useTranslation';
 
 export default function VerificacionPage() {
   const showToast = useToast();
+  const { t } = useTranslation();
   const [cola, setCola]               = useState<PagoVerificacion[]>([]);
   const [loading, setLoading]         = useState(true);
   const [selected, setSelected]       = useState(0);
@@ -34,7 +36,7 @@ export default function VerificacionPage() {
     setAprobando(true);
     try {
       await aprobarPago(current.id);
-      showToast('Pago aprobado. Saldo actualizado.', 'success');
+      showToast(t('verification.approvedMsg'), 'success');
       setCola(prev => prev.filter(p => p.id !== current.id));
       setSelected(0);
       setComentario('');
@@ -48,13 +50,13 @@ export default function VerificacionPage() {
   const handleRechazar = async () => {
     if (!current) return;
     if (!comentario.trim()) {
-      showToast('El comentario es requerido para rechazar.', 'warning');
+      showToast(t('verification.commentRequired'), 'warning');
       return;
     }
     setRechazando(true);
     try {
       await rechazarPago(current.id, comentario.trim());
-      showToast('Pago rechazado.', 'warning');
+      showToast(t('verification.rejectedMsg'), 'warning');
       setCola(prev => prev.filter(p => p.id !== current.id));
       setSelected(0);
       setComentario('');
@@ -78,14 +80,14 @@ export default function VerificacionPage() {
       <div className="p-6 text-gray-100 max-w-2xl">
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h1 className="text-xl font-bold text-white">Verificación de Pagos</h1>
-            <p className="text-sm text-gray-400 mt-0.5">Comprobantes de transferencia pendientes.</p>
+            <h1 className="text-xl font-bold text-white">{t('verification.title')}</h1>
+            <p className="text-sm text-gray-400 mt-0.5">{t('verification.subtitle')}</p>
           </div>
         </div>
         <div className="bg-gray-800 rounded-2xl p-12 text-center shadow-xl">
-          <p className="text-gray-400 text-sm">No hay pagos pendientes de verificación.</p>
+          <p className="text-gray-400 text-sm">{t('verification.noPending')}</p>
           <button onClick={load} className="mt-4 text-blue-400 hover:text-blue-300 text-sm transition-colors">
-            Actualizar
+            {t('common.refresh')}
           </button>
         </div>
       </div>
@@ -104,11 +106,11 @@ export default function VerificacionPage() {
       {/* Page header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-bold text-white">Verificación de Pagos</h1>
-          <p className="text-sm text-gray-400 mt-0.5">Comprobantes de transferencia pendientes.</p>
+          <h1 className="text-xl font-bold text-white">{t('verification.title')}</h1>
+          <p className="text-sm text-gray-400 mt-0.5">{t('verification.subtitle')}</p>
         </div>
         <span className="flex items-center gap-2 bg-amber-500/20 border border-amber-500/40 text-amber-400 text-sm font-semibold px-4 py-1.5 rounded-full">
-          ⏱ {cola.length} pendiente{cola.length !== 1 ? 's' : ''}
+          ⏱ {cola.length} {cola.length !== 1 ? t('verification.pendingPlural') : t('verification.pending')}
         </span>
       </div>
 
@@ -124,7 +126,7 @@ export default function VerificacionPage() {
                 <svg className="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                 </svg>
-                Comprobante
+                {t('verification.receipt')}
               </div>
               <div className="flex items-center gap-3">
                 <button
@@ -157,15 +159,15 @@ export default function VerificacionPage() {
                   />
                   <div className="space-y-1.5 text-sm px-1">
                     <div className="flex justify-between">
-                      <span className="text-gray-400">Banco:</span>
+                      <span className="text-gray-400">{t('verification.bank')}:</span>
                       <span className="text-white font-medium">{current.banco ?? '—'}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-gray-400">Referencia:</span>
+                      <span className="text-gray-400">{t('verification.reference')}:</span>
                       <span className="text-white font-mono text-xs">{current.referencia ?? '—'}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-gray-400">Monto:</span>
+                      <span className="text-gray-400">{t('common.amount')}:</span>
                       <span className="text-emerald-400 font-bold">Q{monto.toFixed(2)}</span>
                     </div>
                   </div>
@@ -179,31 +181,27 @@ export default function VerificacionPage() {
                       </svg>
                     </div>
                     <div>
-                      <p className="text-white font-semibold text-sm">Comprobante de Transferencia</p>
+                      <p className="text-white font-semibold text-sm">{t('portal.receiptTitle')}</p>
                       <p className="text-gray-400 text-xs">{current?.banco ?? '—'}</p>
                     </div>
                   </div>
                   <div className="space-y-2 text-sm border-t border-gray-700 pt-4">
                     <div className="flex justify-between">
-                      <span className="text-gray-400">Referencia:</span>
+                      <span className="text-gray-400">{t('verification.reference')}:</span>
                       <span className="text-white font-medium">{current?.referencia ?? '—'}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-gray-400">Fecha:</span>
+                      <span className="text-gray-400">{t('common.date')}:</span>
                       <span className="text-white">{fmtFecha(current?.fecha_transferencia ?? null)}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-gray-400">Monto:</span>
+                      <span className="text-gray-400">{t('common.amount')}:</span>
                       <span className="text-emerald-400 font-bold">Q{monto.toFixed(2)}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-400">Beneficiario:</span>
-                      <span className="text-white">Residencial Las Flores</span>
                     </div>
                   </div>
                   <div className="text-center pt-2">
                     <span className="text-xs text-gray-500 tracking-widest font-medium border border-gray-600 px-3 py-1 rounded">
-                      SIN IMAGEN ADJUNTA
+                      {t('verification.noImage')}
                     </span>
                   </div>
                 </div>
@@ -245,11 +243,11 @@ export default function VerificacionPage() {
             {/* Montos */}
             <div className="grid grid-cols-2 gap-4 border-t border-gray-700 pt-4">
               <div>
-                <p className="text-xs text-gray-400 mb-1">Monto reportado</p>
+                <p className="text-xs text-gray-400 mb-1">{t('verification.reportedAmount')}</p>
                 <p className="text-2xl font-bold text-emerald-400">Q{monto.toFixed(2)}</p>
               </div>
               <div>
-                <p className="text-xs text-gray-400 mb-1">Saldo actual</p>
+                <p className="text-xs text-gray-400 mb-1">{t('verification.currentBalance')}</p>
                 <p className={`text-2xl font-bold ${saldo > 0 ? 'text-red-400' : 'text-emerald-400'}`}>
                   Q{saldo.toFixed(2)}
                 </p>
@@ -263,7 +261,7 @@ export default function VerificacionPage() {
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                   </svg>
-                  Fecha de transferencia
+                  {t('verification.transferDate')}
                 </span>
                 <span className="text-white font-medium">{fmtFecha(current?.fecha_transferencia ?? null)}</span>
               </div>
@@ -272,7 +270,7 @@ export default function VerificacionPage() {
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 20l4-16m2 16l4-16M6 9h14M4 15h14" />
                   </svg>
-                  Referencia
+                  {t('verification.reference')}
                 </span>
                 <span className="text-white font-mono text-xs">{current?.referencia ?? '—'}</span>
               </div>
@@ -281,7 +279,7 @@ export default function VerificacionPage() {
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 14v3m4-3v3m4-3v3M3 21h18M3 10h18M3 7l9-4 9 4M4 10h16v11H4V10z" />
                   </svg>
-                  Banco
+                  {t('verification.bank')}
                 </span>
                 <span className="text-white font-medium">{current?.banco ?? '—'}</span>
               </div>
@@ -293,14 +291,14 @@ export default function VerificacionPage() {
                 <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
-                El monto cubre el saldo pendiente
+                {t('verification.coversSaldo')}
               </div>
             ) : (
               <div className="flex items-center gap-2 text-amber-400 text-sm bg-amber-900/30 border border-amber-700/40 rounded-xl px-4 py-2.5">
                 <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                 </svg>
-                El monto no cubre el saldo completo
+                {t('verification.doesntCover')}
               </div>
             )}
           </div>
@@ -315,13 +313,13 @@ export default function VerificacionPage() {
                   checked={!!comentario}
                   className="accent-blue-500"
                 />
-                Comentario (requerido para rechazar)
+                {t('verification.commentLabel')}
               </label>
               <textarea
                 value={comentario}
                 onChange={e => setComentario(e.target.value)}
                 rows={3}
-                placeholder="Ingrese un comentario o motivo de rechazo..."
+                placeholder={t('verification.commentPlaceholder')}
                 className="w-full bg-gray-700 border border-gray-600 rounded-xl px-4 py-3 text-white text-sm placeholder-gray-400 focus:outline-none focus:border-blue-500 transition-colors resize-none"
               />
             </div>
@@ -338,7 +336,7 @@ export default function VerificacionPage() {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
                 }
-                {aprobando ? 'APROBANDO...' : 'APROBAR'}
+                {aprobando ? t('verification.approving') : t('verification.approveBtn')}
               </button>
               <button
                 onClick={handleRechazar}
@@ -351,11 +349,11 @@ export default function VerificacionPage() {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
                 }
-                {rechazando ? 'RECHAZANDO...' : 'RECHAZAR'}
+                {rechazando ? t('verification.rejecting') : t('verification.rejectBtn')}
               </button>
             </div>
             <p className="text-center text-xs text-gray-500">
-              Al aprobar, el saldo del residente se actualizará automáticamente
+              {t('verification.updateNote')}
             </p>
           </div>
         </div>
@@ -364,7 +362,7 @@ export default function VerificacionPage() {
       {/* Verification queue */}
       <div className="bg-gray-800 rounded-2xl shadow-xl overflow-hidden">
         <div className="px-5 py-3 border-b border-gray-700">
-          <h3 className="text-sm font-bold text-white">Cola de Verificación</h3>
+          <h3 className="text-sm font-bold text-white">{t('verification.queue')}</h3>
         </div>
         <div className="flex gap-3 p-4 overflow-x-auto">
           {cola.map((p, i) => (

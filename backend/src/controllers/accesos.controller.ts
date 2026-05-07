@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import pool from '../db/pool';
 import { checkPreautorizacion } from './preautorizaciones.controller';
+import { tenantFilter, ownershipClause, ownershipParams } from '../utils/tenant';
 
 export const registrarAcceso = async (req: Request, res: Response) => {
   const { nombre_visitante, numero_dpi, foto, residente_id, agente_id, placa, notas } = req.body;
@@ -15,9 +16,9 @@ export const registrarAcceso = async (req: Request, res: Response) => {
   try {
     await client.query('BEGIN');
 
-    // 1. Verificar que el residente existe
+    // Verify residente exists and get their sucursal_id
     const residenteResult = await client.query(
-      'SELECT id, estado_pago FROM residentes WHERE id = $1',
+      'SELECT id, estado_pago, sucursal_id FROM residentes WHERE id = $1',
       [residente_id]
     );
     if (residenteResult.rows.length === 0) {
@@ -25,9 +26,18 @@ export const registrarAcceso = async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Residente no encontrado' });
     }
 
-    // 2. Verificar que el agente existe
+    // Resolve sucursal_id: from JWT (agente/admin_sucursal) or from residente record
+    const sucursal_id: string = req.user!.sucursal_id ?? residenteResult.rows[0].sucursal_id;
+    if (!sucursal_id) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'No se pudo determinar la sucursal del registro' });
+    }
+
+    // Verify agente exists with a valid staff role
     const agenteResult = await client.query(
-      "SELECT id FROM usuarios WHERE id = $1 AND activo = TRUE AND rol IN ('agente', 'admin')",
+      `SELECT id FROM usuarios
+       WHERE id = $1 AND activo = TRUE
+         AND rol IN ('agente', 'admin_sucursal', 'admin_empresa', 'owner')`,
       [agente_id]
     );
     if (agenteResult.rows.length === 0) {
@@ -35,10 +45,9 @@ export const registrarAcceso = async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Agente no encontrado o inactivo' });
     }
 
-    // 3. Verificar preautorización (lectura simple, no afecta la transacción)
     const preautorizado = await checkPreautorizacion(numero_dpi, residente_id);
 
-    // 4. Upsert visitante por numero_dpi
+    // Upsert visitante
     const visitanteExistente = await client.query(
       'SELECT id FROM visitantes WHERE numero_dpi = $1',
       [numero_dpi]
@@ -58,7 +67,7 @@ export const registrarAcceso = async (req: Request, res: Response) => {
       visitante = nuevoVisitante.rows[0];
     }
 
-    // 5. Registrar vehículo si se proporcionó placa
+    // Register vehicle if plate provided
     let vehiculo_id: string | null = null;
     if (placa) {
       const vehiculoResult = await client.query(
@@ -68,21 +77,24 @@ export const registrarAcceso = async (req: Request, res: Response) => {
       vehiculo_id = vehiculoResult.rows[0].id;
     }
 
-    // 6. Crear registro de acceso
+    // Create access record with sucursal_id
     const registroResult = await client.query(
-      `INSERT INTO registros_acceso (visitante_id, residente_id, vehiculo_id, agente_id, tipo, notas)
-       VALUES ($1, $2, $3, $4, 'entrada', $5)
+      `INSERT INTO registros_acceso
+         (sucursal_id, visitante_id, residente_id, vehiculo_id, agente_id, tipo, notas)
+       VALUES ($1, $2, $3, $4, $5, 'entrada', $6)
        RETURNING *`,
-      [visitante_id, residente_id, vehiculo_id, agente_id, notas || null]
+      [sucursal_id, visitante_id, residente_id, vehiculo_id, agente_id, notas || null]
     );
     const registro = registroResult.rows[0];
 
-    // 7. Generar cargo automático si el residente está en mora
+    // Auto-charge if residente is in mora — filtered by sucursal
     let cargo_generado = null;
-    const estado_pago = residenteResult.rows[0].estado_pago;
-    if (estado_pago === 'mora') {
+    if (residenteResult.rows[0].estado_pago === 'mora') {
       const configResult = await client.query(
-        'SELECT id, nombre, monto FROM configuracion_cargos WHERE activo = TRUE LIMIT 1'
+        `SELECT id, nombre, monto FROM configuracion_cargos
+         WHERE activo = TRUE AND sucursal_id = $1
+         LIMIT 1`,
+        [sucursal_id]
       );
       if (configResult.rows.length > 0) {
         const config = configResult.rows[0];
@@ -97,7 +109,6 @@ export const registrarAcceso = async (req: Request, res: Response) => {
     }
 
     await client.query('COMMIT');
-
     res.status(201).json({ registro, visitante, cargo_generado, preautorizado });
   } catch (error) {
     await client.query('ROLLBACK');
@@ -113,16 +124,23 @@ export const registrarSalida = async (req: Request, res: Response) => {
     const result = await pool.query(
       `UPDATE registros_acceso
        SET tipo = 'salida', timestamp_salida = NOW()
-       WHERE id = $1 AND timestamp_salida IS NULL
+       WHERE id = $1
+         AND timestamp_salida IS NULL
+         AND ${ownershipClause('registros_acceso', 2)}
        RETURNING *`,
-      [id]
+      [id, ...ownershipParams(req.user!)]
     );
     if (result.rows.length === 0) {
-      const existe = await pool.query('SELECT id, timestamp_salida FROM registros_acceso WHERE id = $1', [id]);
+      const existe = await pool.query(
+        'SELECT id, timestamp_salida FROM registros_acceso WHERE id = $1', [id]
+      );
       if (existe.rows.length === 0) {
         return res.status(404).json({ error: 'Registro de acceso no encontrado' });
       }
-      return res.status(409).json({ error: 'La salida ya fue registrada para este acceso' });
+      if (existe.rows[0].timestamp_salida !== null) {
+        return res.status(409).json({ error: 'La salida ya fue registrada para este acceso' });
+      }
+      return res.status(403).json({ error: 'Sin acceso a este registro' });
     }
     res.json(result.rows[0]);
   } catch (error) {
@@ -135,6 +153,10 @@ export const getAccesoActivo = async (req: Request, res: Response) => {
   if (!placa) {
     return res.status(400).json({ error: 'Parámetro requerido: placa' });
   }
+
+  const ts = tenantFilter(req.user!, 'ra');
+  const placaOffset = ts.params.length + 1;
+
   try {
     const result = await pool.query(
       `SELECT
@@ -152,11 +174,13 @@ export const getAccesoActivo = async (req: Request, res: Response) => {
        JOIN residentes  r   ON ra.residente_id  = r.id
        JOIN usuarios    u   ON r.usuario_id     = u.id
        JOIN vehiculos   veh ON ra.vehiculo_id   = veh.id
-       WHERE UPPER(veh.placa) = UPPER($1)
+       ${ts.joinClause}
+       WHERE ${ts.whereClause}
+         AND UPPER(veh.placa) = UPPER($${placaOffset})
          AND ra.timestamp_salida IS NULL
        ORDER BY ra.timestamp_entrada DESC
        LIMIT 1`,
-      [placa]
+      [...ts.params, placa]
     );
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'No hay acceso activo para esa placa' });
@@ -186,8 +210,7 @@ export const registrarSalidaPut = async (req: Request, res: Response) => {
   const { id } = req.params;
   try {
     const existe = await pool.query(
-      'SELECT id, timestamp_salida FROM registros_acceso WHERE id = $1',
-      [id]
+      'SELECT id, timestamp_salida FROM registros_acceso WHERE id = $1', [id]
     );
     if (existe.rows.length === 0) {
       return res.status(404).json({ error: 'Registro de acceso no encontrado' });
@@ -200,21 +223,28 @@ export const registrarSalidaPut = async (req: Request, res: Response) => {
       `UPDATE registros_acceso
        SET timestamp_salida = NOW()
        WHERE id = $1
+         AND ${ownershipClause('registros_acceso', 2)}
        RETURNING *`,
-      [id]
+      [id, ...ownershipParams(req.user!)]
     );
+    if (result.rows.length === 0) {
+      return res.status(403).json({ error: 'Sin acceso a este registro' });
+    }
     res.json(result.rows[0]);
   } catch (error) {
     res.status(500).json({ error: 'Error al registrar salida', detail: String(error) });
   }
 };
 
-
 export const getMisAccesos = async (req: Request, res: Response) => {
   const usuarioId = req.user?.id;
   try {
-    const r = await pool.query('SELECT id FROM residentes WHERE usuario_id = $1', [usuarioId]);
-    if (r.rows.length === 0) return res.status(404).json({ error: 'Residente no encontrado' });
+    const r = await pool.query(
+      'SELECT id FROM residentes WHERE usuario_id = $1', [usuarioId]
+    );
+    if (r.rows.length === 0) {
+      return res.status(404).json({ error: 'Residente no encontrado' });
+    }
     const residenteId = r.rows[0].id;
 
     const result = await pool.query(
