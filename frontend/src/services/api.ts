@@ -469,6 +469,7 @@ export interface ConfigCargo {
 export interface ConfigCargoInput {
   nombre: string;
   monto: number;
+  sucursal_id?: string;
 }
 
 export const getConfigCargos = async (): Promise<ConfigCargo[]> => {
@@ -513,7 +514,7 @@ export const deleteConfigCargo = async (id: string): Promise<void> => {
   }
 };
 
-// ── Empresas ──────────────────────────────────────────────────────────────
+/* Corporate & Multi-tenant Management */
 
 export interface Empresa {
   id: string;
@@ -579,7 +580,30 @@ export const getEmpresaStats = async (id: string): Promise<EmpresaStats> => {
   return res.json() as Promise<EmpresaStats>;
 };
 
-// ── Sucursales ────────────────────────────────────────────────────────────
+export const deleteEmpresa = async (id: string): Promise<void> => {
+  const res = await fetch(`${BASE_URL}/api/empresas/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+    headers: authHeaders(),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error((body as { error?: string }).error || 'Error al eliminar empresa');
+  }
+};
+
+export const assignAdminEmpresa = async (empresaId: string, usuarioId: string): Promise<void> => {
+  const res = await fetch(`${BASE_URL}/api/empresas/${encodeURIComponent(empresaId)}/admin`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify({ usuario_id: usuarioId }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error((body as { error?: string }).error || 'Error al asignar admin');
+  }
+};
+
+/* Branch & Location Management */
 
 export interface Sucursal {
   id: string;
@@ -649,7 +673,18 @@ export const updateSucursal = async (
   return body as Sucursal;
 };
 
-// ── Usuarios (staff) ──────────────────────────────────────────────────────
+export const deleteSucursal = async (id: string): Promise<void> => {
+  const res = await fetch(`${BASE_URL}/api/sucursales/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+    headers: authHeaders(),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error((body as { error?: string }).error || 'Error al eliminar sucursal');
+  }
+};
+
+/* User & Staff Management */
 
 export interface Usuario {
   id: string;
@@ -697,6 +732,17 @@ export const updatePreferencias = async (idioma: string, tema: string): Promise<
   if (!res.ok) {
     const body = await res.json();
     throw new Error(body.error || 'Error al actualizar preferencias');
+  }
+};
+
+export const deleteUsuario = async (id: string): Promise<void> => {
+  const res = await fetch(`${BASE_URL}/api/usuarios/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+    headers: authHeaders(),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error((body as { error?: string }).error || 'Error al eliminar usuario');
   }
 };
 

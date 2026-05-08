@@ -34,6 +34,7 @@ services:
       PORT: 3000
       DATABASE_URL: postgresql://sguser:sgpassword123@db:5432/securegate
       JWT_SECRET: securegate_jwt_secret_dev
+      GOOGLE_CLOUD_API_KEY: ${GOOGLE_CLOUD_API_KEY}
     ports:
       - "3000:3000"
     volumes:

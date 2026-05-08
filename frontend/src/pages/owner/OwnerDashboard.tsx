@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import {
-  getEmpresas, createEmpresa, updateEmpresa, getDashboard,
+  getEmpresas, createEmpresa, updateEmpresa, deleteEmpresa, getDashboard,
   type Empresa, type EmpresaInput,
 } from '../../services/api';
 import { Spinner, TableSkeleton } from '../../components/Skeleton';
@@ -8,6 +8,23 @@ import { useToast } from '../../components/Toast';
 import { useTranslation } from '../../i18n/useTranslation';
 
 const EMPTY: EmpresaInput = { nombre: '', nit: '', logo_url: '' };
+
+function StatCard({ label, value, accent, iconPath }: { label: string; value: number; accent: string; iconPath: string }) {
+  return (
+    <div className="relative overflow-hidden bg-gradient-to-br from-gray-800 to-gray-900 rounded-2xl p-5 shadow-xl border border-gray-700/30 transition-all duration-300 hover:-translate-y-0.5 group">
+      <div className={`absolute -top-6 -right-6 w-24 h-24 rounded-full blur-2xl opacity-20 transition-all duration-500 group-hover:scale-150 ${accent.replace('text-', 'bg-')}`} />
+      <div className="flex items-start justify-between mb-3 relative z-10">
+        <p className="text-gray-400 text-xs font-semibold uppercase tracking-wide">{label}</p>
+        <div className={`p-2 rounded-lg bg-gray-700/50 ${accent}`}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d={iconPath} />
+          </svg>
+        </div>
+      </div>
+      <p className="text-3xl font-bold text-white relative z-10">{value}</p>
+    </div>
+  );
+}
 
 interface Props {
   onSelectEmpresa: (id: string) => void;
@@ -76,6 +93,17 @@ export default function OwnerDashboard({ onSelectEmpresa }: Props) {
     }
   };
 
+  const handleDeleteEmpresa = async (emp: Empresa) => {
+    if (!window.confirm(`${t('owner.confirmDeleteEmpresa')} "${emp.nombre}"?`)) return;
+    try {
+      await deleteEmpresa(emp.id);
+      cargar();
+      showToast(t('owner.empresaDeleted'), 'warning');
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Error al eliminar empresa', 'error');
+    }
+  };
+
   return (
     <div className="p-6 text-gray-100 space-y-6 max-w-7xl">
       <div className="flex items-center justify-between">
@@ -96,25 +124,16 @@ export default function OwnerDashboard({ onSelectEmpresa }: Props) {
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {loading ? (
           Array.from({ length: 3 }).map((_, i) => (
-            <div key={i} className="bg-gray-800 rounded-2xl p-6 border-l-4 border-gray-700 animate-pulse">
-              <div className="h-4 bg-gray-700 rounded w-2/3 mb-3" />
-              <div className="h-10 bg-gray-700 rounded w-1/3" />
+            <div key={i} className="bg-gray-800 rounded-2xl p-5 border border-gray-700/50 animate-pulse">
+              <div className="h-3 bg-gray-700 rounded w-3/4 mb-3" />
+              <div className="h-8 bg-gray-700 rounded w-1/2" />
             </div>
           ))
         ) : (
           <>
-            <div className="bg-gray-800 rounded-2xl p-6 shadow-xl border-l-4 border-blue-500">
-              <p className="text-gray-400 text-sm font-medium">{t('owner.activeCompanies')}</p>
-              <p className="text-4xl font-bold text-white mt-2">{totalEmpresasActivas}</p>
-            </div>
-            <div className="bg-gray-800 rounded-2xl p-6 shadow-xl border-l-4 border-green-500">
-              <p className="text-gray-400 text-sm font-medium">{t('owner.activeBranches')}</p>
-              <p className="text-4xl font-bold text-white mt-2">{totalSucursalesActivas}</p>
-            </div>
-            <div className="bg-gray-800 rounded-2xl p-6 shadow-xl border-l-4 border-teal-500">
-              <p className="text-gray-400 text-sm font-medium">{t('owner.globalAccesses')}</p>
-              <p className="text-4xl font-bold text-white mt-2">{accesosHoy}</p>
-            </div>
+            <StatCard label={t('owner.activeCompanies')} value={totalEmpresasActivas}   accent="text-blue-400"  iconPath="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+            <StatCard label={t('owner.activeBranches')}  value={totalSucursalesActivas} accent="text-green-400" iconPath="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z M12 7a3 3 0 1 0 0 6 3 3 0 0 0 0-6z" />
+            <StatCard label={t('owner.globalAccesses')}  value={accesosHoy}             accent="text-teal-400"  iconPath="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
           </>
         )}
       </div>
@@ -175,6 +194,13 @@ export default function OwnerDashboard({ onSelectEmpresa }: Props) {
                           }`}
                         >
                           {emp.activo ? t('common.deactivate') : t('common.activate')}
+                        </button>
+                        <span className="text-gray-600">·</span>
+                        <button
+                          onClick={() => handleDeleteEmpresa(emp)}
+                          className="text-red-400 hover:text-red-300 text-xs font-medium transition-colors"
+                        >
+                          {t('common.delete')}
                         </button>
                       </div>
                     </td>

@@ -13,15 +13,17 @@ export const getConfiguracion = async (_req: Request, res: Response) => {
 };
 
 export const createConfiguracion = async (req: Request, res: Response) => {
-  const { nombre, monto, activo } = req.body;
+  const { nombre, monto, activo, sucursal_id } = req.body;
   if (!nombre || monto === undefined) {
     return res.status(400).json({ error: 'Campos requeridos: nombre, monto' });
   }
+  // If caller doesn't supply sucursal_id, fall back to the user's own sucursal
+  const resolvedSucursalId: string | null = sucursal_id ?? (req.user as { sucursal_id?: string | null } | undefined)?.sucursal_id ?? null;
   try {
     const result = await pool.query(
-      `INSERT INTO configuracion_cargos (nombre, monto, activo)
-       VALUES ($1, $2, $3) RETURNING *`,
-      [nombre, monto, activo !== undefined ? activo : true]
+      `INSERT INTO configuracion_cargos (nombre, monto, activo, sucursal_id)
+       VALUES ($1, $2, $3, $4) RETURNING *`,
+      [nombre, monto, activo !== undefined ? activo : true, resolvedSucursalId]
     );
     res.status(201).json(result.rows[0]);
   } catch (error) {

@@ -87,6 +87,22 @@ export const updateSucursal = async (req: Request, res: Response) => {
   }
 };
 
+export const deleteSucursal = async (req: Request, res: Response) => {
+  const { id } = req.params;
+  try {
+    const result = await pool.query(
+      `UPDATE sucursales SET activo = FALSE WHERE id = $1 RETURNING *`,
+      [id]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Sucursal no encontrada' });
+    }
+    res.json(result.rows[0]);
+  } catch (error) {
+    res.status(500).json({ error: 'Error al eliminar sucursal', detail: String(error) });
+  }
+};
+
 export const assignAdminSucursal = async (req: Request, res: Response) => {
   const { id } = req.params;
   const { usuario_id } = req.body;

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import {
-  getEmpresaStats, getSucursales, createSucursal, assignAdminSucursal,
+  getEmpresaStats, getSucursales, createSucursal, deleteSucursal, assignAdminSucursal,
   type EmpresaStats, type Sucursal, type SucursalInput,
 } from '../../services/api';
 import { Spinner, TableSkeleton } from '../../components/Skeleton';
@@ -49,6 +49,17 @@ export default function EmpresaDetail({ empresaId, onBack }: Props) {
     setSucForm({ ...EMPTY_SUC, empresa_id: empresaId });
     setModalError(null);
     setModal('sucursal');
+  };
+
+  const handleDeleteSucursal = async (suc: Sucursal) => {
+    if (!window.confirm(`${t('ae.confirmDeleteSucursal')} "${suc.nombre}"?`)) return;
+    try {
+      await deleteSucursal(suc.id);
+      cargar();
+      showToast(t('ae.sucursalDeleted'), 'warning');
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Error al eliminar sucursal', 'error');
+    }
   };
 
   const openAdminModal = (suc: Sucursal) => {
@@ -204,12 +215,21 @@ export default function EmpresaDetail({ empresaId, onBack }: Props) {
                       </span>
                     </td>
                     <td className="px-4 py-3">
-                      <button
-                        onClick={() => openAdminModal(suc)}
-                        className="text-blue-400 hover:text-blue-300 text-xs font-medium transition-colors"
-                      >
-                        {t('empDetail.assignAdmin')}
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => openAdminModal(suc)}
+                          className="text-blue-400 hover:text-blue-300 text-xs font-medium transition-colors"
+                        >
+                          {t('empDetail.assignAdmin')}
+                        </button>
+                        <span className="text-gray-600">·</span>
+                        <button
+                          onClick={() => handleDeleteSucursal(suc)}
+                          className="text-red-400 hover:text-red-300 text-xs font-medium transition-colors"
+                        >
+                          {t('common.delete')}
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))

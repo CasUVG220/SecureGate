@@ -4,10 +4,11 @@ import { requireOwner, requireAdminEmpresa } from '../middleware/auth.middleware
 
 const router = Router();
 
-router.get('/',           requireOwner, ctrl.getEmpresas);
-router.post('/',          requireOwner, ctrl.createEmpresa);
-router.get('/:id/stats',  requireAdminEmpresa, ctrl.getEmpresaStats);
-router.put('/:id',        requireOwner, ctrl.updateEmpresa);
-router.delete('/:id',     requireOwner, ctrl.deleteEmpresa);
+router.get('/',               requireOwner,        ctrl.getEmpresas);
+router.post('/',              requireOwner,        ctrl.createEmpresa);
+router.get('/:id/stats',      requireAdminEmpresa, ctrl.getEmpresaStats);
+router.put('/:id',            requireOwner,        ctrl.updateEmpresa);
+router.delete('/:id',         requireOwner,        ctrl.deleteEmpresa);
+router.post('/:id/admin',     requireOwner,        ctrl.assignAdminEmpresa);
 
 export default router;

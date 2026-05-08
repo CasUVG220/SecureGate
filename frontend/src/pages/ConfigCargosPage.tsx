@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import {
   getConfigCargos, createConfigCargo, updateConfigCargo, deleteConfigCargo,
+  decodeTokenPayload,
   type ConfigCargo,
 } from '../services/api';
 import { TableSkeleton, Spinner } from '../components/Skeleton';
@@ -12,6 +13,12 @@ const EMPTY_FORM = { nombre: '', monto: '' };
 export default function ConfigCargosPage() {
   const showToast = useToast();
   const { t } = useTranslation();
+
+  const sucursalId = (() => {
+    const token = localStorage.getItem('token');
+    if (!token) return null;
+    return (decodeTokenPayload(token)?.sucursal_id as string) ?? null;
+  })();
   const [configs, setConfigs]       = useState<ConfigCargo[]>([]);
   const [loading, setLoading]       = useState(true);
   const [error, setError]           = useState<string | null>(null);
@@ -47,7 +54,11 @@ export default function ConfigCargosPage() {
         setConfigs(prev => prev.map(c => c.id === updated.id ? updated : c));
         showToast(t('config.updated'));
       } else {
-        const created = await createConfigCargo({ nombre: form.nombre.trim(), monto });
+        const created = await createConfigCargo({
+          nombre: form.nombre.trim(),
+          monto,
+          sucursal_id: sucursalId ?? undefined,
+        });
         setConfigs(prev => [...prev, created]);
         showToast(t('config.created'));
       }
@@ -126,6 +137,10 @@ export default function ConfigCargosPage() {
         <div>
           <h1 className="text-xl font-bold text-white">{t('config.title')}</h1>
           <p className="text-sm text-gray-400 mt-0.5">{t('config.subtitle')}</p>
+          <p className="text-xs text-blue-400 mt-1 flex items-center gap-1">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+            {t('config.autoChargeNote')}
+          </p>
         </div>
         <button onClick={openCreate}
           className="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-4 py-2 rounded-xl text-sm transition-colors">

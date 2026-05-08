@@ -96,7 +96,7 @@ export default function DashboardPage() {
                           {new Date(a.timestamp_salida).toLocaleTimeString('es-GT', { hour: '2-digit', minute: '2-digit' })}
                         </span>
                       ) : (
-                        <span className="inline-flex items-center gap-1.5 bg-brand-500/10 border border-brand-500/20 text-brand-400 text-xs font-bold px-2.5 py-1 rounded-md shadow-[0_0_10px_rgba(99,102,241,0.2)]">
+                        <span className="inline-flex items-center gap-1.5 bg-brand-500/10 border border-brand-500/20 text-brand-400 text-xs font-bold px-2.5 py-1 rounded-md shadow-[0_0_10px_rgba(113,113,122,0.3)]">
                           <span className="w-1.5 h-1.5 rounded-full bg-brand-400 animate-pulse"></span>
                           {t('dashboard.active')}
                         </span>
