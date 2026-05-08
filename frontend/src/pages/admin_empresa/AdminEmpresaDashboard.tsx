@@ -4,11 +4,19 @@ import { decodeTokenPayload } from '../../services/api';
 import { TableSkeleton } from '../../components/Skeleton';
 import { useTranslation } from '../../i18n/useTranslation';
 
-function StatCard({ label, value, color }: { label: string; value: number; color: string }) {
+function StatCard({ label, value, accent, iconPath }: { label: string; value: number; accent: string; iconPath: string }) {
   return (
-    <div className={`bg-gray-800 rounded-2xl p-5 shadow-xl border-l-4 ${color}`}>
-      <p className="text-gray-400 text-xs font-medium">{label}</p>
-      <p className="text-3xl font-bold text-white mt-1">{value}</p>
+    <div className="relative overflow-hidden bg-gradient-to-br from-gray-800 to-gray-900 rounded-2xl p-5 shadow-xl border border-gray-700/30 transition-all duration-300 hover:-translate-y-0.5 group">
+      <div className={`absolute -top-6 -right-6 w-24 h-24 rounded-full blur-2xl opacity-20 transition-all duration-500 group-hover:scale-150 ${accent.replace('text-', 'bg-')}`} />
+      <div className="flex items-start justify-between mb-3 relative z-10">
+        <p className="text-gray-400 text-xs font-semibold uppercase tracking-wide">{label}</p>
+        <div className={`p-2 rounded-lg bg-gray-700/50 ${accent}`}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d={iconPath} />
+          </svg>
+        </div>
+      </div>
+      <p className="text-3xl font-bold text-white relative z-10">{value}</p>
     </div>
   );
 }
@@ -86,10 +94,10 @@ export default function AdminEmpresaDashboard() {
           ))
         ) : stats ? (
           <>
-            <StatCard label={t('empDetail.branches')}         value={stats.total_sucursales}       color="border-blue-500" />
-            <StatCard label={t('empDetail.residents')}        value={stats.total_residentes}       color="border-green-500" />
-            <StatCard label={t('dashboard.accessesToday')}    value={stats.total_accesos_hoy}      color="border-teal-500" />
-            <StatCard label={t('dashboard.pendingPayments')}  value={stats.total_pagos_pendientes} color="border-yellow-500" />
+            <StatCard label={t('empDetail.branches')}        value={stats.total_sucursales}       accent="text-blue-400"   iconPath="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+            <StatCard label={t('empDetail.residents')}       value={stats.total_residentes}       accent="text-green-400"  iconPath="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M9 7a4 4 0 1 0 0-8 4 4 0 0 0 0 8z" />
+            <StatCard label={t('dashboard.accessesToday')}   value={stats.total_accesos_hoy}      accent="text-teal-400"   iconPath="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+            <StatCard label={t('dashboard.pendingPayments')} value={stats.total_pagos_pendientes} accent="text-amber-400"  iconPath="M1 4h22v16H1zM1 10h22" />
           </>
         ) : null}
       </div>

@@ -57,6 +57,22 @@ export const getUsuariosSucursal = async (req: Request, res: Response) => {
   }
 };
 
+export const deleteUsuario = async (req: Request, res: Response) => {
+  const { id } = req.params;
+  try {
+    const result = await pool.query(
+      `UPDATE usuarios SET activo = FALSE WHERE id = $1 RETURNING id, nombre, email, rol, activo`,
+      [id]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Usuario no encontrado' });
+    }
+    res.json(result.rows[0]);
+  } catch (error) {
+    res.status(500).json({ error: 'Error al eliminar usuario', detail: String(error) });
+  }
+};
+
 export const createUsuario = async (req: Request, res: Response) => {
   const user = req.user!;
   const { nombre, email, password, rol, numero_casa } = req.body as {

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import {
-  getSucursales, createSucursal, updateSucursal, assignAdminSucursal,
-  getUsuarios, createUsuario,
+  getSucursales, createSucursal, updateSucursal, deleteSucursal, assignAdminSucursal,
+  getUsuarios, createUsuario, deleteUsuario,
   type Sucursal, type SucursalInput, type Usuario,
 } from '../../services/api';
 import { Spinner, TableSkeleton } from '../../components/Skeleton';
@@ -125,6 +125,28 @@ export default function GestionSucursales() {
     }
   };
 
+  const handleDeleteSucursal = async (suc: Sucursal) => {
+    if (!window.confirm(`${t('ae.confirmDeleteSucursal')} "${suc.nombre}"?`)) return;
+    try {
+      await deleteSucursal(suc.id);
+      cargar();
+      showToast(t('ae.sucursalDeleted'), 'warning');
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Error al eliminar sucursal', 'error');
+    }
+  };
+
+  const handleDeleteUsuario = async (u: Usuario) => {
+    if (!window.confirm(`${t('ae.confirmDeleteUser')} "${u.nombre}"?`)) return;
+    try {
+      await deleteUsuario(u.id);
+      cargar();
+      showToast(t('ae.userDeleted'), 'warning');
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Error al eliminar usuario', 'error');
+    }
+  };
+
   // ── Assign admin modal ───────────────────────────────────────────────────
 
   const openAdminModal = (suc: Sucursal) => {
@@ -186,7 +208,13 @@ export default function GestionSucursales() {
     }
   };
 
-  const staffUsuarios = usuarios.filter(u => u.rol !== 'residente');
+  const [staffFilter, setStaffFilter] = useState<'all' | 'agente' | 'admin_sucursal'>('all');
+
+  const staffUsuarios = usuarios.filter(u => {
+    if (u.rol === 'residente') return false;
+    if (staffFilter === 'all') return true;
+    return u.rol === staffFilter;
+  });
 
   return (
     <div className="p-6 text-gray-100 space-y-6 max-w-7xl">
@@ -266,7 +294,7 @@ export default function GestionSucursales() {
                         <span className="text-gray-600">·</span>
                         <button
                           onClick={() => openAdminModal(suc)}
-                          className="text-purple-400 hover:text-purple-300 text-xs font-medium transition-colors"
+                          className="text-teal-400 hover:text-teal-300 text-xs font-medium transition-colors"
                         >
                           {t('empDetail.assignAdmin')}
                         </button>
@@ -281,6 +309,13 @@ export default function GestionSucursales() {
                         >
                           {suc.activo ? t('common.deactivate') : t('common.activate')}
                         </button>
+                        <span className="text-gray-600">·</span>
+                        <button
+                          onClick={() => handleDeleteSucursal(suc)}
+                          className="text-red-400 hover:text-red-300 text-xs font-medium transition-colors"
+                        >
+                          {t('common.delete')}
+                        </button>
                       </div>
                     </td>
                   </tr>
@@ -293,8 +328,23 @@ export default function GestionSucursales() {
 
       {/* Staff users table */}
       <div className="bg-gray-800 rounded-2xl shadow-xl overflow-hidden">
-        <div className="px-6 py-4 border-b border-gray-700">
+        <div className="px-6 py-4 border-b border-gray-700 flex items-center justify-between gap-4 flex-wrap">
           <h2 className="text-base font-semibold text-white">{t('ae.staffSection')}</h2>
+          <div className="flex gap-1 bg-gray-700/50 rounded-lg p-1">
+            {(['all', 'agente', 'admin_sucursal'] as const).map(f => (
+              <button
+                key={f}
+                onClick={() => setStaffFilter(f)}
+                className={`text-xs font-medium px-3 py-1.5 rounded-md transition-colors ${
+                  staffFilter === f
+                    ? 'bg-blue-600 text-white'
+                    : 'text-gray-400 hover:text-gray-200'
+                }`}
+              >
+                {f === 'all' ? t('ae.filterAll') : f === 'agente' ? t('ae.filterAgents') : t('ae.filterAdmins')}
+              </button>
+            ))}
+          </div>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -305,6 +355,7 @@ export default function GestionSucursales() {
                 <th className="px-4 py-3 font-medium">{t('common.role')}</th>
                 <th className="px-4 py-3 font-medium">{t('ae.branchLabel')}</th>
                 <th className="px-4 py-3 font-medium text-center">{t('common.status')}</th>
+                <th className="px-4 py-3 font-medium">{t('common.actions')}</th>
               </tr>
             </thead>
             <tbody>
@@ -312,7 +363,7 @@ export default function GestionSucursales() {
                 <TableSkeleton rows={3} cols={5} />
               ) : staffUsuarios.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="px-4 py-10 text-center text-gray-500">
+                  <td colSpan={6} className="px-4 py-10 text-center text-gray-500">
                     {t('ae.noStaff')}
                   </td>
                 </tr>
@@ -333,6 +384,14 @@ export default function GestionSucursales() {
                       }`}>
                         {u.activo ? t('common.active') : t('common.inactive')}
                       </span>
+                    </td>
+                    <td className="px-4 py-3">
+                      <button
+                        onClick={() => handleDeleteUsuario(u)}
+                        className="text-red-400 hover:text-red-300 text-xs font-medium transition-colors"
+                      >
+                        {t('common.delete')}
+                      </button>
                     </td>
                   </tr>
                 ))

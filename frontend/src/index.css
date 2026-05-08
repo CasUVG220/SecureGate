@@ -4,9 +4,9 @@
 
 @layer base {
   body {
-    @apply antialiased text-gray-100 selection:bg-brand-500 selection:text-white;
+    @apply antialiased text-gray-100 selection:bg-blue-500 selection:text-white;
   }
-  
+
   /* Custom sleek scrollbar */
   ::-webkit-scrollbar {
     width: 6px;
@@ -16,49 +16,97 @@
     background: transparent;
   }
   ::-webkit-scrollbar-thumb {
-    @apply bg-gray-700/50 rounded-full hover:bg-gray-600/80 transition-colors;
+    @apply bg-gray-700/50 rounded-full;
   }
   html:not(.dark) ::-webkit-scrollbar-thumb {
-    @apply bg-gray-300 rounded-full hover:bg-gray-400;
+    @apply bg-gray-300 rounded-full;
   }
 }
 
-/* ── Light mode overrides (html without .dark class) ─────────────────────
-   These rules apply when the user switches to light mode.
-   Specificity (0,2,0) beats Tailwind utility (0,1,0) at same cascade level.
-   ───────────────────────────────────────────────────────────────────────── */
+/* Light Mode Theme Overrides */
 
-/* Backgrounds */
+/* Surfaces & Backgrounds */
 html:not(.dark) .bg-gray-950 { background-color: #f8fafc; }
-html:not(.dark) .bg-gray-900 { background-color: #f9fafb; }
+html:not(.dark) .bg-gray-900 { background-color: #f1f5f9; }
 html:not(.dark) .bg-gray-800 { background-color: #ffffff; }
-html:not(.dark) .bg-gray-750 { background-color: #f3f4f6; }
-html:not(.dark) .bg-gray-700 { background-color: #f3f4f6; }
-html:not(.dark) .bg-gray-600 { background-color: #e5e7eb; }
+html:not(.dark) .bg-gray-750 { background-color: #f8fafc; }
+html:not(.dark) .bg-gray-700 { background-color: #f1f5f9; }
+html:not(.dark) .bg-gray-600 { background-color: #e2e8f0; }
+html:not(.dark) .bg-dark-900 { background-color: #f1f5f9; }
+html:not(.dark) .bg-dark-800 { background-color: #ffffff; }
+html:not(.dark) .bg-dark-700 { background-color: #f8fafc; }
 
-/* Borders */
-html:not(.dark) .border-gray-800 { border-color: #e5e7eb; }
-html:not(.dark) .border-gray-700 { border-color: #e5e7eb; }
-html:not(.dark) .border-gray-600 { border-color: #d1d5db; }
+/* Transparency-based Overlays */
+html:not(.dark) .bg-dark-800\/40 { background-color: rgba(255,255,255,0.92) !important; }
+html:not(.dark) .bg-white\/5    { background-color: rgba(0,0,0,0.04)  !important; }
+html:not(.dark) .bg-white\/10   { background-color: rgba(0,0,0,0.06)  !important; }
+html:not(.dark) .bg-dark-700\/50 { background-color: rgba(0,0,0,0.04) !important; }
 
-/* Text — gray scale */
-html:not(.dark) .text-gray-100 { color: #1f2937; }
-html:not(.dark) .text-gray-200 { color: #374151; }
-html:not(.dark) .text-gray-300 { color: #4b5563; }
-html:not(.dark) .text-gray-400 { color: #6b7280; }
+/* Borders & Dividers */
+html:not(.dark) .border-gray-800 { border-color: #e2e8f0; }
+html:not(.dark) .border-gray-700 { border-color: #e2e8f0; }
+html:not(.dark) .border-gray-600 { border-color: #cbd5e1; }
+html:not(.dark) .border-white\/5 { border-color: rgba(0,0,0,0.08) !important; }
 
-/* Primary text: white → near-black, EXCEPT on colored-bg elements and buttons */
-html:not(.dark) .text-white:not(button):not([class*="bg-blue-"]):not([class*="bg-emerald-"]):not([class*="bg-red-"]):not([class*="bg-green-"]):not([class*="bg-amber-"]):not([class*="bg-teal-"]):not([class*="bg-yellow-"]):not([class*="bg-indigo-"]):not([class*="bg-purple-"]) {
-  color: #111827;
+
+html:not(.dark) .divide-white\/5 > * + * { border-color: rgba(0,0,0,0.08) !important; }
+
+/* Typography & Text Colors */
+html:not(.dark) .text-gray-100 { color: #1e293b; }
+html:not(.dark) .text-gray-200 { color: #334155; }
+html:not(.dark) .text-gray-300 { color: #475569; }
+html:not(.dark) .text-gray-400 { color: #64748b; }
+html:not(.dark) .text-gray-500 { color: #94a3b8; }
+
+
+html:not(.dark) .text-white:not(button):not([class*="bg-blue-"]):not([class*="bg-brand-"]):not([class*="bg-emerald-"]):not([class*="bg-red-"]):not([class*="bg-green-"]):not([class*="bg-amber-"]):not([class*="bg-teal-"]):not([class*="bg-yellow-"]):not([class*="bg-indigo-"]):not([class*="bg-purple-"]):not([class*="bg-dark-"]) {
+  color: #1e293b;
 }
 
-/* Form elements: always dark text for readability */
-html:not(.dark) input:not([type="checkbox"]):not([type="radio"]) { color: #111827; }
-html:not(.dark) select { color: #111827; }
-html:not(.dark) textarea { color: #111827; }
+/* Forms & Skeletons */
+html:not(.dark) input:not([type="checkbox"]):not([type="radio"]),
+html:not(.dark) select,
+html:not(.dark) textarea {
+  background-color: #ffffff !important;
+  border-color: #cbd5e1 !important;
+  color: #1e293b !important;
+}
 html:not(.dark) input::placeholder,
-html:not(.dark) textarea::placeholder { color: #9ca3af; }
+html:not(.dark) textarea::placeholder { color: #94a3b8 !important; }
 
-/* Skeleton pulses */
-html:not(.dark) [class*="animate-pulse"] .bg-gray-700 { background-color: #e5e7eb; }
-html:not(.dark) [class*="animate-pulse"] .rounded { background-color: #e5e7eb; }
+
+html:not(.dark) [class*="animate-pulse"] .bg-gray-700 { background-color: #e2e8f0; }
+html:not(.dark) [class*="animate-pulse"] .bg-white\/10 { background-color: #e2e8f0 !important; }
+
+/* Visual Effects: Gradients & Shadows */
+html:not(.dark) .from-gray-800 {
+  --tw-gradient-from: #ffffff;
+  --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to, rgb(255 255 255 / 0));
+}
+html:not(.dark) .from-gray-900 {
+  --tw-gradient-from: #f8fafc;
+  --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to, rgb(248 250 252 / 0));
+}
+html:not(.dark) .to-gray-900   { --tw-gradient-to: #f1f5f9; }
+html:not(.dark) .to-gray-800   { --tw-gradient-to: #f8fafc; }
+
+/* Status Badges & Accents */
+html:not(.dark) .bg-green-900\/50  { background-color: #dcfce7 !important; }
+html:not(.dark) .bg-red-900\/40    { background-color: #fee2e2 !important; }
+html:not(.dark) .bg-red-900\/50    { background-color: #fee2e2 !important; }
+html:not(.dark) .bg-amber-900\/50  { background-color: #fef3c7 !important; }
+html:not(.dark) .bg-yellow-900\/50 { background-color: #fef9c3 !important; }
+
+
+html:not(.dark) .text-green-400  { color: #047857; }
+html:not(.dark) .text-teal-400   { color: #185b58; }
+html:not(.dark) .text-blue-400   { color: #3f3f46; }
+html:not(.dark) .text-indigo-400 { color: #3f3f46; }
+html:not(.dark) .text-cyan-400   { color: #3f3f46; }
+html:not(.dark) .text-amber-400  { color: #b45309; }
+html:not(.dark) .text-yellow-400 { color: #ca8a04; }
+html:not(.dark) .text-red-400    { color: #dc2626; }
+html:not(.dark) .text-red-300    { color: #dc2626; }
+
+
+html:not(.dark) .bg-gray-700\/50 { background-color: rgba(0,0,0,0.06) !important; }

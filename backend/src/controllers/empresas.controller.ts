@@ -7,6 +7,7 @@ export const getEmpresas = async (_req: Request, res: Response) => {
       `SELECT e.*, COUNT(s.id)::int AS total_sucursales
        FROM empresas e
        LEFT JOIN sucursales s ON s.empresa_id = e.id AND s.activo = TRUE
+       WHERE e.activo = TRUE
        GROUP BY e.id
        ORDER BY e.created_at DESC`
     );
@@ -63,20 +64,141 @@ export const updateEmpresa = async (req: Request, res: Response) => {
 
 export const deleteEmpresa = async (req: Request, res: Response) => {
   const { id } = req.params;
+  const client = await pool.connect();
 
   try {
-    const result = await pool.query(
+    await client.query('BEGIN');
+
+    // Get all sucursal IDs for this empresa
+    const sucRes = await client.query(
+      `SELECT id FROM sucursales WHERE empresa_id = $1`,
+      [id]
+    );
+    const sucIds: string[] = sucRes.rows.map((r: { id: string }) => r.id);
+
+    if (sucIds.length > 0) {
+      // Deactivate cargos automáticos for residents of these sucursales
+      await client.query(
+        `UPDATE cargos_automaticos SET aplicado = TRUE
+         WHERE residente_id IN (
+           SELECT id FROM residentes WHERE sucursal_id = ANY($1::uuid[])
+         )`,
+        [sucIds]
+      );
+
+      // Deactivate preautorizaciones
+      await client.query(
+        `UPDATE preautorizaciones SET activo = FALSE
+         WHERE sucursal_id = ANY($1::uuid[])`,
+        [sucIds]
+      );
+
+      // Deactivate pagos
+      await client.query(
+        `UPDATE pagos SET estado = 'rechazado'
+         WHERE sucursal_id = ANY($1::uuid[]) AND estado = 'pendiente'`,
+        [sucIds]
+      );
+
+      // Deactivate residentes
+      await client.query(
+        `UPDATE residentes SET estado_pago = 'pendiente'
+         WHERE sucursal_id = ANY($1::uuid[])`,
+        [sucIds]
+      );
+
+      // Deactivate all staff users in those sucursales
+      await client.query(
+        `UPDATE usuarios SET activo = FALSE
+         WHERE sucursal_id = ANY($1::uuid[])`,
+        [sucIds]
+      );
+
+      // Deactivate all sucursales
+      await client.query(
+        `UPDATE sucursales SET activo = FALSE WHERE empresa_id = $1`,
+        [id]
+      );
+    }
+
+    // Deactivate empresa-level users (admin_empresa)
+    await client.query(
+      `UPDATE usuarios SET activo = FALSE, empresa_id = NULL
+       WHERE empresa_id = $1 AND rol = 'admin_empresa'`,
+      [id]
+    );
+
+    // Deactivate empresa
+    const result = await client.query(
       `UPDATE empresas SET activo = FALSE WHERE id = $1 RETURNING id`,
       [id]
     );
 
     if (result.rows.length === 0) {
+      await client.query('ROLLBACK');
       return res.status(404).json({ error: 'Empresa no encontrada' });
     }
 
-    res.json({ message: 'Empresa desactivada correctamente', id: result.rows[0].id });
+    await client.query('COMMIT');
+    res.json({ message: 'Empresa y todos sus recursos desactivados', id });
   } catch (error) {
-    res.status(500).json({ error: 'Error al desactivar empresa', detail: String(error) });
+    await client.query('ROLLBACK');
+    res.status(500).json({ error: 'Error al eliminar empresa', detail: String(error) });
+  } finally {
+    client.release();
+  }
+};
+
+export const assignAdminEmpresa = async (req: Request, res: Response) => {
+  const { id } = req.params; // empresa_id
+  const { usuario_id } = req.body;
+
+  if (!usuario_id) {
+    return res.status(400).json({ error: 'Campo requerido: usuario_id' });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    // Verify empresa exists
+    const empCheck = await client.query(
+      'SELECT id FROM empresas WHERE id = $1 AND activo = TRUE',
+      [id]
+    );
+    if (empCheck.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Empresa no encontrada' });
+    }
+
+    // Remove current admin_empresa of this empresa (demote to agente)
+    await client.query(
+      `UPDATE usuarios SET rol = 'agente', empresa_id = NULL
+       WHERE empresa_id = $1 AND rol = 'admin_empresa'`,
+      [id]
+    );
+
+    // Assign new admin_empresa
+    const result = await client.query(
+      `UPDATE usuarios
+       SET rol = 'admin_empresa', empresa_id = $1, activo = TRUE
+       WHERE id = $2
+       RETURNING id, nombre, email, rol, empresa_id`,
+      [id, usuario_id]
+    );
+
+    if (result.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Usuario no encontrado' });
+    }
+
+    await client.query('COMMIT');
+    res.json(result.rows[0]);
+  } catch (error) {
+    await client.query('ROLLBACK');
+    res.status(500).json({ error: 'Error al asignar admin empresa', detail: String(error) });
+  } finally {
+    client.release();
   }
 };
 
