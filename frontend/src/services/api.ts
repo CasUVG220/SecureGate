@@ -139,6 +139,12 @@ export const getAccesoActivo = async (placa: string): Promise<AccesoActivo | nul
   return body as AccesoActivo;
 };
 
+export const getAccesosActivos = async (): Promise<AccesoActivo[]> => {
+  const res = await fetch(`${BASE_URL}/api/accesos/activos`, { headers: authHeaders() });
+  if (!res.ok) throw new Error('Error al cargar visitantes activos');
+  return res.json();
+};
+
 export const registrarSalidaVehiculo = async (
   registroId: string
 ): Promise<Record<string, unknown>> => {
@@ -292,6 +298,32 @@ export interface MiVisita {
   numero_dpi: string;
   placa: string | null;
 }
+
+export interface PreautMatch {
+  residente_id: string;
+  nombre_visitante: string;
+  numero_dpi: string | null;
+  placa: string | null;
+  numero_casa: string;
+  residente_nombre: string;
+}
+
+/** Busca una preautorización vigente hoy por DPI o placa. Devuelve null si no existe. */
+export const buscarPreautorizacion = async (
+  params: { dpi?: string; placa?: string }
+): Promise<PreautMatch | null> => {
+  const qs = new URLSearchParams();
+  if (params.dpi)   qs.set('dpi',   params.dpi);
+  if (params.placa) qs.set('placa', params.placa);
+  const res = await fetch(
+    `${BASE_URL}/api/preautorizaciones/buscar?${qs.toString()}`,
+    { headers: authHeaders() }
+  );
+  if (res.status === 404) return null;
+  const body = await res.json();
+  if (!res.ok) throw new Error(body.error || 'Error al buscar preautorización');
+  return body as PreautMatch;
+};
 
 export const getMisPreautorizaciones = async (): Promise<MiPreautorizacion[]> => {
   const res = await fetch(`${BASE_URL}/api/preautorizaciones/mis`, { headers: authHeaders() });
@@ -514,7 +546,7 @@ export const deleteConfigCargo = async (id: string): Promise<void> => {
   }
 };
 
-/* Corporate & Multi-tenant Management */
+// ── Empresas ──────────────────────────────────────────────────────────────
 
 export interface Empresa {
   id: string;
@@ -603,7 +635,7 @@ export const assignAdminEmpresa = async (empresaId: string, usuarioId: string): 
   }
 };
 
-/* Branch & Location Management */
+// ── Sucursales ────────────────────────────────────────────────────────────
 
 export interface Sucursal {
   id: string;
@@ -684,7 +716,7 @@ export const deleteSucursal = async (id: string): Promise<void> => {
   }
 };
 
-/* User & Staff Management */
+// ── Usuarios (staff) ──────────────────────────────────────────────────────
 
 export interface Usuario {
   id: string;

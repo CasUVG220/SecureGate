@@ -236,6 +236,51 @@ export const registrarSalidaPut = async (req: Request, res: Response) => {
   }
 };
 
+export const getAccesosActivos = async (req: Request, res: Response) => {
+  const ts = tenantFilter(req.user!, 'ra');
+  try {
+    const result = await pool.query(
+      `SELECT
+         ra.id              AS registro_id,
+         ra.timestamp_entrada,
+         v.id               AS visitante_id,
+         v.nombre           AS visitante_nombre,
+         v.numero_dpi       AS visitante_dpi,
+         r.id               AS residente_id,
+         r.numero_casa      AS residente_casa,
+         u.nombre           AS residente_nombre,
+         veh.placa
+       FROM registros_acceso ra
+       JOIN visitantes  v   ON ra.visitante_id  = v.id
+       JOIN residentes  r   ON ra.residente_id  = r.id
+       JOIN usuarios    u   ON r.usuario_id     = u.id
+       LEFT JOIN vehiculos  veh ON ra.vehiculo_id = veh.id
+       ${ts.joinClause}
+       WHERE ${ts.whereClause}
+         AND ra.timestamp_salida IS NULL
+       ORDER BY ra.timestamp_entrada DESC`,
+      ts.params
+    );
+    res.json(result.rows.map(row => ({
+      registro_id:       row.registro_id,
+      timestamp_entrada: row.timestamp_entrada,
+      visitante: {
+        id:         row.visitante_id,
+        nombre:     row.visitante_nombre,
+        numero_dpi: row.visitante_dpi,
+      },
+      residente: {
+        id:          row.residente_id,
+        numero_casa: row.residente_casa,
+        nombre:      row.residente_nombre,
+      },
+      placa: row.placa ?? null,
+    })));
+  } catch (error) {
+    res.status(500).json({ error: 'Error al obtener accesos activos', detail: String(error) });
+  }
+};
+
 export const getMisAccesos = async (req: Request, res: Response) => {
   const usuarioId = req.user?.id;
   try {

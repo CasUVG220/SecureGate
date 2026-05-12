@@ -392,6 +392,9 @@ export default function VerificacionPage() {
                   {new Date(p.fecha_pago).toLocaleDateString('es-GT', { day: '2-digit', month: '2-digit', year: 'numeric' })}
                 </span>
               </div>
+              {p.estado === 'rechazado' && p.comentario_rechazo && (
+                <p className="text-xs text-red-400/80 italic mt-1 truncate">"{p.comentario_rechazo}"</p>
+              )}
             </button>
           ))}
         </div>

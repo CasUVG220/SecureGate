@@ -21,6 +21,8 @@ export default function PagosPage() {
   const [residentes, setResidentes] = useState<Residente[]>([]);
   const [loading, setLoading]       = useState(true);
   const [error, setError]           = useState<string | null>(null);
+  const [search, setSearch]         = useState('');
+  const [filterEstado, setFilterEstado] = useState('');
   const [showModal, setShowModal]   = useState(false);
   const [form, setForm]             = useState(EMPTY_FORM);
   const [saving, setSaving]         = useState(false);
@@ -95,16 +97,41 @@ export default function PagosPage() {
     }
   };
 
+  const q = search.toLowerCase();
+  const filtered = pagos.filter(p =>
+    (!filterEstado || p.estado === filterEstado) &&
+    (`${p.numero_casa} ${p.residente_nombre}`).toLowerCase().includes(q)
+  );
+
   return (
     <div className="p-6 text-gray-100 space-y-5">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <h1 className="text-xl font-bold text-white">{t('payments.title')}</h1>
-        <button
-          onClick={() => { setForm(EMPTY_FORM); setFormError(null); setShowModal(true); }}
-          className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors"
-        >
-          {t('payments.registerCash')}
-        </button>
+        <div className="flex gap-3 flex-wrap">
+          <input
+            type="text"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Buscar por casa o residente…"
+            className="bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white placeholder-gray-400 text-sm focus:outline-none focus:border-blue-500 w-52"
+          />
+          <select
+            value={filterEstado}
+            onChange={e => setFilterEstado(e.target.value)}
+            className="bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500 appearance-none"
+          >
+            <option value="">Todos</option>
+            <option value="pendiente">{t('payments.pending')}</option>
+            <option value="aprobado">{t('payments.approved')}</option>
+            <option value="rechazado">{t('payments.rejected')}</option>
+          </select>
+          <button
+            onClick={() => { setForm(EMPTY_FORM); setFormError(null); setShowModal(true); }}
+            className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors"
+          >
+            {t('payments.registerCash')}
+          </button>
+        </div>
       </div>
 
       {error && (
@@ -112,7 +139,7 @@ export default function PagosPage() {
       )}
 
       <div className="bg-gray-800 rounded-2xl shadow-xl overflow-hidden">
-        {!loading && pagos.length === 0 ? (
+        {!loading && filtered.length === 0 ? (
           <p className="text-gray-400 text-sm text-center py-12">{t('payments.noPayments')}</p>
         ) : (
           <table className="w-full text-sm">
@@ -131,7 +158,7 @@ export default function PagosPage() {
               {loading ? (
                 <TableSkeleton rows={6} cols={7} />
               ) : (
-                pagos.map(p => (
+                filtered.map(p => (
                   <tr key={p.id} className="border-b border-gray-700 last:border-0">
                     <td className="px-4 py-3 font-medium">{p.numero_casa}</td>
                     <td className="px-4 py-3 text-gray-300">{p.residente_nombre}</td>

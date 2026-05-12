@@ -113,7 +113,7 @@ function AppShell() {
     setIsAuthenticated(true);
     setPage(resolveDefaultPage(rol));
     
-    // Synchronize user preferences with backend settings
+    // Set preferences from backend
     if (usuario.tema) setTheme(usuario.tema);
     if (usuario.idioma) setLanguage(usuario.idioma);
   };
@@ -183,7 +183,7 @@ function AppShell() {
 
   return (
     <div className="flex flex-col h-screen overflow-hidden bg-dark-900">
-      {/* Navigation Header */}
+      {/* ── Top header ── */}
       <header className="h-16 bg-dark-800/80 backdrop-blur-md border-b border-white/5 flex items-center justify-between px-6 flex-shrink-0 z-20 sticky top-0">
         <span className="text-white font-bold tracking-tight text-xl flex items-center gap-2">
           <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-brand-500 to-purple-600 flex items-center justify-center shadow-glow">
@@ -192,6 +192,7 @@ function AppShell() {
           SecureGate
         </span>
         <div className="flex items-center gap-4">
+          {/* Language toggle */}
           <button
             onClick={() => setLanguage(language === 'es' ? 'en' : 'es')}
             aria-label="Toggle language"
@@ -199,6 +200,7 @@ function AppShell() {
           >
             {language === 'es' ? 'EN' : 'ES'}
           </button>
+          {/* Theme toggle */}
           <button
             onClick={toggleTheme}
             aria-label="Toggle theme"
@@ -225,10 +227,10 @@ function AppShell() {
       </header>
 
       <div className="flex flex-1 overflow-hidden relative">
-        {/* Background Visual Effects */}
+        {/* Abstract glowing background effect for the whole app */}
         <div className="absolute top-[-20%] left-[50%] w-[60%] h-[60%] bg-brand-600/5 rounded-full blur-[150px] pointer-events-none z-0"></div>
 
-        {/* Sidebar Navigation */}
+        {/* ── Sidebar ── */}
         <aside className="w-16 md:w-64 flex-shrink-0 bg-dark-800/50 backdrop-blur-sm border-r border-white/5 flex flex-col py-4 gap-1 overflow-y-auto z-10">
           {navItems.map(item => (
             <button
@@ -250,7 +252,7 @@ function AppShell() {
           ))}
         </aside>
 
-        {/* Main Application Content */}
+        {/* ── Page content ── */}
         <main className="flex-1 overflow-y-auto relative z-10">
           {renderPage()}
         </main>

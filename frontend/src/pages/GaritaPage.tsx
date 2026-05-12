@@ -5,6 +5,7 @@ import {
   decodeTokenPayload,
   scanDPI,
   scanPlaca,
+  buscarPreautorizacion,
   type Residente,
 } from '../services/api';
 import { useTranslation } from '../i18n/useTranslation';
@@ -39,6 +40,7 @@ export default function GaritaPage() {
   const [ocrDpiMsg, setOcrDpiMsg]     = useState<string | null>(null);
   const [ocrPlacaMsg, setOcrPlacaMsg] = useState<string | null>(null);
   const [ultimosIngresos, setUltimosIngresos] = useState<UltimoIngreso[]>([]);
+  const [preautorizado, setPreautorizado] = useState(false);
   const [casaSearch, setCasaSearch]   = useState('');
   const [casaOpen, setCasaOpen]       = useState(false);
 
@@ -95,6 +97,19 @@ export default function GaritaPage() {
           numero_dpi:       res.numero_dpi || prev.numero_dpi,
         }));
         setDpiOcr(true);
+        if (res.numero_dpi) {
+          const match = await buscarPreautorizacion({ dpi: res.numero_dpi });
+          if (match) {
+            setForm(prev => ({
+              ...prev,
+              nombre_visitante: match.nombre_visitante || prev.nombre_visitante,
+              numero_dpi:       match.numero_dpi || prev.numero_dpi,
+              placa:            match.placa || prev.placa,
+              residente_id:     match.residente_id,
+            }));
+            setPreautorizado(true);
+          }
+        }
       } else {
         setOcrDpiMsg(t('gate.dpiReadFail'));
       }
@@ -115,6 +130,17 @@ export default function GaritaPage() {
       if (res.placa) {
         setForm(prev => ({ ...prev, placa: res.placa }));
         setPlacaOcr(true);
+        const match = await buscarPreautorizacion({ placa: res.placa });
+        if (match) {
+          setForm(prev => ({
+            ...prev,
+            nombre_visitante: match.nombre_visitante || prev.nombre_visitante,
+            numero_dpi:       match.numero_dpi || prev.numero_dpi,
+            placa:            match.placa || prev.placa,
+            residente_id:     match.residente_id,
+          }));
+          setPreautorizado(true);
+        }
       } else {
         setOcrPlacaMsg(t('gate.plateReadFail'));
       }
@@ -134,6 +160,7 @@ export default function GaritaPage() {
     setCasaSearch('');
     setDpiOcr(false);
     setPlacaOcr(false);
+    setPreautorizado(false);
     setError(null);
     setOcrDpiMsg(null);
     setOcrPlacaMsg(null);
@@ -355,6 +382,14 @@ export default function GaritaPage() {
             </div>
           </div>
         </div>
+
+        {/* Preauth banner */}
+        {preautorizado && (
+          <div className="bg-emerald-900/60 border-2 border-emerald-500 rounded-2xl px-5 py-4 flex items-center gap-3 shrink-0 shadow-xl">
+            <span className="text-emerald-400 text-2xl font-black tracking-widest">✓ PREAUTORIZADO</span>
+            <p className="text-emerald-300 text-sm">Visitante con preautorización activa para hoy. Datos auto-completados.</p>
+          </div>
+        )}
 
         {/* Action buttons */}
         <div className="grid grid-cols-2 gap-3 shrink-0">

@@ -12,7 +12,8 @@ export default function AgentesPage() {
 
   const [agentes, setAgentes] = useState<Usuario[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError]     = useState<string | null>(null);
+  const [search, setSearch]   = useState('');
   const [showForm, setShowForm] = useState(false);
   const [agentForm, setAgentForm] = useState(EMPTY_AGENT);
   const [saving, setSaving] = useState(false);
@@ -61,6 +62,11 @@ export default function AgentesPage() {
     }
   };
 
+  const filtered = agentes.filter(a => {
+    const q = search.toLowerCase();
+    return (`${a.nombre} ${a.email} ${a.rol}`).toLowerCase().includes(q);
+  });
+
   return (
     <div className="p-6 text-gray-100 space-y-5 max-w-6xl">
       {error && (
@@ -97,21 +103,30 @@ export default function AgentesPage() {
 
       {/* Action bar */}
       {!showForm && (
-        <div className="flex justify-between items-center">
-          <h1 className="text-xl font-bold text-white">
-            Personal / Agentes
-            {!loading && <span className="ml-2 text-sm font-normal text-gray-400">({agentes.length})</span>}
-          </h1>
-          <button onClick={() => { setShowForm(true); setError(null); }}
-            className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-5 py-2 rounded-xl transition-colors text-sm">
-            {t('residents.newAgent') || 'Nuevo Agente'}
-          </button>
+        <div className="space-y-3">
+          <div className="flex justify-between items-center">
+            <h1 className="text-xl font-bold text-white">
+              Personal / Agentes
+              {!loading && <span className="ml-2 text-sm font-normal text-gray-400">({filtered.length})</span>}
+            </h1>
+            <button onClick={() => { setShowForm(true); setError(null); }}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-5 py-2 rounded-xl transition-colors text-sm">
+              {t('residents.newAgent') || 'Nuevo Agente'}
+            </button>
+          </div>
+          <input
+            type="text"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Buscar por nombre, email o rol…"
+            className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-white placeholder-gray-400 text-sm focus:outline-none focus:border-blue-500 transition-colors"
+          />
         </div>
       )}
 
       {/* Table */}
       <div className="bg-gray-800 rounded-2xl overflow-hidden shadow-xl">
-        {!loading && agentes.length === 0 ? (
+        {!loading && filtered.length === 0 ? (
           <p className="text-gray-400 text-sm text-center py-10">No hay personal registrado</p>
         ) : (
           <table className="w-full text-sm">
@@ -127,7 +142,7 @@ export default function AgentesPage() {
               {loading ? (
                 <TableSkeleton rows={4} cols={4} />
               ) : (
-                agentes.map((a, i) => (
+                filtered.map((a, i) => (
                   <tr key={a.id} className={`border-b border-gray-700 last:border-0 ${i % 2 === 1 ? 'bg-gray-700/20' : ''}`}>
                     <td className="px-5 py-3 font-semibold text-white">{a.nombre}</td>
                     <td className="px-5 py-3 text-gray-400">{a.email}</td>
