@@ -1,31 +1,84 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   getAccesoActivo,
+  getAccesosActivos,
   registrarSalidaVehiculo,
   decodeTokenPayload,
+  scanPlaca,
   type AccesoActivo,
 } from '../services/api';
 import { useTranslation } from '../i18n/useTranslation';
 
 export default function SalidaPage() {
   const { t } = useTranslation();
-  const [placa, setPlaca] = useState('');
-  const [searching, setSearching] = useState(false);
+  const [placa, setPlaca]               = useState('');
+  const [searching, setSearching]       = useState(false);
   const [accesoActivo, setAccesoActivo] = useState<AccesoActivo | null>(null);
-  const [notFound, setNotFound] = useState(false);
-  const [registrando, setRegistrando] = useState(false);
-  const [salidaOk, setSalidaOk] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [notFound, setNotFound]         = useState(false);
+  const [registrando, setRegistrando]   = useState(false);
+  const [salidaOk, setSalidaOk]         = useState(false);
+  const [error, setError]               = useState<string | null>(null);
   const [agenteNombre, setAgenteNombre] = useState('');
+
+  // Camera / OCR state
+  const [cameraOpen, setCameraOpen] = useState(false);
+  const [scanning, setScanning]     = useState(false);
+  const [ocrMsg, setOcrMsg]         = useState<string | null>(null);
+
+  // Active visitors panel
+  const [activos, setActivos]             = useState<AccesoActivo[]>([]);
+  const [activosLoading, setActivosLoading] = useState(true);
+  const [salidaActivoId, setSalidaActivoId] = useState<string | null>(null);
+
+  const videoRef  = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+
+  const loadActivos = useCallback(() => {
+    setActivosLoading(true);
+    getAccesosActivos()
+      .then(setActivos)
+      .catch(() => {})
+      .finally(() => setActivosLoading(false));
+  }, []);
 
   useEffect(() => {
     const token = localStorage.getItem('token');
     if (!token) return;
     const payload = decodeTokenPayload(token);
     if (payload) setAgenteNombre((payload.nombre as string) || (payload.email as string));
-  }, []);
+    loadActivos();
+  }, [loadActivos]);
 
   void agenteNombre;
+
+  const stopCamera = useCallback(() => {
+    streamRef.current?.getTracks().forEach(t => t.stop());
+    streamRef.current = null;
+  }, []);
+
+  useEffect(() => () => { stopCamera(); }, [stopCamera]);
+
+  const startCamera = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+      streamRef.current = stream;
+      if (videoRef.current) videoRef.current.srcObject = stream;
+    } catch {
+      setOcrMsg('No se pudo acceder a la cámara.');
+    }
+  };
+
+  const handleToggleCamera = () => {
+    if (cameraOpen) {
+      stopCamera();
+      setCameraOpen(false);
+      setOcrMsg(null);
+    } else {
+      setCameraOpen(true);
+      void startCamera();
+    }
+  };
 
   const resetBusqueda = () => {
     setAccesoActivo(null);
@@ -34,23 +87,54 @@ export default function SalidaPage() {
     setError(null);
   };
 
-  const handleBuscar = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!placa.trim()) return;
+  const buscarPorPlaca = async (p: string) => {
     resetBusqueda();
     setSearching(true);
     try {
-      const data = await getAccesoActivo(placa.trim());
-      if (data === null) {
-        setNotFound(true);
-      } else {
-        setAccesoActivo(data);
-      }
+      const data = await getAccesoActivo(p.trim());
+      if (data === null) setNotFound(true);
+      else setAccesoActivo(data);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Error al buscar acceso');
     } finally {
       setSearching(false);
     }
+  };
+
+  const handleScanPlaca = async () => {
+    const video  = videoRef.current;
+    const canvas = canvasRef.current;
+    if (!video || !canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    canvas.width  = video.videoWidth  || 640;
+    canvas.height = video.videoHeight || 480;
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    const base64 = canvas.toDataURL('image/jpeg', 0.9).replace(/^data:image\/jpeg;base64,/, '');
+    setScanning(true);
+    setOcrMsg(null);
+    try {
+      const result = await scanPlaca(base64);
+      if (result.placa) {
+        setPlaca(result.placa);
+        setOcrMsg(`Placa detectada: ${result.placa}`);
+        stopCamera();
+        setCameraOpen(false);
+        void buscarPorPlaca(result.placa);
+      } else {
+        setOcrMsg('No se pudo leer la placa. Intenta de nuevo.');
+      }
+    } catch {
+      setOcrMsg('Error al procesar la imagen.');
+    } finally {
+      setScanning(false);
+    }
+  };
+
+  const handleBuscar = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!placa.trim()) return;
+    void buscarPorPlaca(placa);
   };
 
   const handleSalida = async () => {
@@ -61,10 +145,23 @@ export default function SalidaPage() {
       await registrarSalidaVehiculo(accesoActivo.registro_id);
       setSalidaOk(true);
       setAccesoActivo(null);
+      loadActivos();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Error al registrar salida');
     } finally {
       setRegistrando(false);
+    }
+  };
+
+  const handleSalidaActivo = async (registroId: string) => {
+    setSalidaActivoId(registroId);
+    try {
+      await registrarSalidaVehiculo(registroId);
+      loadActivos();
+    } catch {
+      // silently ignore
+    } finally {
+      setSalidaActivoId(null);
     }
   };
 
@@ -78,9 +175,49 @@ export default function SalidaPage() {
       <main className="flex items-start justify-center px-4 py-10">
         <div className="w-full max-w-lg space-y-4">
 
-          {/* Search form — always visible */}
+          {/* Search form */}
           <form onSubmit={handleBuscar} className="bg-gray-800 rounded-2xl p-8 shadow-xl space-y-5">
-            <h2 className="text-lg font-bold text-white">{t('exit.searchTitle')}</h2>
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-bold text-white">{t('exit.searchTitle')}</h2>
+              <button
+                type="button"
+                onClick={handleToggleCamera}
+                className={`flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors ${
+                  cameraOpen
+                    ? 'bg-red-700 hover:bg-red-600 text-white'
+                    : 'bg-gray-700 hover:bg-gray-600 text-gray-300'
+                }`}
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+                {cameraOpen ? 'Cerrar' : 'Escanear'}
+              </button>
+            </div>
+
+            {/* OCR camera */}
+            {cameraOpen && (
+              <div className="space-y-2">
+                <div className="relative bg-black rounded-xl overflow-hidden aspect-video">
+                  <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
+                  <canvas ref={canvasRef} className="hidden" />
+                </div>
+                {ocrMsg && (
+                  <p className={`text-xs px-2 py-1 rounded ${ocrMsg.startsWith('Placa') ? 'text-green-400' : 'text-amber-400'}`}>
+                    {ocrMsg}
+                  </p>
+                )}
+                <button
+                  type="button"
+                  onClick={handleScanPlaca}
+                  disabled={scanning}
+                  className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm font-semibold py-2.5 rounded-xl transition-colors"
+                >
+                  {scanning ? 'Procesando...' : 'Capturar placa'}
+                </button>
+              </div>
+            )}
 
             <div>
               <label className="block text-sm text-gray-300 mb-1">{t('exit.plateLabel')} *</label>
@@ -120,7 +257,6 @@ export default function SalidaPage() {
           {accesoActivo && !salidaOk && (
             <div className="bg-gray-800 rounded-2xl p-8 shadow-xl space-y-4">
               <h3 className="text-base font-bold text-white">{t('exit.activeAccessFound')}</h3>
-
               <div className="space-y-2 text-sm">
                 <div className="flex justify-between border-b border-gray-700 pb-2">
                   <span className="text-gray-400">{t('exit.plateLabel')}</span>
@@ -186,6 +322,66 @@ export default function SalidaPage() {
 
         </div>
       </main>
+
+      {/* Active Visitors Panel */}
+      <div className="px-4 pb-10 max-w-4xl mx-auto">
+        <div className="bg-gray-800 rounded-2xl shadow-xl overflow-hidden">
+          <div className="px-6 py-4 border-b border-gray-700 flex items-center justify-between">
+            <h2 className="text-base font-bold text-white">
+              Visitantes dentro
+              {!activosLoading && (
+                <span className="ml-2 text-sm font-normal text-gray-400">({activos.length})</span>
+              )}
+            </h2>
+            <button
+              onClick={loadActivos}
+              className="text-xs text-gray-400 hover:text-white transition-colors"
+            >
+              Actualizar
+            </button>
+          </div>
+          {activosLoading ? (
+            <p className="text-center text-gray-400 text-sm py-8">Cargando...</p>
+          ) : activos.length === 0 ? (
+            <p className="text-center text-gray-400 text-sm py-8">No hay visitantes dentro actualmente.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-gray-700 text-gray-400 text-left">
+                    <th className="px-5 py-3 font-medium">Visitante</th>
+                    <th className="px-5 py-3 font-medium">Casa</th>
+                    <th className="px-5 py-3 font-medium">Placa</th>
+                    <th className="px-5 py-3 font-medium">Entrada</th>
+                    <th className="px-5 py-3 font-medium"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {activos.map(a => (
+                    <tr key={a.registro_id} className="border-b border-gray-700 last:border-0 hover:bg-gray-700/30 transition-colors">
+                      <td className="px-5 py-3 text-white font-medium">{a.visitante.nombre}</td>
+                      <td className="px-5 py-3 text-gray-300">{a.residente.numero_casa}</td>
+                      <td className="px-5 py-3 text-gray-400 uppercase">{a.placa ?? '—'}</td>
+                      <td className="px-5 py-3 text-gray-400">
+                        {new Date(a.timestamp_entrada).toLocaleTimeString('es-GT', { hour: '2-digit', minute: '2-digit' })}
+                      </td>
+                      <td className="px-5 py-3">
+                        <button
+                          onClick={() => handleSalidaActivo(a.registro_id)}
+                          disabled={salidaActivoId === a.registro_id}
+                          className="text-xs text-red-400 hover:text-red-300 disabled:opacity-50 font-medium transition-colors whitespace-nowrap"
+                        >
+                          {salidaActivoId === a.registro_id ? 'Registrando...' : 'Registrar salida'}
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

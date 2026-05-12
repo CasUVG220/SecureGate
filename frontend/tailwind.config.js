@@ -11,7 +11,7 @@ export default {
         sans: ['Outfit', 'sans-serif'],
       },
       colors: {
-       
+        // gray → slate (cool dark surfaces — keep)
         gray: {
           50:  '#f8fafc',
           100: '#f1f5f9',
@@ -27,7 +27,7 @@ export default {
           950: '#020617',
         },
 
-        
+        // blue → zinc neutral (charcoal buttons, no color cast at all)
         blue: {
           50:  '#fafafa',
           100: '#f4f4f5',
@@ -42,7 +42,7 @@ export default {
           950: '#09090b',
         },
 
-        
+        // brand → same zinc (all brand-* classes become neutral charcoal)
         brand: {
           50:  '#fafafa',
           100: '#f4f4f5',
@@ -57,7 +57,7 @@ export default {
           950: '#09090b',
         },
 
-        
+        // purple → near-black (logo/brand gradient ends at #09090b — charcoal→black)
         purple: {
           50:  '#f4f4f5',
           100: '#e4e4e7',
@@ -72,7 +72,7 @@ export default {
           950: '#010101',
         },
 
-        
+        // green → muted emerald (status only: active/success, not neon lime)
         green: {
           50:  '#ecfdf5',
           100: '#d1fae5',
@@ -87,7 +87,7 @@ export default {
           950: '#022c22',
         },
 
-        
+        // teal → muted (accent text, not neon)
         teal: {
           50:  '#f0faf9',
           100: '#d2eeeb',
@@ -109,6 +109,7 @@ export default {
         },
       },
       boxShadow: {
+        // zinc-based glow — very subtle, security aesthetic
         'glow':    '0 0 18px rgba(39, 39, 42, 0.7)',
         'glow-lg': '0 0 30px rgba(39, 39, 42, 0.9)',
       },

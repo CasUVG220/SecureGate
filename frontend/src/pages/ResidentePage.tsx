@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   getResidenteMe,
   getMisPreautorizaciones,
@@ -30,7 +30,7 @@ const PAGO_ESTADO_CLASS: Record<string, string> = {
 
 const today = () => new Date().toISOString().slice(0, 10);
 
-const EMPTY_FORM = { nombre_visitante: '', numero_dpi: '', placa: '', fecha_inicio: today(), fecha_fin: '' };
+const EMPTY_FORM = { nombre_visitante: '', numero_dpi: '', placa: '' };
 const EMPTY_TRF  = { monto: '', referencia: '', banco: '', fecha_transferencia: today() };
 
 export default function ResidentePage() {
@@ -68,9 +68,9 @@ export default function ResidentePage() {
   const [invLoading, setInvLoading] = useState(false);
   const [invLoaded, setInvLoaded]   = useState(false);
 
-  const [showForm, setShowForm] = useState(false);
-  const [tipo, setTipo]         = useState<'permanente' | 'temporal'>('permanente');
-  const [form, setForm]         = useState(EMPTY_FORM);
+  const [showForm, setShowForm]       = useState(false);
+  const [form, setForm]               = useState(EMPTY_FORM);
+  const formRef                       = useRef<HTMLDivElement>(null);
   const [saving, setSaving]     = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -165,22 +165,42 @@ export default function ResidentePage() {
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormError(null);
+    if (!form.numero_dpi.trim() && !form.placa.trim()) {
+      setFormError('Se requiere al menos DPI o placa del visitante.');
+      return;
+    }
     setSaving(true);
     try {
-      const payload: Parameters<typeof createMisPreautorizacion>[0] = {
+      const created = await createMisPreautorizacion({
         nombre_visitante: form.nombre_visitante,
         numero_dpi:       form.numero_dpi || undefined,
         placa:            form.placa || undefined,
-        fecha_inicio:     form.fecha_inicio,
-        fecha_fin:        tipo === 'temporal' ? form.fecha_fin || undefined : undefined,
-      };
-      const created = await createMisPreautorizacion(payload);
-      setPreauths(prev => [created, ...prev]);
+        fecha_inicio:     today(),
+      });
+      setPreauths(prev => [created, ...prev].filter(p => p.fecha_fin === null));
       setShowForm(false);
       setForm(EMPTY_FORM);
-      setTipo('permanente');
     } catch (err) {
       setFormError(err instanceof Error ? err.message : 'Error al guardar');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handlePreautHoy = async (p: MiPreautorizacion) => {
+    setFormError(null);
+    setSaving(true);
+    try {
+      await createMisPreautorizacion({
+        nombre_visitante: p.nombre_visitante,
+        numero_dpi:       p.numero_dpi || undefined,
+        placa:            p.placa || undefined,
+        fecha_inicio:     today(),
+        fecha_fin:        today(),
+      });
+      showToast('Preautorización de hoy creada', 'success');
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Error al preautorizar', 'error');
     } finally {
       setSaving(false);
     }
@@ -407,6 +427,9 @@ export default function ResidentePage() {
                       {p.referencia && (
                         <p className="text-gray-500 text-xs mt-0.5 font-mono">{p.referencia}</p>
                       )}
+                      {p.estado === 'rechazado' && p.comentario_rechazo && (
+                        <p className="text-xs text-red-400/80 italic mt-1">Motivo: "{p.comentario_rechazo}"</p>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -423,157 +446,126 @@ export default function ResidentePage() {
             <p className="text-gray-400 text-sm text-center py-10">{t('common.loading')}</p>
           ) : (
             <>
-              {/* Preautorizaciones */}
+              {/* Visitantes guardados */}
               <section>
                 <div className="flex items-center justify-between mb-4">
-                  <h2 className="text-base font-semibold text-white">{t('portal.myPreauths')}</h2>
+                  <h2 className="text-base font-semibold text-white">Visitantes guardados</h2>
                   {!showForm && (
                     <button
                       onClick={() => setShowForm(true)}
                       className="text-sm bg-blue-600 hover:bg-blue-700 text-white font-medium px-4 py-2 rounded-lg transition-colors"
                     >
-                      {t('portal.new')}
+                      Guardar visitante
                     </button>
                   )}
                 </div>
 
                 {/* Inline create form */}
                 {showForm && (
-                  <form onSubmit={handleSave} className="bg-gray-800 rounded-2xl p-6 mb-4 space-y-4 shadow-xl">
-                    <h3 className="text-sm font-semibold text-white">{t('portal.newPreauth')}</h3>
+                  <div ref={formRef}>
+                    <form onSubmit={handleSave} className="bg-gray-800 rounded-2xl p-6 mb-4 space-y-4 shadow-xl">
+                      <h3 className="text-sm font-semibold text-white">Guardar datos del visitante</h3>
+                      <p className="text-xs text-gray-400">Guarda los datos para preautorizar con un clic en cualquier momento.</p>
 
-                    {formError && (
-                      <div className="bg-red-50 border border-red-300 rounded-lg px-3 py-2 text-red-700 text-sm">
-                        {formError}
-                      </div>
-                    )}
+                      {formError && (
+                        <div className="bg-red-50 border border-red-300 rounded-lg px-3 py-2 text-red-700 text-sm">
+                          {formError}
+                        </div>
+                      )}
 
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                      <div className="sm:col-span-3">
-                        <label className="block text-xs text-gray-400 mb-1">{t('portal.visitorName')} *</label>
-                        <input
-                          name="nombre_visitante"
-                          value={form.nombre_visitante}
-                          onChange={handleFormChange}
-                          required
-                          placeholder="Juan Pérez"
-                          className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white placeholder-gray-400 text-sm focus:outline-none focus:border-blue-500"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs text-gray-400 mb-1">{t('portal.dpi')}</label>
-                        <input
-                          name="numero_dpi"
-                          value={form.numero_dpi}
-                          onChange={handleFormChange}
-                          placeholder={t('common.optional')}
-                          className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white placeholder-gray-400 text-sm focus:outline-none focus:border-blue-500"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs text-gray-400 mb-1">{t('portal.plate')}</label>
-                        <input
-                          name="placa"
-                          value={form.placa}
-                          onChange={handleFormChange}
-                          placeholder={t('common.optional')}
-                          className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white placeholder-gray-400 text-sm focus:outline-none focus:border-blue-500"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs text-gray-400 mb-1">{t('portal.startDate')} *</label>
-                        <input
-                          name="fecha_inicio"
-                          type="date"
-                          value={form.fecha_inicio}
-                          onChange={handleFormChange}
-                          required
-                          className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500"
-                        />
-                      </div>
-                    </div>
-
-                    {/* Tipo */}
-                    <div className="flex gap-6">
-                      {(['permanente', 'temporal'] as const).map(tipVal => (
-                        <label key={tipVal} className="flex items-center gap-2 cursor-pointer">
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                        <div className="sm:col-span-3">
+                          <label className="block text-xs text-gray-400 mb-1">{t('portal.visitorName')} *</label>
                           <input
-                            type="radio"
-                            name="tipo"
-                            value={tipVal}
-                            checked={tipo === tipVal}
-                            onChange={() => setTipo(tipVal)}
-                            className="accent-blue-500"
+                            name="nombre_visitante"
+                            value={form.nombre_visitante}
+                            onChange={handleFormChange}
+                            required
+                            placeholder="Juan Pérez"
+                            className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white placeholder-gray-400 text-sm focus:outline-none focus:border-blue-500"
                           />
-                          <span className="text-sm text-gray-300 capitalize">
-                            {tipVal === 'permanente' ? t('portal.permanentLabel') : t('portal.temporal')}
-                          </span>
-                        </label>
-                      ))}
-                    </div>
-
-                    {tipo === 'temporal' && (
-                      <div className="w-full sm:w-48">
-                        <label className="block text-xs text-gray-400 mb-1">{t('portal.endDate')} *</label>
-                        <input
-                          name="fecha_fin"
-                          type="date"
-                          value={form.fecha_fin}
-                          onChange={handleFormChange}
-                          required
-                          className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500"
-                        />
+                        </div>
+                        <div>
+                          <label className="block text-xs text-gray-400 mb-1">
+                            {t('portal.dpi')}
+                            <span className="ml-1 text-gray-500">(requerido si no hay placa)</span>
+                          </label>
+                          <input
+                            name="numero_dpi"
+                            value={form.numero_dpi}
+                            onChange={handleFormChange}
+                            placeholder="1234567890101"
+                            className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white placeholder-gray-400 text-sm focus:outline-none focus:border-blue-500"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs text-gray-400 mb-1">
+                            {t('portal.plate')}
+                            <span className="ml-1 text-gray-500">(requerido si no hay DPI)</span>
+                          </label>
+                          <input
+                            name="placa"
+                            value={form.placa}
+                            onChange={handleFormChange}
+                            placeholder="P-123ABC"
+                            className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white placeholder-gray-400 text-sm focus:outline-none focus:border-blue-500 uppercase"
+                          />
+                        </div>
                       </div>
-                    )}
 
-                    <div className="flex gap-3 pt-1">
-                      <button
-                        type="submit"
-                        disabled={saving}
-                        className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm font-medium px-5 py-2 rounded-lg transition-colors"
-                      >
-                        {saving ? t('common.saving') : t('common.save')}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => { setShowForm(false); setFormError(null); setForm(EMPTY_FORM); setTipo('permanente'); }}
-                        className="bg-gray-700 hover:bg-gray-600 text-gray-200 text-sm font-medium px-5 py-2 rounded-lg transition-colors"
-                      >
-                        {t('common.cancel')}
-                      </button>
-                    </div>
-                  </form>
+                      <div className="flex gap-3 pt-1">
+                        <button
+                          type="submit"
+                          disabled={saving}
+                          className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm font-medium px-5 py-2 rounded-lg transition-colors"
+                        >
+                          {saving ? t('common.saving') : 'Guardar'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => { setShowForm(false); setFormError(null); setForm(EMPTY_FORM); }}
+                          className="bg-gray-700 hover:bg-gray-600 text-gray-200 text-sm font-medium px-5 py-2 rounded-lg transition-colors"
+                        >
+                          {t('common.cancel')}
+                        </button>
+                      </div>
+                    </form>
+                  </div>
                 )}
 
-                {/* Cards */}
-                {preauths.length === 0 ? (
-                  <p className="text-gray-400 text-sm text-center py-8">{t('portal.noPreauths')}</p>
+                {/* Cards — only show saved data (fecha_fin === null) */}
+                {preauths.filter(p => p.fecha_fin === null).length === 0 ? (
+                  <p className="text-gray-400 text-sm text-center py-8">No hay visitantes guardados.</p>
                 ) : (
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    {preauths.map(p => (
+                    {preauths.filter(p => p.fecha_fin === null).map(p => (
                       <div key={p.id} className="bg-gray-800 rounded-xl p-4 shadow border border-gray-700">
                         <div className="flex items-start justify-between gap-2">
                           <p className="font-semibold text-white text-sm">{p.nombre_visitante}</p>
-                          <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-medium shrink-0">
-                            {t('portal.active')}
+                          <span className="text-xs bg-gray-700 text-gray-300 px-2 py-0.5 rounded-full font-medium shrink-0">
+                            Guardado
                           </span>
                         </div>
                         <div className="mt-2 space-y-0.5 text-xs text-gray-400">
                           {p.numero_dpi && <p>{t('portal.dpi')}: {p.numero_dpi}</p>}
                           {p.placa      && <p>{t('portal.plate')}: {p.placa}</p>}
-                          <p className="text-gray-300 mt-1">
-                            {p.fecha_fin
-                              ? `${new Date(p.fecha_inicio + 'T00:00:00').toLocaleDateString('es-GT')} – ${new Date(p.fecha_fin + 'T00:00:00').toLocaleDateString('es-GT')}`
-                              : t('portal.permanent')}
-                          </p>
                         </div>
-                        <button
-                          onClick={() => handleDelete(p.id, p.nombre_visitante)}
-                          disabled={deletingId === p.id}
-                          className="mt-3 text-xs text-red-400 hover:text-red-300 transition-colors disabled:opacity-50"
-                        >
-                          {deletingId === p.id ? t('portal.deleting') : t('common.delete')}
-                        </button>
+                        <div className="mt-3 flex items-center gap-3">
+                          <button
+                            onClick={() => handlePreautHoy(p)}
+                            disabled={saving}
+                            className="text-xs bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-medium px-3 py-1 rounded-lg transition-colors"
+                          >
+                            Preautorizar hoy
+                          </button>
+                          <button
+                            onClick={() => handleDelete(p.id, p.nombre_visitante)}
+                            disabled={deletingId === p.id}
+                            className="text-xs text-red-400 hover:text-red-300 transition-colors disabled:opacity-50"
+                          >
+                            {deletingId === p.id ? t('portal.deleting') : t('common.delete')}
+                          </button>
+                        </div>
                       </div>
                     ))}
                   </div>

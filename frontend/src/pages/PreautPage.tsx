@@ -7,7 +7,8 @@ import { TableSkeleton, Spinner } from '../components/Skeleton';
 import { useToast } from '../components/Toast';
 import { useTranslation } from '../i18n/useTranslation';
 
-const EMPTY_FORM = { residente_id: '', nombre_visitante: '', numero_dpi: '', fecha_inicio: '', fecha_fin: '' };
+const today = () => new Date().toISOString().slice(0, 10);
+const EMPTY_FORM = { residente_id: '', nombre_visitante: '', numero_dpi: '', placa: '', fecha_inicio: '', fecha_fin: '' };
 
 export default function PreautPage() {
   const showToast = useToast();
@@ -44,12 +45,17 @@ export default function PreautPage() {
       setFormError('Residente, nombre del visitante y fecha de inicio son obligatorios.');
       return;
     }
+    if (!form.numero_dpi && !form.placa) {
+      setFormError('Se requiere al menos DPI o placa del visitante.');
+      return;
+    }
     setSaving(true); setFormError(null);
     try {
       await createPreautorizacion({
         residente_id:     form.residente_id,
         nombre_visitante: form.nombre_visitante,
         numero_dpi:       form.numero_dpi   || undefined,
+        placa:            form.placa        || undefined,
         fecha_inicio:     form.fecha_inicio,
         fecha_fin:        form.fecha_fin    || undefined,
       });
@@ -75,6 +81,19 @@ export default function PreautPage() {
     } finally {
       setDeletingId(null);
     }
+  };
+
+  const handlePreautHoy = (p: Preautorizacion) => {
+    setForm({
+      residente_id:     p.residente_id,
+      nombre_visitante: p.nombre_visitante,
+      numero_dpi:       p.numero_dpi || '',
+      placa:            p.placa || '',
+      fecha_inicio:     today(),
+      fecha_fin:        today(),
+    });
+    setFormError(null);
+    setShowModal(true);
   };
 
   const formatFecha = (iso: string | null) =>
@@ -123,11 +142,17 @@ export default function PreautPage() {
                     <td className="px-4 py-3 text-gray-300">{formatFecha(p.fecha_inicio)}</td>
                     <td className="px-4 py-3 text-gray-300">{formatFecha(p.fecha_fin)}</td>
                     <td className="px-4 py-3">
-                      <button onClick={() => handleEliminar(p.id)} disabled={deletingId === p.id}
-                        className="text-xs text-red-400 hover:text-red-300 disabled:opacity-50 font-medium transition-colors flex items-center gap-1">
-                        {deletingId === p.id && <Spinner size={12} />}
-                        {t('common.delete')}
-                      </button>
+                      <div className="flex items-center gap-3">
+                        <button onClick={() => handlePreautHoy(p)}
+                          className="text-xs text-blue-400 hover:text-blue-300 font-medium transition-colors whitespace-nowrap">
+                          Preautorizar hoy
+                        </button>
+                        <button onClick={() => handleEliminar(p.id)} disabled={deletingId === p.id}
+                          className="text-xs text-red-400 hover:text-red-300 disabled:opacity-50 font-medium transition-colors flex items-center gap-1">
+                          {deletingId === p.id && <Spinner size={12} />}
+                          {t('common.delete')}
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -160,10 +185,17 @@ export default function PreautPage() {
                 <input name="nombre_visitante" value={form.nombre_visitante} onChange={handleFormChange} required placeholder="Juan Pérez"
                   className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-white placeholder-gray-400 focus:outline-none focus:border-blue-500 transition-colors" />
               </div>
-              <div>
-                <label className="block text-sm text-gray-300 mb-1">{t('preauth.dpiOptional')}</label>
-                <input name="numero_dpi" value={form.numero_dpi} onChange={handleFormChange} placeholder="1234567890101"
-                  className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-white placeholder-gray-400 focus:outline-none focus:border-blue-500 transition-colors" />
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm text-gray-300 mb-1">DPI <span className="text-gray-500 text-xs">(o placa)</span></label>
+                  <input name="numero_dpi" value={form.numero_dpi} onChange={handleFormChange} placeholder="1234567890101"
+                    className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-white placeholder-gray-400 focus:outline-none focus:border-blue-500 transition-colors" />
+                </div>
+                <div>
+                  <label className="block text-sm text-gray-300 mb-1">{t('gate.plate')} <span className="text-gray-500 text-xs">(o DPI)</span></label>
+                  <input name="placa" value={form.placa} onChange={handleFormChange} placeholder="P-123ABC"
+                    className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-white placeholder-gray-400 focus:outline-none focus:border-blue-500 transition-colors" />
+                </div>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>

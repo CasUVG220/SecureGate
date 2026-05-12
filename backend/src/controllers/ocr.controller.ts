@@ -28,11 +28,11 @@ const cleanName = (s: string) => s.trim().replace(/\s+/g, ' ');
 const parseIdentificacion = (text: string): { nombre: string; numero_dpi: string } => {
   const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
 
-  // DPI/CUI extraction logic
+  // ── CUI / DPI number (always 13 digits) ──────────────────────────────────
   const dpiMatch = text.match(/\b(\d{4}\s?\d{5}\s?\d{4})\b/);
   const numero_dpi = dpiMatch ? dpiMatch[1].replace(/\s+/g, '') : '';
 
-  // Name extraction logic
+  // ── Name extraction ───────────────────────────────────────────────────────
   let nombre = '';
   let nombresPart = '';
   let apellidosPart = '';

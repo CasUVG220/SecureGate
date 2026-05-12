@@ -13,11 +13,58 @@ export const checkPreautorizacion = async (
        AND (numero_dpi = $2 OR numero_dpi IS NULL)
        AND activo = TRUE
        AND fecha_inicio <= NOW()::date
-       AND (fecha_fin IS NULL OR fecha_fin >= NOW()::date)
+       AND fecha_fin IS NOT NULL
+       AND fecha_fin >= NOW()::date
      LIMIT 1`,
     [residente_id, numero_dpi]
   );
   return result.rows.length > 0;
+};
+
+/** Busca una preautorización vigente hoy por DPI o placa (para auto-entrada en garita). */
+export const buscarPreautorizacion = async (req: Request, res: Response) => {
+  const { dpi, placa } = req.query as { dpi?: string; placa?: string };
+  if (!dpi && !placa) {
+    return res.status(400).json({ error: 'Se requiere dpi o placa' });
+  }
+
+  const ts = tenantFilter(req.user!, 'p');
+  const extraParams: unknown[] = [...ts.params];
+  const conditions: string[] = [];
+
+  if (dpi) {
+    conditions.push(`p.numero_dpi = $${extraParams.length + 1}`);
+    extraParams.push(dpi);
+  }
+  if (placa) {
+    conditions.push(`UPPER(p.placa) = UPPER($${extraParams.length + 1})`);
+    extraParams.push(placa);
+  }
+
+  try {
+    const result = await pool.query(
+      `SELECT p.residente_id, p.nombre_visitante, p.numero_dpi, p.placa,
+              r.numero_casa, u.nombre AS residente_nombre
+       FROM preautorizaciones p
+       JOIN residentes r ON p.residente_id = r.id
+       JOIN usuarios   u ON r.usuario_id   = u.id
+       ${ts.joinClause}
+       WHERE ${ts.whereClause}
+         AND p.activo = TRUE
+         AND p.fecha_inicio <= CURRENT_DATE
+         AND p.fecha_fin IS NOT NULL
+         AND p.fecha_fin >= CURRENT_DATE
+         AND (${conditions.join(' OR ')})
+       LIMIT 1`,
+      extraParams
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Sin preautorización activa para hoy' });
+    }
+    res.json(result.rows[0]);
+  } catch (error) {
+    res.status(500).json({ error: 'Error al buscar preautorización', detail: String(error) });
+  }
 };
 
 export const getPreautorizaciones = async (req: Request, res: Response) => {
@@ -47,6 +94,9 @@ export const createPreautorizacion = async (req: Request, res: Response) => {
     return res.status(400).json({
       error: 'Campos requeridos: residente_id, nombre_visitante, fecha_inicio',
     });
+  }
+  if (!numero_dpi && !placa) {
+    return res.status(400).json({ error: 'Se requiere al menos DPI o placa del visitante' });
   }
 
   try {
@@ -136,6 +186,9 @@ export const createMisPreautorizacion = async (req: Request, res: Response) => {
 
   if (!nombre_visitante || !fecha_inicio) {
     return res.status(400).json({ error: 'Campos requeridos: nombre_visitante, fecha_inicio' });
+  }
+  if (!numero_dpi && !placa) {
+    return res.status(400).json({ error: 'Se requiere al menos DPI o placa del visitante' });
   }
 
   const residente = await getResidenteIdFromUser(req.user!.id);

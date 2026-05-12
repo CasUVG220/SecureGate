@@ -209,11 +209,18 @@ export default function GestionSucursales() {
   };
 
   const [staffFilter, setStaffFilter] = useState<'all' | 'agente' | 'admin_sucursal'>('all');
+  const [sucSearch, setSucSearch]     = useState('');
+  const [staffSearch, setStaffSearch] = useState('');
+
+  const filteredSucursales = sucursales.filter(s =>
+    s.nombre.toLowerCase().includes(sucSearch.toLowerCase())
+  );
 
   const staffUsuarios = usuarios.filter(u => {
     if (u.rol === 'residente') return false;
-    if (staffFilter === 'all') return true;
-    return u.rol === staffFilter;
+    if (staffFilter !== 'all' && u.rol !== staffFilter) return false;
+    const q = staffSearch.toLowerCase();
+    return (`${u.nombre} ${u.email}`).toLowerCase().includes(q);
   });
 
   return (
@@ -242,8 +249,15 @@ export default function GestionSucursales() {
 
       {/* Sucursales table */}
       <div className="bg-gray-800 rounded-2xl shadow-xl overflow-hidden">
-        <div className="px-6 py-4 border-b border-gray-700">
+        <div className="px-6 py-4 border-b border-gray-700 space-y-3">
           <h2 className="text-base font-semibold text-white">{t('ae.branchesSection')}</h2>
+          <input
+            type="text"
+            value={sucSearch}
+            onChange={e => setSucSearch(e.target.value)}
+            placeholder="Buscar sucursal…"
+            className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-400 focus:outline-none focus:border-blue-500"
+          />
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -260,14 +274,14 @@ export default function GestionSucursales() {
             <tbody>
               {loading ? (
                 <TableSkeleton rows={3} cols={6} />
-              ) : sucursales.length === 0 ? (
+              ) : filteredSucursales.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="px-4 py-10 text-center text-gray-500">
                     {t('ae.noBranches')}
                   </td>
                 </tr>
               ) : (
-                sucursales.map(suc => (
+                filteredSucursales.map(suc => (
                   <tr key={suc.id} className="border-b border-gray-700 last:border-0">
                     <td className="px-4 py-3">
                       <p className="font-medium text-white">{suc.nombre}</p>
@@ -328,23 +342,32 @@ export default function GestionSucursales() {
 
       {/* Staff users table */}
       <div className="bg-gray-800 rounded-2xl shadow-xl overflow-hidden">
-        <div className="px-6 py-4 border-b border-gray-700 flex items-center justify-between gap-4 flex-wrap">
-          <h2 className="text-base font-semibold text-white">{t('ae.staffSection')}</h2>
-          <div className="flex gap-1 bg-gray-700/50 rounded-lg p-1">
-            {(['all', 'agente', 'admin_sucursal'] as const).map(f => (
-              <button
-                key={f}
-                onClick={() => setStaffFilter(f)}
-                className={`text-xs font-medium px-3 py-1.5 rounded-md transition-colors ${
-                  staffFilter === f
-                    ? 'bg-blue-600 text-white'
-                    : 'text-gray-400 hover:text-gray-200'
-                }`}
-              >
-                {f === 'all' ? t('ae.filterAll') : f === 'agente' ? t('ae.filterAgents') : t('ae.filterAdmins')}
-              </button>
-            ))}
+        <div className="px-6 py-4 border-b border-gray-700 space-y-3">
+          <div className="flex items-center justify-between gap-4 flex-wrap">
+            <h2 className="text-base font-semibold text-white">{t('ae.staffSection')}</h2>
+            <div className="flex gap-1 bg-gray-700/50 rounded-lg p-1">
+              {(['all', 'agente', 'admin_sucursal'] as const).map(f => (
+                <button
+                  key={f}
+                  onClick={() => setStaffFilter(f)}
+                  className={`text-xs font-medium px-3 py-1.5 rounded-md transition-colors ${
+                    staffFilter === f
+                      ? 'bg-blue-600 text-white'
+                      : 'text-gray-400 hover:text-gray-200'
+                  }`}
+                >
+                  {f === 'all' ? t('ae.filterAll') : f === 'agente' ? t('ae.filterAgents') : t('ae.filterAdmins')}
+                </button>
+              ))}
+            </div>
           </div>
+          <input
+            type="text"
+            value={staffSearch}
+            onChange={e => setStaffSearch(e.target.value)}
+            placeholder="Buscar por nombre o email…"
+            className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-400 focus:outline-none focus:border-blue-500"
+          />
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
