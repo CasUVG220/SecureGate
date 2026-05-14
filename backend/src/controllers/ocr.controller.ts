@@ -107,9 +107,20 @@ const parseIdentificacion = (text: string): { nombre: string; numero_dpi: string
 
 const parsePlaca = (text: string): string => {
   const upper = text.toUpperCase().replace(/[^A-Z0-9\-\s]/g, ' ');
-  const matches = upper.match(/[A-Z]{1,3}[-\s]?[0-9A-Z]{3,6}/g);
-  if (!matches || matches.length === 0) return '';
-  return matches.sort((a, b) => b.length - a.length)[0].trim().replace(/\s+/g, '-');
+
+  // Vehículos particulares: 3 letras + separador opcional + 3 dígitos  (ej. ABC 123, ABC-123)
+  const particular = upper.match(/\b([A-Z]{3})[\s\-]?(\d{3})\b/g);
+  if (particular && particular.length > 0) {
+    return particular[0].replace(/[\s\-]+/g, '-').trim();
+  }
+
+  // Motocicletas / placas cortas: 1-2 letras + separador + 3-5 dígitos  (ej. M-12345)
+  const moto = upper.match(/\b([A-Z]{1,2})[\s\-](\d{3,5})\b/g);
+  if (moto && moto.length > 0) {
+    return moto[0].replace(/[\s\-]+/g, '-').trim();
+  }
+
+  return '';
 };
 
 export const scanDpi = async (req: Request, res: Response) => {
