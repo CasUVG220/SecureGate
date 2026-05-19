@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import pool from '../db/pool';
+import rateLimit from 'express-rate-limit';
 import authRouter from './auth.routes';
 import residentesRouter from './residentes.routes';
 import accesosRouter from './accesos.routes';
@@ -15,9 +16,17 @@ import usuariosRouter from './usuarios.routes';
 import { verifyToken, requireOwner, requireAdminEmpresa, requireAdminSucursal } from '../middleware/auth.middleware';
 import { getDashboard } from '../controllers/dashboard.controller';
 
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Demasiados intentos de login' },
+});
+
 const router = Router();
 
-router.use('/auth', authRouter);
+router.use('/auth', loginLimiter, authRouter);
 router.use('/empresas',   verifyToken, empresasRouter);
 router.use('/sucursales', verifyToken, requireAdminEmpresa,    sucursalesRouter);
 router.use('/usuarios',   verifyToken, requireAdminSucursal,   usuariosRouter);
