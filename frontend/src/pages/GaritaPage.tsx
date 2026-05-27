@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   getResidentes,
   registrarAcceso,
@@ -6,10 +6,7 @@ import {
   scanDPI,
   scanPlaca,
   buscarPreautorizacion,
-  buscarVisitantesFrecuentes,
-  BlacklistDenialError,
   type Residente,
-  type VisitanteFrecuente,
 } from '../services/api';
 import { useTranslation } from '../i18n/useTranslation';
 
@@ -46,19 +43,12 @@ export default function GaritaPage() {
   const [preautorizado, setPreautorizado] = useState(false);
   const [casaSearch, setCasaSearch]   = useState('');
   const [casaOpen, setCasaOpen]       = useState(false);
-  const [blacklistBlock, setBlacklistBlock] = useState<{
-    razon: string; tipo: string; fecha_fin: string | null;
-  } | null>(null);
-  const [dpiHistorial, setDpiHistorial]     = useState(false);
-  const [dpiSugerencias, setDpiSugerencias] = useState<VisitanteFrecuente[]>([]);
-  const [dpiDropdownOpen, setDpiDropdownOpen] = useState(false);
 
   const dpiVideoRef   = useRef<HTMLVideoElement>(null);
   const placaVideoRef = useRef<HTMLVideoElement>(null);
   const canvasRef     = useRef<HTMLCanvasElement>(null);
   const streamRef     = useRef<MediaStream | null>(null);
-
-  const hasCamera = !!(navigator.mediaDevices?.getUserMedia);
+  const hasCamera     = !!(navigator.mediaDevices?.getUserMedia);
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -67,24 +57,22 @@ export default function GaritaPage() {
       .then(setResidentes)
       .catch(() => setError('No se pudo cargar la lista de residentes.'));
 
-    if (!hasCamera) return;
-
-    (async () => {
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
-        streamRef.current = stream;
-        if (dpiVideoRef.current)   dpiVideoRef.current.srcObject = stream;
-        if (placaVideoRef.current) placaVideoRef.current.srcObject = stream;
-      } catch (err) {
-        console.warn('Cámara no disponible:', err);
-      }
-    })();
+    if (hasCamera) {
+      navigator.mediaDevices
+        .getUserMedia({ video: { facingMode: 'environment' } })
+        .then(stream => {
+          streamRef.current = stream;
+          if (dpiVideoRef.current)   dpiVideoRef.current.srcObject = stream;
+          if (placaVideoRef.current) placaVideoRef.current.srcObject = stream;
+        })
+        .catch(err => { console.warn('Cámara no disponible:', err); });
+    }
 
     return () => {
       streamRef.current?.getTracks().forEach(t => t.stop());
       streamRef.current = null;
     };
-  }, [hasCamera]);
+  }, []);
 
   const captureFrame = (videoRef: React.RefObject<HTMLVideoElement>): string | null => {
     const video  = videoRef.current;
@@ -112,8 +100,6 @@ export default function GaritaPage() {
           numero_dpi:       res.numero_dpi || prev.numero_dpi,
         }));
         setDpiOcr(true);
-        setDpiHistorial(false);
-        setDpiDropdownOpen(false);
         if (res.numero_dpi) {
           const match = await buscarPreautorizacion({ dpi: res.numero_dpi });
           if (match) {
@@ -172,27 +158,6 @@ export default function GaritaPage() {
     setForm(prev => ({ ...prev, [e.target.name]: e.target.value }));
   };
 
-  const handleDpiChange = useCallback(async (val: string) => {
-    setForm(prev => ({ ...prev, numero_dpi: val }));
-    setDpiHistorial(false);
-    if (val.length < 4) { setDpiSugerencias([]); setDpiDropdownOpen(false); return; }
-    const sugs = await buscarVisitantesFrecuentes(val, form.residente_id || undefined);
-    setDpiSugerencias(sugs);
-    setDpiDropdownOpen(sugs.length > 0);
-  }, [form.residente_id]);
-
-  const selectSugerencia = (v: VisitanteFrecuente) => {
-    setForm(prev => ({
-      ...prev,
-      nombre_visitante: v.nombre,
-      numero_dpi:       v.numero_dpi,
-      placa:            v.placa ?? prev.placa,
-    }));
-    setDpiHistorial(true);
-    setDpiSugerencias([]);
-    setDpiDropdownOpen(false);
-  };
-
   const resetForm = () => {
     setForm(EMPTY_FORM);
     setCasaSearch('');
@@ -202,16 +167,6 @@ export default function GaritaPage() {
     setError(null);
     setOcrDpiMsg(null);
     setOcrPlacaMsg(null);
-    setBlacklistBlock(null);
-    setDpiHistorial(false);
-    setDpiSugerencias([]);
-    setDpiDropdownOpen(false);
-  };
-
-  const diasDesde = (ts: string | null): string => {
-    if (!ts) return 'sin visitas';
-    const d = Math.floor((Date.now() - new Date(ts).getTime()) / 86_400_000);
-    return d === 0 ? 'hoy' : d === 1 ? 'ayer' : `hace ${d} días`;
   };
 
   const handleAutorizar = async () => {
@@ -244,11 +199,7 @@ export default function GaritaPage() {
       }, ...prev].slice(0, 10));
       resetForm();
     } catch (err: unknown) {
-      if (err instanceof BlacklistDenialError) {
-        setBlacklistBlock({ razon: err.razon, tipo: err.tipo, fecha_fin: err.fecha_fin });
-      } else {
-        setError(err instanceof Error ? err.message : 'Error al registrar');
-      }
+      setError(err instanceof Error ? err.message : 'Error al registrar');
     } finally {
       setLoading(false);
     }
@@ -287,110 +238,79 @@ export default function GaritaPage() {
   }
 
   return (
-    <div className="flex flex-col lg:flex-row h-full text-gray-100">
+    <div className="flex h-full text-gray-100">
       <canvas ref={canvasRef} className="hidden" />
 
-      {/* Camera column — top on mobile, left on desktop */}
-      <div className="w-full lg:w-1/2 flex flex-col gap-3 p-4 border-b lg:border-b-0 lg:border-r border-gray-700 min-h-0">
+      {/* Left column — always-on cameras */}
+      <div className="w-1/2 flex flex-col gap-3 p-4 border-r border-gray-700 min-h-0">
 
-        {!hasCamera ? (
-          /* No camera available — HTTPS required */
-          <div className="flex-1 bg-gray-800 rounded-2xl flex flex-col items-center justify-center gap-3 shadow-xl p-8 text-center">
-            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-gray-500">
-              <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
-              <line x1="1" y1="1" x2="23" y2="23"/>
-            </svg>
-            <p className="text-gray-400 text-sm font-medium">{t('gate.cameraUnavailable')}</p>
-            <p className="text-gray-500 text-xs">{t('gate.httpsRequired')}</p>
+        {/* DPI scanner */}
+        <div className="flex-1 bg-gray-800 rounded-2xl flex flex-col shadow-xl overflow-hidden min-h-0">
+          <div className="flex items-center gap-2 px-4 py-2.5 border-b border-gray-700 shrink-0">
+            <span className="text-sm font-semibold text-gray-200">{t('gate.dpiScanner')}</span>
+            {dpiOcr && (
+              <span className="text-xs bg-emerald-600 text-white px-2 py-0.5 rounded-full font-medium">OCR</span>
+            )}
           </div>
-        ) : (
-          <>
-            {/* DPI scanner */}
-            <div className="flex-1 bg-gray-800 rounded-2xl flex flex-col shadow-xl overflow-hidden min-h-0">
-              <div className="flex items-center gap-2 px-4 py-2.5 border-b border-gray-700 shrink-0">
-                <span className="text-sm font-semibold text-gray-200">{t('gate.dpiScanner')}</span>
-                {dpiOcr && (
-                  <span className="text-xs bg-emerald-600 text-white px-2 py-0.5 rounded-full font-medium">OCR</span>
-                )}
-              </div>
-              <div className="flex-1 bg-gray-900 min-h-0 overflow-hidden">
-                <video ref={dpiVideoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
-              </div>
-              {ocrDpiMsg && (
-                <p className="px-4 py-1 text-xs text-red-400 border-t border-gray-700 shrink-0">{ocrDpiMsg}</p>
-              )}
-              <div className="p-3 border-t border-gray-700 shrink-0">
-                <button
-                  onClick={handleCaptureDpi}
-                  disabled={ocringDpi}
-                  className="w-full bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-semibold py-2 rounded-xl transition-colors text-sm"
-                >
-                  {ocringDpi ? t('common.processing') : t('gate.scanDocument')}
-                </button>
-              </div>
+          <div className="flex-1 bg-gray-900 min-h-0 overflow-hidden flex items-center justify-center">
+            {hasCamera
+              ? <video ref={dpiVideoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
+              : <p className="text-gray-500 text-xs text-center px-4">Cámara no disponible (requiere HTTPS)</p>
+            }
+          </div>
+          {ocrDpiMsg && (
+            <p className="px-4 py-1 text-xs text-red-400 border-t border-gray-700 shrink-0">{ocrDpiMsg}</p>
+          )}
+          {hasCamera && (
+            <div className="p-3 border-t border-gray-700 shrink-0">
+              <button
+                onClick={handleCaptureDpi}
+                disabled={ocringDpi}
+                className="w-full bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-semibold py-2 rounded-xl transition-colors text-sm"
+              >
+                {ocringDpi ? t('common.processing') : t('gate.scanDocument')}
+              </button>
             </div>
+          )}
+        </div>
 
-            {/* Plate scanner */}
-            <div className="flex-1 bg-gray-800 rounded-2xl flex flex-col shadow-xl overflow-hidden min-h-0">
-              <div className="flex items-center gap-2 px-4 py-2.5 border-b border-gray-700 shrink-0">
-                <span className="text-sm font-semibold text-gray-200">{t('gate.plateScanner')}</span>
-                {placaOcr && (
-                  <span className="text-xs bg-emerald-600 text-white px-2 py-0.5 rounded-full font-medium">OCR</span>
-                )}
-              </div>
-              <div className="flex-1 bg-gray-900 min-h-0 overflow-hidden">
-                <video ref={placaVideoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
-              </div>
-              {ocrPlacaMsg && (
-                <p className="px-4 py-1 text-xs text-red-400 border-t border-gray-700 shrink-0">{ocrPlacaMsg}</p>
-              )}
-              <div className="p-3 border-t border-gray-700 shrink-0">
-                <button
-                  onClick={handleCapturePlaca}
-                  disabled={ocringPlaca}
-                  className="w-full bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-semibold py-2 rounded-xl transition-colors text-sm"
-                >
-                  {ocringPlaca ? t('common.processing') : t('gate.scanPlate')}
-                </button>
-              </div>
+        {/* Plate scanner */}
+        <div className="flex-1 bg-gray-800 rounded-2xl flex flex-col shadow-xl overflow-hidden min-h-0">
+          <div className="flex items-center gap-2 px-4 py-2.5 border-b border-gray-700 shrink-0">
+            <span className="text-sm font-semibold text-gray-200">{t('gate.plateScanner')}</span>
+            {placaOcr && (
+              <span className="text-xs bg-emerald-600 text-white px-2 py-0.5 rounded-full font-medium">OCR</span>
+            )}
+          </div>
+          <div className="flex-1 bg-gray-900 min-h-0 overflow-hidden flex items-center justify-center">
+            {hasCamera
+              ? <video ref={placaVideoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
+              : <p className="text-gray-500 text-xs text-center px-4">Cámara no disponible (requiere HTTPS)</p>
+            }
+          </div>
+          {ocrPlacaMsg && (
+            <p className="px-4 py-1 text-xs text-red-400 border-t border-gray-700 shrink-0">{ocrPlacaMsg}</p>
+          )}
+          {hasCamera && (
+            <div className="p-3 border-t border-gray-700 shrink-0">
+              <button
+                onClick={handleCapturePlaca}
+                disabled={ocringPlaca}
+                className="w-full bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-semibold py-2 rounded-xl transition-colors text-sm"
+              >
+                {ocringPlaca ? t('common.processing') : t('gate.scanPlate')}
+              </button>
             </div>
-          </>
-        )}
+          )}
+        </div>
       </div>
 
-      {/* Form column — bottom on mobile, right on desktop */}
-      <div className="w-full lg:w-1/2 flex flex-col gap-3 p-4 overflow-y-auto">
+      {/* Right column — form + actions + log */}
+      <div className="w-1/2 flex flex-col gap-3 p-4 overflow-y-auto">
 
         {/* Datos del visitante */}
         <div className="bg-gray-800 rounded-2xl p-5 shadow-xl space-y-4 shrink-0">
           <h2 className="text-base font-bold text-white">{t('gate.visitorData')}</h2>
-
-          {blacklistBlock && (
-            <div className="bg-red-950 border-2 border-red-600 rounded-xl px-4 py-4 space-y-2">
-              <p className="text-red-300 font-bold text-base tracking-wide uppercase">
-                ⛔ ACCESO DENEGADO — Visitante en lista negra
-              </p>
-              <p className="text-red-200 text-sm">
-                <span className="font-semibold">Razón:</span> {blacklistBlock.razon}
-              </p>
-              <p className="text-red-300 text-sm">
-                {blacklistBlock.tipo === 'permanente'
-                  ? 'Ban permanente'
-                  : blacklistBlock.tipo === 'residente'
-                  ? 'Bloqueado por un residente'
-                  : `Ban temporal — vence el ${blacklistBlock.fecha_fin
-                      ? new Date(blacklistBlock.fecha_fin).toLocaleDateString('es-GT')
-                      : '—'}`
-                }
-              </p>
-              <button
-                onClick={resetForm}
-                className="text-xs text-red-400 hover:text-red-200 underline transition-colors"
-              >
-                Limpiar formulario
-              </button>
-            </div>
-          )}
 
           {error && (
             <div className="bg-red-900/40 border border-red-700 rounded-lg px-4 py-2 text-red-300 text-sm">
@@ -411,45 +331,16 @@ export default function GaritaPage() {
               />
             </div>
 
-            {/* DPI — with frecuentes autocomplete */}
-            <div className="relative">
-              <div className="flex items-center gap-1.5 mb-1">
-                <label className="text-xs text-gray-400">{t('gate.dpi')} *</label>
-                {dpiOcr && (
-                  <span className="text-xs bg-emerald-700 text-white px-1.5 py-0.5 rounded font-medium">OCR</span>
-                )}
-                {dpiHistorial && !dpiOcr && (
-                  <span className="text-xs bg-blue-700 text-white px-1.5 py-0.5 rounded font-medium">Historial</span>
-                )}
-              </div>
+            {/* DPI */}
+            <div>
+              <label className="block text-xs text-gray-400 mb-1">{t('gate.dpi')} *</label>
               <input
                 name="numero_dpi"
                 value={form.numero_dpi}
-                onChange={e => handleDpiChange(e.target.value)}
-                onKeyDown={e => e.key === 'Escape' && setDpiDropdownOpen(false)}
-                onBlur={() => setTimeout(() => setDpiDropdownOpen(false), 150)}
+                onChange={handleChange}
                 placeholder="1234567890101"
-                autoComplete="off"
                 className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm placeholder-gray-400 focus:outline-none focus:border-blue-500 transition-colors"
               />
-              {dpiDropdownOpen && dpiSugerencias.length > 0 && (
-                <div className="absolute z-20 mt-1 w-full bg-gray-700 border border-gray-600 rounded-lg shadow-xl max-h-48 overflow-y-auto left-0">
-                  {dpiSugerencias.map(v => (
-                    <button
-                      key={v.id}
-                      type="button"
-                      onMouseDown={() => selectSugerencia(v)}
-                      className="w-full text-left px-3 py-2 hover:bg-gray-600 transition-colors border-b border-gray-600 last:border-0"
-                    >
-                      <p className="text-white text-xs font-medium truncate">{v.nombre}</p>
-                      <p className="text-gray-400 text-xs font-mono">{v.numero_dpi}
-                        {v.placa && <span className="ml-2 text-teal-400">{v.placa}</span>}
-                        <span className="ml-2 text-gray-500">{diasDesde(v.ultima_visita)}</span>
-                      </p>
-                    </button>
-                  ))}
-                </div>
-              )}
             </div>
 
             {/* Placa */}
@@ -514,11 +405,11 @@ export default function GaritaPage() {
         )}
 
         {/* Action buttons */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 shrink-0">
+        <div className="grid grid-cols-2 gap-3 shrink-0">
           <button
             onClick={handleAutorizar}
-            disabled={loading || !!blacklistBlock}
-            className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-5 rounded-2xl transition-colors text-sm tracking-widest shadow-xl"
+            disabled={loading}
+            className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-bold py-5 rounded-2xl transition-colors text-sm tracking-widest shadow-xl"
           >
             {loading ? t('gate.registering') : t('gate.authorizeEntry')}
           </button>
@@ -540,7 +431,6 @@ export default function GaritaPage() {
               {t('gate.noEntries')}
             </p>
           ) : (
-            <div className="overflow-x-auto">
             <table className="w-full text-xs">
               <thead>
                 <tr className="border-b border-gray-700 text-gray-400 text-left">
@@ -571,7 +461,6 @@ export default function GaritaPage() {
                 ))}
               </tbody>
             </table>
-            </div>
           )}
         </div>
       </div>

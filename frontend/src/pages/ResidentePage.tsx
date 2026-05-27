@@ -240,7 +240,7 @@ export default function ResidentePage() {
   const saldo = parseFloat(data!.saldo_pendiente);
 
   return (
-    <main className="px-4 sm:px-6 py-6 sm:py-8 space-y-6 max-w-md mx-auto text-gray-100">
+    <main className="px-6 py-8 space-y-6 max-w-3xl mx-auto text-gray-100">
       {/* Summary card */}
       <div className="bg-gray-800 rounded-2xl p-6 shadow-xl">
         <div className="flex items-start justify-between gap-4">

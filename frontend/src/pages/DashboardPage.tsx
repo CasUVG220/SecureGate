@@ -32,7 +32,7 @@ export default function DashboardPage() {
   }, []);
 
   return (
-    <div className="p-4 sm:p-8 text-gray-100 space-y-6 sm:space-y-8 max-w-7xl mx-auto">
+    <div className="p-8 text-gray-100 space-y-8 max-w-7xl mx-auto">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-white tracking-tight">{t('dashboard.title')}</h1>
       </div>
@@ -41,7 +41,7 @@ export default function DashboardPage() {
         <div className="bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3 text-red-400 text-sm">{error}</div>
       )}
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {loading ? (
           Array.from({ length: 3 }).map((_, i) => (
             <div key={i} className="bg-dark-800/40 rounded-3xl p-6 border border-white/5 animate-pulse">
@@ -70,7 +70,6 @@ export default function DashboardPage() {
             <p className="text-gray-400 text-sm">{t('dashboard.noAccesses')}</p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-white/5 text-gray-400 text-left bg-white/[0.02]">
@@ -108,7 +107,6 @@ export default function DashboardPage() {
               )}
             </tbody>
           </table>
-          </div>
         )}
       </div>
     </div>

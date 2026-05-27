@@ -62,10 +62,6 @@ services:
     networks:
       - securegate-network
 
-  # nginx solo para produccion con HTTPS
-  # nginx:
-  #   image: nginx:alpine
-
 volumes:
   postgres_data:
     driver: local
