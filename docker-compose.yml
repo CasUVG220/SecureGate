@@ -34,6 +34,8 @@ services:
       PORT: 3000
       DATABASE_URL: postgresql://sguser:sgpassword123@db:5432/securegate
       JWT_SECRET: securegate_jwt_secret_dev
+    ports:
+      - "3000:3000"
     volumes:
       - ./backend/src:/app/src
     depends_on:
@@ -50,6 +52,8 @@ services:
     restart: unless-stopped
     environment:
       VITE_API_URL: http://localhost:3000
+    ports:
+      - "5173:5173"
     volumes:
       - ./frontend:/app
       - /app/node_modules
@@ -58,21 +62,9 @@ services:
     networks:
       - securegate-network
 
-  nginx:
-    image: nginx:alpine
-    container_name: securegate-nginx
-    restart: unless-stopped
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-      - /etc/letsencrypt:/etc/letsencrypt:ro
-    depends_on:
-      - frontend
-      - backend
-    networks:
-      - securegate-network
+  # nginx solo para produccion con HTTPS
+  # nginx:
+  #   image: nginx:alpine
 
 volumes:
   postgres_data:
