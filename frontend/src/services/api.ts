@@ -11,57 +11,6 @@ const authHeaders = (): HeadersInit => ({
   Authorization: `Bearer ${getToken()}`,
 });
 
-// ── Auth helpers ──────────────────────────────────────────────────────────
-
-export const refreshToken = async (): Promise<string | null> => {
-  try {
-    const res = await fetch(`${BASE_URL}/api/auth/refresh`, {
-      method: 'POST',
-      credentials: 'include',
-    });
-    if (!res.ok) return null;
-    const data = await res.json() as { token: string };
-    localStorage.setItem('token', data.token);
-    return data.token;
-  } catch {
-    return null;
-  }
-};
-
-export const logout = async (): Promise<void> => {
-  await fetch(`${BASE_URL}/api/auth/logout`, {
-    method: 'POST',
-    credentials: 'include',
-  }).catch(() => {});
-  localStorage.removeItem('token');
-};
-
-let _refreshing: Promise<string | null> | null = null;
-
-const apiFetch = async (url: string, init?: RequestInit): Promise<Response> => {
-  const res = await fetch(url, init);
-  if (res.status !== 401) return res;
-
-  // Deduplicate concurrent refresh attempts
-  if (!_refreshing) {
-    _refreshing = refreshToken().finally(() => { _refreshing = null; });
-  }
-  const newToken = await _refreshing;
-
-  if (!newToken) {
-    localStorage.removeItem('token');
-    window.location.href = '/';
-    return res;
-  }
-
-  // Retry once with the new access token
-  const retryHeaders: HeadersInit = {
-    ...(init?.headers as Record<string, string> | undefined),
-    Authorization: `Bearer ${newToken}`,
-  };
-  return fetch(url, { ...init, headers: retryHeaders });
-};
-
 export interface Residente {
   id: string;
   numero_casa: string;
@@ -90,38 +39,19 @@ export interface AccesoResult {
 }
 
 export const getResidentes = async (): Promise<Residente[]> => {
-  const res = await apiFetch(`${BASE_URL}/api/residentes`, { headers: authHeaders() });
+  const res = await fetch(`${BASE_URL}/api/residentes`, { headers: authHeaders() });
   if (!res.ok) throw new Error('Error al cargar residentes');
   return res.json();
 };
 
-export class BlacklistDenialError extends Error {
-  razon: string;
-  tipo: string;
-  fecha_fin: string | null;
-  constructor(razon: string, tipo: string, fecha_fin: string | null) {
-    super('Visitante en lista negra');
-    this.name = 'BlacklistDenialError';
-    this.razon = razon;
-    this.tipo = tipo;
-    this.fecha_fin = fecha_fin;
-  }
-}
-
 export const registrarAcceso = async (data: AccesoPayload): Promise<AccesoResult> => {
-  const res = await apiFetch(`${BASE_URL}/api/accesos`, {
+  const res = await fetch(`${BASE_URL}/api/accesos`, {
     method: 'POST',
     headers: authHeaders(),
     body: JSON.stringify(data),
   });
   const body = await res.json();
-  if (!res.ok) {
-    if (res.status === 403 && (body as { razon?: string }).razon) {
-      const b = body as { razon: string; tipo: string; fecha_fin?: string | null };
-      throw new BlacklistDenialError(b.razon, b.tipo, b.fecha_fin ?? null);
-    }
-    throw new Error((body as { error?: string }).error || 'Error al registrar acceso');
-  }
+  if (!res.ok) throw new Error(body.error || 'Error al registrar acceso');
   return body;
 };
 
@@ -141,7 +71,7 @@ export interface ResidenteUpdate {
 }
 
 export const createResidente = async (data: ResidenteInput): Promise<Residente> => {
-  const res = await apiFetch(`${BASE_URL}/api/residentes`, {
+  const res = await fetch(`${BASE_URL}/api/residentes`, {
     method: 'POST',
     headers: authHeaders(),
     body: JSON.stringify(data),
@@ -152,7 +82,7 @@ export const createResidente = async (data: ResidenteInput): Promise<Residente> 
 };
 
 export const updateResidente = async (id: string, data: ResidenteUpdate): Promise<Residente> => {
-  const res = await apiFetch(`${BASE_URL}/api/residentes/${id}`, {
+  const res = await fetch(`${BASE_URL}/api/residentes/${id}`, {
     method: 'PUT',
     headers: authHeaders(),
     body: JSON.stringify(data),
@@ -163,7 +93,7 @@ export const updateResidente = async (id: string, data: ResidenteUpdate): Promis
 };
 
 export const deleteResidente = async (id: string): Promise<void> => {
-  const res = await apiFetch(`${BASE_URL}/api/residentes/${id}`, {
+  const res = await fetch(`${BASE_URL}/api/residentes/${id}`, {
     method: 'DELETE',
     headers: authHeaders(),
   });
@@ -199,7 +129,7 @@ export interface AccesoActivo {
 
 /** Retorna null cuando no hay acceso activo (404), lanza Error para otros fallos */
 export const getAccesoActivo = async (placa: string): Promise<AccesoActivo | null> => {
-  const res = await apiFetch(
+  const res = await fetch(
     `${BASE_URL}/api/accesos/activo?placa=${encodeURIComponent(placa)}`,
     { headers: authHeaders() }
   );
@@ -210,7 +140,7 @@ export const getAccesoActivo = async (placa: string): Promise<AccesoActivo | nul
 };
 
 export const getAccesosActivos = async (): Promise<AccesoActivo[]> => {
-  const res = await apiFetch(`${BASE_URL}/api/accesos/activos`, { headers: authHeaders() });
+  const res = await fetch(`${BASE_URL}/api/accesos/activos`, { headers: authHeaders() });
   if (!res.ok) throw new Error('Error al cargar visitantes activos');
   return res.json();
 };
@@ -218,7 +148,7 @@ export const getAccesosActivos = async (): Promise<AccesoActivo[]> => {
 export const registrarSalidaVehiculo = async (
   registroId: string
 ): Promise<Record<string, unknown>> => {
-  const res = await apiFetch(`${BASE_URL}/api/accesos/${encodeURIComponent(registroId)}/salida`, {
+  const res = await fetch(`${BASE_URL}/api/accesos/${encodeURIComponent(registroId)}/salida`, {
     method: 'PUT',
     headers: authHeaders(),
   });
@@ -266,13 +196,13 @@ export interface PagoInput {
 }
 
 export const getPagos = async (): Promise<Pago[]> => {
-  const res = await apiFetch(`${BASE_URL}/api/pagos`, { headers: authHeaders() });
+  const res = await fetch(`${BASE_URL}/api/pagos`, { headers: authHeaders() });
   if (!res.ok) throw new Error('Error al cargar pagos');
   return res.json();
 };
 
 export const createPago = async (data: PagoInput): Promise<Pago> => {
-  const res = await apiFetch(`${BASE_URL}/api/pagos`, {
+  const res = await fetch(`${BASE_URL}/api/pagos`, {
     method: 'POST',
     headers: authHeaders(),
     body: JSON.stringify(data),
@@ -283,7 +213,7 @@ export const createPago = async (data: PagoInput): Promise<Pago> => {
 };
 
 export const aprobarPago = async (id: string): Promise<Pago> => {
-  const res = await apiFetch(`${BASE_URL}/api/pagos/${encodeURIComponent(id)}/aprobar`, {
+  const res = await fetch(`${BASE_URL}/api/pagos/${encodeURIComponent(id)}/aprobar`, {
     method: 'PUT',
     headers: authHeaders(),
   });
@@ -293,7 +223,7 @@ export const aprobarPago = async (id: string): Promise<Pago> => {
 };
 
 export const rechazarPago = async (id: string, comentario_rechazo?: string): Promise<Pago> => {
-  const res = await apiFetch(`${BASE_URL}/api/pagos/${encodeURIComponent(id)}/rechazar`, {
+  const res = await fetch(`${BASE_URL}/api/pagos/${encodeURIComponent(id)}/rechazar`, {
     method: 'PUT',
     headers: authHeaders(),
     body: JSON.stringify({ comentario_rechazo }),
@@ -304,13 +234,13 @@ export const rechazarPago = async (id: string, comentario_rechazo?: string): Pro
 };
 
 export const getPendientesVerificacion = async (): Promise<PagoVerificacion[]> => {
-  const res = await apiFetch(`${BASE_URL}/api/pagos/pendientes-verificacion`, { headers: authHeaders() });
+  const res = await fetch(`${BASE_URL}/api/pagos/pendientes-verificacion`, { headers: authHeaders() });
   if (!res.ok) throw new Error('Error al cargar cola de verificación');
   return res.json();
 };
 
 export const crearTransferencia = async (data: TransferenciaInput): Promise<Pago> => {
-  const res = await apiFetch(`${BASE_URL}/api/pagos/transferencia`, {
+  const res = await fetch(`${BASE_URL}/api/pagos/transferencia`, {
     method: 'POST',
     headers: authHeaders(),
     body: JSON.stringify(data),
@@ -321,7 +251,7 @@ export const crearTransferencia = async (data: TransferenciaInput): Promise<Pago
 };
 
 export const getMisPagos = async (): Promise<Pago[]> => {
-  const res = await apiFetch(`${BASE_URL}/api/pagos/mis`, { headers: authHeaders() });
+  const res = await fetch(`${BASE_URL}/api/pagos/mis`, { headers: authHeaders() });
   if (!res.ok) throw new Error('Error al cargar historial de pagos');
   return res.json();
 };
@@ -385,7 +315,7 @@ export const buscarPreautorizacion = async (
   const qs = new URLSearchParams();
   if (params.dpi)   qs.set('dpi',   params.dpi);
   if (params.placa) qs.set('placa', params.placa);
-  const res = await apiFetch(
+  const res = await fetch(
     `${BASE_URL}/api/preautorizaciones/buscar?${qs.toString()}`,
     { headers: authHeaders() }
   );
@@ -396,7 +326,7 @@ export const buscarPreautorizacion = async (
 };
 
 export const getMisPreautorizaciones = async (): Promise<MiPreautorizacion[]> => {
-  const res = await apiFetch(`${BASE_URL}/api/preautorizaciones/mis`, { headers: authHeaders() });
+  const res = await fetch(`${BASE_URL}/api/preautorizaciones/mis`, { headers: authHeaders() });
   if (!res.ok) throw new Error('Error al cargar preautorizaciones');
   return res.json();
 };
@@ -404,7 +334,7 @@ export const getMisPreautorizaciones = async (): Promise<MiPreautorizacion[]> =>
 export const createMisPreautorizacion = async (
   data: Omit<PreautorizacionInput, 'residente_id'>
 ): Promise<MiPreautorizacion> => {
-  const res = await apiFetch(`${BASE_URL}/api/preautorizaciones/mis`, {
+  const res = await fetch(`${BASE_URL}/api/preautorizaciones/mis`, {
     method: 'POST',
     headers: authHeaders(),
     body: JSON.stringify(data),
@@ -415,7 +345,7 @@ export const createMisPreautorizacion = async (
 };
 
 export const deleteMisPreautorizacion = async (id: string): Promise<void> => {
-  const res = await apiFetch(
+  const res = await fetch(
     `${BASE_URL}/api/preautorizaciones/mis/${encodeURIComponent(id)}`,
     { method: 'DELETE', headers: authHeaders() }
   );
@@ -426,13 +356,13 @@ export const deleteMisPreautorizacion = async (id: string): Promise<void> => {
 };
 
 export const getMisAccesos = async (): Promise<MiVisita[]> => {
-  const res = await apiFetch(`${BASE_URL}/api/accesos/mis`, { headers: authHeaders() });
+  const res = await fetch(`${BASE_URL}/api/accesos/mis`, { headers: authHeaders() });
   if (!res.ok) throw new Error('Error al cargar historial de accesos');
   return res.json();
 };
 
 export const getPreautorizaciones = async (): Promise<Preautorizacion[]> => {
-  const res = await apiFetch(`${BASE_URL}/api/preautorizaciones`, { headers: authHeaders() });
+  const res = await fetch(`${BASE_URL}/api/preautorizaciones`, { headers: authHeaders() });
   if (!res.ok) throw new Error('Error al cargar preautorizaciones');
   return res.json();
 };
@@ -440,7 +370,7 @@ export const getPreautorizaciones = async (): Promise<Preautorizacion[]> => {
 export const createPreautorizacion = async (
   data: PreautorizacionInput
 ): Promise<Preautorizacion> => {
-  const res = await apiFetch(`${BASE_URL}/api/preautorizaciones`, {
+  const res = await fetch(`${BASE_URL}/api/preautorizaciones`, {
     method: 'POST',
     headers: authHeaders(),
     body: JSON.stringify(data),
@@ -451,7 +381,7 @@ export const createPreautorizacion = async (
 };
 
 export const deletePreautorizacion = async (id: string): Promise<void> => {
-  const res = await apiFetch(
+  const res = await fetch(
     `${BASE_URL}/api/preautorizaciones/${encodeURIComponent(id)}`,
     { method: 'DELETE', headers: authHeaders() }
   );
@@ -479,7 +409,7 @@ export interface ResidenteMe {
 }
 
 export const getResidenteMe = async (): Promise<ResidenteMe> => {
-  const res = await apiFetch(`${BASE_URL}/api/residentes/me`, { headers: authHeaders() });
+  const res = await fetch(`${BASE_URL}/api/residentes/me`, { headers: authHeaders() });
   if (!res.ok) throw new Error('Error al cargar tus datos');
   return res.json();
 };
@@ -498,7 +428,7 @@ export interface DashboardData {
 }
 
 export const getDashboard = async (): Promise<DashboardData> => {
-  const res = await apiFetch(`${BASE_URL}/api/dashboard`, { headers: authHeaders() });
+  const res = await fetch(`${BASE_URL}/api/dashboard`, { headers: authHeaders() });
   if (!res.ok) throw new Error('Error al cargar el dashboard');
   return res.json();
 };
@@ -535,7 +465,7 @@ export const scanPlaca = async (
 };
 
 const downloadCSV = async (url: string, filename: string): Promise<void> => {
-  const res = await apiFetch(url, { headers: authHeaders() });
+  const res = await fetch(url, { headers: authHeaders() });
   if (!res.ok) return;
   const blob = await res.blob();
   const href = URL.createObjectURL(blob);
@@ -575,13 +505,13 @@ export interface ConfigCargoInput {
 }
 
 export const getConfigCargos = async (): Promise<ConfigCargo[]> => {
-  const res = await apiFetch(`${BASE_URL}/api/configuracion-cargos`, { headers: authHeaders() });
+  const res = await fetch(`${BASE_URL}/api/configuracion-cargos`, { headers: authHeaders() });
   if (!res.ok) throw new Error('Error al cargar configuraciones de cargo');
   return res.json();
 };
 
 export const createConfigCargo = async (data: ConfigCargoInput): Promise<ConfigCargo> => {
-  const res = await apiFetch(`${BASE_URL}/api/configuracion-cargos`, {
+  const res = await fetch(`${BASE_URL}/api/configuracion-cargos`, {
     method: 'POST',
     headers: authHeaders(),
     body: JSON.stringify(data),
@@ -595,7 +525,7 @@ export const updateConfigCargo = async (
   id: string,
   data: Partial<ConfigCargoInput & { activo: boolean }>
 ): Promise<ConfigCargo> => {
-  const res = await apiFetch(`${BASE_URL}/api/configuracion-cargos/${encodeURIComponent(id)}`, {
+  const res = await fetch(`${BASE_URL}/api/configuracion-cargos/${encodeURIComponent(id)}`, {
     method: 'PUT',
     headers: authHeaders(),
     body: JSON.stringify(data),
@@ -606,7 +536,7 @@ export const updateConfigCargo = async (
 };
 
 export const deleteConfigCargo = async (id: string): Promise<void> => {
-  const res = await apiFetch(`${BASE_URL}/api/configuracion-cargos/${encodeURIComponent(id)}`, {
+  const res = await fetch(`${BASE_URL}/api/configuracion-cargos/${encodeURIComponent(id)}`, {
     method: 'DELETE',
     headers: authHeaders(),
   });
@@ -643,13 +573,13 @@ export interface EmpresaStats {
 }
 
 export const getEmpresas = async (): Promise<Empresa[]> => {
-  const res = await apiFetch(`${BASE_URL}/api/empresas`, { headers: authHeaders() });
+  const res = await fetch(`${BASE_URL}/api/empresas`, { headers: authHeaders() });
   if (!res.ok) throw new Error('Error al cargar empresas');
   return res.json() as Promise<Empresa[]>;
 };
 
 export const createEmpresa = async (data: EmpresaInput): Promise<Empresa> => {
-  const res = await apiFetch(`${BASE_URL}/api/empresas`, {
+  const res = await fetch(`${BASE_URL}/api/empresas`, {
     method: 'POST',
     headers: authHeaders(),
     body: JSON.stringify(data),
@@ -663,7 +593,7 @@ export const updateEmpresa = async (
   id: string,
   data: Partial<EmpresaInput & { activo: boolean }>
 ): Promise<Empresa> => {
-  const res = await apiFetch(`${BASE_URL}/api/empresas/${encodeURIComponent(id)}`, {
+  const res = await fetch(`${BASE_URL}/api/empresas/${encodeURIComponent(id)}`, {
     method: 'PUT',
     headers: authHeaders(),
     body: JSON.stringify(data),
@@ -674,7 +604,7 @@ export const updateEmpresa = async (
 };
 
 export const getEmpresaStats = async (id: string): Promise<EmpresaStats> => {
-  const res = await apiFetch(
+  const res = await fetch(
     `${BASE_URL}/api/empresas/${encodeURIComponent(id)}/stats`,
     { headers: authHeaders() }
   );
@@ -683,7 +613,7 @@ export const getEmpresaStats = async (id: string): Promise<EmpresaStats> => {
 };
 
 export const deleteEmpresa = async (id: string): Promise<void> => {
-  const res = await apiFetch(`${BASE_URL}/api/empresas/${encodeURIComponent(id)}`, {
+  const res = await fetch(`${BASE_URL}/api/empresas/${encodeURIComponent(id)}`, {
     method: 'DELETE',
     headers: authHeaders(),
   });
@@ -694,7 +624,7 @@ export const deleteEmpresa = async (id: string): Promise<void> => {
 };
 
 export const assignAdminEmpresa = async (empresaId: string, usuarioId: string): Promise<void> => {
-  const res = await apiFetch(`${BASE_URL}/api/empresas/${encodeURIComponent(empresaId)}/admin`, {
+  const res = await fetch(`${BASE_URL}/api/empresas/${encodeURIComponent(empresaId)}/admin`, {
     method: 'POST',
     headers: authHeaders(),
     body: JSON.stringify({ usuario_id: usuarioId }),
@@ -728,13 +658,13 @@ export interface SucursalInput {
 }
 
 export const getSucursales = async (): Promise<Sucursal[]> => {
-  const res = await apiFetch(`${BASE_URL}/api/sucursales`, { headers: authHeaders() });
+  const res = await fetch(`${BASE_URL}/api/sucursales`, { headers: authHeaders() });
   if (!res.ok) throw new Error('Error al cargar sucursales');
   return res.json() as Promise<Sucursal[]>;
 };
 
 export const createSucursal = async (data: SucursalInput): Promise<Sucursal> => {
-  const res = await apiFetch(`${BASE_URL}/api/sucursales`, {
+  const res = await fetch(`${BASE_URL}/api/sucursales`, {
     method: 'POST',
     headers: authHeaders(),
     body: JSON.stringify(data),
@@ -748,7 +678,7 @@ export const assignAdminSucursal = async (
   sucursal_id: string,
   usuario_id: string
 ): Promise<unknown> => {
-  const res = await apiFetch(
+  const res = await fetch(
     `${BASE_URL}/api/sucursales/${encodeURIComponent(sucursal_id)}/admin`,
     {
       method: 'POST',
@@ -765,7 +695,7 @@ export const updateSucursal = async (
   id: string,
   data: Partial<SucursalInput & { activo: boolean }>
 ): Promise<Sucursal> => {
-  const res = await apiFetch(`${BASE_URL}/api/sucursales/${encodeURIComponent(id)}`, {
+  const res = await fetch(`${BASE_URL}/api/sucursales/${encodeURIComponent(id)}`, {
     method: 'PUT',
     headers: authHeaders(),
     body: JSON.stringify(data),
@@ -776,7 +706,7 @@ export const updateSucursal = async (
 };
 
 export const deleteSucursal = async (id: string): Promise<void> => {
-  const res = await apiFetch(`${BASE_URL}/api/sucursales/${encodeURIComponent(id)}`, {
+  const res = await fetch(`${BASE_URL}/api/sucursales/${encodeURIComponent(id)}`, {
     method: 'DELETE',
     headers: authHeaders(),
   });
@@ -809,13 +739,13 @@ export interface UsuarioInput {
 }
 
 export const getUsuarios = async (): Promise<Usuario[]> => {
-  const res = await apiFetch(`${BASE_URL}/api/usuarios`, { headers: authHeaders() });
+  const res = await fetch(`${BASE_URL}/api/usuarios`, { headers: authHeaders() });
   if (!res.ok) throw new Error('Error al cargar usuarios');
   return res.json() as Promise<Usuario[]>;
 };
 
 export const createUsuario = async (data: UsuarioInput): Promise<Usuario> => {
-  const res = await apiFetch(`${BASE_URL}/api/usuarios`, {
+  const res = await fetch(`${BASE_URL}/api/usuarios`, {
     method: 'POST',
     headers: authHeaders(),
     body: JSON.stringify(data),
@@ -826,7 +756,7 @@ export const createUsuario = async (data: UsuarioInput): Promise<Usuario> => {
 };
 
 export const updatePreferencias = async (idioma: string, tema: string): Promise<void> => {
-  const res = await apiFetch(`${BASE_URL}/api/usuarios/me/preferencias`, {
+  const res = await fetch(`${BASE_URL}/api/usuarios/me/preferencias`, {
     method: 'PUT',
     headers: authHeaders(),
     body: JSON.stringify({ idioma, tema }),
@@ -838,103 +768,13 @@ export const updatePreferencias = async (idioma: string, tema: string): Promise<
 };
 
 export const deleteUsuario = async (id: string): Promise<void> => {
-  const res = await apiFetch(`${BASE_URL}/api/usuarios/${encodeURIComponent(id)}`, {
+  const res = await fetch(`${BASE_URL}/api/usuarios/${encodeURIComponent(id)}`, {
     method: 'DELETE',
     headers: authHeaders(),
   });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     throw new Error((body as { error?: string }).error || 'Error al eliminar usuario');
-  }
-};
-
-// ── Blacklist ─────────────────────────────────────────────────────────────
-
-export interface BlacklistEntry {
-  id: string;
-  tipo: 'temporal' | 'permanente';
-  razon: string;
-  fecha_inicio: string;
-  fecha_fin: string | null;
-  activo: boolean;
-  created_at: string;
-  visitante_id: string;
-  visitante_nombre: string;
-  numero_dpi: string;
-  sucursal_nombre: string;
-  creado_por_nombre: string;
-}
-
-export interface BlacklistInput {
-  visitante_id: string;
-  tipo: 'temporal' | 'permanente';
-  razon: string;
-  fecha_fin?: string;
-  sucursal_id?: string;
-}
-
-export interface VisitanteBasico {
-  id: string;
-  nombre: string;
-  numero_dpi: string;
-}
-
-export interface VisitanteFrecuente {
-  id: string;
-  nombre: string;
-  numero_dpi: string;
-  placa: string | null;
-  ultima_visita: string | null;
-}
-
-export const buscarVisitantesPorDpi = async (dpi: string): Promise<VisitanteBasico[]> => {
-  if (dpi.length < 3) return [];
-  const res = await apiFetch(
-    `${BASE_URL}/api/visitantes?dpi=${encodeURIComponent(dpi)}`,
-    { headers: authHeaders() }
-  );
-  if (!res.ok) return [];
-  return res.json() as Promise<VisitanteBasico[]>;
-};
-
-export const buscarVisitantesFrecuentes = async (
-  q: string,
-  residente_id?: string
-): Promise<VisitanteFrecuente[]> => {
-  if (q.length < 4) return [];
-  const url = new URL(`${BASE_URL}/api/visitantes/buscar`);
-  url.searchParams.set('q', q);
-  if (residente_id) url.searchParams.set('residente_id', residente_id);
-  const res = await apiFetch(url.toString(), { headers: authHeaders() });
-  if (!res.ok) return [];
-  return res.json() as Promise<VisitanteFrecuente[]>;
-};
-
-export const getBlacklist = async (): Promise<BlacklistEntry[]> => {
-  const res = await apiFetch(`${BASE_URL}/api/blacklist`, { headers: authHeaders() });
-  if (!res.ok) throw new Error('Error al cargar blacklist');
-  return res.json() as Promise<BlacklistEntry[]>;
-};
-
-export const addToBlacklist = async (data: BlacklistInput): Promise<BlacklistEntry> => {
-  const res = await apiFetch(`${BASE_URL}/api/blacklist`, {
-    method: 'POST',
-    headers: authHeaders(),
-    body: JSON.stringify(data),
-  });
-  const body = await res.json();
-  if (!res.ok) throw new Error((body as { error?: string }).error || 'Error al agregar a blacklist');
-  return body as BlacklistEntry;
-};
-
-export const removeFromBlacklist = async (id: string): Promise<void> => {
-  const res = await apiFetch(`${BASE_URL}/api/blacklist/${encodeURIComponent(id)}`, {
-    method: 'DELETE',
-    headers: authHeaders(),
-  });
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error((body as { error?: string }).error || 'Error al remover de blacklist');
   }
 };
 

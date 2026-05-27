@@ -26,8 +26,7 @@ function BarChart({ sucursales, noDataLabel, title }: { sucursales: EmpresaStats
   return (
     <div className="bg-gray-800 rounded-2xl shadow-xl p-6 space-y-3">
       <h2 className="text-base font-semibold text-white">{title}</h2>
-      <div className="overflow-x-auto">
-      <div className="space-y-2 min-w-[320px]">
+      <div className="space-y-2">
         {sucursales.map(s => (
           <div key={s.id} className="flex items-center gap-3">
             <span className="text-xs text-gray-400 w-32 truncate shrink-0">{s.nombre}</span>
@@ -44,7 +43,6 @@ function BarChart({ sucursales, noDataLabel, title }: { sucursales: EmpresaStats
           <p className="text-gray-500 text-sm">{noDataLabel}</p>
         )}
       </div>
-    </div>
     </div>
   );
 }
@@ -78,7 +76,7 @@ export default function AdminEmpresaDashboard() {
   }, [empresaId]);
 
   return (
-    <div className="p-4 sm:p-6 text-gray-100 space-y-6 max-w-7xl">
+    <div className="p-6 text-gray-100 space-y-6 max-w-7xl">
       <h1 className="text-xl font-bold text-white">{t('ae.dashTitle')}</h1>
 
       {error && (

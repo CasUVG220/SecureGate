@@ -9,35 +9,15 @@ import { Spinner } from '../components/Skeleton';
 import { useToast } from '../components/Toast';
 import { useTranslation } from '../i18n/useTranslation';
 
-const RAZONES_RECHAZO = [
-  { value: 'imagen_no_clara',        label: 'Imagen no clara o ilegible' },
-  { value: 'monto_incorrecto',       label: 'Monto incorrecto' },
-  { value: 'referencia_invalida',    label: 'Número de referencia inválido' },
-  { value: 'fecha_incorrecta',       label: 'Fecha del comprobante incorrecta' },
-  { value: 'beneficiario_incorrecto',label: 'Beneficiario no corresponde' },
-  { value: 'banco_no_reconocido',    label: 'Banco no reconocido' },
-  { value: 'otro',                   label: 'Otro motivo...' },
-];
-
 export default function VerificacionPage() {
   const showToast = useToast();
   const { t } = useTranslation();
   const [cola, setCola]               = useState<PagoVerificacion[]>([]);
   const [loading, setLoading]         = useState(true);
   const [selected, setSelected]       = useState(0);
-  const [razonSeleccionada, setRazonSeleccionada] = useState('');
-  const [comentarioLibre, setComentarioLibre]     = useState('');
+  const [comentario, setComentario]   = useState('');
   const [aprobando, setAprobando]     = useState(false);
   const [rechazando, setRechazando]   = useState(false);
-
-  const comentarioFinal =
-    razonSeleccionada === 'otro'
-      ? comentarioLibre.trim()
-      : RAZONES_RECHAZO.find(r => r.value === razonSeleccionada)?.label ?? '';
-
-  const puedeRechazar =
-    razonSeleccionada !== '' &&
-    (razonSeleccionada !== 'otro' || comentarioLibre.trim() !== '');
 
   const load = () => {
     setLoading(true);
@@ -67,20 +47,19 @@ export default function VerificacionPage() {
     }
   };
 
-  const resetRechazo = () => {
-    setRazonSeleccionada('');
-    setComentarioLibre('');
-  };
-
   const handleRechazar = async () => {
-    if (!current || !puedeRechazar) return;
+    if (!current) return;
+    if (!comentario.trim()) {
+      showToast(t('verification.commentRequired'), 'warning');
+      return;
+    }
     setRechazando(true);
     try {
-      await rechazarPago(current.id, comentarioFinal);
+      await rechazarPago(current.id, comentario.trim());
       showToast(t('verification.rejectedMsg'), 'warning');
       setCola(prev => prev.filter(p => p.id !== current.id));
       setSelected(0);
-      resetRechazo();
+      setComentario('');
     } catch (err: unknown) {
       showToast(err instanceof Error ? err.message : 'Error al rechazar', 'error');
     } finally {
@@ -326,51 +305,43 @@ export default function VerificacionPage() {
 
           {/* Actions */}
           <div className="bg-gray-800 rounded-2xl p-6 shadow-xl space-y-4">
-            {/* Approve */}
-            <button
-              onClick={handleAprobar}
-              disabled={aprobando || rechazando}
-              className="w-full flex items-center justify-center gap-2 bg-green-600 hover:bg-green-500 disabled:opacity-50 text-white font-bold py-3.5 rounded-xl transition-colors"
-            >
-              {aprobando
-                ? <Spinner size={16} />
-                : <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-              }
-              {aprobando ? t('verification.approving') : t('verification.approveBtn')}
-            </button>
-
-            {/* Reject section */}
-            <div className="border-t border-gray-700 pt-4 space-y-3">
-              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">
-                {t('verification.rejectBtn')}
-              </p>
-              <select
-                value={razonSeleccionada}
-                onChange={e => { setRazonSeleccionada(e.target.value); setComentarioLibre(''); }}
-                className="w-full bg-gray-700 border border-gray-600 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-red-500 transition-colors"
-              >
-                <option value="">— Selecciona motivo de rechazo —</option>
-                {RAZONES_RECHAZO.map(r => (
-                  <option key={r.value} value={r.value}>{r.label}</option>
-                ))}
-              </select>
-
-              {razonSeleccionada === 'otro' && (
-                <textarea
-                  value={comentarioLibre}
-                  onChange={e => setComentarioLibre(e.target.value)}
-                  rows={3}
-                  placeholder="Describe el motivo del rechazo…"
-                  className="w-full bg-gray-700 border border-gray-600 rounded-xl px-4 py-3 text-white text-sm placeholder-gray-400 focus:outline-none focus:border-red-500 transition-colors resize-none"
+            <div>
+              <label className="flex items-center gap-2 text-sm text-gray-300 mb-2">
+                <input
+                  type="checkbox"
+                  readOnly
+                  checked={!!comentario}
+                  className="accent-blue-500"
                 />
-              )}
+                {t('verification.commentLabel')}
+              </label>
+              <textarea
+                value={comentario}
+                onChange={e => setComentario(e.target.value)}
+                rows={3}
+                placeholder={t('verification.commentPlaceholder')}
+                className="w-full bg-gray-700 border border-gray-600 rounded-xl px-4 py-3 text-white text-sm placeholder-gray-400 focus:outline-none focus:border-blue-500 transition-colors resize-none"
+              />
+            </div>
 
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                onClick={handleAprobar}
+                disabled={aprobando || rechazando}
+                className="flex items-center justify-center gap-2 bg-green-600 hover:bg-green-500 disabled:opacity-50 text-white font-bold py-3.5 rounded-xl transition-colors"
+              >
+                {aprobando
+                  ? <Spinner size={16} />
+                  : <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                }
+                {aprobando ? t('verification.approving') : t('verification.approveBtn')}
+              </button>
               <button
                 onClick={handleRechazar}
-                disabled={aprobando || rechazando || !puedeRechazar}
-                className="w-full flex items-center justify-center gap-2 bg-red-700 hover:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-3.5 rounded-xl transition-colors"
+                disabled={aprobando || rechazando}
+                className="flex items-center justify-center gap-2 bg-red-700 hover:bg-red-600 disabled:opacity-50 text-white font-bold py-3.5 rounded-xl transition-colors"
               >
                 {rechazando
                   ? <Spinner size={16} />
@@ -381,7 +352,6 @@ export default function VerificacionPage() {
                 {rechazando ? t('verification.rejecting') : t('verification.rejectBtn')}
               </button>
             </div>
-
             <p className="text-center text-xs text-gray-500">
               {t('verification.updateNote')}
             </p>
@@ -398,7 +368,7 @@ export default function VerificacionPage() {
           {cola.map((p, i) => (
             <button
               key={p.id}
-              onClick={() => { setSelected(i); resetRechazo(); }}
+              onClick={() => { setSelected(i); setComentario(''); }}
               className={`shrink-0 w-48 rounded-xl p-3 text-left transition-colors border ${
                 i === selected
                   ? 'border-blue-500 bg-blue-900/30'

@@ -4,7 +4,6 @@ import {
   getPagos, createPago, aprobarPago, rechazarPago,
   crearTransferencia, getPendientesVerificacion, getMisPagos,
 } from '../controllers/pagos.controller';
-import { auditLog } from '../middleware/audit.middleware';
 
 const router = Router();
 
@@ -12,8 +11,8 @@ router.get('/pendientes-verificacion', verifyToken, getPendientesVerificacion);
 router.get('/mis',                     verifyToken, getMisPagos);
 router.post('/transferencia',          verifyToken, crearTransferencia);
 router.get('/',                        verifyToken, getPagos);
-router.post('/',                       verifyToken, auditLog({ accion: 'PAGO_EFECTIVO',  tabla: 'pagos' }), createPago);
-router.put('/:id/aprobar',             verifyToken, auditLog({ accion: 'PAGO_APROBADO',  tabla: 'pagos' }), aprobarPago);
-router.put('/:id/rechazar',            verifyToken, auditLog({ accion: 'PAGO_RECHAZADO', tabla: 'pagos' }), rechazarPago);
+router.post('/',                       verifyToken, createPago);
+router.put('/:id/aprobar',             verifyToken, aprobarPago);
+router.put('/:id/rechazar',            verifyToken, rechazarPago);
 
 export default router;
