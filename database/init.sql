@@ -127,6 +127,75 @@ CREATE TABLE IF NOT EXISTS preautorizaciones (
   created_at       TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
+-- ── Audit logs ────────────────────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS audit_logs (
+  id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  usuario_id       UUID REFERENCES usuarios(id) ON DELETE SET NULL,
+  accion           VARCHAR(100) NOT NULL,
+  tabla_afectada   VARCHAR(50),
+  registro_id      UUID,
+  datos_anteriores JSONB,
+  datos_nuevos     JSONB,
+  ip_address       VARCHAR(45),
+  user_agent       VARCHAR(255),
+  sucursal_id      UUID REFERENCES sucursales(id) ON DELETE SET NULL,
+  created_at       TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_audit_usuario ON audit_logs(usuario_id);
+CREATE INDEX IF NOT EXISTS idx_audit_accion  ON audit_logs(accion);
+CREATE INDEX IF NOT EXISTS idx_audit_created ON audit_logs(created_at);
+
+-- ── Refresh tokens ─────────────────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS refresh_tokens (
+  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  usuario_id  UUID NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+  token_hash  VARCHAR(255) NOT NULL UNIQUE,
+  expires_at  TIMESTAMP NOT NULL,
+  revoked     BOOLEAN NOT NULL DEFAULT FALSE,
+  ip_address  VARCHAR(45),
+  created_at  TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_rt_usuario ON refresh_tokens(usuario_id);
+CREATE INDEX IF NOT EXISTS idx_rt_hash    ON refresh_tokens(token_hash);
+
+-- ── Blacklist ──────────────────────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS visitante_blacklist (
+  id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  visitante_id UUID NOT NULL REFERENCES visitantes(id) ON DELETE CASCADE,
+  sucursal_id  UUID NOT NULL REFERENCES sucursales(id) ON DELETE CASCADE,
+  tipo         VARCHAR(20) NOT NULL DEFAULT 'temporal'
+                 CHECK (tipo IN ('temporal', 'permanente')),
+  razon        TEXT NOT NULL,
+  fecha_inicio DATE NOT NULL DEFAULT CURRENT_DATE,
+  fecha_fin    DATE,
+  activo       BOOLEAN NOT NULL DEFAULT TRUE,
+  creado_por   UUID NOT NULL REFERENCES usuarios(id) ON DELETE RESTRICT,
+  created_at   TIMESTAMP NOT NULL DEFAULT NOW(),
+  UNIQUE(visitante_id, sucursal_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_bl_visitante ON visitante_blacklist(visitante_id);
+CREATE INDEX IF NOT EXISTS idx_bl_sucursal  ON visitante_blacklist(sucursal_id);
+
+CREATE TABLE IF NOT EXISTS residente_visitante_blacklist (
+  id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  residente_id UUID NOT NULL REFERENCES residentes(id) ON DELETE CASCADE,
+  visitante_id UUID NOT NULL REFERENCES visitantes(id) ON DELETE CASCADE,
+  razon        TEXT NOT NULL,
+  activo       BOOLEAN NOT NULL DEFAULT TRUE,
+  creado_por   UUID NOT NULL REFERENCES usuarios(id) ON DELETE RESTRICT,
+  created_at   TIMESTAMP NOT NULL DEFAULT NOW(),
+  UNIQUE(residente_id, visitante_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_rvbl_visitante ON residente_visitante_blacklist(visitante_id);
+CREATE INDEX IF NOT EXISTS idx_rvbl_residente ON residente_visitante_blacklist(residente_id);
+
 -- ── Seeds ─────────────────────────────────────────────────────────────────
 
 DO $$

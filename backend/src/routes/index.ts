@@ -13,8 +13,11 @@ import configuracionCargosRouter from './configuracion-cargos.routes';
 import empresasRouter from './empresas.routes';
 import sucursalesRouter from './sucursales.routes';
 import usuariosRouter from './usuarios.routes';
+import blacklistRouter from './blacklist.routes';
+import visitantesRouter from './visitantes.routes';
 import { verifyToken, requireOwner, requireAdminEmpresa, requireAdminSucursal } from '../middleware/auth.middleware';
 import { getDashboard } from '../controllers/dashboard.controller';
+import { getAuditLogs } from '../controllers/audit.controller';
 
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -39,7 +42,11 @@ router.use('/ocr', ocrRouter);
 router.use('/reportes', reportesRouter);
 router.use('/configuracion-cargos', configuracionCargosRouter);
 
-router.get('/dashboard', verifyToken, getDashboard);
+router.use('/blacklist',   verifyToken, blacklistRouter);
+router.use('/visitantes',  verifyToken, visitantesRouter);
+
+router.get('/dashboard',   verifyToken, getDashboard);
+router.get('/audit-logs', verifyToken, requireOwner, getAuditLogs);
 
 router.get('/status', async (req, res) => {
   try {

@@ -66,13 +66,15 @@ const downloadPagos = (d: string, h: string) =>
 export default function ReportesPage() {
   const { t } = useTranslation();
   return (
-    <div className="p-6 text-gray-100 space-y-6 max-w-2xl">
+    <div className="p-4 sm:p-6 text-gray-100 space-y-6 max-w-4xl">
       <div>
         <h1 className="text-xl font-bold text-white">{t('reports.title')}</h1>
         <p className="text-sm text-gray-400 mt-1">{t('reports.subtitle')}</p>
       </div>
-      <ReporteCard title={t('reports.accesses')}       onDownload={downloadAccesos} />
-      <ReporteCard title={t('reports.paymentsReport')} onDownload={downloadPagos} />
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+        <ReporteCard title={t('reports.accesses')}       onDownload={downloadAccesos} />
+        <ReporteCard title={t('reports.paymentsReport')} onDownload={downloadPagos} />
+      </div>
     </div>
   );
 }

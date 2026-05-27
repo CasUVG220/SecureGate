@@ -113,7 +113,7 @@ export default function ResidentesPage() {
   );
 
   return (
-    <div className="p-8 text-gray-100 space-y-6 max-w-7xl mx-auto">
+    <div className="p-4 sm:p-8 text-gray-100 space-y-6 max-w-7xl mx-auto">
       {error && (
         <div className="bg-red-500/10 border border-red-500/20 text-red-400 text-sm rounded-xl px-4 py-3 flex items-center gap-3">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>

@@ -17,6 +17,7 @@ import EmpresaDetail          from './pages/owner/EmpresaDetail';
 import OwnerEmpresas          from './pages/owner/OwnerEmpresas';
 import AdminEmpresaDashboard  from './pages/admin_empresa/AdminEmpresaDashboard';
 import GestionSucursales      from './pages/admin_empresa/GestionSucursales';
+import BlacklistPage           from './pages/BlacklistPage';
 import { ToastProvider }      from './components/Toast';
 import { decodeTokenPayload } from './services/api';
 import { ThemeProvider, useTheme } from './context/ThemeContext';
@@ -25,7 +26,7 @@ import { useTranslation }     from './i18n/useTranslation';
 import { useLanguage }        from './context/LanguageContext';
 
 type Page =
-  | 'dashboard' | 'residentes' | 'pagos' | 'preaut' | 'reportes' | 'config' | 'verificacion' | 'agentes'
+  | 'dashboard' | 'residentes' | 'pagos' | 'preaut' | 'reportes' | 'config' | 'verificacion' | 'agentes' | 'blacklist'
   | 'garita' | 'salida'
   | 'portal'
   | 'owner-dashboard' | 'owner-empresas' | 'owner-empresa-detail'
@@ -52,6 +53,7 @@ const ADMIN_NAV: NavItem[] = [
   { key: 'reportes',     labelKey: 'nav.reports',      d: 'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6M16 13H8M16 17H8M10 9H8' },
   { key: 'config',       labelKey: 'nav.config',       d: 'M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6' },
   { key: 'verificacion', labelKey: 'nav.verification', d: 'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z' },
+  { key: 'blacklist',    labelKey: 'nav.blacklist',    d: 'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10zM9 12l2 2 4-4' },
 ];
 
 const AGENTE_NAV: NavItem[] = [
@@ -145,6 +147,7 @@ function AppShell() {
       case 'reportes':     return <ReportesPage />;
       case 'config':       return <ConfigCargosPage />;
       case 'verificacion': return <VerificacionPage />;
+      case 'blacklist':    return <BlacklistPage />;
       case 'garita':       return <GaritaPage />;
       case 'salida':       return <SalidaPage />;
       case 'portal':       return <ResidentePage />;

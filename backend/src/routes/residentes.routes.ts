@@ -3,6 +3,7 @@ import { body } from 'express-validator';
 import * as ctrl from '../controllers/residentes.controller';
 import { verifyToken } from '../middleware/auth.middleware';
 import { validateRequest } from '../middleware/validate.middleware';
+import { auditLog } from '../middleware/audit.middleware';
 
 const router = Router();
 
@@ -19,6 +20,6 @@ router.post(
   ctrl.createResidente,
 );
 router.put('/:id',        verifyToken, ctrl.updateResidente);
-router.delete('/:id',     verifyToken, ctrl.deleteResidente);
+router.delete('/:id',     verifyToken, auditLog({ accion: 'RESIDENTE_ELIMINADO', tabla: 'residentes' }), ctrl.deleteResidente);
 
 export default router;
