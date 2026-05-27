@@ -119,7 +119,7 @@ export default function EmpresaDetail({ empresaId, onBack }: Props) {
   const empresaNombre = sucursales[0]?.empresa_nombre ?? 'Empresa';
 
   return (
-    <div className="p-6 text-gray-100 space-y-6 max-w-7xl">
+    <div className="p-4 sm:p-6 text-gray-100 space-y-6 max-w-7xl">
       {/* Header */}
       <div className="flex items-center gap-4">
         <button
@@ -251,8 +251,8 @@ export default function EmpresaDetail({ empresaId, onBack }: Props) {
 
       {/* Modal nueva sucursal */}
       {modal === 'sucursal' && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-          <div className="bg-gray-800 rounded-2xl shadow-2xl w-full max-w-md p-6 space-y-5">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="bg-gray-800 rounded-t-2xl sm:rounded-2xl shadow-2xl w-full sm:max-w-md p-6 space-y-5">
             <h2 className="text-lg font-bold text-white">{t('empDetail.createBranch')}</h2>
             {modalError && (
               <div className="bg-red-900/40 border border-red-700 rounded-lg px-3 py-2 text-red-300 text-sm">{modalError}</div>
@@ -296,8 +296,8 @@ export default function EmpresaDetail({ empresaId, onBack }: Props) {
 
       {/* Modal asignar admin */}
       {modal === 'admin' && adminTarget && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-          <div className="bg-gray-800 rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-5">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="bg-gray-800 rounded-t-2xl sm:rounded-2xl shadow-2xl w-full sm:max-w-sm p-6 space-y-5">
             <h2 className="text-lg font-bold text-white">{t('empDetail.assignAdmin')}</h2>
             <p className="text-sm text-gray-400">{t('empDetail.branchLabel')} <span className="text-white font-medium">{adminTarget.nombre}</span></p>
             {modalError && (

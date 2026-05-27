@@ -33,7 +33,6 @@ export default function SalidaPage() {
   const videoRef  = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
-  const hasCamera = !!(navigator.mediaDevices?.getUserMedia);
 
   const loadActivos = useCallback(() => {
     setActivosLoading(true);
@@ -60,9 +59,11 @@ export default function SalidaPage() {
 
   useEffect(() => () => { stopCamera(); }, [stopCamera]);
 
+  const hasCamera = !!(navigator.mediaDevices?.getUserMedia);
+
   const startCamera = async () => {
     if (!hasCamera) {
-      setOcrMsg('Cámara no disponible (requiere HTTPS).');
+      setOcrMsg('Cámara no disponible (requiere HTTPS)');
       return;
     }
     try {
@@ -202,7 +203,7 @@ export default function SalidaPage() {
                   {cameraOpen ? 'Cerrar' : 'Escanear'}
                 </button>
               ) : (
-                <span className="text-xs text-gray-500">Cámara no disponible (requiere HTTPS)</span>
+                <span className="text-xs text-gray-500 italic">Cámara no disponible</span>
               )}
             </div>
 

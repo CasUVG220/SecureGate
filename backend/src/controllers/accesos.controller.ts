@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import pool from '../db/pool';
 import { checkPreautorizacion } from './preautorizaciones.controller';
+import { checkBlacklist } from './blacklist.controller';
 import { tenantFilter, ownershipClause, ownershipParams } from '../utils/tenant';
 
 export const registrarAcceso = async (req: Request, res: Response) => {
@@ -65,6 +66,18 @@ export const registrarAcceso = async (req: Request, res: Response) => {
       );
       visitante_id = nuevoVisitante.rows[0].id;
       visitante = nuevoVisitante.rows[0];
+    }
+
+    // Blacklist check — must happen after visitante_id is resolved
+    const blacklistCheck = await checkBlacklist(visitante_id, sucursal_id);
+    if (blacklistCheck.bloqueado) {
+      await client.query('ROLLBACK');
+      return res.status(403).json({
+        error:    'Visitante en lista negra',
+        razon:    blacklistCheck.razon,
+        tipo:     blacklistCheck.tipo,
+        fecha_fin: blacklistCheck.fecha_fin ?? null,
+      });
     }
 
     // Register vehicle if plate provided
