@@ -1,5 +1,6 @@
 import express from 'express';
 import cors from 'cors';
+import cookieParser from 'cookie-parser';
 import dotenv from 'dotenv';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
@@ -21,10 +22,13 @@ app.use(helmet.contentSecurityPolicy({
   },
 }));
 
-// CORS
+// CORS — credentials required for httpOnly refresh-token cookie
 app.use(cors({
   origin: process.env.ALLOWED_ORIGINS?.split(',') || ['http://localhost:5173'],
+  credentials: true,
 }));
+
+app.use(cookieParser());
 
 // General rate limit — 100 requests per 15 minutes per IP
 const generalLimiter = rateLimit({
