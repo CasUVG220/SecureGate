@@ -142,6 +142,7 @@ export default function PagosPage() {
         {!loading && filtered.length === 0 ? (
           <p className="text-gray-400 text-sm text-center py-12">{t('payments.noPayments')}</p>
         ) : (
+          <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-gray-700 text-gray-400 text-left">
@@ -192,12 +193,13 @@ export default function PagosPage() {
               )}
             </tbody>
           </table>
+          </div>
         )}
       </div>
 
       {showModal && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 px-4">
-          <div className="bg-gray-800 rounded-2xl p-8 w-full max-w-md shadow-2xl">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60">
+          <div className="bg-gray-800 rounded-t-2xl sm:rounded-2xl p-6 sm:p-8 w-full sm:max-w-md shadow-2xl">
             <h2 className="text-lg font-bold text-white mb-6">{t('payments.modalTitle')}</h2>
             {formError && (
               <div className="mb-4 bg-red-900/40 border border-red-700 rounded-lg px-4 py-3 text-red-300 text-sm">{formError}</div>
