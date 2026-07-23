@@ -110,6 +110,10 @@ CREATE TABLE IF NOT EXISTS configuracion_cargos (
   sucursal_id UUID NOT NULL REFERENCES sucursales(id) ON DELETE RESTRICT,
   nombre      VARCHAR(100) NOT NULL,
   monto       DECIMAL(10,2) NOT NULL CHECK (monto > 0),
+  frecuencia  VARCHAR(20) NOT NULL DEFAULT 'mensual'
+                CHECK (frecuencia IN ('unica_vez', 'quincenal', 'mensual')),
+  restringir_visitas_mora BOOLEAN NOT NULL DEFAULT FALSE,
+  costo_extra_visita_mora NUMERIC(10,2) NOT NULL DEFAULT 0,
   activo      BOOLEAN NOT NULL DEFAULT TRUE,
   created_at  TIMESTAMP NOT NULL DEFAULT NOW()
 );
@@ -168,18 +172,15 @@ CREATE TABLE IF NOT EXISTS visitante_blacklist (
   id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   visitante_id UUID NOT NULL REFERENCES visitantes(id) ON DELETE CASCADE,
   sucursal_id  UUID NOT NULL REFERENCES sucursales(id) ON DELETE CASCADE,
-  tipo         VARCHAR(20) NOT NULL DEFAULT 'temporal'
-                 CHECK (tipo IN ('temporal', 'permanente')),
   razon        TEXT NOT NULL,
-  fecha_inicio DATE NOT NULL DEFAULT CURRENT_DATE,
-  fecha_fin    DATE,
+  fecha_inicio TIMESTAMP NOT NULL DEFAULT NOW(),
+  fecha_fin    TIMESTAMP,
   activo       BOOLEAN NOT NULL DEFAULT TRUE,
   creado_por   UUID NOT NULL REFERENCES usuarios(id) ON DELETE RESTRICT,
-  created_at   TIMESTAMP NOT NULL DEFAULT NOW(),
-  UNIQUE(visitante_id, sucursal_id)
+  created_at   TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX IF NOT EXISTS idx_bl_visitante ON visitante_blacklist(visitante_id);
+CREATE INDEX IF NOT EXISTS idx_bl_visitante_activo ON visitante_blacklist(visitante_id, activo);
 CREATE INDEX IF NOT EXISTS idx_bl_sucursal  ON visitante_blacklist(sucursal_id);
 
 CREATE TABLE IF NOT EXISTS residente_visitante_blacklist (
@@ -195,6 +196,63 @@ CREATE TABLE IF NOT EXISTS residente_visitante_blacklist (
 
 CREATE INDEX IF NOT EXISTS idx_rvbl_visitante ON residente_visitante_blacklist(visitante_id);
 CREATE INDEX IF NOT EXISTS idx_rvbl_residente ON residente_visitante_blacklist(residente_id);
+
+-- ── Anuncios ───────────────────────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS anuncios (
+  id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  sucursal_id   UUID NOT NULL REFERENCES sucursales(id) ON DELETE CASCADE,
+  titulo        VARCHAR(200) NOT NULL,
+  contenido     TEXT NOT NULL,
+  prioridad     VARCHAR(20) NOT NULL DEFAULT 'normal'
+                  CHECK (prioridad IN ('normal', 'importante', 'urgente')),
+  vigente_desde TIMESTAMP NOT NULL DEFAULT NOW(),
+  vigente_hasta TIMESTAMP,
+  creado_por    UUID NOT NULL REFERENCES usuarios(id) ON DELETE RESTRICT,
+  created_at    TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_anuncios_sucursal ON anuncios(sucursal_id);
+
+CREATE TABLE IF NOT EXISTS anuncio_lecturas (
+  id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  anuncio_id   UUID NOT NULL REFERENCES anuncios(id) ON DELETE CASCADE,
+  residente_id UUID NOT NULL REFERENCES residentes(id) ON DELETE CASCADE,
+  leido_at     TIMESTAMP NOT NULL DEFAULT NOW(),
+  UNIQUE(anuncio_id, residente_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_anuncio_lecturas_residente ON anuncio_lecturas(residente_id);
+
+-- ── Tickets (chat interno) ──────────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS tickets (
+  id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  sucursal_id  UUID NOT NULL REFERENCES sucursales(id) ON DELETE CASCADE,
+  residente_id UUID NOT NULL REFERENCES residentes(id) ON DELETE CASCADE,
+  tipo         VARCHAR(20) NOT NULL DEFAULT 'otro'
+                 CHECK (tipo IN ('mantenimiento', 'queja', 'seguridad', 'otro')),
+  titulo       VARCHAR(200) NOT NULL,
+  estado       VARCHAR(20) NOT NULL DEFAULT 'abierto'
+                 CHECK (estado IN ('abierto', 'en_proceso', 'cerrado')),
+  created_at   TIMESTAMP NOT NULL DEFAULT NOW(),
+  updated_at   TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_tickets_sucursal  ON tickets(sucursal_id);
+CREATE INDEX IF NOT EXISTS idx_tickets_residente ON tickets(residente_id);
+
+CREATE TABLE IF NOT EXISTS ticket_mensajes (
+  id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  ticket_id       UUID NOT NULL REFERENCES tickets(id) ON DELETE CASCADE,
+  autor_id        UUID NOT NULL REFERENCES usuarios(id) ON DELETE RESTRICT,
+  mensaje         TEXT NOT NULL,
+  created_at      TIMESTAMP NOT NULL DEFAULT NOW(),
+  leido_admin     BOOLEAN NOT NULL DEFAULT FALSE,
+  leido_residente BOOLEAN NOT NULL DEFAULT TRUE
+);
+
+CREATE INDEX IF NOT EXISTS idx_ticket_mensajes_ticket ON ticket_mensajes(ticket_id);
 
 -- ── Seeds ─────────────────────────────────────────────────────────────────
 
@@ -249,5 +307,209 @@ BEGIN
 
 END;
 $$;
+
+-- ── Cargos programados ────────────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS cargos_programados (
+  id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  sucursal_id     UUID NOT NULL REFERENCES sucursales(id) ON DELETE RESTRICT,
+  nombre          VARCHAR(150) NOT NULL,
+  descripcion     TEXT,
+  monto           DECIMAL(10,2) NOT NULL CHECK (monto > 0),
+  frecuencia      VARCHAR(20) NOT NULL DEFAULT 'mensual'
+                    CHECK (frecuencia IN ('unica_vez', 'quincenal', 'mensual')),
+  aplica_a        VARCHAR(20) NOT NULL DEFAULT 'todos'
+                    CHECK (aplica_a IN ('todos', 'individual')),
+  activo          BOOLEAN NOT NULL DEFAULT TRUE,
+  ultimo_aplicado TIMESTAMP,
+  creado_por      UUID NOT NULL REFERENCES usuarios(id),
+  created_at      TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS cargos_programados_historial (
+  id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  cargo_programado_id UUID NOT NULL REFERENCES cargos_programados(id),
+  residente_id        UUID NOT NULL REFERENCES residentes(id),
+  monto               DECIMAL(10,2) NOT NULL,
+  aplicado_por        UUID NOT NULL REFERENCES usuarios(id),
+  applied_at          TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_cp_sucursal   ON cargos_programados(sucursal_id);
+CREATE INDEX IF NOT EXISTS idx_cph_cargo     ON cargos_programados_historial(cargo_programado_id);
+CREATE INDEX IF NOT EXISTS idx_cph_residente ON cargos_programados_historial(residente_id);
+
+-- ── Migrations (idempotent) ────────────────────────────────────────────────
+
+DO $$ BEGIN
+  ALTER TABLE configuracion_cargos
+    ADD COLUMN frecuencia VARCHAR(20) NOT NULL DEFAULT 'mensual'
+      CHECK (frecuencia IN ('unica_vez', 'quincenal', 'mensual'));
+EXCEPTION WHEN duplicate_column THEN NULL;
+END $$;
+
+-- T-S5-01: ciclo de mora — fecha del último pago del residente
+DO $$ BEGIN
+  ALTER TABLE residentes ADD COLUMN fecha_ultimo_pago TIMESTAMP;
+EXCEPTION WHEN duplicate_column THEN NULL;
+END $$;
+
+-- T-S5-02: restricción de visitas en mora + cargo extra por visita
+DO $$ BEGIN
+  ALTER TABLE configuracion_cargos
+    ADD COLUMN restringir_visitas_mora BOOLEAN NOT NULL DEFAULT FALSE;
+EXCEPTION WHEN duplicate_column THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  ALTER TABLE configuracion_cargos
+    ADD COLUMN costo_extra_visita_mora NUMERIC(10,2) NOT NULL DEFAULT 0;
+EXCEPTION WHEN duplicate_column THEN NULL;
+END $$;
+
+-- T-S5-04: migrate visitante_blacklist to duracion-based model (drop tipo,
+-- widen date columns to TIMESTAMP, drop the single-ban unique constraint).
+ALTER TABLE visitante_blacklist DROP CONSTRAINT IF EXISTS visitante_blacklist_visitante_id_sucursal_id_key;
+ALTER TABLE visitante_blacklist DROP COLUMN IF EXISTS tipo;
+ALTER TABLE visitante_blacklist ALTER COLUMN fecha_inicio TYPE TIMESTAMP USING fecha_inicio::timestamp;
+ALTER TABLE visitante_blacklist ALTER COLUMN fecha_inicio SET DEFAULT NOW();
+ALTER TABLE visitante_blacklist ALTER COLUMN fecha_fin    TYPE TIMESTAMP USING fecha_fin::timestamp;
+CREATE INDEX IF NOT EXISTS idx_bl_visitante_activo ON visitante_blacklist(visitante_id, activo);
+
+-- ── S6: Reservas de áreas comunes ─────────────────────────────────────────
+
+-- btree_gist habilita el EXCLUDE de solapes (uuid WITH = + tsrange WITH &&).
+-- Va dentro de DO/EXCEPTION porque migrate.ts ejecuta TODO init.sql como una
+-- sola query (= una sola transacción implícita): si CREATE EXTENSION fallara
+-- por falta de privilegios, se perderían todas las migraciones del arranque.
+DO $$ BEGIN
+  CREATE EXTENSION IF NOT EXISTS btree_gist;
+EXCEPTION WHEN insufficient_privilege OR undefined_file OR undefined_object THEN
+  RAISE NOTICE '[init] btree_gist no disponible; se omite el EXCLUDE de solapes.';
+END $$;
+
+CREATE TABLE IF NOT EXISTS areas_comunes (
+  id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  sucursal_id         UUID NOT NULL REFERENCES sucursales(id) ON DELETE RESTRICT,
+  nombre              VARCHAR(150) NOT NULL,
+  descripcion         TEXT,
+  imagen_url          TEXT,           -- URL externa o data URI base64; NULL = sin imagen
+  tarifa_tipo         VARCHAR(20)   NOT NULL DEFAULT 'gratis'
+                        CHECK (tarifa_tipo IN ('gratis', 'por_hora', 'unica')),
+  tarifa_monto        NUMERIC(10,2) NOT NULL DEFAULT 0 CHECK (tarifa_monto >= 0),
+  requiere_aprobacion BOOLEAN,        -- NULL = hereda configuracion_reservas
+  activa              BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at          TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_areas_sucursal ON areas_comunes(sucursal_id);
+
+CREATE TABLE IF NOT EXISTS configuracion_reservas (
+  sucursal_id                        UUID PRIMARY KEY REFERENCES sucursales(id) ON DELETE CASCADE,
+  permite_cancelacion                BOOLEAN NOT NULL DEFAULT TRUE,
+  horas_limite_cancelacion_completa  INT NOT NULL DEFAULT 48 CHECK (horas_limite_cancelacion_completa >= 0),
+  horas_limite_cancelacion_parcial   INT NOT NULL DEFAULT 24 CHECK (horas_limite_cancelacion_parcial  >= 0),
+  porcentaje_reembolso_parcial       NUMERIC(5,2) NOT NULL DEFAULT 50
+                                       CHECK (porcentaje_reembolso_parcial BETWEEN 0 AND 100),
+  max_reservas_activas_por_residente INT
+                                       CHECK (max_reservas_activas_por_residente IS NULL
+                                              OR max_reservas_activas_por_residente > 0),
+  requiere_aprobacion_admin          BOOLEAN NOT NULL DEFAULT FALSE,
+  buffer_minutos_entre_reservas      INT NOT NULL DEFAULT 0
+                                       CHECK (buffer_minutos_entre_reservas BETWEEN 0 AND 1440),
+  buffer_motivo                      TEXT,
+  updated_at                         TIMESTAMP NOT NULL DEFAULT NOW(),
+  CONSTRAINT configuracion_reservas_horas_coherentes
+    CHECK (horas_limite_cancelacion_completa >= horas_limite_cancelacion_parcial)
+);
+
+CREATE TABLE IF NOT EXISTS reservas_areas (
+  id                   UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  area_id              UUID NOT NULL REFERENCES areas_comunes(id) ON DELETE RESTRICT,
+  residente_id         UUID NOT NULL REFERENCES residentes(id)    ON DELETE RESTRICT,
+  fecha                DATE NOT NULL,
+  hora_inicio          TIME NOT NULL,
+  hora_fin             TIME NOT NULL,
+  estado               VARCHAR(25) NOT NULL DEFAULT 'confirmada'
+                         CHECK (estado IN ('pendiente_aprobacion','confirmada','cancelada','rechazada','completada')),
+  cargo_id             UUID REFERENCES pagos(id) ON DELETE SET NULL,
+  monto_cargo          NUMERIC(10,2) NOT NULL DEFAULT 0,  -- monto original; sobrevive a la anulación del cargo
+  motivo_cancelacion   TEXT,
+  reembolso_aplicado   NUMERIC(5,2),                      -- porcentaje aplicado al cancelar
+  recordatorio_enviado BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at           TIMESTAMP NOT NULL DEFAULT NOW(),
+  CONSTRAINT reservas_areas_horas_validas CHECK (hora_fin > hora_inicio)
+);
+
+CREATE INDEX IF NOT EXISTS idx_reservas_area_fecha ON reservas_areas(area_id, fecha);
+CREATE INDEX IF NOT EXISTS idx_reservas_residente  ON reservas_areas(residente_id);
+CREATE INDEX IF NOT EXISTS idx_reservas_recordatorio
+  ON reservas_areas(fecha) WHERE estado = 'confirmada' AND recordatorio_enviado = FALSE;
+
+-- Red de seguridad contra doble reserva a nivel de BD. No puede expresar el
+-- buffer (es configuración por sucursal en runtime), así que garantiza la
+-- regla literal de solape; el buffer se valida en la app bajo el lock del área.
+DO $$ BEGIN
+  ALTER TABLE reservas_areas
+    ADD CONSTRAINT reservas_areas_sin_solape
+    EXCLUDE USING gist (
+      area_id WITH =,
+      tsrange((fecha + hora_inicio), (fecha + hora_fin), '[)') WITH &&
+    ) WHERE (estado IN ('pendiente_aprobacion', 'confirmada'));
+EXCEPTION
+  WHEN duplicate_object OR duplicate_table THEN NULL;
+  WHEN undefined_object OR undefined_function OR feature_not_supported THEN
+    RAISE NOTICE '[init] EXCLUDE de solapes omitido (btree_gist ausente).';
+  WHEN exclusion_violation THEN
+    RAISE NOTICE '[init] Hay reservas solapadas preexistentes; EXCLUDE no aplicado.';
+END $$;
+
+-- Descripción del cargo, p. ej. "Reserva: Salón Social - 2026-08-20".
+DO $$ BEGIN
+  ALTER TABLE pagos ADD COLUMN concepto VARCHAR(255);
+EXCEPTION WHEN duplicate_column THEN NULL;
+END $$;
+
+-- metodo += 'reserva' (cargo generado por una reserva, no un pago recibido).
+-- La guarda pg_constraint evita revalidar toda la tabla pagos bajo
+-- ACCESS EXCLUSIVE en cada arranque del backend.
+DO $$ BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+     WHERE conrelid = 'pagos'::regclass
+       AND conname  = 'pagos_metodo_check'
+       AND pg_get_constraintdef(oid) LIKE '%reserva%'
+  ) THEN
+    ALTER TABLE pagos DROP CONSTRAINT IF EXISTS pagos_metodo_check;
+    ALTER TABLE pagos ADD  CONSTRAINT pagos_metodo_check
+      CHECK (metodo IN ('efectivo', 'transferencia', 'reserva'));
+  END IF;
+END $$;
+
+-- estado += 'anulado' (cargo dejado sin efecto por cancelación o rechazo).
+DO $$ BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+     WHERE conrelid = 'pagos'::regclass
+       AND conname  = 'pagos_estado_check'
+       AND pg_get_constraintdef(oid) LIKE '%anulado%'
+  ) THEN
+    ALTER TABLE pagos DROP CONSTRAINT IF EXISTS pagos_estado_check;
+    ALTER TABLE pagos ADD  CONSTRAINT pagos_estado_check
+      CHECK (estado IN ('pendiente', 'aprobado', 'rechazado', 'anulado'));
+  END IF;
+END $$;
+
+-- Notificaciones personales: NULL = anuncio general (comportamiento actual).
+DO $$ BEGIN
+  ALTER TABLE anuncios ADD COLUMN residente_id UUID REFERENCES residentes(id) ON DELETE CASCADE;
+EXCEPTION WHEN duplicate_column THEN NULL;
+END $$;
+
+-- El cron de recordatorios inserta sin usuario actuante.
+ALTER TABLE anuncios ALTER COLUMN creado_por DROP NOT NULL;
+
+CREATE INDEX IF NOT EXISTS idx_anuncios_residente
+  ON anuncios(residente_id) WHERE residente_id IS NOT NULL;
 
 SELECT 'SecureGate DB inicializada correctamente' AS mensaje;
