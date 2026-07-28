@@ -68,15 +68,14 @@ export const registrarAcceso = async (req: Request, res: Response) => {
       visitante = nuevoVisitante.rows[0];
     }
 
-    // Blacklist check — must happen after visitante_id is resolved
-    const blacklistCheck = await checkBlacklist(visitante_id, sucursal_id);
-    if (blacklistCheck.bloqueado) {
+    // Blacklist check — deny before registering the access
+    const ban = await checkBlacklist(numero_dpi, sucursal_id);
+    if (ban) {
       await client.query('ROLLBACK');
       return res.status(403).json({
-        error:    'Visitante en lista negra',
-        razon:    blacklistCheck.razon,
-        tipo:     blacklistCheck.tipo,
-        fecha_fin: blacklistCheck.fecha_fin ?? null,
+        error:     'Visitante en blacklist',
+        razon:     ban.razon,
+        fecha_fin: ban.fecha_fin ?? null,
       });
     }
 
@@ -100,29 +99,113 @@ export const registrarAcceso = async (req: Request, res: Response) => {
     );
     const registro = registroResult.rows[0];
 
-    // Auto-charge if residente is in mora — filtered by sucursal
-    let cargo_generado = null;
+    let cargo_generado: { monto: string; nombre: string; frecuencia: string } | null = null;
+    let cargo_extra_mora: number | null = null;
+    let saldo_pendiente_actualizado: number = parseFloat(residenteResult.rows[0].saldo_pendiente ?? '0');
+
+    // Extra charge for entering while in mora (T-S5-03) — additive, never blocks access
+    if (residenteResult.rows[0].estado_pago === 'mora') {
+      const restriccion = await client.query(
+        `SELECT costo_extra_visita_mora FROM configuracion_cargos
+         WHERE activo = TRUE AND sucursal_id = $1
+           AND restringir_visitas_mora = TRUE
+           AND costo_extra_visita_mora > 0
+         LIMIT 1`,
+        [sucursal_id]
+      );
+
+      if (restriccion.rows.length > 0) {
+        const costoExtra = restriccion.rows[0].costo_extra_visita_mora;
+
+        await client.query(
+          `INSERT INTO cargos_automaticos
+             (registro_acceso_id, residente_id, monto, descripcion, aplicado)
+           VALUES ($1, $2, $3, $4, TRUE)`,
+          [registro.id, residente_id, costoExtra, 'Cargo extra por visita en mora']
+        );
+
+        const saldoExtra = await client.query(
+          `UPDATE residentes
+           SET saldo_pendiente = saldo_pendiente + $1
+           WHERE id = $2
+           RETURNING saldo_pendiente`,
+          [costoExtra, residente_id]
+        );
+
+        saldo_pendiente_actualizado = parseFloat(saldoExtra.rows[0].saldo_pendiente);
+        cargo_extra_mora = parseFloat(costoExtra);
+      }
+    }
+
+    // Auto-charge if residente is in mora — with frecuencia deduplication
     if (residenteResult.rows[0].estado_pago === 'mora') {
       const configResult = await client.query(
-        `SELECT id, nombre, monto FROM configuracion_cargos
+        `SELECT id, nombre, monto, frecuencia FROM configuracion_cargos
          WHERE activo = TRUE AND sucursal_id = $1
          LIMIT 1`,
         [sucursal_id]
       );
+
       if (configResult.rows.length > 0) {
         const config = configResult.rows[0];
-        const cargoResult = await client.query(
-          `INSERT INTO cargos_automaticos (registro_acceso_id, residente_id, monto, descripcion)
-           VALUES ($1, $2, $3, $4)
-           RETURNING *`,
-          [registro.id, residente_id, config.monto, `Cargo por acceso con mora — ${config.nombre}`]
-        );
-        cargo_generado = cargoResult.rows[0];
+        const frecuencia: string = config.frecuencia ?? 'mensual';
+
+        // Deduplication: check if charge already fired this period
+        let dupQuery: string;
+        if (frecuencia === 'unica_vez') {
+          dupQuery = `SELECT 1 FROM cargos_automaticos
+            WHERE residente_id = $1 AND created_at > NOW() - INTERVAL '30 days' LIMIT 1`;
+        } else if (frecuencia === 'quincenal') {
+          dupQuery = `SELECT 1 FROM cargos_automaticos
+            WHERE residente_id = $1 AND created_at > NOW() - INTERVAL '15 days' LIMIT 1`;
+        } else {
+          // mensual — same calendar month
+          dupQuery = `SELECT 1 FROM cargos_automaticos
+            WHERE residente_id = $1
+              AND EXTRACT(MONTH FROM created_at) = EXTRACT(MONTH FROM NOW())
+              AND EXTRACT(YEAR  FROM created_at) = EXTRACT(YEAR  FROM NOW())
+            LIMIT 1`;
+        }
+
+        const dupResult = await client.query(dupQuery, [residente_id]);
+
+        if (dupResult.rows.length === 0) {
+          // No duplicate — apply charge atomically
+          await client.query(
+            `INSERT INTO cargos_automaticos
+               (registro_acceso_id, residente_id, monto, descripcion, aplicado)
+             VALUES ($1, $2, $3, $4, TRUE)`,
+            [registro.id, residente_id, config.monto,
+             `Cargo por acceso con mora — ${config.nombre}`]
+          );
+
+          const saldoResult = await client.query(
+            `UPDATE residentes
+             SET saldo_pendiente = saldo_pendiente + $1
+             WHERE id = $2
+             RETURNING saldo_pendiente`,
+            [config.monto, residente_id]
+          );
+
+          saldo_pendiente_actualizado = parseFloat(saldoResult.rows[0].saldo_pendiente);
+          cargo_generado = {
+            monto:     config.monto,
+            nombre:    config.nombre,
+            frecuencia,
+          };
+        }
       }
     }
 
     await client.query('COMMIT');
-    res.status(201).json({ registro, visitante, cargo_generado, preautorizado });
+    res.status(201).json({
+      registro,
+      visitante,
+      cargo_generado,
+      cargo_extra_mora,
+      preautorizado,
+      saldo_pendiente_actualizado,
+    });
   } catch (error) {
     await client.query('ROLLBACK');
     res.status(500).json({ error: 'Error al registrar acceso', detail: String(error) });
