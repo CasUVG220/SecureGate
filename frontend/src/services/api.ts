@@ -1,8 +1,33 @@
-let envUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000';
-if (envUrl.includes('localhost') && typeof window !== 'undefined' && window.location.hostname !== 'localhost') {
-  envUrl = `${window.location.protocol}//${window.location.hostname}:3000`;
-}
-const BASE_URL = envUrl;
+// URL base del backend.
+//
+// Se resuelve en runtime a partir del hostname desde el que se abrio la app,
+// para no tener que hornear la IP de cada servidor en tiempo de build: el
+// mismo contenedor sirve para localhost y para cualquier VM nueva.
+//
+// VITE_API_URL solo manda cuando apunta a un host distinto del loopback
+// (caso produccion detras de nginx: VITE_API_URL=https://midominio.com).
+const LOOPBACK_HOSTS = ['localhost', '127.0.0.1', '0.0.0.0', '[::1]'];
+const API_PORT = import.meta.env.VITE_API_PORT || '3000';
+
+const resolveBaseUrl = (): string => {
+  const envUrl = (import.meta.env.VITE_API_URL || '').trim();
+
+  // Sin navegador (tests, SSR) no hay hostname que detectar.
+  if (typeof window === 'undefined') return envUrl || `http://localhost:${API_PORT}`;
+
+  const pageHost = window.location.hostname;
+  const envPointsToLoopback = !envUrl || LOOPBACK_HOSTS.some(h => envUrl.includes(h));
+
+  // La pagina se abrio desde una IP/hostname remoto pero la env var quedo en
+  // localhost: apuntamos al backend del mismo host que sirve el frontend.
+  if (envPointsToLoopback && !LOOPBACK_HOSTS.includes(pageHost)) {
+    return `${window.location.protocol}//${pageHost}:${API_PORT}`;
+  }
+
+  return envUrl || `${window.location.protocol}//${pageHost}:${API_PORT}`;
+};
+
+const BASE_URL = resolveBaseUrl();
 
 const getToken = (): string => localStorage.getItem('token') || '';
 
@@ -82,11 +107,19 @@ export interface AccesoPayload {
   notas?: string;
 }
 
+export interface CargoGenerado {
+  monto: string;
+  nombre: string;
+  frecuencia: string;
+}
+
 export interface AccesoResult {
   registro: Record<string, unknown>;
   visitante: Record<string, unknown>;
-  cargo_generado: Record<string, unknown> | null;
+  cargo_generado: CargoGenerado | null;
+  cargo_extra_mora: number | null;
   preautorizado: boolean;
+  saldo_pendiente_actualizado: number;
 }
 
 export const getResidentes = async (): Promise<Residente[]> => {
@@ -97,13 +130,11 @@ export const getResidentes = async (): Promise<Residente[]> => {
 
 export class BlacklistDenialError extends Error {
   razon: string;
-  tipo: string;
   fecha_fin: string | null;
-  constructor(razon: string, tipo: string, fecha_fin: string | null) {
+  constructor(razon: string, fecha_fin: string | null) {
     super('Visitante en lista negra');
     this.name = 'BlacklistDenialError';
     this.razon = razon;
-    this.tipo = tipo;
     this.fecha_fin = fecha_fin;
   }
 }
@@ -117,8 +148,8 @@ export const registrarAcceso = async (data: AccesoPayload): Promise<AccesoResult
   const body = await res.json();
   if (!res.ok) {
     if (res.status === 403 && (body as { razon?: string }).razon) {
-      const b = body as { razon: string; tipo: string; fecha_fin?: string | null };
-      throw new BlacklistDenialError(b.razon, b.tipo, b.fecha_fin ?? null);
+      const b = body as { razon: string; fecha_fin?: string | null };
+      throw new BlacklistDenialError(b.razon, b.fecha_fin ?? null);
     }
     throw new Error((body as { error?: string }).error || 'Error al registrar acceso');
   }
@@ -564,6 +595,9 @@ export interface ConfigCargo {
   id: string;
   nombre: string;
   monto: string;
+  frecuencia: 'mensual' | 'quincenal' | 'unica_vez';
+  restringir_visitas_mora: boolean;
+  costo_extra_visita_mora: string;
   activo: boolean;
   created_at: string;
 }
@@ -571,6 +605,9 @@ export interface ConfigCargo {
 export interface ConfigCargoInput {
   nombre: string;
   monto: number;
+  frecuencia?: 'mensual' | 'quincenal' | 'unica_vez';
+  restringir_visitas_mora?: boolean;
+  costo_extra_visita_mora?: number;
   sucursal_id?: string;
 }
 
@@ -850,9 +887,8 @@ export const deleteUsuario = async (id: string): Promise<void> => {
 
 // ── Blacklist ─────────────────────────────────────────────────────────────
 
-export interface BlacklistEntry {
+export interface Blacklist {
   id: string;
-  tipo: 'temporal' | 'permanente';
   razon: string;
   fecha_inicio: string;
   fecha_fin: string | null;
@@ -865,11 +901,16 @@ export interface BlacklistEntry {
   creado_por_nombre: string;
 }
 
+/** @deprecated alias de Blacklist */
+export type BlacklistEntry = Blacklist;
+
+export type BlacklistDuracion = 'temporal_dias' | '30_dias' | 'indefinido';
+
 export interface BlacklistInput {
   visitante_id: string;
-  tipo: 'temporal' | 'permanente';
   razon: string;
-  fecha_fin?: string;
+  duracion: BlacklistDuracion;
+  dias?: number;
   sucursal_id?: string;
 }
 
@@ -910,13 +951,13 @@ export const buscarVisitantesFrecuentes = async (
   return res.json() as Promise<VisitanteFrecuente[]>;
 };
 
-export const getBlacklist = async (): Promise<BlacklistEntry[]> => {
+export const getBlacklist = async (): Promise<Blacklist[]> => {
   const res = await apiFetch(`${BASE_URL}/api/blacklist`, { headers: authHeaders() });
   if (!res.ok) throw new Error('Error al cargar blacklist');
-  return res.json() as Promise<BlacklistEntry[]>;
+  return res.json() as Promise<Blacklist[]>;
 };
 
-export const addToBlacklist = async (data: BlacklistInput): Promise<BlacklistEntry> => {
+export const createBlacklist = async (data: BlacklistInput): Promise<Blacklist> => {
   const res = await apiFetch(`${BASE_URL}/api/blacklist`, {
     method: 'POST',
     headers: authHeaders(),
@@ -924,10 +965,10 @@ export const addToBlacklist = async (data: BlacklistInput): Promise<BlacklistEnt
   });
   const body = await res.json();
   if (!res.ok) throw new Error((body as { error?: string }).error || 'Error al agregar a blacklist');
-  return body as BlacklistEntry;
+  return body as Blacklist;
 };
 
-export const removeFromBlacklist = async (id: string): Promise<void> => {
+export const deleteBlacklist = async (id: string): Promise<void> => {
   const res = await apiFetch(`${BASE_URL}/api/blacklist/${encodeURIComponent(id)}`, {
     method: 'DELETE',
     headers: authHeaders(),
@@ -938,3 +979,621 @@ export const removeFromBlacklist = async (id: string): Promise<void> => {
   }
 };
 
+/** @deprecated alias de createBlacklist */
+export const addToBlacklist = createBlacklist;
+/** @deprecated alias de deleteBlacklist */
+export const removeFromBlacklist = deleteBlacklist;
+
+// ── Anuncios ──────────────────────────────────────────────────────────────
+
+export type AnuncioPrioridad = 'normal' | 'importante' | 'urgente';
+
+export interface Anuncio {
+  id: string;
+  sucursal_id: string;
+  titulo: string;
+  contenido: string;
+  prioridad: AnuncioPrioridad;
+  vigente_desde: string;
+  vigente_hasta: string | null;
+  creado_por: string;
+  created_at: string;
+  sucursal_nombre: string;
+  creado_por_nombre: string;
+  total_lecturas: number;
+}
+
+export interface AnuncioInput {
+  titulo: string;
+  contenido: string;
+  prioridad: AnuncioPrioridad;
+  vigente_desde?: string | null;
+  vigente_hasta?: string | null;
+  sucursal_id?: string;
+}
+
+export interface MiAnuncio {
+  id: string;
+  titulo: string;
+  contenido: string;
+  prioridad: AnuncioPrioridad;
+  vigente_desde: string;
+  vigente_hasta: string | null;
+  created_at: string;
+  leido: boolean;
+  leido_at: string | null;
+}
+
+export const getAnuncios = async (): Promise<Anuncio[]> => {
+  const res = await apiFetch(`${BASE_URL}/api/anuncios`, { headers: authHeaders() });
+  if (!res.ok) throw new Error('Error al cargar anuncios');
+  return res.json() as Promise<Anuncio[]>;
+};
+
+export const createAnuncio = async (data: AnuncioInput): Promise<Anuncio> => {
+  const res = await apiFetch(`${BASE_URL}/api/anuncios`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify(data),
+  });
+  const body = await res.json();
+  if (!res.ok) throw new Error((body as { error?: string }).error || 'Error al crear anuncio');
+  return body as Anuncio;
+};
+
+export const updateAnuncio = async (
+  id: string,
+  data: Partial<AnuncioInput>
+): Promise<Anuncio> => {
+  const res = await apiFetch(`${BASE_URL}/api/anuncios/${encodeURIComponent(id)}`, {
+    method: 'PUT',
+    headers: authHeaders(),
+    body: JSON.stringify(data),
+  });
+  const body = await res.json();
+  if (!res.ok) throw new Error((body as { error?: string }).error || 'Error al actualizar anuncio');
+  return body as Anuncio;
+};
+
+export const deleteAnuncio = async (id: string): Promise<void> => {
+  const res = await apiFetch(`${BASE_URL}/api/anuncios/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+    headers: authHeaders(),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error((body as { error?: string }).error || 'Error al eliminar anuncio');
+  }
+};
+
+export const getMisAnuncios = async (): Promise<MiAnuncio[]> => {
+  const res = await apiFetch(`${BASE_URL}/api/anuncios/mis`, { headers: authHeaders() });
+  if (!res.ok) throw new Error('Error al cargar anuncios');
+  return res.json() as Promise<MiAnuncio[]>;
+};
+
+export const marcarAnuncioLeido = async (id: string): Promise<void> => {
+  const res = await apiFetch(`${BASE_URL}/api/anuncios/${encodeURIComponent(id)}/leer`, {
+    method: 'POST',
+    headers: authHeaders(),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error((body as { error?: string }).error || 'Error al marcar como leído');
+  }
+};
+
+/** alias del ticket */
+export const marcarLeido = marcarAnuncioLeido;
+
+// ── Tickets (chat interno) ──────────────────────────────────────────────────
+
+export type TicketTipo   = 'mantenimiento' | 'queja' | 'seguridad' | 'otro';
+export type TicketEstado = 'abierto' | 'en_proceso' | 'cerrado';
+
+export interface Ticket {
+  id: string;
+  sucursal_id: string;
+  residente_id: string;
+  tipo: TicketTipo;
+  titulo: string;
+  estado: TicketEstado;
+  created_at: string;
+  updated_at: string;
+  ultimo_mensaje: string | null;
+  ultimo_mensaje_at: string | null;
+  no_leidos: number;
+  numero_casa?: string;
+  residente_nombre?: string;
+}
+
+export interface TicketMensaje {
+  id: string;
+  ticket_id: string;
+  autor_id: string;
+  mensaje: string;
+  created_at: string;
+  leido_admin: boolean;
+  leido_residente: boolean;
+  autor_nombre: string;
+  autor_rol: string;
+}
+
+export interface TicketInput {
+  tipo: TicketTipo;
+  titulo: string;
+  mensaje: string;
+}
+
+export const getMisTickets = async (): Promise<Ticket[]> => {
+  const res = await apiFetch(`${BASE_URL}/api/tickets/mis`, { headers: authHeaders() });
+  if (!res.ok) throw new Error('Error al cargar tickets');
+  return res.json() as Promise<Ticket[]>;
+};
+
+export const getTickets = async (): Promise<Ticket[]> => {
+  const res = await apiFetch(`${BASE_URL}/api/tickets`, { headers: authHeaders() });
+  if (!res.ok) throw new Error('Error al cargar tickets');
+  return res.json() as Promise<Ticket[]>;
+};
+
+export const createTicket = async (data: TicketInput): Promise<Ticket> => {
+  const res = await apiFetch(`${BASE_URL}/api/tickets`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify(data),
+  });
+  const body = await res.json();
+  if (!res.ok) throw new Error((body as { error?: string }).error || 'Error al crear ticket');
+  return body as Ticket;
+};
+
+export const getTicketMensajes = async (
+  id: string
+): Promise<{ ticket: Ticket; mensajes: TicketMensaje[] }> => {
+  const res = await apiFetch(`${BASE_URL}/api/tickets/${encodeURIComponent(id)}/mensajes`, {
+    headers: authHeaders(),
+  });
+  if (!res.ok) throw new Error('Error al cargar el chat');
+  return res.json() as Promise<{ ticket: Ticket; mensajes: TicketMensaje[] }>;
+};
+
+export const addTicketMensaje = async (id: string, mensaje: string): Promise<TicketMensaje> => {
+  const res = await apiFetch(`${BASE_URL}/api/tickets/${encodeURIComponent(id)}/mensajes`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify({ mensaje }),
+  });
+  const body = await res.json();
+  if (!res.ok) throw new Error((body as { error?: string }).error || 'Error al enviar mensaje');
+  return body as TicketMensaje;
+};
+
+export const cerrarTicket = async (id: string): Promise<Ticket> => {
+  const res = await apiFetch(`${BASE_URL}/api/tickets/${encodeURIComponent(id)}/cerrar`, {
+    method: 'PUT',
+    headers: authHeaders(),
+  });
+  const body = await res.json();
+  if (!res.ok) throw new Error((body as { error?: string }).error || 'Error al cerrar ticket');
+  return body as Ticket;
+};
+
+// ── Cargos Programados ────────────────────────────────────────────────────
+
+export class PeriodConflictError extends Error {
+  ultimo_aplicado: string | null;
+  constructor(message: string, ultimo_aplicado: string | null) {
+    super(message);
+    this.name = 'PeriodConflictError';
+    this.ultimo_aplicado = ultimo_aplicado;
+  }
+}
+
+export interface CargoProgramado {
+  id: string;
+  sucursal_id: string;
+  nombre: string;
+  descripcion: string | null;
+  monto: string;
+  frecuencia: 'mensual' | 'quincenal' | 'unica_vez';
+  aplica_a: 'todos' | 'individual';
+  activo: boolean;
+  ultimo_aplicado: string | null;
+  creado_por: string;
+  created_at: string;
+  veces_aplicado: number;
+  residentes_afectados: number;
+}
+
+export interface CargoProgramadoInput {
+  nombre: string;
+  descripcion?: string;
+  monto: number;
+  frecuencia?: 'mensual' | 'quincenal' | 'unica_vez';
+  aplica_a?: 'todos' | 'individual';
+}
+
+export interface HistorialAplicacion {
+  applied_at: string;
+  residentes: number;
+  monto_total: string;
+  aplicado_por_nombre: string;
+}
+
+export interface AplicarCargoResult {
+  aplicado_a: number;
+  monto_total: string;
+}
+
+export const getCargosProgramados = async (): Promise<CargoProgramado[]> => {
+  const res = await apiFetch(`${BASE_URL}/api/cargos-programados`, { headers: authHeaders() });
+  if (!res.ok) throw new Error('Error al cargar cargos programados');
+  return res.json() as Promise<CargoProgramado[]>;
+};
+
+export const createCargoProgramado = async (data: CargoProgramadoInput): Promise<CargoProgramado> => {
+  const res = await apiFetch(`${BASE_URL}/api/cargos-programados`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify(data),
+  });
+  const body = await res.json();
+  if (!res.ok) throw new Error((body as { error?: string }).error || 'Error al crear cargo programado');
+  return body as CargoProgramado;
+};
+
+export const updateCargoProgramado = async (
+  id: string,
+  data: Partial<CargoProgramadoInput & { activo: boolean }>
+): Promise<CargoProgramado> => {
+  const res = await apiFetch(`${BASE_URL}/api/cargos-programados/${encodeURIComponent(id)}`, {
+    method: 'PUT',
+    headers: authHeaders(),
+    body: JSON.stringify(data),
+  });
+  const body = await res.json();
+  if (!res.ok) throw new Error((body as { error?: string }).error || 'Error al actualizar cargo');
+  return body as CargoProgramado;
+};
+
+export const deleteCargoProgramado = async (id: string): Promise<void> => {
+  const res = await apiFetch(`${BASE_URL}/api/cargos-programados/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+    headers: authHeaders(),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error((body as { error?: string }).error || 'Error al eliminar cargo');
+  }
+};
+
+export const aplicarCargoProgramado = async (id: string): Promise<AplicarCargoResult> => {
+  const res = await apiFetch(`${BASE_URL}/api/cargos-programados/${encodeURIComponent(id)}/aplicar`, {
+    method: 'POST',
+    headers: authHeaders(),
+  });
+  const body = await res.json();
+  if (res.status === 409) {
+    throw new PeriodConflictError(
+      (body as { error?: string }).error || 'Este cargo ya fue aplicado en el periodo actual',
+      (body as { ultimo_aplicado?: string | null }).ultimo_aplicado ?? null
+    );
+  }
+  if (!res.ok) throw new Error((body as { error?: string }).error || 'Error al aplicar cargo');
+  return body as AplicarCargoResult;
+};
+
+export const getHistorialCargo = async (id: string): Promise<HistorialAplicacion[]> => {
+  const res = await apiFetch(
+    `${BASE_URL}/api/cargos-programados/${encodeURIComponent(id)}/historial`,
+    { headers: authHeaders() }
+  );
+  if (!res.ok) throw new Error('Error al cargar historial');
+  return res.json() as Promise<HistorialAplicacion[]>;
+};
+
+// ── Audit Logs ────────────────────────────────────────────────────────────
+
+export interface AuditLog {
+  id: string;
+  created_at: string;
+  usuario_nombre: string | null;
+  usuario_email: string | null;
+  accion: string;
+  tabla_afectada: string | null;
+  ip_address: string | null;
+  sucursal_id: string | null;
+}
+
+export const getAuditLogs = async (params: {
+  limit?: number;
+  offset?: number;
+  accion?: string;
+  usuario_id?: string;
+  desde?: string;
+  hasta?: string;
+}): Promise<{ logs: AuditLog[]; total: number }> => {
+  const url = new URL(`${BASE_URL}/api/audit-logs`);
+  if (params.limit  !== undefined) url.searchParams.set('limit',  String(params.limit));
+  if (params.offset !== undefined) url.searchParams.set('offset', String(params.offset));
+  if (params.accion)     url.searchParams.set('accion',     params.accion);
+  if (params.usuario_id) url.searchParams.set('usuario_id', params.usuario_id);
+  if (params.desde)      url.searchParams.set('desde',      params.desde);
+  if (params.hasta)      url.searchParams.set('hasta',      params.hasta);
+
+  const res = await apiFetch(url.toString(), { headers: authHeaders() });
+  if (!res.ok) throw new Error('Error al cargar logs de auditoría');
+  return res.json() as Promise<{ logs: AuditLog[]; total: number }>;
+};
+
+
+// ── Reservas de áreas comunes ─────────────────────────────────────────────
+
+export type TarifaTipo = 'gratis' | 'por_hora' | 'unica';
+
+export type EstadoReserva =
+  | 'pendiente_aprobacion'
+  | 'confirmada'
+  | 'cancelada'
+  | 'rechazada'
+  | 'completada';
+
+export interface AreaComun {
+  id: string;
+  sucursal_id: string;
+  nombre: string;
+  descripcion: string | null;
+  imagen_url: string | null;
+  tarifa_tipo: TarifaTipo;
+  tarifa_monto: string;
+  requiere_aprobacion: boolean | null;
+  activa: boolean;
+  created_at: string;
+  reservas_activas?: string;
+}
+
+export interface AreaComunInput {
+  nombre: string;
+  descripcion?: string | null;
+  imagen_url?: string | null;
+  tarifa_tipo: TarifaTipo;
+  tarifa_monto: number;
+  requiere_aprobacion?: boolean | null;
+  activa?: boolean;
+  sucursal_id?: string;
+}
+
+export interface ConfigReservas {
+  sucursal_id: string;
+  permite_cancelacion: boolean;
+  horas_limite_cancelacion_completa: number;
+  horas_limite_cancelacion_parcial: number;
+  porcentaje_reembolso_parcial: number | string;
+  max_reservas_activas_por_residente: number | null;
+  requiere_aprobacion_admin: boolean;
+  buffer_minutos_entre_reservas: number;
+  buffer_motivo: string | null;
+  es_default?: boolean;
+}
+
+export interface OcupadoSlot {
+  id: string;
+  fecha: string;
+  hora_inicio: string;
+  hora_fin: string;
+  estado: EstadoReserva;
+  bloqueo_desde: string;
+  bloqueo_hasta: string;
+}
+
+export interface Disponibilidad {
+  area: { id: string; nombre: string; activa: boolean; tarifa_tipo: TarifaTipo; tarifa_monto: string };
+  fecha: string;
+  buffer_minutos: number;
+  buffer_motivo: string | null;
+  ocupados: OcupadoSlot[];
+}
+
+export interface Reserva {
+  id: string;
+  area_id: string;
+  residente_id: string;
+  fecha: string;
+  hora_inicio: string;
+  hora_fin: string;
+  estado: EstadoReserva;
+  cargo_id: string | null;
+  monto_cargo: string;
+  motivo_cancelacion: string | null;
+  reembolso_aplicado: string | null;
+  created_at: string;
+  area_nombre?: string;
+  imagen_url?: string | null;
+  tarifa_tipo?: TarifaTipo;
+  cargo_monto?: string | null;
+  cargo_estado?: string | null;
+  numero_casa?: string;
+  residente_nombre?: string;
+  es_futura?: boolean;
+  monto?: number;
+  requiere_aprobacion?: boolean;
+}
+
+export interface PreviewCancelacion {
+  reserva_id: string;
+  estado: EstadoReserva;
+  permite_cancelacion: boolean;
+  cancelable: boolean;
+  horas_restantes: number;
+  reembolso_aplicado: number;
+  monto_cargo: number;
+  monto_reembolso: number;
+  horas_limite_cancelacion_completa: number;
+  horas_limite_cancelacion_parcial: number;
+}
+
+export interface ResumenMesItem {
+  id: string;
+  concepto: string | null;
+  monto: string;
+  metodo: string;
+  estado: string;
+  fecha_pago: string;
+  reserva_id: string | null;
+  area_nombre: string | null;
+  reserva_fecha: string | null;
+}
+
+export interface ResumenMes {
+  periodo: string;
+  items: ResumenMesItem[];
+  total_pendiente: number;
+  saldo_pendiente: number;
+  estado_pago: string;
+}
+
+// Áreas
+
+export const getAreas = async (soloActivas = false): Promise<AreaComun[]> => {
+  const url = new URL(`${BASE_URL}/api/areas`);
+  if (soloActivas) url.searchParams.set('activa', 'true');
+  const res = await apiFetch(url.toString(), { headers: authHeaders() });
+  if (!res.ok) throw new Error('Error al cargar áreas comunes');
+  return res.json() as Promise<AreaComun[]>;
+};
+
+export const createArea = async (data: AreaComunInput): Promise<AreaComun> => {
+  const res = await apiFetch(`${BASE_URL}/api/areas`, {
+    method: 'POST', headers: authHeaders(), body: JSON.stringify(data),
+  });
+  const body = await res.json();
+  if (!res.ok) throw new Error((body as { error?: string }).error || 'Error al crear el área');
+  return body as AreaComun;
+};
+
+export const updateArea = async (id: string, data: Partial<AreaComunInput>): Promise<AreaComun> => {
+  const res = await apiFetch(`${BASE_URL}/api/areas/${encodeURIComponent(id)}`, {
+    method: 'PUT', headers: authHeaders(), body: JSON.stringify(data),
+  });
+  const body = await res.json();
+  if (!res.ok) throw new Error((body as { error?: string }).error || 'Error al actualizar el área');
+  return body as AreaComun;
+};
+
+export const deleteArea = async (id: string): Promise<void> => {
+  const res = await apiFetch(`${BASE_URL}/api/areas/${encodeURIComponent(id)}`, {
+    method: 'DELETE', headers: authHeaders(),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error((body as { error?: string }).error || 'Error al eliminar el área');
+  }
+};
+
+// Configuración
+
+export const getConfigReservas = async (): Promise<ConfigReservas> => {
+  const res = await apiFetch(`${BASE_URL}/api/config-reservas`, { headers: authHeaders() });
+  if (!res.ok) throw new Error('Error al cargar la configuración de reservas');
+  return res.json() as Promise<ConfigReservas>;
+};
+
+export const updateConfigReservas = async (
+  data: Partial<ConfigReservas>
+): Promise<ConfigReservas> => {
+  const res = await apiFetch(`${BASE_URL}/api/config-reservas`, {
+    method: 'PUT', headers: authHeaders(), body: JSON.stringify(data),
+  });
+  const body = await res.json();
+  if (!res.ok) throw new Error((body as { error?: string }).error || 'Error al guardar la configuración');
+  return body as ConfigReservas;
+};
+
+// Reservas
+
+export const getDisponibilidad = async (
+  area_id: string,
+  fecha: string
+): Promise<Disponibilidad> => {
+  const url = new URL(`${BASE_URL}/api/reservas/disponibilidad`);
+  url.searchParams.set('area_id', area_id);
+  url.searchParams.set('fecha', fecha);
+  const res = await apiFetch(url.toString(), { headers: authHeaders() });
+  if (!res.ok) throw new Error('Error al cargar la disponibilidad');
+  return res.json() as Promise<Disponibilidad>;
+};
+
+export const crearReserva = async (data: {
+  area_id: string; fecha: string; hora_inicio: string; hora_fin: string;
+}): Promise<Reserva> => {
+  const res = await apiFetch(`${BASE_URL}/api/reservas`, {
+    method: 'POST', headers: authHeaders(), body: JSON.stringify(data),
+  });
+  const body = await res.json();
+  if (!res.ok) throw new Error((body as { error?: string }).error || 'Error al crear la reserva');
+  return body as Reserva;
+};
+
+export const getMisReservas = async (): Promise<Reserva[]> => {
+  const res = await apiFetch(`${BASE_URL}/api/reservas/mis-reservas`, { headers: authHeaders() });
+  if (!res.ok) throw new Error('Error al cargar tus reservas');
+  return res.json() as Promise<Reserva[]>;
+};
+
+export const getReservas = async (filtros: {
+  area_id?: string; estado?: string; fecha_desde?: string; fecha_hasta?: string;
+} = {}): Promise<Reserva[]> => {
+  const url = new URL(`${BASE_URL}/api/reservas`);
+  if (filtros.area_id)    url.searchParams.set('area_id',     filtros.area_id);
+  if (filtros.estado)     url.searchParams.set('estado',      filtros.estado);
+  if (filtros.fecha_desde) url.searchParams.set('fecha_desde', filtros.fecha_desde);
+  if (filtros.fecha_hasta) url.searchParams.set('fecha_hasta', filtros.fecha_hasta);
+  const res = await apiFetch(url.toString(), { headers: authHeaders() });
+  if (!res.ok) throw new Error('Error al cargar reservas');
+  return res.json() as Promise<Reserva[]>;
+};
+
+export const getPreviewCancelacion = async (id: string): Promise<PreviewCancelacion> => {
+  const res = await apiFetch(
+    `${BASE_URL}/api/reservas/${encodeURIComponent(id)}/preview-cancelacion`,
+    { headers: authHeaders() }
+  );
+  if (!res.ok) throw new Error('Error al calcular el reembolso');
+  return res.json() as Promise<PreviewCancelacion>;
+};
+
+export const aprobarReserva = async (id: string): Promise<Reserva> => {
+  const res = await apiFetch(`${BASE_URL}/api/reservas/${encodeURIComponent(id)}/aprobar`, {
+    method: 'PATCH', headers: authHeaders(),
+  });
+  const body = await res.json();
+  if (!res.ok) throw new Error((body as { error?: string }).error || 'Error al aprobar la reserva');
+  return body as Reserva;
+};
+
+export const rechazarReserva = async (id: string, motivo?: string): Promise<Reserva> => {
+  const res = await apiFetch(`${BASE_URL}/api/reservas/${encodeURIComponent(id)}/rechazar`, {
+    method: 'PATCH', headers: authHeaders(), body: JSON.stringify({ motivo: motivo ?? null }),
+  });
+  const body = await res.json();
+  if (!res.ok) throw new Error((body as { error?: string }).error || 'Error al rechazar la reserva');
+  return body as Reserva;
+};
+
+export const cancelarReserva = async (id: string, motivo?: string): Promise<Reserva> => {
+  const res = await apiFetch(`${BASE_URL}/api/reservas/${encodeURIComponent(id)}/cancelar`, {
+    method: 'PATCH', headers: authHeaders(), body: JSON.stringify({ motivo: motivo ?? null }),
+  });
+  const body = await res.json();
+  if (!res.ok) throw new Error((body as { error?: string }).error || 'Error al cancelar la reserva');
+  return body as Reserva;
+};
+
+// Resumen de la factura del mes (residente)
+
+export const getMiResumenMes = async (): Promise<ResumenMes> => {
+  const res = await apiFetch(`${BASE_URL}/api/pagos/mi-resumen`, { headers: authHeaders() });
+  if (!res.ok) throw new Error('Error al cargar el resumen del mes');
+  return res.json() as Promise<ResumenMes>;
+};
