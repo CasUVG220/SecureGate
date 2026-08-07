@@ -1,0 +1,99 @@
+# Compose de PRODUCCION — solo para servidores con dominio real y
+# certificados de Let's Encrypt ya emitidos en /etc/letsencrypt.
+#
+# NO usar en local ni en VMs sin dominio: nginx entra en crash-loop si los
+# certificados no existen. Para el dia a dia usa docker-compose.yml.
+#
+# Antes de levantarlo:
+#   1. Apuntar el dominio (registro A) a la IP publica del servidor.
+#   2. Emitir el certificado, p. ej.:
+#        sudo certbot certonly --standalone -d midominio.com
+#   3. Sustituir DOMINIO por el dominio real en nginx/nginx.conf.
+#   4. Exportar las variables del bloque `environment` (o crear un .env).
+#
+# Uso:
+#   docker compose -f docker-compose.prod.yml up --build -d
+
+services:
+
+  db:
+    image: postgres:15-alpine
+    container_name: securegate-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-securegate}
+      POSTGRES_USER: ${POSTGRES_USER:-sguser}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?define POSTGRES_PASSWORD en el entorno}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - securegate-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-sguser} -d ${POSTGRES_DB:-securegate}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: securegate-backend
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DATABASE_URL: postgresql://${POSTGRES_USER:-sguser}:${POSTGRES_PASSWORD:?define POSTGRES_PASSWORD en el entorno}@db:5432/${POSTGRES_DB:-securegate}
+      JWT_SECRET: ${JWT_SECRET:?define JWT_SECRET en el entorno}
+      # Origenes permitidos por CORS. En produccion es obligatorio: el
+      # backend no refleja el origen del navegador fuera de desarrollo.
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:?define ALLOWED_ORIGINS, p. ej. https://midominio.com}
+      TZ: America/Guatemala
+      APP_TZ: America/Guatemala
+    volumes:
+      - ./database/init.sql:/app/database/init.sql:ro
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - securegate-network
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: securegate-frontend
+    restart: unless-stopped
+    environment:
+      # Detras de nginx el frontend y la API comparten dominio, asi que la
+      # URL base es el propio origen HTTPS.
+      VITE_API_URL: ${PUBLIC_URL:?define PUBLIC_URL, p. ej. https://midominio.com}
+    depends_on:
+      - backend
+    networks:
+      - securegate-network
+
+  nginx:
+    image: nginx:alpine
+    container_name: securegate-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+    depends_on:
+      - frontend
+      - backend
+    networks:
+      - securegate-network
+
+volumes:
+  postgres_data:
+    driver: local
+
+networks:
+  securegate-network:
+    driver: bridge

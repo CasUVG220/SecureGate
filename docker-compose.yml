@@ -1,4 +1,7 @@
-version: '3.9'
+# Compose de uso diario: local y VMs de desarrollo/staging.
+# Backend y frontend exponen sus puertos directamente, sin nginx ni
+# certificados SSL. Para el despliegue con dominio real + Let's Encrypt
+# usa docker-compose.prod.yml (ver README).
 
 services:
 
@@ -34,8 +37,13 @@ services:
       PORT: 3000
       DATABASE_URL: postgresql://sguser:sgpassword123@db:5432/securegate
       JWT_SECRET: securegate_jwt_secret_dev
+      TZ: America/Guatemala
+      APP_TZ: America/Guatemala
+    ports:
+      - "3000:3000"
     volumes:
       - ./backend/src:/app/src
+      - ./database/init.sql:/app/database/init.sql:ro
     depends_on:
       db:
         condition: service_healthy
@@ -49,27 +57,17 @@ services:
     container_name: securegate-frontend
     restart: unless-stopped
     environment:
+      # Valor por defecto para uso local. Al abrir el frontend desde otra
+      # maquina (IP de una VM), services/api.ts detecta el hostname en
+      # runtime y apunta al backend de ese mismo host, asi que no hace falta
+      # editar esta variable por servidor.
       VITE_API_URL: http://localhost:3000
+    ports:
+      - "5173:5173"
     volumes:
       - ./frontend:/app
       - /app/node_modules
     depends_on:
-      - backend
-    networks:
-      - securegate-network
-
-  nginx:
-    image: nginx:alpine
-    container_name: securegate-nginx
-    restart: unless-stopped
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-      - /etc/letsencrypt:/etc/letsencrypt:ro
-    depends_on:
-      - frontend
       - backend
     networks:
       - securegate-network
