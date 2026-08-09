@@ -10,6 +10,7 @@ import {
   BlacklistDenialError,
   type Residente,
   type VisitanteFrecuente,
+  type CargoGenerado,
 } from '../services/api';
 import { useTranslation } from '../i18n/useTranslation';
 
@@ -47,11 +48,15 @@ export default function GaritaPage() {
   const [casaSearch, setCasaSearch]   = useState('');
   const [casaOpen, setCasaOpen]       = useState(false);
   const [blacklistBlock, setBlacklistBlock] = useState<{
-    razon: string; tipo: string; fecha_fin: string | null;
+    razon: string; fecha_fin: string | null;
   } | null>(null);
   const [dpiHistorial, setDpiHistorial]     = useState(false);
   const [dpiSugerencias, setDpiSugerencias] = useState<VisitanteFrecuente[]>([]);
   const [dpiDropdownOpen, setDpiDropdownOpen] = useState(false);
+  const [cargoAlert, setCargoAlert]         = useState<{
+    monto: string; nombre: string; frecuencia: string; saldo: string;
+  } | null>(null);
+  const [extraMoraAlert, setExtraMoraAlert] = useState<{ monto: string } | null>(null);
 
   const dpiVideoRef   = useRef<HTMLVideoElement>(null);
   const placaVideoRef = useRef<HTMLVideoElement>(null);
@@ -206,6 +211,8 @@ export default function GaritaPage() {
     setDpiHistorial(false);
     setDpiSugerencias([]);
     setDpiDropdownOpen(false);
+    setCargoAlert(null);
+    setExtraMoraAlert(null);
   };
 
   const diasDesde = (ts: string | null): string => {
@@ -226,7 +233,7 @@ export default function GaritaPage() {
     if (!payload?.id) { setError('Token inválido.'); return; }
     setLoading(true);
     try {
-      await registrarAcceso({
+      const result = await registrarAcceso({
         nombre_visitante: form.nombre_visitante,
         numero_dpi:       form.numero_dpi,
         residente_id:     form.residente_id,
@@ -242,10 +249,25 @@ export default function GaritaPage() {
         unidad:    residente ? `Casa ${residente.numero_casa}` : '—',
         estado:    'Autorizado',
       }, ...prev].slice(0, 10));
+      const cg = result.cargo_generado;
+      const extraMora = result.cargo_extra_mora;
       resetForm();
+      if (cg) {
+        const frecLabel = cg.frecuencia === 'unica_vez' ? 'única vez'
+          : cg.frecuencia === 'quincenal' ? 'quincenal' : 'mensual';
+        setCargoAlert({
+          monto:     parseFloat(cg.monto).toFixed(2),
+          nombre:    cg.nombre,
+          frecuencia: frecLabel,
+          saldo:     result.saldo_pendiente_actualizado.toFixed(2),
+        });
+      }
+      if (extraMora != null && extraMora > 0) {
+        setExtraMoraAlert({ monto: extraMora.toFixed(2) });
+      }
     } catch (err: unknown) {
       if (err instanceof BlacklistDenialError) {
-        setBlacklistBlock({ razon: err.razon, tipo: err.tipo, fecha_fin: err.fecha_fin });
+        setBlacklistBlock({ razon: err.razon, fecha_fin: err.fecha_fin });
       } else {
         setError(err instanceof Error ? err.message : 'Error al registrar');
       }
@@ -289,6 +311,41 @@ export default function GaritaPage() {
   return (
     <div className="flex flex-col lg:flex-row h-full text-gray-100">
       <canvas ref={canvasRef} className="hidden" />
+
+      {/* Blocking blacklist modal — must be dismissed before continuing */}
+      {blacklistBlock && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+          <div className="bg-gray-900 border-2 border-red-600 rounded-2xl shadow-2xl w-full max-w-md p-6 space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="w-11 h-11 rounded-full bg-red-950 flex items-center justify-center shrink-0">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-red-500">
+                  <circle cx="12" cy="12" r="10" /><line x1="4.9" y1="4.9" x2="19.1" y2="19.1" />
+                </svg>
+              </div>
+              <h2 className="text-red-300 font-bold text-lg uppercase tracking-wide">
+                {t('blacklist.blockedTitle')}
+              </h2>
+            </div>
+            <p className="text-red-200 text-sm">{t('blacklist.blockedAlert')}</p>
+            <div className="bg-red-950/60 border border-red-800 rounded-xl px-4 py-3 space-y-1">
+              <p className="text-red-200 text-sm">
+                <span className="font-semibold">{t('blacklist.reason')}:</span> {blacklistBlock.razon}
+              </p>
+              <p className="text-red-300 text-sm">
+                {blacklistBlock.fecha_fin
+                  ? `${t('blacklist.expiresOn')} ${new Date(blacklistBlock.fecha_fin).toLocaleDateString('es-GT')}`
+                  : t('blacklist.permanent')}
+              </p>
+            </div>
+            <button
+              onClick={resetForm}
+              className="w-full bg-red-700 hover:bg-red-600 text-white font-semibold py-2.5 rounded-xl transition-colors"
+            >
+              {t('blacklist.close')}
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Camera column — top on mobile, left on desktop */}
       <div className="w-full lg:w-1/2 flex flex-col gap-3 p-4 border-b lg:border-b-0 lg:border-r border-gray-700 min-h-0">
@@ -364,33 +421,6 @@ export default function GaritaPage() {
         {/* Datos del visitante */}
         <div className="bg-gray-800 rounded-2xl p-5 shadow-xl space-y-4 shrink-0">
           <h2 className="text-base font-bold text-white">{t('gate.visitorData')}</h2>
-
-          {blacklistBlock && (
-            <div className="bg-red-950 border-2 border-red-600 rounded-xl px-4 py-4 space-y-2">
-              <p className="text-red-300 font-bold text-base tracking-wide uppercase">
-                ⛔ ACCESO DENEGADO — Visitante en lista negra
-              </p>
-              <p className="text-red-200 text-sm">
-                <span className="font-semibold">Razón:</span> {blacklistBlock.razon}
-              </p>
-              <p className="text-red-300 text-sm">
-                {blacklistBlock.tipo === 'permanente'
-                  ? 'Ban permanente'
-                  : blacklistBlock.tipo === 'residente'
-                  ? 'Bloqueado por un residente'
-                  : `Ban temporal — vence el ${blacklistBlock.fecha_fin
-                      ? new Date(blacklistBlock.fecha_fin).toLocaleDateString('es-GT')
-                      : '—'}`
-                }
-              </p>
-              <button
-                onClick={resetForm}
-                className="text-xs text-red-400 hover:text-red-200 underline transition-colors"
-              >
-                Limpiar formulario
-              </button>
-            </div>
-          )}
 
           {error && (
             <div className="bg-red-900/40 border border-red-700 rounded-lg px-4 py-2 text-red-300 text-sm">
@@ -510,6 +540,35 @@ export default function GaritaPage() {
           <div className="bg-emerald-900/60 border-2 border-emerald-500 rounded-2xl px-5 py-4 flex items-center gap-3 shrink-0 shadow-xl">
             <span className="text-emerald-400 text-2xl font-black tracking-widest">✓ PREAUTORIZADO</span>
             <p className="text-emerald-300 text-sm">Visitante con preautorización activa para hoy. Datos auto-completados.</p>
+          </div>
+        )}
+
+        {/* Cargo alert banner */}
+        {cargoAlert && (
+          <div className="bg-amber-900/60 border-2 border-amber-500 rounded-2xl px-5 py-4 space-y-1 shrink-0 shadow-xl">
+            <div className="flex items-start justify-between gap-2">
+              <p className="text-amber-300 font-bold text-sm">
+                ⚠ Cargo aplicado: Q{cargoAlert.monto} — {cargoAlert.nombre} ({cargoAlert.frecuencia})
+              </p>
+              <button
+                onClick={() => setCargoAlert(null)}
+                className="text-amber-400 hover:text-amber-200 text-lg leading-none shrink-0 transition-colors"
+              >✕</button>
+            </div>
+            <p className="text-amber-200 text-xs">Nuevo saldo pendiente: Q{cargoAlert.saldo}</p>
+          </div>
+        )}
+
+        {/* Extra charge for entering while in mora (T-S5-03) */}
+        {extraMoraAlert && (
+          <div className="bg-red-900/60 border-2 border-red-500 rounded-2xl px-5 py-4 flex items-start justify-between gap-2 shrink-0 shadow-xl">
+            <p className="text-red-300 font-bold text-sm">
+              ⛔ Cargo extra de Q{extraMoraAlert.monto} aplicado por visita en mora
+            </p>
+            <button
+              onClick={() => setExtraMoraAlert(null)}
+              className="text-red-400 hover:text-red-200 text-lg leading-none shrink-0 transition-colors"
+            >✕</button>
           </div>
         )}
 

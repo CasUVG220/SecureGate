@@ -1,23 +1,30 @@
 import { useEffect, useState } from 'react';
 import {
-  getBlacklist, addToBlacklist, removeFromBlacklist, buscarVisitantesPorDpi,
-  type BlacklistEntry, type BlacklistInput, type VisitanteBasico,
+  getBlacklist, createBlacklist, deleteBlacklist, buscarVisitantesPorDpi,
+  type Blacklist, type BlacklistInput, type BlacklistDuracion, type VisitanteBasico,
 } from '../services/api';
 import { Spinner, TableSkeleton } from '../components/Skeleton';
 import { useToast } from '../components/Toast';
+import { useTranslation } from '../i18n/useTranslation';
 
-const today = () => new Date().toISOString().slice(0, 10);
+const DURACION_VALUES: { value: BlacklistDuracion; labelKey: string }[] = [
+  { value: 'temporal_dias', labelKey: 'blacklist.durTemporal' },
+  { value: '30_dias',       labelKey: 'blacklist.dur30' },
+  { value: 'indefinido',    labelKey: 'blacklist.durIndefinido' },
+];
 
 const EMPTY_FORM: BlacklistInput = {
   visitante_id: '',
-  tipo: 'temporal',
   razon: '',
-  fecha_fin: today(),
+  duracion: 'temporal_dias',
+  dias: 7,
 };
 
 export default function BlacklistPage() {
   const showToast = useToast();
-  const [entries, setEntries]     = useState<BlacklistEntry[]>([]);
+  const { t } = useTranslation();
+
+  const [entries, setEntries]     = useState<Blacklist[]>([]);
   const [loading, setLoading]     = useState(true);
   const [search, setSearch]       = useState('');
   const [showModal, setShowModal] = useState(false);
@@ -34,11 +41,11 @@ export default function BlacklistPage() {
     setLoading(true);
     getBlacklist()
       .then(setEntries)
-      .catch(() => showToast('Error al cargar blacklist', 'error'))
+      .catch(() => showToast(t('blacklist.errorLoad'), 'error'))
       .finally(() => setLoading(false));
   };
 
-  useEffect(() => { cargar(); }, []);
+  useEffect(() => { cargar(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleDpiSearch = async (val: string) => {
     setDpiQuery(val);
@@ -72,37 +79,37 @@ export default function BlacklistPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.visitante_id) { setFormError('Selecciona un visitante por DPI'); return; }
-    if (!form.razon.trim()) { setFormError('La razón es requerida'); return; }
-    if (form.tipo === 'temporal' && !form.fecha_fin) {
-      setFormError('Indica la fecha de vencimiento del ban'); return;
+    if (!form.visitante_id) { setFormError(t('blacklist.selectVisitor')); return; }
+    if (!form.razon.trim()) { setFormError(t('blacklist.reasonRequired')); return; }
+    if (form.duracion === 'temporal_dias' && (!form.dias || form.dias < 1)) {
+      setFormError(t('blacklist.daysRequired')); return;
     }
     setSaving(true); setFormError(null);
     try {
-      await addToBlacklist({
+      await createBlacklist({
         visitante_id: form.visitante_id,
-        tipo:         form.tipo,
         razon:        form.razon,
-        fecha_fin:    form.tipo === 'temporal' ? form.fecha_fin : undefined,
+        duracion:     form.duracion,
+        dias:         form.duracion === 'temporal_dias' ? form.dias : undefined,
       });
       setShowModal(false);
       cargar();
-      showToast('Visitante agregado a la lista negra', 'warning');
+      showToast(t('blacklist.added'), 'warning');
     } catch (err) {
-      setFormError(err instanceof Error ? err.message : 'Error al agregar');
+      setFormError(err instanceof Error ? err.message : t('common.error'));
     } finally {
       setSaving(false);
     }
   };
 
-  const handleRemove = async (entry: BlacklistEntry) => {
-    if (!window.confirm(`¿Remover el ban de "${entry.visitante_nombre}"?`)) return;
+  const handleRemove = async (entry: Blacklist) => {
+    if (!window.confirm(`${t('blacklist.removeConfirm')} "${entry.visitante_nombre}"?`)) return;
     try {
-      await removeFromBlacklist(entry.id);
+      await deleteBlacklist(entry.id);
       cargar();
-      showToast('Ban removido', 'success');
+      showToast(t('blacklist.removed'), 'success');
     } catch (err) {
-      showToast(err instanceof Error ? err.message : 'Error al remover', 'error');
+      showToast(err instanceof Error ? err.message : t('common.error'), 'error');
     }
   };
 
@@ -113,12 +120,21 @@ export default function BlacklistPage() {
   const formatDate = (d: string | null) =>
     d ? new Date(d).toLocaleDateString('es-GT') : '—';
 
+  // Tipo de ban derivado de fecha_fin: Permanente / 30 días / Temporal
+  const banType = (e: Blacklist): string => {
+    if (e.fecha_fin === null) return t('blacklist.permanent');
+    const dias = Math.round(
+      (new Date(e.fecha_fin).getTime() - new Date(e.fecha_inicio).getTime()) / 86_400_000
+    );
+    return dias === 30 ? t('blacklist.dur30') : t('blacklist.temporal');
+  };
+
   return (
     <div className="p-4 sm:p-6 text-gray-100 space-y-6 max-w-7xl">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-bold text-white">Lista Negra de Visitantes</h1>
-          <p className="text-sm text-gray-400 mt-0.5">Visitantes con acceso bloqueado en esta sucursal</p>
+          <h1 className="text-xl font-bold text-white">{t('blacklist.title')}</h1>
+          <p className="text-sm text-gray-400 mt-0.5">{t('blacklist.subtitle')}</p>
         </div>
         <button
           onClick={openModal}
@@ -128,7 +144,7 @@ export default function BlacklistPage() {
             <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
             <line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
           </svg>
-          Agregar ban
+          {t('blacklist.add')}
         </button>
       </div>
 
@@ -137,7 +153,7 @@ export default function BlacklistPage() {
         type="text"
         value={search}
         onChange={e => setSearch(e.target.value)}
-        placeholder="Buscar por nombre, DPI o razón…"
+        placeholder={t('blacklist.searchPlaceholder')}
         className="w-full max-w-sm bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-red-500"
       />
 
@@ -147,13 +163,13 @@ export default function BlacklistPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-gray-700 text-gray-400 text-left">
-                <th className="px-4 py-3 font-medium">Visitante</th>
-                <th className="px-4 py-3 font-medium">DPI</th>
-                <th className="px-4 py-3 font-medium">Razón</th>
-                <th className="px-4 py-3 font-medium text-center">Tipo</th>
-                <th className="px-4 py-3 font-medium text-center">Vence</th>
-                <th className="px-4 py-3 font-medium text-center">Sucursal</th>
-                <th className="px-4 py-3 font-medium">Acciones</th>
+                <th className="px-4 py-3 font-medium">{t('blacklist.colVisitor')}</th>
+                <th className="px-4 py-3 font-medium">{t('blacklist.colDpi')}</th>
+                <th className="px-4 py-3 font-medium">{t('blacklist.colReason')}</th>
+                <th className="px-4 py-3 font-medium text-center">{t('blacklist.colType')}</th>
+                <th className="px-4 py-3 font-medium text-center">{t('blacklist.colExpires')}</th>
+                <th className="px-4 py-3 font-medium text-center">{t('blacklist.colBranch')}</th>
+                <th className="px-4 py-3 font-medium">{t('common.actions')}</th>
               </tr>
             </thead>
             <tbody>
@@ -162,7 +178,7 @@ export default function BlacklistPage() {
               ) : filtered.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="px-4 py-10 text-center text-gray-500">
-                    No hay visitantes en lista negra.
+                    {t('blacklist.empty')}
                   </td>
                 </tr>
               ) : (
@@ -175,15 +191,15 @@ export default function BlacklistPage() {
                     </td>
                     <td className="px-4 py-3 text-center">
                       <span className={`inline-block text-xs font-semibold px-2 py-0.5 rounded-full ${
-                        entry.tipo === 'permanente'
+                        entry.fecha_fin === null
                           ? 'bg-red-900/60 text-red-400'
                           : 'bg-amber-900/50 text-amber-400'
                       }`}>
-                        {entry.tipo === 'permanente' ? 'Permanente' : 'Temporal'}
+                        {banType(entry)}
                       </span>
                     </td>
                     <td className="px-4 py-3 text-center text-gray-400 text-xs">
-                      {entry.tipo === 'permanente' ? '∞' : formatDate(entry.fecha_fin)}
+                      {entry.fecha_fin === null ? '∞' : formatDate(entry.fecha_fin)}
                     </td>
                     <td className="px-4 py-3 text-center text-gray-400 text-xs">{entry.sucursal_nombre}</td>
                     <td className="px-4 py-3">
@@ -191,7 +207,7 @@ export default function BlacklistPage() {
                         onClick={() => handleRemove(entry)}
                         className="text-green-400 hover:text-green-300 text-xs font-medium transition-colors"
                       >
-                        Remover ban
+                        {t('blacklist.remove')}
                       </button>
                     </td>
                   </tr>
@@ -206,7 +222,7 @@ export default function BlacklistPage() {
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm">
           <div className="bg-gray-800 rounded-t-2xl sm:rounded-2xl shadow-2xl w-full sm:max-w-md p-6 space-y-5">
-            <h2 className="text-lg font-bold text-white">Agregar a lista negra</h2>
+            <h2 className="text-lg font-bold text-white">{t('blacklist.modalTitle')}</h2>
 
             {formError && (
               <div className="bg-red-900/40 border border-red-700 rounded-lg px-3 py-2 text-red-300 text-sm">
@@ -218,13 +234,13 @@ export default function BlacklistPage() {
               {/* DPI search */}
               <div className="relative">
                 <label className="block text-xs font-medium text-gray-400 mb-1">
-                  Buscar visitante por DPI *
+                  {t('blacklist.searchByDpi')} *
                 </label>
                 <input
                   type="text"
                   value={dpiQuery}
                   onChange={e => handleDpiSearch(e.target.value)}
-                  placeholder="Escribe el número de DPI…"
+                  placeholder={t('blacklist.dpiPlaceholder')}
                   className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-red-500"
                 />
                 {dpiLoading && (
@@ -249,40 +265,34 @@ export default function BlacklistPage() {
                 )}
                 {selectedVisitante && (
                   <p className="mt-1 text-xs text-green-400">
-                    Seleccionado: <strong>{selectedVisitante.nombre}</strong>
+                    {t('blacklist.selected')}: <strong>{selectedVisitante.nombre}</strong>
                   </p>
                 )}
               </div>
 
-              {/* Tipo */}
+              {/* Duración */}
               <div>
-                <label className="block text-xs font-medium text-gray-400 mb-1">Tipo de ban *</label>
-                <div className="flex gap-4">
-                  {(['temporal', 'permanente'] as const).map(t => (
-                    <label key={t} className="flex items-center gap-2 cursor-pointer text-sm text-gray-300">
-                      <input
-                        type="radio"
-                        name="tipo"
-                        value={t}
-                        checked={form.tipo === t}
-                        onChange={() => setForm(prev => ({ ...prev, tipo: t }))}
-                        className="accent-red-500"
-                      />
-                      {t === 'temporal' ? 'Temporal' : 'Permanente'}
-                    </label>
+                <label className="block text-xs font-medium text-gray-400 mb-1">{t('blacklist.duration')} *</label>
+                <select
+                  value={form.duracion}
+                  onChange={e => setForm(prev => ({ ...prev, duracion: e.target.value as BlacklistDuracion }))}
+                  className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-red-500"
+                >
+                  {DURACION_VALUES.map(d => (
+                    <option key={d.value} value={d.value}>{t(d.labelKey)}</option>
                   ))}
-                </div>
+                </select>
               </div>
 
-              {/* Fecha fin (only temporal) */}
-              {form.tipo === 'temporal' && (
+              {/* Días (only temporal_dias) */}
+              {form.duracion === 'temporal_dias' && (
                 <div>
-                  <label className="block text-xs font-medium text-gray-400 mb-1">Fecha de vencimiento *</label>
+                  <label className="block text-xs font-medium text-gray-400 mb-1">{t('blacklist.days')} *</label>
                   <input
-                    type="date"
-                    value={form.fecha_fin ?? ''}
-                    min={today()}
-                    onChange={e => setForm(prev => ({ ...prev, fecha_fin: e.target.value }))}
+                    type="number"
+                    min={1}
+                    value={form.dias ?? ''}
+                    onChange={e => setForm(prev => ({ ...prev, dias: e.target.value ? parseInt(e.target.value, 10) : undefined }))}
                     className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-red-500"
                   />
                 </div>
@@ -290,12 +300,12 @@ export default function BlacklistPage() {
 
               {/* Razón */}
               <div>
-                <label className="block text-xs font-medium text-gray-400 mb-1">Razón *</label>
+                <label className="block text-xs font-medium text-gray-400 mb-1">{t('blacklist.reason')} *</label>
                 <textarea
                   value={form.razon}
                   onChange={e => setForm(prev => ({ ...prev, razon: e.target.value }))}
                   rows={3}
-                  placeholder="Describe el motivo del ban…"
+                  placeholder={t('blacklist.reasonPlaceholder')}
                   className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-red-500 resize-none"
                 />
               </div>
@@ -306,14 +316,14 @@ export default function BlacklistPage() {
                   disabled={saving}
                   className="flex-1 bg-red-700 hover:bg-red-600 disabled:opacity-50 text-white text-sm font-medium py-2 rounded-lg transition-colors flex items-center justify-center gap-2"
                 >
-                  {saving && <Spinner size={14} />} Agregar ban
+                  {saving && <Spinner size={14} />} {t('blacklist.add')}
                 </button>
                 <button
                   type="button"
                   onClick={() => setShowModal(false)}
                   className="px-4 py-2 text-sm text-gray-400 hover:text-gray-200 transition-colors"
                 >
-                  Cancelar
+                  {t('common.cancel')}
                 </button>
               </div>
             </form>
