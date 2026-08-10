@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import GaritaPage             from './pages/GaritaPage';
 import ResidentesPage         from './pages/ResidentesPage';
 import LoginPage              from './pages/LoginPage';
@@ -15,21 +15,27 @@ import NotFoundPage           from './pages/NotFoundPage';
 import OwnerDashboard         from './pages/owner/OwnerDashboard';
 import EmpresaDetail          from './pages/owner/EmpresaDetail';
 import OwnerEmpresas          from './pages/owner/OwnerEmpresas';
+import AuditLogsPage          from './pages/owner/AuditLogsPage';
 import AdminEmpresaDashboard  from './pages/admin_empresa/AdminEmpresaDashboard';
 import GestionSucursales      from './pages/admin_empresa/GestionSucursales';
 import BlacklistPage           from './pages/BlacklistPage';
+import AnunciosPage            from './pages/AnunciosPage';
+import TicketsPage             from './pages/TicketsPage';
+import ReservasAdminPage      from './pages/ReservasAdminPage';
+import ReservasPage           from './pages/ReservasPage';
+import AnnouncementsBell       from './components/AnnouncementsBell';
 import { ToastProvider }      from './components/Toast';
-import { decodeTokenPayload } from './services/api';
+import { decodeTokenPayload, getTickets } from './services/api';
 import { ThemeProvider, useTheme } from './context/ThemeContext';
 import { LanguageProvider }   from './context/LanguageContext';
 import { useTranslation }     from './i18n/useTranslation';
 import { useLanguage }        from './context/LanguageContext';
 
 type Page =
-  | 'dashboard' | 'residentes' | 'pagos' | 'preaut' | 'reportes' | 'config' | 'verificacion' | 'agentes' | 'blacklist'
+  | 'dashboard' | 'residentes' | 'pagos' | 'preaut' | 'reportes' | 'config' | 'verificacion' | 'agentes' | 'blacklist' | 'anuncios' | 'tickets' | 'reservas'
   | 'garita' | 'salida'
-  | 'portal'
-  | 'owner-dashboard' | 'owner-empresas' | 'owner-empresa-detail'
+  | 'portal' | 'mis-reservas'
+  | 'owner-dashboard' | 'owner-empresas' | 'owner-empresa-detail' | 'owner-audit'
   | 'ae-dashboard' | 'ae-sucursales';
 
 interface NavItem { key: Page; labelKey: string; d: string; }
@@ -54,6 +60,9 @@ const ADMIN_NAV: NavItem[] = [
   { key: 'config',       labelKey: 'nav.config',       d: 'M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6' },
   { key: 'verificacion', labelKey: 'nav.verification', d: 'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z' },
   { key: 'blacklist',    labelKey: 'nav.blacklist',    d: 'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10zM9 12l2 2 4-4' },
+  { key: 'anuncios',     labelKey: 'nav.announcements', d: 'M3 11l18-5v12L3 14v-3zM11.6 16.8a3 3 0 11-5.8-1.6' },
+  { key: 'tickets',      labelKey: 'nav.tickets',       d: 'M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z' },
+  { key: 'reservas',     labelKey: 'nav.reservations',  d: 'M8 2v4M16 2v4M3 10h18M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z' },
 ];
 
 const AGENTE_NAV: NavItem[] = [
@@ -62,12 +71,14 @@ const AGENTE_NAV: NavItem[] = [
 ];
 
 const RESIDENTE_NAV: NavItem[] = [
-  { key: 'portal', labelKey: 'nav.portal', d: 'M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2zM9 22V12h6v10' },
+  { key: 'portal',       labelKey: 'nav.portal',       d: 'M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2zM9 22V12h6v10' },
+  { key: 'mis-reservas', labelKey: 'nav.reservations', d: 'M8 2v4M16 2v4M3 10h18M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z' },
 ];
 
 const OWNER_NAV: NavItem[] = [
   { key: 'owner-dashboard', labelKey: 'nav.ownerDashboard', d: 'M3 3h7v7H3zm11 0h7v7h-7zM3 14h7v7H3zm11 0h7v7h-7z' },
   { key: 'owner-empresas',  labelKey: 'nav.companies',      d: 'M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2zM9 22V12h6v10' },
+  { key: 'owner-audit',     labelKey: 'nav.auditLogs',      d: 'M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M9 5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2M9 5h6M9 12h6M9 16h4' },
 ];
 
 const ADMIN_EMPRESA_NAV: NavItem[] = [
@@ -106,6 +117,17 @@ function AppShell() {
     return resolveDefaultPage(rol);
   });
   const [selectedEmpresaId, setSelectedEmpresaId] = useState<string | null>(null);
+  const [ticketsUnread, setTicketsUnread] = useState(0);
+
+  // Badge de tickets no leídos para el staff (se refresca al navegar)
+  useEffect(() => {
+    if (userRol !== 'admin' && userRol !== 'admin_sucursal') return;
+    let cancel = false;
+    getTickets()
+      .then(rows => { if (!cancel) setTicketsUnread(rows.reduce((s, t) => s + Number(t.no_leidos || 0), 0)); })
+      .catch(() => {});
+    return () => { cancel = true; };
+  }, [userRol, page]);
 
   const handleLogin = (token: string, rol: string, usuario: Record<string, any>) => {
     localStorage.setItem('token', token);
@@ -148,6 +170,10 @@ function AppShell() {
       case 'config':       return <ConfigCargosPage />;
       case 'verificacion': return <VerificacionPage />;
       case 'blacklist':    return <BlacklistPage />;
+      case 'anuncios':     return <AnunciosPage />;
+      case 'tickets':      return <TicketsPage />;
+      case 'reservas':     return <ReservasAdminPage />;
+      case 'mis-reservas': return <ReservasPage />;
       case 'garita':       return <GaritaPage />;
       case 'salida':       return <SalidaPage />;
       case 'portal':       return <ResidentePage />;
@@ -157,6 +183,8 @@ function AppShell() {
         return <OwnerDashboard onSelectEmpresa={goToEmpresaDetail} />;
       case 'owner-empresas':
         return <OwnerEmpresas />;
+      case 'owner-audit':
+        return <AuditLogsPage />;
       case 'owner-empresa-detail':
         return selectedEmpresaId
           ? <EmpresaDetail empresaId={selectedEmpresaId} onBack={() => setPage('owner-dashboard')} />
@@ -195,6 +223,8 @@ function AppShell() {
           SecureGate
         </span>
         <div className="flex items-center gap-4">
+          {/* Announcements bell — residente portal */}
+          {userRol === 'residente' && <AnnouncementsBell />}
           {/* Language toggle */}
           <button
             onClick={() => setLanguage(language === 'es' ? 'en' : 'es')}
@@ -251,6 +281,11 @@ function AppShell() {
               )}
               <SideIcon d={item.d} />
               <span className="hidden md:block truncate">{t(item.labelKey)}</span>
+              {item.key === 'tickets' && ticketsUnread > 0 && (
+                <span className="ml-auto min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full bg-red-600 text-white text-[10px] font-bold leading-none">
+                  {ticketsUnread > 9 ? '9+' : ticketsUnread}
+                </span>
+              )}
             </button>
           ))}
         </aside>

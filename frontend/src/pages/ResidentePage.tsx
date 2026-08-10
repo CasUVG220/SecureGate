@@ -6,15 +6,24 @@ import {
   deleteMisPreautorizacion,
   getMisAccesos,
   getMisPagos,
+  getMiResumenMes,
+  type ResumenMes,
   crearTransferencia,
+  getMisTickets,
+  createTicket,
   type ResidenteMe,
   type MiPreautorizacion,
   type MiVisita,
   type Pago,
+  type Ticket,
+  type TicketTipo,
 } from '../services/api';
 import { Spinner } from '../components/Skeleton';
 import { useToast } from '../components/Toast';
 import { useTranslation } from '../i18n/useTranslation';
+import TicketChat, { TIPO_LABEL, ESTADO_BADGE, ESTADO_LABEL } from '../components/TicketChat';
+
+const TICKET_TIPOS: TicketTipo[] = ['mantenimiento', 'queja', 'seguridad', 'otro'];
 
 const BADGE: Record<string, string> = {
   al_dia:   'bg-green-100 text-green-700',
@@ -49,12 +58,24 @@ export default function ResidentePage() {
   const [loading, setLoading]   = useState(true);
   const [error, setError]       = useState<string | null>(null);
 
-  const [tab, setTab]           = useState<'pagos' | 'invitados'>('pagos');
+  const [tab, setTab]           = useState<'pagos' | 'invitados' | 'solicitudes'>('pagos');
+
+  // Solicitudes (tickets) tab state
+  const [tickets, setTickets]           = useState<Ticket[]>([]);
+  const [ticketsLoaded, setTicketsLoaded] = useState(false);
+  const [selectedTicket, setSelectedTicket] = useState<string | null>(null);
+  const [showTicketForm, setShowTicketForm] = useState(false);
+  const [ticketForm, setTicketForm]     = useState<{ tipo: TicketTipo; titulo: string; mensaje: string }>(
+    { tipo: 'mantenimiento', titulo: '', mensaje: '' }
+  );
+  const [ticketSaving, setTicketSaving] = useState(false);
+  const [ticketError, setTicketError]   = useState<string | null>(null);
 
   // Pagos tab state
   const [misPagos, setMisPagos]           = useState<Pago[]>([]);
   const [pagosLoading, setPagosLoading]   = useState(false);
   const [pagosLoaded, setPagosLoaded]     = useState(false);
+  const [resumenMes, setResumenMes]       = useState<ResumenMes | null>(null);
   const [showTrf, setShowTrf]             = useState(false);
   const [trfForm, setTrfForm]             = useState(EMPTY_TRF);
   const [imgBase64, setImgBase64]         = useState<string | null>(null);
@@ -82,6 +103,8 @@ export default function ResidentePage() {
       .then(p => { setMisPagos(p); setPagosLoaded(true); })
       .catch(() => showToast('No se pudo cargar el historial de pagos.', 'error'))
       .finally(() => setPagosLoading(false));
+    // Desglose del mes: de dónde sale el saldo (cuota, reservas, etc.)
+    getMiResumenMes().then(setResumenMes).catch(() => {});
   };
 
   const loadInvitados = () => {
@@ -101,10 +124,51 @@ export default function ResidentePage() {
     loadPagos();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const handleTabChange = (tab2: 'pagos' | 'invitados') => {
+  const loadTickets = (force = false) => {
+    if (ticketsLoaded && !force) return;
+    getMisTickets()
+      .then(rows => { setTickets(rows); setTicketsLoaded(true); })
+      .catch(() => showToast('No se pudo cargar tus solicitudes.', 'error'));
+  };
+
+  const closeTicketChat = () => { setSelectedTicket(null); loadTickets(true); };
+
+  useEffect(() => {
+    if (!selectedTicket) return;
+    const handleEscape = (e: KeyboardEvent) => { if (e.key === 'Escape') closeTicketChat(); };
+    window.addEventListener('keydown', handleEscape);
+    return () => window.removeEventListener('keydown', handleEscape);
+  }, [selectedTicket]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleTabChange = (tab2: 'pagos' | 'invitados' | 'solicitudes') => {
     setTab(tab2);
     if (tab2 === 'pagos') loadPagos();
     if (tab2 === 'invitados') loadInvitados();
+    if (tab2 === 'solicitudes') loadTickets();
+  };
+
+  const ticketsUnread = tickets.reduce((s, tk) => s + Number(tk.no_leidos || 0), 0);
+
+  const handleCreateTicket = async () => {
+    if (!ticketForm.titulo.trim())  { setTicketError(t('tickets.titleRequired')); return; }
+    if (!ticketForm.mensaje.trim()) { setTicketError(t('tickets.messageRequired')); return; }
+    setTicketError(null); setTicketSaving(true);
+    try {
+      const nuevo = await createTicket({
+        tipo:    ticketForm.tipo,
+        titulo:  ticketForm.titulo.trim(),
+        mensaje: ticketForm.mensaje.trim(),
+      });
+      setShowTicketForm(false);
+      setTicketForm({ tipo: 'mantenimiento', titulo: '', mensaje: '' });
+      loadTickets(true);
+      setSelectedTicket(nuevo.id);
+      showToast(t('tickets.created'), 'success');
+    } catch (err) {
+      setTicketError(err instanceof Error ? err.message : t('common.error'));
+    } finally {
+      setTicketSaving(false);
+    }
   };
 
   const handleTrfChange = (e: React.ChangeEvent<HTMLInputElement>) =>
@@ -258,6 +322,9 @@ export default function ResidentePage() {
             <p className={`text-xl font-semibold mt-0.5 ${saldo > 0 ? 'text-red-400' : 'text-green-400'}`}>
               Q{saldo.toFixed(2)}
             </p>
+            {saldo > 0 && (
+              <p className="text-gray-500 text-xs mt-0.5">Incluye cargos por mora aplicados automáticamente</p>
+            )}
           </div>
           {data!.telefono && (
             <div>
@@ -270,17 +337,26 @@ export default function ResidentePage() {
 
       {/* Tab bar */}
       <div className="flex rounded-xl overflow-hidden border border-gray-700">
-        {(['pagos', 'invitados'] as const).map(tabKey => (
+        {(['pagos', 'invitados', 'solicitudes'] as const).map(tabKey => (
           <button
             key={tabKey}
             onClick={() => handleTabChange(tabKey)}
-            className={`flex-1 py-2.5 text-sm font-semibold transition-colors ${
+            className={`relative flex-1 py-2.5 text-sm font-semibold transition-colors ${
               tab === tabKey
                 ? 'bg-emerald-500 text-white'
                 : 'bg-gray-800 text-gray-400 hover:text-gray-200'
             }`}
           >
-            {tabKey === 'pagos' ? t('portal.payments') : t('portal.visitors')}
+            {tabKey === 'pagos'
+              ? t('portal.payments')
+              : tabKey === 'invitados'
+              ? t('portal.visitors')
+              : t('tickets.myTickets')}
+            {tabKey === 'solicitudes' && ticketsUnread > 0 && (
+              <span className="absolute top-1.5 right-2 min-w-[16px] h-4 px-1 flex items-center justify-center rounded-full bg-red-600 text-white text-[10px] font-bold leading-none">
+                {ticketsUnread > 9 ? '9+' : ticketsUnread}
+              </span>
+            )}
           </button>
         ))}
       </div>
@@ -288,6 +364,35 @@ export default function ResidentePage() {
       {/* ── Tab: Pagos ── */}
       {tab === 'pagos' && (
         <div className="space-y-4">
+          {/* Resumen de la factura del mes: desglosa el saldo por concepto */}
+          <div className="bg-gray-800 rounded-2xl p-6 shadow-xl space-y-3">
+            <h2 className="text-base font-semibold text-white">{t('reservas.monthSummary')}</h2>
+            {!resumenMes || resumenMes.items.length === 0 ? (
+              <p className="text-sm text-gray-500">{t('reservas.monthSummaryEmpty')}</p>
+            ) : (
+              <>
+                <ul className="space-y-2">
+                  {resumenMes.items.map(item => (
+                    <li key={item.id} className="flex justify-between gap-3 text-sm">
+                      <span className="text-gray-300">
+                        {item.concepto || t('reservas.maintenanceFee')}
+                      </span>
+                      <span className="text-gray-200 font-medium whitespace-nowrap">
+                        Q{parseFloat(item.monto).toFixed(2)}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+                <div className="flex justify-between gap-3 text-sm border-t border-gray-700 pt-2">
+                  <span className="font-semibold text-gray-300">{t('reservas.monthTotal')}</span>
+                  <span className="font-bold text-emerald-400">
+                    Q{resumenMes.total_pendiente.toFixed(2)}
+                  </span>
+                </div>
+              </>
+            )}
+          </div>
+
           {/* Realizar Pago card */}
           <div className="bg-gray-800 rounded-2xl p-6 shadow-xl space-y-4">
             <div>
@@ -602,6 +707,135 @@ export default function ResidentePage() {
                 )}
               </section>
             </>
+          )}
+        </div>
+      )}
+
+      {/* ── Tab: Solicitudes (tickets) ── */}
+      {tab === 'solicitudes' && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-base font-semibold text-white">{t('tickets.myTickets')}</h2>
+            {!showTicketForm && (
+              <button
+                onClick={() => { setShowTicketForm(true); setTicketError(null); }}
+                className="text-sm bg-emerald-600 hover:bg-emerald-500 text-white font-medium px-4 py-2 rounded-lg transition-colors"
+              >
+                {t('tickets.new')}
+              </button>
+            )}
+          </div>
+
+          {/* Nuevo ticket */}
+          {showTicketForm && (
+            <div className="bg-gray-800 rounded-2xl p-5 shadow-xl space-y-4">
+              <h3 className="text-sm font-semibold text-white">{t('tickets.newTitle')}</h3>
+              {ticketError && (
+                <div className="bg-red-900/40 border border-red-700 rounded-lg px-3 py-2 text-red-300 text-sm">{ticketError}</div>
+              )}
+              <div>
+                <label className="block text-xs text-gray-400 mb-1">{t('tickets.typeLabel')}</label>
+                <select
+                  value={ticketForm.tipo}
+                  onChange={e => setTicketForm(p => ({ ...p, tipo: e.target.value as TicketTipo }))}
+                  className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500"
+                >
+                  {TICKET_TIPOS.map(tp => <option key={tp} value={tp}>{t(TIPO_LABEL[tp])}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs text-gray-400 mb-1">{t('tickets.titleLabel')}</label>
+                <input
+                  type="text"
+                  value={ticketForm.titulo}
+                  onChange={e => setTicketForm(p => ({ ...p, titulo: e.target.value }))}
+                  placeholder={t('tickets.titlePlaceholder')}
+                  className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-emerald-500"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-400 mb-1">{t('tickets.messageLabel')}</label>
+                <textarea
+                  value={ticketForm.mensaje}
+                  onChange={e => setTicketForm(p => ({ ...p, mensaje: e.target.value }))}
+                  rows={3}
+                  placeholder={t('tickets.messagePlaceholder')}
+                  className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-emerald-500 resize-none"
+                />
+              </div>
+              <div className="flex gap-3">
+                <button
+                  onClick={handleCreateTicket}
+                  disabled={ticketSaving}
+                  className="flex-1 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-semibold py-2 rounded-xl transition-colors flex items-center justify-center gap-2"
+                >
+                  {ticketSaving && <Spinner size={14} />}
+                  {ticketSaving ? t('common.saving') : t('tickets.send')}
+                </button>
+                <button
+                  onClick={() => { setShowTicketForm(false); setTicketError(null); }}
+                  className="bg-gray-700 hover:bg-gray-600 text-gray-200 font-medium px-4 py-2 rounded-xl transition-colors"
+                >
+                  {t('common.cancel')}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Lista de tickets */}
+          {!ticketsLoaded ? (
+            <div className="flex items-center justify-center py-8"><Spinner size={22} /></div>
+          ) : tickets.length === 0 ? (
+            <p className="text-gray-400 text-sm text-center py-8">{t('tickets.emptyResident')}</p>
+          ) : (
+            <div className="space-y-2">
+              {tickets.map(tk => (
+                <button
+                  key={tk.id}
+                  onClick={() => setSelectedTicket(tk.id)}
+                  className="w-full text-left bg-gray-800 hover:bg-gray-700/60 rounded-xl px-4 py-3 border border-gray-700 transition-colors"
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="text-white font-medium text-sm flex-1 truncate">{tk.titulo}</span>
+                    {Number(tk.no_leidos) > 0 && (
+                      <span className="min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full bg-red-600 text-white text-[10px] font-bold">
+                        {Number(tk.no_leidos)}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2 mt-1">
+                    <span className={`inline-block text-[10px] font-semibold px-2 py-0.5 rounded-full ${ESTADO_BADGE[tk.estado]}`}>
+                      {t(ESTADO_LABEL[tk.estado])}
+                    </span>
+                    <span className="text-[11px] text-gray-400">{t(TIPO_LABEL[tk.tipo])}</span>
+                  </div>
+                  {tk.ultimo_mensaje && (
+                    <p className="text-xs text-gray-500 mt-1 truncate">{tk.ultimo_mensaje}</p>
+                  )}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Chat overlay */}
+          {selectedTicket && (
+            <div
+              className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm p-3 flex flex-col"
+              onClick={closeTicketChat}
+            >
+              <button
+                onClick={closeTicketChat}
+                className="self-end text-gray-300 hover:text-white mb-2 text-sm relative z-10"
+              >
+                ✕ {t('common.cancel')}
+              </button>
+              <div
+                className="flex-1 min-h-0 max-w-lg w-full mx-auto relative z-10"
+                onClick={e => e.stopPropagation()}
+              >
+                <TicketChat key={selectedTicket} ticketId={selectedTicket} viewerRole="residente" onActivity={() => loadTickets(true)} />
+              </div>
+            </div>
           )}
         </div>
       )}
