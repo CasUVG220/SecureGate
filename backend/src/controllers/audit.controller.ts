@@ -6,6 +6,8 @@ export const getAuditLogs = async (req: Request, res: Response) => {
   const offset    = parseInt(req.query.offset     as string) || 0;
   const accion    = (req.query.accion     as string | undefined) || null;
   const usuarioId = (req.query.usuario_id as string | undefined) || null;
+  const desde     = (req.query.desde      as string | undefined) || null;
+  const hasta     = (req.query.hasta      as string | undefined) || null;
 
   const conditions: string[] = [];
   const params: unknown[] = [];
@@ -17,6 +19,15 @@ export const getAuditLogs = async (req: Request, res: Response) => {
   if (usuarioId) {
     params.push(usuarioId);
     conditions.push(`al.usuario_id = $${params.length}`);
+  }
+  if (desde) {
+    params.push(desde);
+    conditions.push(`al.created_at >= $${params.length}`);
+  }
+  if (hasta) {
+    // Include the entire "hasta" day by pushing the upper bound to end of day
+    params.push(hasta);
+    conditions.push(`al.created_at <= ($${params.length}::date + INTERVAL '1 day')`);
   }
 
   const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
@@ -40,10 +51,10 @@ export const getAuditLogs = async (req: Request, res: Response) => {
     );
 
     res.json({
+      logs:   result.rows,
       total:  parseInt(countResult.rows[0].count),
       limit,
       offset,
-      items:  result.rows,
     });
   } catch (error) {
     res.status(500).json({ error: 'Error al obtener logs de auditoría', detail: String(error) });
