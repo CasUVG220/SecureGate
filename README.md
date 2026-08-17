@@ -80,7 +80,8 @@ SecureGate sigue el patron **MVC (Modelo-Vista-Controlador)** con separacion en 
 
 ```
 securegate/
-├── docker-compose.yml          # Orquestacion de los 3 servicios
+├── docker-compose.yml          # Orquestacion de los 3 servicios (uso diario)
+├── docker-compose.prod.yml     # Solo produccion: nginx + SSL (ver nota abajo)
 ├── .gitignore
 ├── .env.example                # Plantilla de variables de entorno
 │
@@ -174,29 +175,88 @@ JWT_SECRET=tu_jwt_secret_aqui
 ### 3. Levantar el entorno completo
 
 ```bash
-docker compose up --build
+docker compose up --build -d
 ```
 
-La primera vez descarga las imagenes base y construye los contenedores. Toma entre 3 y 5 minutos.
+El mismo comando sirve en local y en cualquier VM nueva: no hay que editar el
+compose ni definir variables extra por servidor. La primera vez descarga las
+imagenes base y construye los contenedores; toma entre 3 y 5 minutos.
 
 ### 4. Verificar que todo funciona
 
+Reemplaza `<IP-del-servidor>` por `localhost` en tu maquina, o por la IP
+publica de la VM si levantaste el entorno alli.
+
 | Servicio | URL | Descripcion |
 |---------|-----|-------------|
-| Frontend | http://localhost:5173 | Aplicacion React |
-| Backend health | http://localhost:3000/health | Estado del servidor |
-| Backend + BD | http://localhost:3000/api/status | Conexion a PostgreSQL |
+| Frontend | http://\<IP-del-servidor\>:5173 | Aplicacion React |
+| Backend health | http://\<IP-del-servidor\>:3000/health | Estado del servidor |
+| Backend + BD | http://\<IP-del-servidor\>:3000/api/status | Conexion a PostgreSQL |
+
+```bash
+docker compose ps                      # los 3 contenedores en Up
+curl http://localhost:3000/health      # {"status":"ok",...}
+curl http://localhost:5173             # HTML del frontend
+```
+
+En una VM hay que abrir los puertos `5173` y `3000` en el firewall. Para GCP:
+
+```bash
+gcloud compute firewall-rules create securegate-dev \
+  --allow tcp:5173,tcp:3000 --source-ranges 0.0.0.0/0
+```
+
+**No hace falta configurar `VITE_API_URL` por servidor.** El frontend detecta
+en runtime el hostname desde el que se abrio la pagina
+(`window.location.hostname`, en `frontend/src/services/api.ts`) y arma la URL
+del backend contra ese mismo host. Abrir `http://34.16.22.9:5173` hace que las
+peticiones vayan a `http://34.16.22.9:3000` automaticamente.
+
+> Si en lugar de la IP usas un nombre DNS (`http://mi-vm.ejemplo.com:5173`),
+> Vite bloquea la peticion por su control de `Host`. Agrega ese nombre a
+> `server.allowedHosts` en `frontend/vite.config.ts`.
+
+---
+
+## Despliegue con dominio y SSL (produccion)
+
+`docker-compose.yml` — el que usa el equipo todos los dias — **no incluye
+nginx ni certificados**: expone backend y frontend directamente por sus
+puertos, de modo que funciona en local y en cualquier VM sin dominio.
+
+Cuando el proyecto tenga un dominio real con Let's Encrypt configurado, se usa
+el compose separado `docker-compose.prod.yml`, que si levanta nginx como
+reverse proxy con HTTPS. Requisitos previos:
+
+1. Apuntar el registro A del dominio a la IP publica del servidor.
+2. Emitir el certificado en el host:
+   `sudo certbot certonly --standalone -d midominio.com`
+3. Sustituir `DOMINIO` por el dominio real en `nginx/nginx.conf`.
+4. Exportar las variables obligatorias (o ponerlas en un `.env`):
+
+```bash
+export POSTGRES_PASSWORD=...          # password de la BD
+export JWT_SECRET=...                 # secreto de firma de tokens
+export PUBLIC_URL=https://midominio.com
+export ALLOWED_ORIGINS=https://midominio.com
+
+docker compose -f docker-compose.prod.yml up --build -d
+```
+
+> No levantes `docker-compose.prod.yml` en local ni en una VM sin dominio: si
+> los certificados no existen en `/etc/letsencrypt`, nginx entra en
+> crash-loop. Para esos entornos usa siempre `docker-compose.yml`.
 
 ---
 
 ## Comandos Docker
 
 ```bash
-# Levantar todos los servicios
-docker compose up --build
+# Levantar todos los servicios en segundo plano (local o VM)
+docker compose up --build -d
 
-# Levantar en segundo plano
-docker compose up -d
+# Levantar en primer plano, viendo los logs
+docker compose up --build
 
 # Ver logs en tiempo real
 docker compose logs -f
@@ -295,6 +355,143 @@ La Terminal de Garita presenta:
 - **Precio:** Primeras 1,000 llamadas/mes gratuitas, luego $1.50/1,000
 - **Latencia tipica:** 300–800 ms por imagen
 - **Requisito:** Variable de entorno `GOOGLE_CLOUD_API_KEY` configurada en `.env`
+
+---
+
+## Migraciones automaticas de esquema
+
+El script `database/init.sql` es **idempotente** (usa `CREATE TABLE IF NOT EXISTS`,
+`ALTER TABLE ... IF EXISTS` y bloques `DO $$ ... EXCEPTION WHEN duplicate_column`).
+
+`docker-entrypoint-initdb.d` solo ejecuta ese script en la **primera**
+inicializacion del volumen de Postgres, por lo que las tablas/columnas agregadas
+despues de crear el volumen **no** se aplicaban solas tras un deploy.
+
+Para evitarlo, el backend corre una **guarda de migraciones** al arrancar
+(`backend/src/db/migrate.ts`, invocada desde `index.ts` antes de `app.listen`):
+lee `init.sql` y lo aplica contra la base ya existente. Como es idempotente, es
+seguro ejecutarlo en cada arranque; si falla, se registra el error y el servidor
+arranca igual (evita crash-loops).
+
+- El archivo se monta en el contenedor via `docker-compose.yml`
+  (`./database/init.sql:/app/database/init.sql:ro`).
+- Se puede forzar otra ruta con la variable `INIT_SQL_PATH`.
+- Deploy tipico tras cambiar el esquema:
+  ```bash
+  git pull
+  docker compose build --no-cache backend   # si cambiaron dependencias
+  docker compose up -d backend              # al arrancar aplica init.sql
+  docker compose logs --tail=30 backend     # busca "[migrate] Esquema al dia."
+  ```
+
+Tambien se puede aplicar manualmente en cualquier momento:
+```bash
+docker exec -i securegate-db psql -U sguser -d securegate < database/init.sql
+```
+
+---
+
+## Backups y Recuperacion de la Base de Datos
+
+El proyecto corre en una VM GCP `e2-micro` (Ubuntu 22.04, IP `34.9.219.139`) con
+PostgreSQL 15 dentro de Docker Compose. El script `scripts/backup-postgres.sh`
+automatiza los respaldos diarios hacia un bucket de Google Cloud Storage (GCS).
+
+### Que hace el script
+
+1. `pg_dump` del contenedor `securegate-db`, comprimido con timestamp:
+   `backup_YYYYMMDD_HHMMSS.sql.gz`.
+2. Sube el archivo al bucket de GCS con `gsutil cp`.
+3. Borra los backups locales con mas de 1 dia de antiguedad.
+4. Mantiene una retencion de los **30 backups** mas recientes en el bucket
+   (elimina los mas antiguos con `gsutil rm`).
+
+### Variables de entorno
+
+| Variable | Requerida | Default | Descripcion |
+|----------|-----------|---------|-------------|
+| `GCS_BUCKET` | **Si** | — | Nombre del bucket GCS, sin `gs://` (ej. `securegate-backups`) |
+| `DB_CONTAINER` | No | `securegate-db` | Nombre del contenedor de Postgres |
+| `DB_USER` | No | `sguser` | Usuario de Postgres |
+| `DB_NAME` | No | `securegate` | Base de datos a respaldar |
+| `BACKUP_DIR` | No | `/var/backups/securegate` | Carpeta local temporal |
+| `RETENTION` | No | `30` | Cantidad de backups a conservar en GCS |
+| `LOCAL_MAX_AGE` | No | `1` | Dias de retencion de los backups locales |
+| `GOOGLE_APPLICATION_CREDENTIALS` | No* | — | Ruta al JSON de la service account |
+
+\* En la VM de GCP no es necesario: `gsutil` usa la **service account adjunta a la
+instancia** (via metadata). Solo hace falta que esa SA tenga el rol
+`roles/storage.objectAdmin` sobre el bucket. Fuera de GCP, exporta
+`GOOGLE_APPLICATION_CREDENTIALS` apuntando al JSON de una SA con ese permiso.
+
+### Preparacion (una sola vez)
+
+```bash
+# Crear el bucket (region cercana, con versionado opcional)
+gsutil mb -l us-central1 gs://securegate-backups
+gsutil versioning set on gs://securegate-backups   # opcional
+
+# Otorgar permisos a la service account de la VM sobre el bucket
+gsutil iam ch \
+  serviceAccount:SA_EMAIL@PROJECT.iam.gserviceaccount.com:roles/storage.objectAdmin \
+  gs://securegate-backups
+
+# Probar el script manualmente
+export GCS_BUCKET=securegate-backups
+sudo -E ./scripts/backup-postgres.sh
+```
+
+### Cronjob diario (2:00 AM)
+
+Edita el crontab del usuario que puede ejecutar `docker` y `gsutil`:
+
+```bash
+crontab -e
+```
+
+Agrega la siguiente linea (corre todos los dias a las 02:00, con log):
+
+```cron
+0 2 * * *  GCS_BUCKET=securegate-backups /home/ubuntu/SecureGate/scripts/backup-postgres.sh >> /var/log/securegate-backup.log 2>&1
+```
+
+> Ajusta la ruta absoluta del script segun donde este clonado el repo.
+> Verifica la zona horaria de la VM con `timedatectl`; el cron usa la hora local
+> del sistema. Para forzar Guatemala: `sudo timedatectl set-timezone America/Guatemala`.
+
+Revisa la ejecucion mas reciente con:
+
+```bash
+tail -n 50 /var/log/securegate-backup.log
+gsutil ls -l gs://securegate-backups/
+```
+
+### Restaurar desde un backup
+
+```bash
+# 1. Listar los backups disponibles y elegir uno
+gsutil ls gs://securegate-backups/
+
+# 2. Descargar el backup deseado
+gsutil cp gs://securegate-backups/backup_20260712_020000.sql.gz .
+
+# 3. Descomprimir
+gunzip backup_20260712_020000.sql.gz    # -> backup_20260712_020000.sql
+
+# 4a. Restaurar sobre la base existente (streaming, sin descomprimir a disco):
+gunzip -c backup_20260712_020000.sql.gz | \
+  docker exec -i securegate-db psql -U sguser -d securegate
+
+# 4b. (Recomendado) Restaurar en una base limpia para evitar conflictos:
+docker exec -u postgres securegate-db dropdb --if-exists securegate
+docker exec -u postgres securegate-db createdb -O sguser securegate
+gunzip -c backup_20260712_020000.sql.gz | \
+  docker exec -i securegate-db psql -U sguser -d securegate
+```
+
+> El dump se genera con `pg_dump` en formato SQL plano, por eso se restaura con
+> `psql` (no con `pg_restore`). Detén el backend antes de una restauracion
+> destructiva: `docker compose stop backend`, y reinícialo al terminar.
 
 ---
 
