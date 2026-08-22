@@ -7,6 +7,8 @@ import accesosRouter from './accesos.routes';
 import cargosRouter from './cargos.routes';
 import pagosRouter from './pagos.routes';
 import preautorizacionesRouter from './preautorizaciones.routes';
+import invitacionesQrRouter from './invitacionesQr.routes';
+import configQrRouter from './configQr.routes';
 import ocrRouter from './ocr.routes';
 import reportesRouter from './reportes.routes';
 import configuracionCargosRouter from './configuracion-cargos.routes';
@@ -58,6 +60,8 @@ router.use('/tickets',            verifyToken, ticketsRouter);
 router.use('/areas',              verifyToken, areasRouter);
 router.use('/reservas',           verifyToken, reservasRouter);
 router.use('/config-reservas',    verifyToken, configReservasRouter);
+router.use('/invitaciones-qr',    verifyToken, invitacionesQrRouter);
+router.use('/config-qr',          configQrRouter);
 
 router.get('/dashboard',   verifyToken, getDashboard);
 router.get('/audit-logs', verifyToken, requireOwner, getAuditLogs);
