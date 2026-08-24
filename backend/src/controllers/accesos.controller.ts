@@ -2,10 +2,11 @@ import { Request, Response } from 'express';
 import pool from '../db/pool';
 import { checkPreautorizacion } from './preautorizaciones.controller';
 import { checkBlacklist } from './blacklist.controller';
+import { getConfigQrEfectiva } from './configQr.controller';
 import { tenantFilter, ownershipClause, ownershipParams } from '../utils/tenant';
 
 export const registrarAcceso = async (req: Request, res: Response) => {
-  const { nombre_visitante, numero_dpi, foto, residente_id, agente_id, placa, notas } = req.body;
+  const { nombre_visitante, numero_dpi, foto, residente_id, agente_id, placa, notas, invitacion_qr_id } = req.body;
 
   if (!nombre_visitante || !numero_dpi || !residente_id || !agente_id) {
     return res.status(400).json({
@@ -79,6 +80,83 @@ export const registrarAcceso = async (req: Request, res: Response) => {
       });
     }
 
+    // Validate + consume invitación QR, if this entry comes from a scanned code.
+    // Locked with FOR UPDATE so two garitas scanning the same single-use code
+    // at once can't both succeed (re-checks everything verificarInvitacion
+    // already checked — that call is only advisory, this is authoritative).
+    if (invitacion_qr_id) {
+      const invResult = await client.query(
+        `SELECT id, sucursal_id, tipo, numero_dpi, placa, activo, usos_maximos, usos_actuales,
+                intentos_fallidos_dpi, bloqueado_hasta,
+                (fecha_inicio <= CURRENT_DATE) AS ya_vigente,
+                (fecha_fin IS NULL OR fecha_fin >= CURRENT_DATE) AS no_vencida
+         FROM invitaciones_qr WHERE id = $1 FOR UPDATE`,
+        [invitacion_qr_id]
+      );
+      if (invResult.rows.length === 0) {
+        await client.query('ROLLBACK');
+        return res.status(404).json({ error: 'Invitación QR no encontrada' });
+      }
+      const inv = invResult.rows[0];
+      if (inv.sucursal_id !== sucursal_id) {
+        await client.query('ROLLBACK');
+        return res.status(403).json({ error: 'Esta invitación pertenece a otra sucursal' });
+      }
+      if (inv.bloqueado_hasta && new Date(inv.bloqueado_hasta) > new Date()) {
+        await client.query('ROLLBACK');
+        return res.status(409).json({ error: 'Invitación QR bloqueada temporalmente por intentos fallidos' });
+      }
+      if (!inv.activo || !inv.ya_vigente || !inv.no_vencida) {
+        await client.query('ROLLBACK');
+        return res.status(409).json({ error: 'Invitación QR no vigente' });
+      }
+      if (inv.usos_maximos != null && inv.usos_actuales >= inv.usos_maximos) {
+        await client.query('ROLLBACK');
+        return res.status(409).json({ error: 'Invitación QR ya alcanzó el máximo de usos' });
+      }
+
+      const configQr = await getConfigQrEfectiva(client, sucursal_id);
+
+      if (inv.tipo === 'individual' && inv.numero_dpi &&
+          inv.numero_dpi.trim().toUpperCase() !== String(numero_dpi).trim().toUpperCase()) {
+        // El ROLLBACK va primero: libera el FOR UPDATE que la transacción
+        // todavía tiene sobre esta fila. Si el UPDATE del contador (en una
+        // query aparte, sobre `pool`, para que sobreviva al rollback) se
+        // hiciera antes, esa conexión separada quedaría esperando para
+        // siempre el lock que sólo el propio ROLLBACK libera — auto-deadlock.
+        await client.query('ROLLBACK');
+        const intentos = inv.intentos_fallidos_dpi + 1;
+        const bloquear = intentos >= configQr.max_intentos_fallidos;
+        await pool.query(
+          `UPDATE invitaciones_qr
+             SET intentos_fallidos_dpi = $2,
+                 bloqueado_hasta = CASE WHEN $3::boolean
+                   THEN NOW() + ($4 || ' minutes')::interval ELSE bloqueado_hasta END
+           WHERE id = $1`,
+          [invitacion_qr_id, intentos, bloquear, configQr.bloqueo_minutos]
+        );
+        return res.status(409).json({ error: 'El DPI no coincide con la invitación' });
+      }
+
+      if (configQr.requiere_placa) {
+        if (!placa) {
+          await client.query('ROLLBACK');
+          return res.status(409).json({ error: 'Este QR requiere registrar la placa del vehículo' });
+        }
+        if (inv.placa && inv.placa.trim().toUpperCase() !== String(placa).trim().toUpperCase()) {
+          await client.query('ROLLBACK');
+          return res.status(409).json({ error: 'La placa no coincide con la invitación' });
+        }
+      }
+
+      await client.query(
+        `UPDATE invitaciones_qr
+           SET usos_actuales = usos_actuales + 1, intentos_fallidos_dpi = 0
+         WHERE id = $1`,
+        [invitacion_qr_id]
+      );
+    }
+
     // Register vehicle if plate provided
     let vehiculo_id: string | null = null;
     if (placa) {
@@ -92,10 +170,10 @@ export const registrarAcceso = async (req: Request, res: Response) => {
     // Create access record with sucursal_id
     const registroResult = await client.query(
       `INSERT INTO registros_acceso
-         (sucursal_id, visitante_id, residente_id, vehiculo_id, agente_id, tipo, notas)
-       VALUES ($1, $2, $3, $4, $5, 'entrada', $6)
+         (sucursal_id, visitante_id, residente_id, vehiculo_id, agente_id, tipo, notas, invitacion_qr_id)
+       VALUES ($1, $2, $3, $4, $5, 'entrada', $6, $7)
        RETURNING *`,
-      [sucursal_id, visitante_id, residente_id, vehiculo_id, agente_id, notas || null]
+      [sucursal_id, visitante_id, residente_id, vehiculo_id, agente_id, notas || null, invitacion_qr_id || null]
     );
     const registro = registroResult.rows[0];
 
