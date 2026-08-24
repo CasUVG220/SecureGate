@@ -131,6 +131,42 @@ CREATE TABLE IF NOT EXISTS preautorizaciones (
   created_at       TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS invitaciones_qr (
+  id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  sucursal_id      UUID NOT NULL REFERENCES sucursales(id) ON DELETE RESTRICT,
+  residente_id     UUID NOT NULL REFERENCES residentes(id) ON DELETE CASCADE,
+  tipo             VARCHAR(20) NOT NULL CHECK (tipo IN ('grupal', 'individual')),
+  etiqueta         VARCHAR(150),
+  nombre_visitante VARCHAR(150),
+  numero_dpi       VARCHAR(20),
+  fecha_inicio     DATE NOT NULL,
+  fecha_fin        DATE,
+  usos_maximos     INT,
+  usos_actuales    INT NOT NULL DEFAULT 0,
+  activo           BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at       TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_invitaciones_qr_residente ON invitaciones_qr(residente_id);
+CREATE INDEX IF NOT EXISTS idx_invitaciones_qr_sucursal  ON invitaciones_qr(sucursal_id);
+
+ALTER TABLE registros_acceso
+  ADD COLUMN IF NOT EXISTS invitacion_qr_id UUID REFERENCES invitaciones_qr(id) ON DELETE SET NULL;
+
+ALTER TABLE invitaciones_qr ADD COLUMN IF NOT EXISTS placa VARCHAR(20);
+ALTER TABLE invitaciones_qr ADD COLUMN IF NOT EXISTS intentos_fallidos_dpi INT NOT NULL DEFAULT 0;
+ALTER TABLE invitaciones_qr ADD COLUMN IF NOT EXISTS bloqueado_hasta TIMESTAMP;
+
+CREATE TABLE IF NOT EXISTS configuracion_qr (
+  sucursal_id                 UUID PRIMARY KEY REFERENCES sucursales(id) ON DELETE CASCADE,
+  dpi_obligatorio_individual  BOOLEAN NOT NULL DEFAULT TRUE,
+  requiere_placa              BOOLEAN NOT NULL DEFAULT FALSE,
+  autorizacion_automatica     BOOLEAN NOT NULL DEFAULT FALSE,
+  max_intentos_fallidos       INT NOT NULL DEFAULT 5 CHECK (max_intentos_fallidos > 0),
+  bloqueo_minutos             INT NOT NULL DEFAULT 15 CHECK (bloqueo_minutos > 0),
+  updated_at                  TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
 -- ── Audit logs ────────────────────────────────────────────────────────────
 
 CREATE TABLE IF NOT EXISTS audit_logs (
