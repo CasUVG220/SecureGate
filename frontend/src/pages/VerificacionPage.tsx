@@ -47,6 +47,8 @@ export default function VerificacionPage() {
       .finally(() => setLoading(false));
   };
 
+  // Carga inicial de la cola; load encapsula la consulta y sus estados.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { load(); }, []);
 
   const current = cola[selected] ?? null;
@@ -59,7 +61,7 @@ export default function VerificacionPage() {
       showToast(t('verification.approvedMsg'), 'success');
       setCola(prev => prev.filter(p => p.id !== current.id));
       setSelected(0);
-      setComentario('');
+      resetRechazo();
     } catch (err: unknown) {
       showToast(err instanceof Error ? err.message : 'Error al aprobar', 'error');
     } finally {
@@ -98,14 +100,14 @@ export default function VerificacionPage() {
 
   if (cola.length === 0) {
     return (
-      <div className="p-6 text-gray-100 max-w-2xl">
+      <div className="sg-page text-gray-100">
         <div className="flex items-center justify-between mb-6">
           <div>
             <h1 className="text-xl font-bold text-white">{t('verification.title')}</h1>
             <p className="text-sm text-gray-400 mt-0.5">{t('verification.subtitle')}</p>
           </div>
         </div>
-        <div className="bg-gray-800 rounded-2xl p-12 text-center shadow-xl">
+        <div className="sg-card p-10 text-center sm:p-12">
           <p className="text-gray-400 text-sm">{t('verification.noPending')}</p>
           <button onClick={load} className="mt-4 text-blue-400 hover:text-blue-300 text-sm transition-colors">
             {t('common.refresh')}
@@ -123,7 +125,7 @@ export default function VerificacionPage() {
     s ? new Date(s).toLocaleDateString('es-GT', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '—';
 
   return (
-    <div className="p-6 text-gray-100 space-y-6">
+    <div className="sg-page text-gray-100">
       {/* Page header */}
       <div className="flex items-center justify-between">
         <div>
@@ -140,7 +142,7 @@ export default function VerificacionPage() {
 
         {/* Left — Comprobante */}
         <div className="space-y-4">
-          <div className="bg-gray-800 rounded-2xl shadow-xl overflow-hidden">
+          <div className="sg-card overflow-hidden">
             {/* Navigation */}
             <div className="flex items-center justify-between px-5 py-3 border-b border-gray-700">
               <div className="flex items-center gap-2 text-sm text-gray-300">
@@ -234,7 +236,7 @@ export default function VerificacionPage() {
         {/* Right — Details + Actions */}
         <div className="space-y-4">
           {/* Resident info */}
-          <div className="bg-gray-800 rounded-2xl p-6 shadow-xl space-y-4">
+          <div className="sg-card p-5 sm:p-6 space-y-4">
             <div>
               <p className="text-xs text-gray-400 mb-2">Residente</p>
               <div className="flex items-center gap-3">
@@ -325,12 +327,12 @@ export default function VerificacionPage() {
           </div>
 
           {/* Actions */}
-          <div className="bg-gray-800 rounded-2xl p-6 shadow-xl space-y-4">
+          <div className="sg-card p-5 sm:p-6 space-y-4">
             {/* Approve */}
             <button
               onClick={handleAprobar}
               disabled={aprobando || rechazando}
-              className="w-full flex items-center justify-center gap-2 bg-green-600 hover:bg-green-500 disabled:opacity-50 text-white font-bold py-3.5 rounded-xl transition-colors"
+              className="sg-btn sg-btn-primary flex w-full items-center justify-center gap-2"
             >
               {aprobando
                 ? <Spinner size={16} />
@@ -349,7 +351,7 @@ export default function VerificacionPage() {
               <select
                 value={razonSeleccionada}
                 onChange={e => { setRazonSeleccionada(e.target.value); setComentarioLibre(''); }}
-                className="w-full bg-gray-700 border border-gray-600 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-red-500 transition-colors"
+                className="sg-input"
               >
                 <option value="">— Selecciona motivo de rechazo —</option>
                 {RAZONES_RECHAZO.map(r => (
@@ -363,14 +365,14 @@ export default function VerificacionPage() {
                   onChange={e => setComentarioLibre(e.target.value)}
                   rows={3}
                   placeholder="Describe el motivo del rechazo…"
-                  className="w-full bg-gray-700 border border-gray-600 rounded-xl px-4 py-3 text-white text-sm placeholder-gray-400 focus:outline-none focus:border-red-500 transition-colors resize-none"
+                  className="sg-input resize-none"
                 />
               )}
 
               <button
                 onClick={handleRechazar}
                 disabled={aprobando || rechazando || !puedeRechazar}
-                className="w-full flex items-center justify-center gap-2 bg-red-700 hover:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-3.5 rounded-xl transition-colors"
+                className="sg-btn sg-btn-danger flex w-full items-center justify-center gap-2"
               >
                 {rechazando
                   ? <Spinner size={16} />
@@ -390,8 +392,8 @@ export default function VerificacionPage() {
       </div>
 
       {/* Verification queue */}
-      <div className="bg-gray-800 rounded-2xl shadow-xl overflow-hidden">
-        <div className="px-5 py-3 border-b border-gray-700">
+      <div className="sg-card overflow-hidden">
+        <div className="border-b border-white/10 px-5 py-4">
           <h3 className="text-sm font-bold text-white">{t('verification.queue')}</h3>
         </div>
         <div className="flex gap-3 p-4 overflow-x-auto">
