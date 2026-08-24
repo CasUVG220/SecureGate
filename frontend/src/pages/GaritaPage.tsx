@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
+import jsQR from 'jsqr';
 import {
   getResidentes,
   registrarAcceso,
@@ -7,12 +8,18 @@ import {
   scanPlaca,
   buscarPreautorizacion,
   buscarVisitantesFrecuentes,
+  verificarInvitacionQr,
+  getConfigQr,
   BlacklistDenialError,
   type Residente,
   type VisitanteFrecuente,
-  type CargoGenerado,
+  type InvitacionQrVerificada,
+  type ConfigQr,
+  type AccesoPayload,
 } from '../services/api';
 import { useTranslation } from '../i18n/useTranslation';
+
+const QR_PREFIX = 'SGQR:';
 
 interface UltimoIngreso {
   id: string;
@@ -28,6 +35,7 @@ const EMPTY_FORM = {
   numero_dpi: '',
   residente_id: '',
   placa: '',
+  invitacion_qr_id: '',
 };
 
 export default function GaritaPage() {
@@ -57,10 +65,17 @@ export default function GaritaPage() {
     monto: string; nombre: string; frecuencia: string; saldo: string;
   } | null>(null);
   const [extraMoraAlert, setExtraMoraAlert] = useState<{ monto: string } | null>(null);
+  const [qrScanning, setQrScanning]   = useState(true);
+  const [qrChecking, setQrChecking]   = useState(false);
+  const [qrInvitacion, setQrInvitacion] = useState<InvitacionQrVerificada | null>(null);
+  const [qrError, setQrError]         = useState<string | null>(null);
+  const [configQr, setConfigQr]       = useState<ConfigQr | null>(null);
 
   const dpiVideoRef   = useRef<HTMLVideoElement>(null);
   const placaVideoRef = useRef<HTMLVideoElement>(null);
+  const qrVideoRef    = useRef<HTMLVideoElement>(null);
   const canvasRef     = useRef<HTMLCanvasElement>(null);
+  const qrCanvasRef   = useRef<HTMLCanvasElement>(null);
   const streamRef     = useRef<MediaStream | null>(null);
 
   const hasCamera = !!(navigator.mediaDevices?.getUserMedia);
@@ -71,6 +86,7 @@ export default function GaritaPage() {
     getResidentes()
       .then(setResidentes)
       .catch(() => setError('No se pudo cargar la lista de residentes.'));
+    getConfigQr().then(setConfigQr).catch(() => {});
 
     if (!hasCamera) return;
 
@@ -80,6 +96,7 @@ export default function GaritaPage() {
         streamRef.current = stream;
         if (dpiVideoRef.current)   dpiVideoRef.current.srcObject = stream;
         if (placaVideoRef.current) placaVideoRef.current.srcObject = stream;
+        if (qrVideoRef.current)    qrVideoRef.current.srcObject = stream;
       } catch (err) {
         console.warn('Cámara no disponible:', err);
       }
@@ -91,7 +108,144 @@ export default function GaritaPage() {
     };
   }, [hasCamera]);
 
-  const captureFrame = (videoRef: React.RefObject<HTMLVideoElement>): string | null => {
+  /**
+   * Envía el registro de acceso con datos explícitos (no lee `form`) —
+   * necesario para la autorización automática por QR, donde `handleQrDecoded`
+   * no puede confiar en que `setForm` ya se haya aplicado (batching de React)
+   * en el mismo tick en el que decide auto-enviar. El botón "Autorizar"
+   * simplemente llama esto con el `form` actual.
+   */
+  const autorizarConDatos = useCallback(async (
+    datos: Pick<AccesoPayload, 'nombre_visitante' | 'numero_dpi' | 'residente_id' | 'placa' | 'invitacion_qr_id'>
+  ) => {
+    if (!datos.nombre_visitante || !datos.numero_dpi || !datos.residente_id) {
+      setError('Nombre, DPI y casa destino son requeridos.');
+      return;
+    }
+    setError(null);
+    const token = localStorage.getItem('token');
+    if (!token) { setSinSesion(true); return; }
+    const payload = decodeTokenPayload(token);
+    if (!payload?.id) { setError('Token inválido.'); return; }
+    setLoading(true);
+    try {
+      const result = await registrarAcceso({
+        nombre_visitante: datos.nombre_visitante,
+        numero_dpi:       datos.numero_dpi,
+        residente_id:     datos.residente_id,
+        agente_id:        payload.id as string,
+        placa:            datos.placa || undefined,
+        invitacion_qr_id: datos.invitacion_qr_id || undefined,
+      });
+      const residente = residentes.find(r => r.id === datos.residente_id);
+      setUltimosIngresos(prev => [{
+        id:        crypto.randomUUID(),
+        hora:      new Date().toLocaleTimeString('es-GT'),
+        visitante: datos.nombre_visitante,
+        placa:     datos.placa || '—',
+        unidad:    residente ? `Casa ${residente.numero_casa}` : '—',
+        estado:    'Autorizado' as const,
+      }, ...prev].slice(0, 10));
+      const cg = result.cargo_generado;
+      const extraMora = result.cargo_extra_mora;
+      resetForm();
+      if (cg) {
+        const frecLabel = cg.frecuencia === 'unica_vez' ? 'única vez'
+          : cg.frecuencia === 'quincenal' ? 'quincenal' : 'mensual';
+        setCargoAlert({
+          monto:     parseFloat(cg.monto).toFixed(2),
+          nombre:    cg.nombre,
+          frecuencia: frecLabel,
+          saldo:     result.saldo_pendiente_actualizado.toFixed(2),
+        });
+      }
+      if (extraMora != null && extraMora > 0) {
+        setExtraMoraAlert({ monto: extraMora.toFixed(2) });
+      }
+    } catch (err: unknown) {
+      if (err instanceof BlacklistDenialError) {
+        setBlacklistBlock({ razon: err.razon, fecha_fin: err.fecha_fin });
+      } else {
+        setError(err instanceof Error ? err.message : 'Error al registrar');
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, [residentes]);
+
+  const handleQrDecoded = useCallback(async (id: string) => {
+    setQrChecking(true);
+    setQrError(null);
+    try {
+      const inv = await verificarInvitacionQr(id);
+      setQrInvitacion(inv);
+      setForm(prev => ({
+        ...prev,
+        invitacion_qr_id: inv.id,
+        residente_id: inv.residente_id,
+        ...(inv.tipo === 'individual'
+          ? { nombre_visitante: inv.nombre_visitante ?? prev.nombre_visitante, numero_dpi: inv.numero_dpi ?? prev.numero_dpi }
+          : {}),
+        ...(inv.placa ? { placa: inv.placa } : {}),
+      }));
+
+      // Autorización automática: sólo para QR individuales completos (nombre
+      // + DPI ya en la invitación) — un QR grupal siempre necesita que el
+      // agente identifique a la persona que tiene enfrente. Si la sucursal
+      // exige placa, sólo se auto-autoriza si la invitación ya trae una
+      // registrada (si no, el agente debe escanearla/escribirla primero).
+      const puedeAutoAutorizar =
+        configQr?.autorizacion_automatica &&
+        inv.tipo === 'individual' && inv.nombre_visitante && inv.numero_dpi &&
+        (!configQr.requiere_placa || !!inv.placa);
+      if (puedeAutoAutorizar) {
+        autorizarConDatos({
+          nombre_visitante: inv.nombre_visitante!,
+          numero_dpi: inv.numero_dpi!,
+          residente_id: inv.residente_id,
+          placa: inv.placa ?? undefined,
+          invitacion_qr_id: inv.id,
+        });
+      }
+    } catch (err) {
+      setQrError(err instanceof Error ? err.message : t('gate.qrInvalidPrefix'));
+      setTimeout(() => setQrScanning(true), 2500);
+    } finally {
+      setQrChecking(false);
+    }
+  }, [t, configQr, autorizarConDatos]);
+
+  // Escaneo continuo: mientras no haya una invitación resuelta, muestrea la
+  // cámara cada ~350ms buscando un QR de SecureGate (prefijo SGQR:).
+  useEffect(() => {
+    if (!hasCamera || !qrScanning || qrInvitacion || qrChecking) return;
+    const interval = setInterval(() => {
+      const video  = qrVideoRef.current;
+      const canvas = qrCanvasRef.current;
+      if (!video || !canvas || video.readyState < 2) return;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+      canvas.width  = video.videoWidth  || 640;
+      canvas.height = video.videoHeight || 480;
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const code = jsQR(imageData.data, imageData.width, imageData.height);
+      if (code?.data?.startsWith(QR_PREFIX)) {
+        setQrScanning(false);
+        handleQrDecoded(code.data.slice(QR_PREFIX.length));
+      }
+    }, 350);
+    return () => clearInterval(interval);
+  }, [hasCamera, qrScanning, qrInvitacion, qrChecking, handleQrDecoded]);
+
+  const handleQrRescan = () => {
+    setQrInvitacion(null);
+    setQrError(null);
+    setForm(prev => ({ ...prev, invitacion_qr_id: '' }));
+    setQrScanning(true);
+  };
+
+  const captureFrame = (videoRef: React.RefObject<HTMLVideoElement | null>): string | null => {
     const video  = videoRef.current;
     const canvas = canvasRef.current;
     if (!video || !canvas) return null;
@@ -213,6 +367,9 @@ export default function GaritaPage() {
     setDpiDropdownOpen(false);
     setCargoAlert(null);
     setExtraMoraAlert(null);
+    setQrInvitacion(null);
+    setQrError(null);
+    setQrScanning(true);
   };
 
   const diasDesde = (ts: string | null): string => {
@@ -221,60 +378,7 @@ export default function GaritaPage() {
     return d === 0 ? 'hoy' : d === 1 ? 'ayer' : `hace ${d} días`;
   };
 
-  const handleAutorizar = async () => {
-    if (!form.nombre_visitante || !form.numero_dpi || !form.residente_id) {
-      setError('Nombre, DPI y casa destino son requeridos.');
-      return;
-    }
-    setError(null);
-    const token = localStorage.getItem('token');
-    if (!token) { setSinSesion(true); return; }
-    const payload = decodeTokenPayload(token);
-    if (!payload?.id) { setError('Token inválido.'); return; }
-    setLoading(true);
-    try {
-      const result = await registrarAcceso({
-        nombre_visitante: form.nombre_visitante,
-        numero_dpi:       form.numero_dpi,
-        residente_id:     form.residente_id,
-        agente_id:        payload.id as string,
-        placa:            form.placa || undefined,
-      });
-      const residente = residentes.find(r => r.id === form.residente_id);
-      setUltimosIngresos(prev => [{
-        id:        crypto.randomUUID(),
-        hora:      new Date().toLocaleTimeString('es-GT'),
-        visitante: form.nombre_visitante,
-        placa:     form.placa || '—',
-        unidad:    residente ? `Casa ${residente.numero_casa}` : '—',
-        estado:    'Autorizado',
-      }, ...prev].slice(0, 10));
-      const cg = result.cargo_generado;
-      const extraMora = result.cargo_extra_mora;
-      resetForm();
-      if (cg) {
-        const frecLabel = cg.frecuencia === 'unica_vez' ? 'única vez'
-          : cg.frecuencia === 'quincenal' ? 'quincenal' : 'mensual';
-        setCargoAlert({
-          monto:     parseFloat(cg.monto).toFixed(2),
-          nombre:    cg.nombre,
-          frecuencia: frecLabel,
-          saldo:     result.saldo_pendiente_actualizado.toFixed(2),
-        });
-      }
-      if (extraMora != null && extraMora > 0) {
-        setExtraMoraAlert({ monto: extraMora.toFixed(2) });
-      }
-    } catch (err: unknown) {
-      if (err instanceof BlacklistDenialError) {
-        setBlacklistBlock({ razon: err.razon, fecha_fin: err.fecha_fin });
-      } else {
-        setError(err instanceof Error ? err.message : 'Error al registrar');
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
+  const handleAutorizar = () => autorizarConDatos(form);
 
   const handleDenegar = () => {
     const residente = residentes.find(r => r.id === form.residente_id);
@@ -284,7 +388,7 @@ export default function GaritaPage() {
       visitante: form.nombre_visitante || 'Desconocido',
       placa:     form.placa || '—',
       unidad:    residente ? `Casa ${residente.numero_casa}` : '—',
-      estado:    'Denegado',
+      estado:    'Denegado' as const,
     }, ...prev].slice(0, 10));
     resetForm();
   };
@@ -309,13 +413,13 @@ export default function GaritaPage() {
   }
 
   return (
-    <div className="flex flex-col lg:flex-row h-full text-gray-100">
+    <div className="flex min-h-full flex-col text-gray-100 lg:flex-row">
       <canvas ref={canvasRef} className="hidden" />
 
       {/* Blocking blacklist modal — must be dismissed before continuing */}
       {blacklistBlock && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-          <div className="bg-gray-900 border-2 border-red-600 rounded-2xl shadow-2xl w-full max-w-md p-6 space-y-4">
+          <div className="sg-card w-full max-w-md rounded-3xl border-2 border-red-600 p-5 sm:p-6">
             <div className="flex items-center gap-3">
               <div className="w-11 h-11 rounded-full bg-red-950 flex items-center justify-center shrink-0">
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-red-500">
@@ -348,11 +452,11 @@ export default function GaritaPage() {
       )}
 
       {/* Camera column — top on mobile, left on desktop */}
-      <div className="w-full lg:w-1/2 flex flex-col gap-3 p-4 border-b lg:border-b-0 lg:border-r border-gray-700 min-h-0">
+          <div className="w-full space-y-3 border-b border-gray-700 p-4 lg:min-h-0 lg:w-1/2 lg:border-b-0 lg:border-r">
 
         {!hasCamera ? (
           /* No camera available — HTTPS required */
-          <div className="flex-1 bg-gray-800 rounded-2xl flex flex-col items-center justify-center gap-3 shadow-xl p-8 text-center">
+          <div className="sg-card flex min-h-64 flex-1 flex-col items-center justify-center gap-3 p-8 text-center">
             <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-gray-500">
               <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
               <line x1="1" y1="1" x2="23" y2="23"/>
@@ -363,7 +467,7 @@ export default function GaritaPage() {
         ) : (
           <>
             {/* DPI scanner */}
-            <div className="flex-1 bg-gray-800 rounded-2xl flex flex-col shadow-xl overflow-hidden min-h-0">
+            <div className="sg-card flex min-h-64 flex-1 flex-col overflow-hidden">
               <div className="flex items-center gap-2 px-4 py-2.5 border-b border-gray-700 shrink-0">
                 <span className="text-sm font-semibold text-gray-200">{t('gate.dpiScanner')}</span>
                 {dpiOcr && (
@@ -388,7 +492,7 @@ export default function GaritaPage() {
             </div>
 
             {/* Plate scanner */}
-            <div className="flex-1 bg-gray-800 rounded-2xl flex flex-col shadow-xl overflow-hidden min-h-0">
+            <div className="sg-card flex min-h-64 flex-1 flex-col overflow-hidden">
               <div className="flex items-center gap-2 px-4 py-2.5 border-b border-gray-700 shrink-0">
                 <span className="text-sm font-semibold text-gray-200">{t('gate.plateScanner')}</span>
                 {placaOcr && (
@@ -411,15 +515,53 @@ export default function GaritaPage() {
                 </button>
               </div>
             </div>
+
+            {/* QR scanner */}
+            <div className="sg-card flex min-h-64 flex-1 flex-col overflow-hidden">
+              <div className="flex items-center gap-2 px-4 py-2.5 border-b border-gray-700 shrink-0">
+                <span className="text-sm font-semibold text-gray-200">{t('gate.qrScanner')}</span>
+                {qrInvitacion && (
+                  <span className="text-xs bg-emerald-600 text-white px-2 py-0.5 rounded-full font-medium">
+                    {t('gate.qrValid')}
+                  </span>
+                )}
+              </div>
+              <div className="flex-1 bg-gray-900 min-h-0 overflow-hidden relative">
+                <video ref={qrVideoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
+                <canvas ref={qrCanvasRef} className="hidden" />
+              </div>
+              <div className="px-4 py-2 border-t border-gray-700 shrink-0 space-y-1">
+                {qrInvitacion ? (
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-xs text-emerald-400 truncate">
+                      {qrInvitacion.etiqueta || qrInvitacion.nombre_visitante || t('gate.qrValid')}
+                      {' · '}{qrInvitacion.residente_nombre}
+                    </p>
+                    <button
+                      onClick={handleQrRescan}
+                      className="text-xs text-blue-400 hover:text-blue-300 shrink-0 transition-colors"
+                    >
+                      {t('gate.qrRescan')}
+                    </button>
+                  </div>
+                ) : qrError ? (
+                  <p className="text-xs text-red-400">{qrError}</p>
+                ) : qrChecking ? (
+                  <p className="text-xs text-gray-400">{t('common.processing')}</p>
+                ) : (
+                  <p className="text-xs text-gray-500">{t('gate.qrScanning')}</p>
+                )}
+              </div>
+            </div>
           </>
         )}
       </div>
 
       {/* Form column — bottom on mobile, right on desktop */}
-      <div className="w-full lg:w-1/2 flex flex-col gap-3 p-4 overflow-y-auto">
+          <div className="w-full space-y-3 overflow-y-auto p-4 lg:w-1/2">
 
         {/* Datos del visitante */}
-        <div className="bg-gray-800 rounded-2xl p-5 shadow-xl space-y-4 shrink-0">
+        <div className="sg-card p-5 sm:p-6 space-y-4 shrink-0">
           <h2 className="text-base font-bold text-white">{t('gate.visitorData')}</h2>
 
           {error && (
@@ -428,7 +570,7 @@ export default function GaritaPage() {
             </div>
           )}
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             {/* Nombre */}
             <div>
               <label className="block text-xs text-gray-400 mb-1">{t('gate.visitorName')} *</label>
@@ -436,8 +578,9 @@ export default function GaritaPage() {
                 name="nombre_visitante"
                 value={form.nombre_visitante}
                 onChange={handleChange}
+                disabled={qrInvitacion?.tipo === 'individual'}
                 placeholder="Juan Pérez"
-                className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm placeholder-gray-400 focus:outline-none focus:border-blue-500 transition-colors"
+                className="sg-input disabled:opacity-60"
               />
             </div>
 
@@ -458,9 +601,10 @@ export default function GaritaPage() {
                 onChange={e => handleDpiChange(e.target.value)}
                 onKeyDown={e => e.key === 'Escape' && setDpiDropdownOpen(false)}
                 onBlur={() => setTimeout(() => setDpiDropdownOpen(false), 150)}
+                disabled={qrInvitacion?.tipo === 'individual' && !!qrInvitacion.numero_dpi}
                 placeholder="1234567890101"
                 autoComplete="off"
-                className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm placeholder-gray-400 focus:outline-none focus:border-blue-500 transition-colors"
+                className="sg-input disabled:opacity-60"
               />
               {dpiDropdownOpen && dpiSugerencias.length > 0 && (
                 <div className="absolute z-20 mt-1 w-full bg-gray-700 border border-gray-600 rounded-lg shadow-xl max-h-48 overflow-y-auto left-0">
@@ -484,14 +628,20 @@ export default function GaritaPage() {
 
             {/* Placa */}
             <div>
-              <label className="block text-xs text-gray-400 mb-1">{t('gate.plate')}</label>
+              <label className="block text-xs text-gray-400 mb-1">
+                {t('gate.plate')}{qrInvitacion && configQr?.requiere_placa ? ' *' : ''}
+              </label>
               <input
                 name="placa"
                 value={form.placa}
                 onChange={handleChange}
+                disabled={!!qrInvitacion?.placa}
                 placeholder="P-123ABC"
-                className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm placeholder-gray-400 focus:outline-none focus:border-blue-500 transition-colors"
+                className="sg-input disabled:opacity-60"
               />
+              {qrInvitacion && configQr?.requiere_placa && !form.placa && (
+                <p className="text-xs text-amber-400 mt-1">{t('gate.qrPlateRequired')}</p>
+              )}
             </div>
 
             {/* Casa / Unidad autocomplete */}
@@ -509,7 +659,7 @@ export default function GaritaPage() {
                 onFocus={() => setCasaOpen(true)}
                 onBlur={() => setTimeout(() => setCasaOpen(false), 150)}
                 placeholder={t('gate.searchHouse')}
-                className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm placeholder-gray-400 focus:outline-none focus:border-blue-500 transition-colors"
+                className="sg-input"
               />
               {casaOpen && filteredResidentes.length > 0 && (
                 <ul className="absolute z-20 w-full bg-gray-700 border border-gray-600 rounded-lg mt-1 max-h-36 overflow-y-auto shadow-2xl">
@@ -576,7 +726,7 @@ export default function GaritaPage() {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 shrink-0">
           <button
             onClick={handleAutorizar}
-            disabled={loading || !!blacklistBlock}
+            disabled={loading || !!blacklistBlock || !!(qrInvitacion && configQr?.requiere_placa && !form.placa)}
             className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-5 rounded-2xl transition-colors text-sm tracking-widest shadow-xl"
           >
             {loading ? t('gate.registering') : t('gate.authorizeEntry')}
@@ -590,7 +740,7 @@ export default function GaritaPage() {
         </div>
 
         {/* Últimos Ingresos */}
-        <div className="bg-gray-800 rounded-2xl overflow-hidden shadow-xl shrink-0">
+        <div className="sg-card overflow-hidden shrink-0">
           <div className="px-5 py-3 border-b border-gray-700">
             <h3 className="text-sm font-bold text-white">{t('gate.lastEntries')}</h3>
           </div>
