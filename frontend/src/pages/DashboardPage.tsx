@@ -32,9 +32,12 @@ export default function DashboardPage() {
   }, []);
 
   return (
-    <div className="p-4 sm:p-8 text-gray-100 space-y-6 sm:space-y-8 max-w-7xl mx-auto">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-white tracking-tight">{t('dashboard.title')}</h1>
+    <div className="sg-page text-gray-100">
+      <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+        <p className="sg-eyebrow">SecureGate · Operaciones</p>
+        <div className="flex items-center justify-between gap-3 sm:contents">
+        <h1 className="text-2xl font-bold tracking-tight text-white sm:text-3xl">{t('dashboard.title')}</h1>
+        </div>
       </div>
 
       {error && (
@@ -44,7 +47,7 @@ export default function DashboardPage() {
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6">
         {loading ? (
           Array.from({ length: 3 }).map((_, i) => (
-            <div key={i} className="bg-dark-800/40 rounded-3xl p-6 border border-white/5 animate-pulse">
+            <div key={i} className="sg-card animate-pulse p-6">
               <div className="h-4 bg-white/10 rounded w-1/2 mb-8" />
               <div className="h-10 bg-white/10 rounded w-1/3" />
             </div>
@@ -58,8 +61,8 @@ export default function DashboardPage() {
         ) : null}
       </div>
 
-      <div className="bg-dark-800/40 backdrop-blur-md rounded-3xl shadow-xl overflow-hidden border border-white/5">
-        <div className="px-8 py-5 border-b border-white/5 flex justify-between items-center">
+      <div className="sg-card overflow-hidden">
+        <div className="flex items-center justify-between border-b border-white/10 px-5 py-4 sm:px-7">
           <h2 className="text-lg font-semibold text-white tracking-tight">{t('dashboard.recentAccesses')}</h2>
         </div>
         {!loading && data?.accesos_recientes.length === 0 ? (
