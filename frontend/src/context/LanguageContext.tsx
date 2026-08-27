@@ -1,3 +1,5 @@
+/* El contexto expone hook, provider y objeto para las pantallas del sistema. */
+/* eslint-disable react-refresh/only-export-components */
 import { createContext, useContext, useState } from 'react';
 
 export type LangKey = 'es' | 'en';
