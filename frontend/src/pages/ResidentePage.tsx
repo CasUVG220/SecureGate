@@ -11,17 +11,21 @@ import {
   crearTransferencia,
   getMisTickets,
   createTicket,
+  getMisInvitaciones,
+  revocarInvitacionQr,
   type ResidenteMe,
   type MiPreautorizacion,
   type MiVisita,
   type Pago,
   type Ticket,
   type TicketTipo,
+  type InvitacionQr,
 } from '../services/api';
 import { Spinner } from '../components/Skeleton';
 import { useToast } from '../components/Toast';
 import { useTranslation } from '../i18n/useTranslation';
 import TicketChat, { TIPO_LABEL, ESTADO_BADGE, ESTADO_LABEL } from '../components/TicketChat';
+import QrInviteModal from '../components/QrInviteModal';
 
 const TICKET_TIPOS: TicketTipo[] = ['mantenimiento', 'queja', 'seguridad', 'otro'];
 
@@ -58,7 +62,7 @@ export default function ResidentePage() {
   const [loading, setLoading]   = useState(true);
   const [error, setError]       = useState<string | null>(null);
 
-  const [tab, setTab]           = useState<'pagos' | 'invitados' | 'solicitudes'>('pagos');
+  const [tab, setTab]           = useState<'pagos' | 'invitados' | 'qr' | 'solicitudes'>('pagos');
 
   // Solicitudes (tickets) tab state
   const [tickets, setTickets]           = useState<Ticket[]>([]);
@@ -95,6 +99,14 @@ export default function ResidentePage() {
   const [saving, setSaving]     = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  // Invitaciones QR tab state
+  const [qrInvites, setQrInvites]   = useState<InvitacionQr[]>([]);
+  const [qrLoading, setQrLoading]   = useState(false);
+  const [qrLoaded, setQrLoaded]     = useState(false);
+  const [showQrCreate, setShowQrCreate] = useState(false);
+  const [viewingQr, setViewingQr]       = useState<InvitacionQr | null>(null);
+  const [revokingQrId, setRevokingQrId] = useState<string | null>(null);
 
   const loadPagos = () => {
     if (pagosLoaded) return;
@@ -140,11 +152,53 @@ export default function ResidentePage() {
     return () => window.removeEventListener('keydown', handleEscape);
   }, [selectedTicket]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const handleTabChange = (tab2: 'pagos' | 'invitados' | 'solicitudes') => {
+  const loadQrInvites = () => {
+    if (qrLoaded) return;
+    setQrLoading(true);
+    getMisInvitaciones()
+      .then(rows => { setQrInvites(rows); setQrLoaded(true); })
+      .catch(() => showToast(t('qr.title') + ': ' + t('common.error'), 'error'))
+      .finally(() => setQrLoading(false));
+  };
+
+  const handleTabChange = (tab2: 'pagos' | 'invitados' | 'qr' | 'solicitudes') => {
     setTab(tab2);
     if (tab2 === 'pagos') loadPagos();
     if (tab2 === 'invitados') loadInvitados();
+    if (tab2 === 'qr') loadQrInvites();
     if (tab2 === 'solicitudes') loadTickets();
+  };
+
+  const handleRevokeQr = async (inv: InvitacionQr) => {
+    if (!window.confirm(t('qr.confirmRevoke'))) return;
+    setRevokingQrId(inv.id);
+    try {
+      await revocarInvitacionQr(inv.id);
+      setQrInvites(prev => prev.filter(i => i.id !== inv.id));
+      showToast(t('qr.revoked'), 'warning');
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : t('common.error'), 'error');
+    } finally {
+      setRevokingQrId(null);
+    }
+  };
+
+  const qrEstado = (inv: InvitacionQr): 'active' | 'expired' | 'exhausted' => {
+    const hoy = today();
+    if (inv.fecha_fin && inv.fecha_fin < hoy) return 'expired';
+    if (inv.usos_maximos != null && inv.usos_actuales >= inv.usos_maximos) return 'exhausted';
+    return 'active';
+  };
+
+  const QR_ESTADO_BADGE: Record<string, string> = {
+    active:    'bg-green-900/40 text-green-400',
+    expired:   'bg-gray-700 text-gray-300',
+    exhausted: 'bg-amber-900/50 text-amber-400',
+  };
+  const QR_ESTADO_LABEL: Record<string, string> = {
+    active:    t('qr.statusActive'),
+    expired:   t('qr.statusExpired'),
+    exhausted: t('qr.statusExhausted'),
   };
 
   const ticketsUnread = tickets.reduce((s, tk) => s + Number(tk.no_leidos || 0), 0);
@@ -304,10 +358,11 @@ export default function ResidentePage() {
   const saldo = parseFloat(data!.saldo_pendiente);
 
   return (
-    <main className="px-4 sm:px-6 py-6 sm:py-8 space-y-6 max-w-md mx-auto text-gray-100">
-      {/* Summary card */}
-      <div className="bg-gray-800 rounded-2xl p-6 shadow-xl">
-        <div className="flex items-start justify-between gap-4">
+    <main className="sg-page text-gray-100">
+      <div className="sg-page-inner space-y-6">
+        {/* Summary card */}
+      <div className="sg-card overflow-hidden p-5 sm:p-7">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <p className="text-gray-400 text-sm">{t('portal.house')}</p>
             <p className="text-3xl font-bold text-white mt-1">{data!.numero_casa}</p>
@@ -316,7 +371,7 @@ export default function ResidentePage() {
             {BADGE_LABEL[data!.estado_pago] ?? data!.estado_pago}
           </span>
         </div>
-        <div className="mt-4 pt-4 border-t border-gray-700 grid grid-cols-2 gap-4">
+        <div className="mt-5 grid grid-cols-1 gap-4 border-t border-white/10 pt-5 sm:grid-cols-2">
           <div>
             <p className="text-gray-400 text-xs">{t('portal.pendingBalance')}</p>
             <p className={`text-xl font-semibold mt-0.5 ${saldo > 0 ? 'text-red-400' : 'text-green-400'}`}>
@@ -336,21 +391,21 @@ export default function ResidentePage() {
       </div>
 
       {/* Tab bar */}
-      <div className="flex rounded-xl overflow-hidden border border-gray-700">
-        {(['pagos', 'invitados', 'solicitudes'] as const).map(tabKey => (
+      <div className="sg-tabbar" role="tablist" aria-label="Secciones del portal">
+        {(['pagos', 'invitados', 'qr', 'solicitudes'] as const).map(tabKey => (
           <button
             key={tabKey}
             onClick={() => handleTabChange(tabKey)}
-            className={`relative flex-1 py-2.5 text-sm font-semibold transition-colors ${
-              tab === tabKey
-                ? 'bg-emerald-500 text-white'
-                : 'bg-gray-800 text-gray-400 hover:text-gray-200'
-            }`}
+            role="tab"
+            aria-selected={tab === tabKey}
+            className={`sg-tab relative flex-1 ${tab === tabKey ? 'sg-tab-active' : ''}`}
           >
             {tabKey === 'pagos'
               ? t('portal.payments')
               : tabKey === 'invitados'
               ? t('portal.visitors')
+              : tabKey === 'qr'
+              ? t('qr.tabTitle')
               : t('tickets.myTickets')}
             {tabKey === 'solicitudes' && ticketsUnread > 0 && (
               <span className="absolute top-1.5 right-2 min-w-[16px] h-4 px-1 flex items-center justify-center rounded-full bg-red-600 text-white text-[10px] font-bold leading-none">
@@ -363,9 +418,9 @@ export default function ResidentePage() {
 
       {/* ── Tab: Pagos ── */}
       {tab === 'pagos' && (
-        <div className="space-y-4">
+        <div className="space-y-4 lg:grid lg:grid-cols-[minmax(18rem,0.75fr)_minmax(0,1.25fr)] lg:gap-4 lg:space-y-0">
           {/* Resumen de la factura del mes: desglosa el saldo por concepto */}
-          <div className="bg-gray-800 rounded-2xl p-6 shadow-xl space-y-3">
+          <div className="sg-card space-y-3 p-5 sm:p-6">
             <h2 className="text-base font-semibold text-white">{t('reservas.monthSummary')}</h2>
             {!resumenMes || resumenMes.items.length === 0 ? (
               <p className="text-sm text-gray-500">{t('reservas.monthSummaryEmpty')}</p>
@@ -394,7 +449,7 @@ export default function ResidentePage() {
           </div>
 
           {/* Realizar Pago card */}
-          <div className="bg-gray-800 rounded-2xl p-6 shadow-xl space-y-4">
+          <div className="sg-card space-y-4 p-5 sm:p-6">
             <div>
               <h2 className="text-base font-semibold text-white">{t('portal.makePayment')}</h2>
               <p className="text-sm text-gray-400 mt-0.5">
@@ -409,7 +464,7 @@ export default function ResidentePage() {
               <div className="space-y-3">
                 <button
                   onClick={() => showToast(t('portal.cardComingSoon'), 'warning')}
-                  className="w-full flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-white font-semibold py-3 rounded-xl transition-colors"
+                    className="sg-btn sg-btn-primary flex w-full items-center justify-center gap-2"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
@@ -418,7 +473,7 @@ export default function ResidentePage() {
                 </button>
                 <button
                   onClick={() => setShowTrf(true)}
-                  className="w-full flex items-center justify-center gap-2 bg-gray-700 hover:bg-gray-600 text-gray-200 font-semibold py-3 rounded-xl transition-colors border border-gray-600"
+                    className="sg-btn sg-btn-secondary flex w-full items-center justify-center gap-2"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
@@ -436,37 +491,37 @@ export default function ResidentePage() {
                 {trfError && (
                   <p className="text-sm text-red-400 bg-red-900/30 border border-red-700/40 rounded-lg px-3 py-2">{trfError}</p>
                 )}
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <div>
                     <label className="block text-xs text-gray-400 mb-1">{t('portal.amountLabel')} *</label>
                     <input type="number" name="monto" step="0.01" min="0.01" value={trfForm.monto}
                       onChange={handleTrfChange} placeholder="850.00"
-                      className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm placeholder-gray-400 focus:outline-none focus:border-blue-500" />
+                      className="sg-input" />
                   </div>
                   <div>
                     <label className="block text-xs text-gray-400 mb-1">{t('portal.bankLabel')} *</label>
                     <input type="text" name="banco" value={trfForm.banco}
                       onChange={handleTrfChange} placeholder="Banco Industrial"
-                      className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm placeholder-gray-400 focus:outline-none focus:border-blue-500" />
+                      className="sg-input" />
                   </div>
                   <div>
                     <label className="block text-xs text-gray-400 mb-1">{t('portal.reference')} *</label>
                     <input type="text" name="referencia" value={trfForm.referencia}
                       onChange={handleTrfChange} placeholder="TRF-789456123"
-                      className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm placeholder-gray-400 focus:outline-none focus:border-blue-500" />
+                      className="sg-input" />
                   </div>
                   <div>
                     <label className="block text-xs text-gray-400 mb-1">{t('portal.transferDate')} *</label>
                     <input type="date" name="fecha_transferencia" value={trfForm.fecha_transferencia}
                       onChange={handleTrfChange}
-                      className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500" />
+                      className="sg-input" />
                   </div>
                 </div>
 
                 {/* Image upload */}
                 <div>
                   <label className="block text-xs text-gray-400 mb-1">{t('portal.receiptImage')}</label>
-                  <label className="flex items-center gap-2 w-full cursor-pointer bg-gray-700 border border-dashed border-gray-500 hover:border-blue-500 rounded-lg px-3 py-2.5 transition-colors">
+                  <label className="flex min-h-12 w-full cursor-pointer items-center gap-2 rounded-xl border border-dashed border-gray-500 bg-gray-700 px-3 py-2.5 transition-colors hover:border-emerald-400">
                     <svg className="w-4 h-4 text-gray-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                     </svg>
@@ -488,12 +543,12 @@ export default function ResidentePage() {
 
                 <div className="flex gap-3 pt-1">
                   <button type="submit" disabled={enviando}
-                    className="flex-1 flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-semibold py-2.5 rounded-xl transition-colors text-sm">
+                    className="sg-btn sg-btn-primary flex flex-1 items-center justify-center gap-2 text-sm">
                     {enviando && <Spinner size={14} />}
                     {enviando ? t('portal.sending') : t('portal.sendReceipt')}
                   </button>
                   <button type="button" onClick={resetTrfForm}
-                    className="bg-gray-700 hover:bg-gray-600 text-gray-200 font-medium px-4 py-2.5 rounded-xl transition-colors text-sm">
+                    className="sg-btn sg-btn-secondary px-4 text-sm">
                     {t('common.cancel')}
                   </button>
                 </div>
@@ -502,8 +557,8 @@ export default function ResidentePage() {
           </div>
 
           {/* Historial de Pagos */}
-          <div>
-            <h2 className="text-base font-semibold text-white mb-3">{t('portal.payHistory')}</h2>
+          <div className="lg:col-span-2">
+            <h2 className="mb-3 text-base font-semibold text-white">{t('portal.payHistory')}</h2>
             {pagosLoading ? (
               <div className="flex items-center justify-center py-8">
                 <Spinner size={24} />
@@ -513,7 +568,7 @@ export default function ResidentePage() {
             ) : (
               <div className="space-y-3">
                 {misPagos.map(p => (
-                  <div key={p.id} className="bg-gray-800 rounded-xl p-4 shadow border border-gray-700 flex items-center gap-4">
+                  <div key={p.id} className="sg-card flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:gap-4">
                     <div className="w-10 h-10 bg-emerald-900/40 rounded-full flex items-center justify-center border border-emerald-700/40 shrink-0">
                       <svg className="w-5 h-5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -546,7 +601,7 @@ export default function ResidentePage() {
 
       {/* ── Tab: Invitados ── */}
       {tab === 'invitados' && (
-        <div className="space-y-8">
+        <div className="space-y-8 lg:grid lg:grid-cols-2 lg:gap-8 lg:space-y-0">
           {invLoading ? (
             <p className="text-gray-400 text-sm text-center py-10">{t('common.loading')}</p>
           ) : (
@@ -558,7 +613,7 @@ export default function ResidentePage() {
                   {!showForm && (
                     <button
                       onClick={() => setShowForm(true)}
-                      className="text-sm bg-blue-600 hover:bg-blue-700 text-white font-medium px-4 py-2 rounded-lg transition-colors"
+                      className="sg-btn sg-btn-primary px-4 text-sm"
                     >
                       Guardar visitante
                     </button>
@@ -568,7 +623,7 @@ export default function ResidentePage() {
                 {/* Inline create form */}
                 {showForm && (
                   <div ref={formRef}>
-                    <form onSubmit={handleSave} className="bg-gray-800 rounded-2xl p-6 mb-4 space-y-4 shadow-xl">
+                    <form onSubmit={handleSave} className="sg-card mb-4 space-y-4 p-5 sm:p-6">
                       <h3 className="text-sm font-semibold text-white">Guardar datos del visitante</h3>
                       <p className="text-xs text-gray-400">Guarda los datos para preautorizar con un clic en cualquier momento.</p>
 
@@ -587,7 +642,7 @@ export default function ResidentePage() {
                             onChange={handleFormChange}
                             required
                             placeholder="Juan Pérez"
-                            className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white placeholder-gray-400 text-sm focus:outline-none focus:border-blue-500"
+                            className="sg-input"
                           />
                         </div>
                         <div>
@@ -600,7 +655,7 @@ export default function ResidentePage() {
                             value={form.numero_dpi}
                             onChange={handleFormChange}
                             placeholder="1234567890101"
-                            className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white placeholder-gray-400 text-sm focus:outline-none focus:border-blue-500"
+                            className="sg-input"
                           />
                         </div>
                         <div>
@@ -613,7 +668,7 @@ export default function ResidentePage() {
                             value={form.placa}
                             onChange={handleFormChange}
                             placeholder="P-123ABC"
-                            className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white placeholder-gray-400 text-sm focus:outline-none focus:border-blue-500 uppercase"
+                            className="sg-input uppercase"
                           />
                         </div>
                       </div>
@@ -644,7 +699,7 @@ export default function ResidentePage() {
                 ) : (
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     {preauths.filter(p => p.fecha_fin === null).map(p => (
-                      <div key={p.id} className="bg-gray-800 rounded-xl p-4 shadow border border-gray-700">
+                      <div key={p.id} className="sg-card p-4">
                         <div className="flex items-start justify-between gap-2">
                           <p className="font-semibold text-white text-sm">{p.nombre_visitante}</p>
                           <span className="text-xs bg-gray-700 text-gray-300 px-2 py-0.5 rounded-full font-medium shrink-0">
@@ -685,7 +740,7 @@ export default function ResidentePage() {
                 ) : (
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     {visitas.map(v => (
-                      <div key={v.id} className="bg-gray-800 rounded-xl p-4 shadow border border-gray-700">
+                      <div key={v.id} className="sg-card p-4">
                         <p className="font-semibold text-white text-sm">{v.nombre_visitante}</p>
                         <div className="mt-2 space-y-0.5 text-xs text-gray-400">
                           <p>{t('portal.dpi')}: {v.numero_dpi}</p>
@@ -711,6 +766,84 @@ export default function ResidentePage() {
         </div>
       )}
 
+      {/* ── Tab: Invitaciones QR ── */}
+      {tab === 'qr' && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-base font-semibold text-white">{t('qr.title')}</h2>
+              <p className="text-sm text-gray-400 mt-0.5">{t('qr.subtitle')}</p>
+            </div>
+            <button
+              onClick={() => setShowQrCreate(true)}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-4 py-2 rounded-xl text-sm transition-colors"
+            >
+              {t('qr.newInvite')}
+            </button>
+          </div>
+
+          {qrLoading ? (
+            <p className="text-gray-400 text-sm">{t('common.loading')}</p>
+          ) : qrInvites.length === 0 ? (
+            <div className="sg-card px-4 py-10 text-center text-gray-500">
+              {t('qr.noInvites')}
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {qrInvites.map(inv => {
+                const estado = qrEstado(inv);
+                return (
+                  <div key={inv.id} className="sg-card flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-semibold text-white truncate">
+                          {inv.etiqueta || (inv.tipo === 'individual' ? inv.nombre_visitante : t('qr.typeGroup'))}
+                        </span>
+                        <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${QR_ESTADO_BADGE[estado]}`}>
+                          {QR_ESTADO_LABEL[estado]}
+                        </span>
+                      </div>
+                      <p className="text-xs text-gray-400 mt-1">
+                        {inv.tipo === 'individual' ? t('qr.typeIndividual') : t('qr.typeGroup')}
+                        {inv.usos_maximos != null && ` · ${inv.usos_actuales}/${inv.usos_maximos} ${t('qr.usesLabel')}`}
+                      </p>
+                    </div>
+                    <div className="flex gap-3 text-sm flex-shrink-0">
+                      <button
+                        onClick={() => setViewingQr(inv)}
+                        className="text-blue-400 hover:text-blue-300 transition-colors"
+                      >
+                        {t('qr.viewQr')}
+                      </button>
+                      <button
+                        onClick={() => handleRevokeQr(inv)}
+                        disabled={revokingQrId === inv.id}
+                        className="text-red-400 hover:text-red-300 transition-colors disabled:opacity-50"
+                      >
+                        {t('qr.revoke')}
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {showQrCreate && (
+        <QrInviteModal
+          onClose={() => setShowQrCreate(false)}
+          onCreated={inv => {
+            setQrInvites(prev => [inv, ...prev]);
+            showToast(t('qr.created'));
+          }}
+        />
+      )}
+      {viewingQr && (
+        <QrInviteModal invitacion={viewingQr} onClose={() => setViewingQr(null)} />
+      )}
+
       {/* ── Tab: Solicitudes (tickets) ── */}
       {tab === 'solicitudes' && (
         <div className="space-y-4">
@@ -728,7 +861,7 @@ export default function ResidentePage() {
 
           {/* Nuevo ticket */}
           {showTicketForm && (
-            <div className="bg-gray-800 rounded-2xl p-5 shadow-xl space-y-4">
+            <div className="sg-card space-y-4 p-5 sm:p-6">
               <h3 className="text-sm font-semibold text-white">{t('tickets.newTitle')}</h3>
               {ticketError && (
                 <div className="bg-red-900/40 border border-red-700 rounded-lg px-3 py-2 text-red-300 text-sm">{ticketError}</div>
@@ -738,7 +871,7 @@ export default function ResidentePage() {
                 <select
                   value={ticketForm.tipo}
                   onChange={e => setTicketForm(p => ({ ...p, tipo: e.target.value as TicketTipo }))}
-                  className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500"
+                  className="sg-input"
                 >
                   {TICKET_TIPOS.map(tp => <option key={tp} value={tp}>{t(TIPO_LABEL[tp])}</option>)}
                 </select>
@@ -750,7 +883,7 @@ export default function ResidentePage() {
                   value={ticketForm.titulo}
                   onChange={e => setTicketForm(p => ({ ...p, titulo: e.target.value }))}
                   placeholder={t('tickets.titlePlaceholder')}
-                  className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-emerald-500"
+                  className="sg-input"
                 />
               </div>
               <div>
@@ -760,7 +893,7 @@ export default function ResidentePage() {
                   onChange={e => setTicketForm(p => ({ ...p, mensaje: e.target.value }))}
                   rows={3}
                   placeholder={t('tickets.messagePlaceholder')}
-                  className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-emerald-500 resize-none"
+                  className="sg-input resize-none"
                 />
               </div>
               <div className="flex gap-3">
@@ -793,7 +926,7 @@ export default function ResidentePage() {
                 <button
                   key={tk.id}
                   onClick={() => setSelectedTicket(tk.id)}
-                  className="w-full text-left bg-gray-800 hover:bg-gray-700/60 rounded-xl px-4 py-3 border border-gray-700 transition-colors"
+                  className="sg-card w-full text-left p-4 transition hover:border-emerald-500/40 hover:bg-gray-700/60"
                 >
                   <div className="flex items-center gap-2">
                     <span className="text-white font-medium text-sm flex-1 truncate">{tk.titulo}</span>
@@ -820,7 +953,7 @@ export default function ResidentePage() {
           {/* Chat overlay */}
           {selectedTicket && (
             <div
-              className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm p-3 flex flex-col"
+              className="sg-drawer-backdrop fixed inset-0 z-50 flex flex-col p-3 sm:p-6"
               onClick={closeTicketChat}
             >
               <button
@@ -839,6 +972,7 @@ export default function ResidentePage() {
           )}
         </div>
       )}
+      </div>
     </main>
   );
 }
