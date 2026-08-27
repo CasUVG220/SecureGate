@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import pool from '../db/pool';
 import { tenantFilter, ownershipClause, ownershipParams } from '../utils/tenant';
+import { censurarTexto } from '../utils/profanityFilter';
 
 const TIPOS = ['mantenimiento', 'queja', 'seguridad', 'otro'];
 
@@ -42,7 +43,7 @@ export const createTicket = async (req: Request, res: Response) => {
     await client.query(
       `INSERT INTO ticket_mensajes (ticket_id, autor_id, mensaje, leido_admin, leido_residente)
        VALUES ($1, $2, $3, FALSE, TRUE)`,
-      [ticket.id, req.user!.id, mensaje]
+      [ticket.id, req.user!.id, censurarTexto(mensaje)]
     );
 
     await client.query('COMMIT');
@@ -198,7 +199,7 @@ export const addMensaje = async (req: Request, res: Response) => {
     const inserted = await pool.query(
       `INSERT INTO ticket_mensajes (ticket_id, autor_id, mensaje, leido_admin, leido_residente)
        VALUES ($1, $2, $3, $4, $5) RETURNING *`,
-      [id, req.user!.id, mensaje, leidoAdmin, leidoResidente]
+      [id, req.user!.id, censurarTexto(mensaje), leidoAdmin, leidoResidente]
     );
 
     // Al responder el staff, un ticket 'abierto' pasa a 'en_proceso'
