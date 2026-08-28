@@ -23,6 +23,8 @@ export default function TicketsPage() {
       .finally(() => setLoading(false));
   };
 
+  // Carga inicial del módulo; el estado se actualiza al resolver la petición.
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { load(); }, []);
 
   const filtered = useMemo(() => tickets.filter(tk =>
@@ -33,7 +35,7 @@ export default function TicketsPage() {
     d ? new Date(d).toLocaleDateString('es-GT', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '';
 
   return (
-    <div className="p-4 sm:p-6 text-gray-100 h-full flex flex-col">
+    <div className="sg-page text-gray-100 h-full flex flex-col">
       <div className="mb-4">
         <h1 className="text-xl font-bold text-white">{t('tickets.title')}</h1>
         <p className="text-sm text-gray-400 mt-0.5">{t('tickets.adminSubtitle')}</p>
@@ -42,12 +44,12 @@ export default function TicketsPage() {
       {/* Filtros */}
       <div className="flex flex-wrap gap-3 mb-4">
         <select value={fEstado} onChange={e => setFEstado(e.target.value as '' | TicketEstado)}
-          className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500">
+          className="sg-input w-full sm:w-auto">
           <option value="">{t('tickets.allStates')}</option>
           {ESTADOS.map(e => <option key={e} value={e}>{t(ESTADO_LABEL[e])}</option>)}
         </select>
         <select value={fTipo} onChange={e => setFTipo(e.target.value as '' | TicketTipo)}
-          className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500">
+          className="sg-input w-full sm:w-auto">
           <option value="">{t('tickets.allTypes')}</option>
           {TIPOS.map(tp => <option key={tp} value={tp}>{t(TIPO_LABEL[tp])}</option>)}
         </select>
@@ -55,7 +57,7 @@ export default function TicketsPage() {
 
       <div className="flex-1 grid grid-cols-1 lg:grid-cols-[minmax(0,380px)_1fr] gap-4 min-h-0">
         {/* Lista */}
-        <div className="bg-gray-800 rounded-2xl shadow-xl overflow-hidden flex flex-col min-h-0">
+        <div className="sg-card flex min-h-0 flex-col overflow-hidden">
           {loading ? (
             <div className="flex items-center justify-center py-10"><Spinner size={22} /></div>
           ) : filtered.length === 0 ? (
@@ -66,7 +68,7 @@ export default function TicketsPage() {
                 <button
                   key={tk.id}
                   onClick={() => setSelectedId(tk.id)}
-                  className={`w-full text-left px-4 py-3 transition-colors ${
+                  className={`w-full text-left px-4 py-4 transition-colors ${
                     selectedId === tk.id ? 'bg-gray-700/50' : 'hover:bg-gray-700/30'
                   }`}
                 >
@@ -99,7 +101,7 @@ export default function TicketsPage() {
           {selectedId ? (
             <TicketChat key={selectedId} ticketId={selectedId} viewerRole="admin" onActivity={load} />
           ) : (
-            <div className="h-full bg-gray-800 rounded-2xl flex items-center justify-center text-gray-500 text-sm p-6 text-center">
+            <div className="sg-card flex h-full items-center justify-center p-6 text-center text-sm text-gray-500">
               {t('tickets.selectPrompt')}
             </div>
           )}
