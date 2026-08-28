@@ -66,7 +66,7 @@ const downloadPagos = (d: string, h: string) =>
 export default function ReportesPage() {
   const { t } = useTranslation();
   return (
-    <div className="p-4 sm:p-6 text-gray-100 space-y-6 max-w-4xl">
+    <div className="sg-page text-gray-100">
       <div>
         <h1 className="text-xl font-bold text-white">{t('reports.title')}</h1>
         <p className="text-sm text-gray-400 mt-1">{t('reports.subtitle')}</p>
