@@ -1,3 +1,5 @@
+/* Este módulo comparte mapas de etiquetas con las vistas de tickets. */
+/* eslint-disable react-refresh/only-export-components */
 import { useEffect, useRef, useState } from 'react';
 import {
   getTicketMensajes, addTicketMensaje, cerrarTicket,
