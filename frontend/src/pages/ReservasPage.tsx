@@ -37,9 +37,6 @@ const horaAMin = (h: string) => {
   return Number.isFinite(hh) && Number.isFinite(mm) ? hh * 60 + mm : NaN;
 };
 
-const INPUT =
-  'w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500';
-
 export default function ReservasPage() {
   const { t } = useTranslation();
   const showToast = useToast();
@@ -168,14 +165,22 @@ export default function ReservasPage() {
   };
 
   return (
-    <main className="px-4 sm:px-6 py-6 sm:py-8 space-y-6 max-w-md mx-auto text-gray-100">
-      <div>
-        <h1 className="text-xl font-bold text-white">{t('reservas.title')}</h1>
-        <p className="text-sm text-gray-400 mt-0.5">{t('reservas.subtitle')}</p>
+    <main className="sg-page text-gray-100">
+      <div className="sg-page-inner space-y-6">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <p className="sg-eyebrow">SecureGate · Residentes</p>
+          <h1 className="mt-1 text-2xl font-bold tracking-tight text-white sm:text-3xl">{t('reservas.title')}</h1>
+          <p className="mt-1 max-w-2xl text-sm text-gray-400">{t('reservas.subtitle')}</p>
+        </div>
+        <div className="sg-card-muted px-4 py-3 text-sm text-gray-300">
+          <span className="text-gray-500">{t('reservas.myReservations')}</span>
+          <span className="ml-2 font-bold text-emerald-300">{misReservas.length}</span>
+        </div>
       </div>
 
       {/* ── Nueva reserva ── */}
-      <section className="bg-gray-800 rounded-2xl p-6 shadow-xl space-y-4">
+      <section className="sg-card space-y-5 p-5 sm:p-7">
         <div>
           <label className="block text-xs font-medium text-gray-400 mb-1">
             {t('reservas.pickArea')}
@@ -184,7 +189,7 @@ export default function ReservasPage() {
             aria-label={t('reservas.pickArea')}
             value={areaId}
             onChange={e => setAreaId(e.target.value)}
-            className={`${INPUT} appearance-none`}
+            className="sg-input appearance-none"
           >
             {areas.map(a => (
               <option key={a.id} value={a.id}>{a.nombre}</option>
@@ -211,11 +216,11 @@ export default function ReservasPage() {
             min={hoy()}
             value={fecha}
             onChange={e => setFecha(e.target.value)}
-            className={INPUT}
+            className="sg-input"
           />
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div>
             <label className="block text-xs font-medium text-gray-400 mb-1">
               {t('reservas.startTime')}
@@ -225,7 +230,7 @@ export default function ReservasPage() {
               aria-label={t('reservas.startTime')}
               value={horaInicio}
               onChange={e => setHoraInicio(e.target.value)}
-              className={INPUT}
+              className="sg-input"
             />
           </div>
           <div>
@@ -237,13 +242,13 @@ export default function ReservasPage() {
               aria-label={t('reservas.endTime')}
               value={horaFin}
               onChange={e => setHoraFin(e.target.value)}
-              className={INPUT}
+              className="sg-input"
             />
           </div>
         </div>
 
         {/* Disponibilidad del día, con el buffer ya aplicado */}
-        <div className="bg-gray-900/60 rounded-xl p-3 space-y-2">
+        <div className="sg-card-muted space-y-2 p-4">
           <p className="text-xs font-semibold text-gray-300">{t('reservas.occupied')}</p>
           {dispLoading ? (
             <p className="text-xs text-gray-500">{t('common.loading')}</p>
@@ -273,7 +278,7 @@ export default function ReservasPage() {
           )}
         </div>
 
-        <div className="flex items-center justify-between text-sm">
+        <div className="flex items-center justify-between rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm">
           <span className="text-gray-400">{t('reservas.cost')}</span>
           <span className="font-bold text-emerald-400">
             {costoActual === null
@@ -293,7 +298,7 @@ export default function ReservasPage() {
         <button
           onClick={handleReservar}
           disabled={reservando}
-          className="w-full bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-semibold py-2.5 rounded-xl transition-colors flex items-center justify-center gap-2"
+          className="sg-btn sg-btn-primary w-full"
         >
           {reservando && <Spinner size={14} />}
           {reservando ? t('reservas.booking') : t('reservas.book')}
@@ -302,14 +307,17 @@ export default function ReservasPage() {
 
       {/* ── Mis reservas ── */}
       <section className="space-y-3">
-        <h2 className="text-base font-bold text-white">{t('reservas.myReservations')}</h2>
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="sg-section-title">{t('reservas.myReservations')}</h2>
+          <span className="text-xs text-gray-500">{misReservas.length} {misReservas.length === 1 ? 'reserva' : 'reservas'}</span>
+        </div>
         {loadingMis ? (
           <p className="text-sm text-gray-400">{t('common.loading')}</p>
         ) : misReservas.length === 0 ? (
           <p className="text-sm text-gray-500">{t('reservas.noReservations')}</p>
         ) : (
           misReservas.map(r => (
-            <div key={r.id} className="bg-gray-800 rounded-xl p-4 shadow border border-gray-700 space-y-1">
+            <div key={r.id} className="sg-card flex flex-col justify-between gap-3 p-4">
               <div className="flex items-start justify-between gap-2">
                 <span className="font-semibold text-white">{r.area_nombre}</span>
                 <span
@@ -346,8 +354,8 @@ export default function ReservasPage() {
 
       {/* ── Modal de cancelación: avisa el reembolso ANTES de confirmar ── */}
       {cancelTarget && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="bg-gray-800 rounded-t-2xl sm:rounded-2xl shadow-2xl w-full sm:max-w-md p-6 space-y-4">
+        <div className="sg-drawer-backdrop fixed inset-0 z-50 flex items-end justify-center p-0 sm:items-center sm:p-4">
+          <div className="sg-card w-full rounded-t-3xl p-5 sm:max-w-md sm:rounded-2xl sm:p-6">
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-bold text-white">{t('reservas.cancelTitle')}</h2>
               <button
@@ -391,7 +399,7 @@ export default function ReservasPage() {
               <input
                 value={motivo}
                 onChange={e => setMotivo(e.target.value)}
-                className={INPUT}
+                className="sg-input"
               />
             </div>
 
@@ -399,14 +407,14 @@ export default function ReservasPage() {
               <button
                 onClick={confirmarCancelacion}
                 disabled={cancelando || (preview ? !preview.cancelable : false)}
-                className="flex-1 bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white font-semibold py-2 rounded-xl transition-colors flex items-center justify-center gap-2"
+                className="sg-btn sg-btn-danger flex-1"
               >
                 {cancelando && <Spinner size={14} />}
                 {t('reservas.confirmCancel')}
               </button>
               <button
                 onClick={() => setCancelTarget(null)}
-                className="bg-gray-700 hover:bg-gray-600 text-gray-200 font-medium px-4 py-2 rounded-xl transition-colors"
+                className="sg-btn sg-btn-secondary px-4"
               >
                 {t('common.cancel')}
               </button>
@@ -414,6 +422,7 @@ export default function ReservasPage() {
           </div>
         </div>
       )}
+      </div>
     </main>
   );
 }

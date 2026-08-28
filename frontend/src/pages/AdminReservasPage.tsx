@@ -1,3 +1,5 @@
+/* Las constantes exportadas también son consumidas por tests y pantallas relacionadas. */
+/* eslint-disable react-refresh/only-export-components */
 import { useEffect, useState } from 'react';
 import {
   getReservas, getAreas, aprobarReserva, rechazarReserva,
@@ -30,8 +32,7 @@ const ESTADOS: EstadoReserva[] = [
 const fmtFecha = (f: string) => new Date(f).toLocaleDateString('es-GT', { timeZone: 'UTC' });
 const fmtHora = (h: string) => h.slice(0, 5);
 
-const FILTRO =
-  'bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500 appearance-none';
+const FILTRO = 'sg-input appearance-none';
 
 export default function AdminReservasPage() {
   const { t } = useTranslation();
@@ -52,7 +53,9 @@ export default function AdminReservasPage() {
       .finally(() => setLoading(false));
   };
 
-  useEffect(() => { load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [filtros]);
+  // La consulta debe repetirse cuando cambian los filtros; load usa el snapshot actual.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { load(); }, [filtros]);
   useEffect(() => { getAreas().then(setAreas).catch(() => {}); }, []);
 
   const handleAprobar = async (r: Reserva) => {
@@ -84,7 +87,7 @@ export default function AdminReservasPage() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="sg-page-inner space-y-6">
       <div>
         <h2 className="text-lg font-bold text-white">{t('reservas.allReservations')}</h2>
       </div>
@@ -132,7 +135,7 @@ export default function AdminReservasPage() {
         </div>
       )}
 
-      <div className="bg-gray-800 rounded-2xl shadow-xl overflow-hidden">
+      <div className="sg-card overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>

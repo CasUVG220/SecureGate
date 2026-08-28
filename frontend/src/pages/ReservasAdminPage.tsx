@@ -21,7 +21,7 @@ export default function ReservasAdminPage() {
   const [tab, setTab] = useState<Tab>('reservas');
 
   return (
-    <div className="p-4 sm:p-6 text-gray-100 space-y-6 max-w-6xl">
+    <div className="sg-page text-gray-100">
       <div>
         <h1 className="text-xl font-bold text-white">{t('reservas.adminTitle')}</h1>
         <p className="text-sm text-gray-400 mt-0.5">{t('reservas.adminSubtitle')}</p>
