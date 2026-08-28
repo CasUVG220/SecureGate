@@ -11,7 +11,7 @@ const EMPTY: EmpresaInput = { nombre: '', nit: '', logo_url: '' };
 
 function StatCard({ label, value, accent, iconPath }: { label: string; value: number; accent: string; iconPath: string }) {
   return (
-    <div className="relative overflow-hidden bg-gradient-to-br from-gray-800 to-gray-900 rounded-2xl p-5 shadow-xl border border-gray-700/30 transition-all duration-300 hover:-translate-y-0.5 group">
+    <div className="sg-card group relative overflow-hidden p-5 transition-all duration-300 hover:-translate-y-0.5">
       <div className={`absolute -top-6 -right-6 w-24 h-24 rounded-full blur-2xl opacity-20 transition-all duration-500 group-hover:scale-150 ${accent.replace('text-', 'bg-')}`} />
       <div className="flex items-start justify-between mb-3 relative z-10">
         <p className="text-gray-400 text-xs font-semibold uppercase tracking-wide">{label}</p>
@@ -105,12 +105,12 @@ export default function OwnerDashboard({ onSelectEmpresa }: Props) {
   };
 
   return (
-    <div className="p-4 sm:p-6 text-gray-100 space-y-6 max-w-7xl">
+    <div className="sg-page text-gray-100">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-bold text-white">{t('owner.panelTitle')}</h1>
         <button
           onClick={() => { setShowModal(true); setFormError(null); setForm(EMPTY); }}
-          className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
+          className="sg-btn sg-btn-primary flex items-center gap-2 text-sm"
         >
           <span className="text-lg leading-none">+</span> {t('owner.newCompany')}
         </button>
@@ -124,7 +124,7 @@ export default function OwnerDashboard({ onSelectEmpresa }: Props) {
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {loading ? (
           Array.from({ length: 3 }).map((_, i) => (
-            <div key={i} className="bg-gray-800 rounded-2xl p-5 border border-gray-700/50 animate-pulse">
+            <div key={i} className="sg-card p-5 border border-gray-700/50 animate-pulse">
               <div className="h-3 bg-gray-700 rounded w-3/4 mb-3" />
               <div className="h-8 bg-gray-700 rounded w-1/2" />
             </div>
@@ -139,8 +139,8 @@ export default function OwnerDashboard({ onSelectEmpresa }: Props) {
       </div>
 
       {/* Tabla empresas */}
-      <div className="bg-gray-800 rounded-2xl shadow-xl overflow-hidden">
-        <div className="px-6 py-4 border-b border-gray-700">
+      <div className="sg-card overflow-hidden">
+        <div className="border-b border-white/10 px-5 py-4 sm:px-6">
           <h2 className="text-base font-semibold text-white">{t('owner.companies')}</h2>
         </div>
         <div className="overflow-x-auto">
