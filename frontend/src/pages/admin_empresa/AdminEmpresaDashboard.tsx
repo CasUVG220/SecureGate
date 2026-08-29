@@ -6,7 +6,7 @@ import { useTranslation } from '../../i18n/useTranslation';
 
 function StatCard({ label, value, accent, iconPath }: { label: string; value: number; accent: string; iconPath: string }) {
   return (
-    <div className="relative overflow-hidden bg-gradient-to-br from-gray-800 to-gray-900 rounded-2xl p-5 shadow-xl border border-gray-700/30 transition-all duration-300 hover:-translate-y-0.5 group">
+    <div className="sg-card group relative overflow-hidden p-5 transition-all duration-300 hover:-translate-y-0.5">
       <div className={`absolute -top-6 -right-6 w-24 h-24 rounded-full blur-2xl opacity-20 transition-all duration-500 group-hover:scale-150 ${accent.replace('text-', 'bg-')}`} />
       <div className="flex items-start justify-between mb-3 relative z-10">
         <p className="text-gray-400 text-xs font-semibold uppercase tracking-wide">{label}</p>
@@ -24,7 +24,7 @@ function StatCard({ label, value, accent, iconPath }: { label: string; value: nu
 function BarChart({ sucursales, noDataLabel, title }: { sucursales: EmpresaStats['sucursales']; noDataLabel: string; title: string }) {
   const max = Math.max(...sucursales.map(s => s.accesos_hoy), 1);
   return (
-    <div className="bg-gray-800 rounded-2xl shadow-xl p-6 space-y-3">
+      <div className="sg-card space-y-3 p-5 sm:p-6">
       <h2 className="text-base font-semibold text-white">{title}</h2>
       <div className="overflow-x-auto">
       <div className="space-y-2 min-w-[320px]">
@@ -64,6 +64,8 @@ export default function AdminEmpresaDashboard() {
 
   useEffect(() => {
     if (!empresaId) {
+      // El estado refleja la ausencia de contexto recibido desde autenticación.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setError('No se encontró empresa asociada al usuario.');
       setLoading(false);
       return;
@@ -78,7 +80,7 @@ export default function AdminEmpresaDashboard() {
   }, [empresaId]);
 
   return (
-    <div className="p-4 sm:p-6 text-gray-100 space-y-6 max-w-7xl">
+    <div className="sg-page text-gray-100">
       <h1 className="text-xl font-bold text-white">{t('ae.dashTitle')}</h1>
 
       {error && (
@@ -89,7 +91,7 @@ export default function AdminEmpresaDashboard() {
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         {loading ? (
           Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} className="bg-gray-800 rounded-2xl p-5 border-l-4 border-gray-700 animate-pulse">
+            <div key={i} className="sg-card p-5 border-l-4 border-gray-700 animate-pulse">
               <div className="h-3 bg-gray-700 rounded w-3/4 mb-3" />
               <div className="h-8 bg-gray-700 rounded w-1/2" />
             </div>
@@ -114,8 +116,8 @@ export default function AdminEmpresaDashboard() {
       )}
 
       {/* Sucursales table */}
-      <div className="bg-gray-800 rounded-2xl shadow-xl overflow-hidden">
-        <div className="px-6 py-4 border-b border-gray-700">
+      <div className="sg-card overflow-hidden">
+        <div className="border-b border-white/10 px-5 py-4 sm:px-6">
           <h2 className="text-base font-semibold text-white">{t('ae.branchesSection')}</h2>
         </div>
         <div className="overflow-x-auto">
