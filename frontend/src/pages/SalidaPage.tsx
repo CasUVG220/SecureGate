@@ -179,11 +179,11 @@ export default function SalidaPage() {
 
   return (
     <div className="text-gray-100">
-      <main className="flex items-start justify-center px-4 py-10">
+      <main className="sg-page text-gray-100">
         <div className="w-full max-w-lg space-y-4">
 
           {/* Search form */}
-          <form onSubmit={handleBuscar} className="bg-gray-800 rounded-2xl p-8 shadow-xl space-y-5">
+          <form onSubmit={handleBuscar} className="sg-card space-y-5 p-5 sm:p-7">
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-bold text-white">{t('exit.searchTitle')}</h2>
               {hasCamera ? (
@@ -223,7 +223,7 @@ export default function SalidaPage() {
                   type="button"
                   onClick={handleScanPlaca}
                   disabled={scanning}
-                  className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm font-semibold py-2.5 rounded-xl transition-colors"
+                  className="sg-btn sg-btn-primary w-full text-sm"
                 >
                   {scanning ? 'Procesando...' : 'Capturar placa'}
                 </button>
@@ -237,14 +237,14 @@ export default function SalidaPage() {
                 onChange={(e) => setPlaca(e.target.value)}
                 required
                 placeholder="P-123ABC"
-                className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-white placeholder-gray-400 focus:outline-none focus:border-blue-500 transition-colors uppercase"
+                className="sg-input uppercase"
               />
             </div>
 
             <button
               type="submit"
               disabled={searching}
-              className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-semibold py-3 rounded-xl transition-colors"
+              className="sg-btn sg-btn-primary w-full"
             >
               {searching ? t('common.searching') : t('common.search')}
             </button>
@@ -266,7 +266,7 @@ export default function SalidaPage() {
 
           {/* Active access card */}
           {accesoActivo && !salidaOk && (
-            <div className="bg-gray-800 rounded-2xl p-8 shadow-xl space-y-4">
+            <div className="sg-card space-y-4 p-5 sm:p-7">
               <h3 className="text-base font-bold text-white">{t('exit.activeAccessFound')}</h3>
               <div className="space-y-2 text-sm">
                 <div className="flex justify-between border-b border-gray-700 pb-2">
@@ -306,7 +306,7 @@ export default function SalidaPage() {
               <button
                 onClick={handleSalida}
                 disabled={registrando}
-                className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-semibold py-3 rounded-xl transition-colors"
+                className="sg-btn sg-btn-primary w-full"
               >
                 {registrando ? t('exit.registering') : t('exit.registerExit')}
               </button>
@@ -335,9 +335,9 @@ export default function SalidaPage() {
       </main>
 
       {/* Active Visitors Panel */}
-      <div className="px-4 pb-10 max-w-4xl mx-auto">
-        <div className="bg-gray-800 rounded-2xl shadow-xl overflow-hidden">
-          <div className="px-6 py-4 border-b border-gray-700 flex items-center justify-between">
+      <div className="sg-page pt-0 text-gray-100">
+        <div className="sg-card overflow-hidden">
+          <div className="flex items-center justify-between border-b border-white/10 px-5 py-4 sm:px-6">
             <h2 className="text-base font-bold text-white">
               Visitantes dentro
               {!activosLoading && (
