@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { getUsuarios, createUsuario, type Usuario, type UsuarioInput } from '../services/api';
+import { getUsuarios, createUsuario, type Usuario } from '../services/api';
 import { TableSkeleton, Spinner } from '../components/Skeleton';
 import { useToast } from '../components/Toast';
 import { useTranslation } from '../i18n/useTranslation';
@@ -68,7 +68,7 @@ export default function AgentesPage() {
   });
 
   return (
-    <div className="p-6 text-gray-100 space-y-5 max-w-6xl">
+    <div className="sg-page text-gray-100">
       {error && (
         <div className="bg-red-900/40 border border-red-700 rounded-lg px-4 py-3 text-red-300 text-sm">{error}</div>
       )}
@@ -125,7 +125,7 @@ export default function AgentesPage() {
       )}
 
       {/* Table */}
-      <div className="bg-gray-800 rounded-2xl overflow-hidden shadow-xl">
+      <div className="sg-card overflow-hidden">
         {!loading && filtered.length === 0 ? (
           <p className="text-gray-400 text-sm text-center py-10">No hay personal registrado</p>
         ) : (
