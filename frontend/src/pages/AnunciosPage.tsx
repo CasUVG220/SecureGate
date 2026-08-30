@@ -129,7 +129,7 @@ export default function AnunciosPage() {
   );
 
   return (
-    <div className="p-4 sm:p-6 text-gray-100 space-y-6 max-w-6xl">
+    <div className="sg-page text-gray-100">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-bold text-white">{t('announce.title')}</h1>
@@ -137,7 +137,7 @@ export default function AnunciosPage() {
         </div>
         <button
           onClick={openCreate}
-          className="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-4 py-2 rounded-xl text-sm transition-colors"
+          className="sg-btn sg-btn-primary text-sm"
         >
           {t('announce.new')}
         </button>
@@ -148,14 +148,14 @@ export default function AnunciosPage() {
         value={search}
         onChange={e => setSearch(e.target.value)}
         placeholder={t('announce.searchPlaceholder')}
-        className="w-full max-w-sm bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-blue-500"
+        className="sg-input w-full max-w-sm"
       />
 
       {error && (
         <div className="bg-red-900/40 border border-red-700 rounded-lg px-4 py-3 text-red-300 text-sm">{error}</div>
       )}
 
-      <div className="bg-gray-800 rounded-2xl shadow-xl overflow-hidden">
+      <div className="sg-card overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
@@ -202,8 +202,8 @@ export default function AnunciosPage() {
 
       {/* Modal */}
       {showModal && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="bg-gray-800 rounded-t-2xl sm:rounded-2xl shadow-2xl w-full sm:max-w-lg p-6 space-y-4">
+        <div className="sg-drawer-backdrop fixed inset-0 z-50 flex items-end justify-center p-0 sm:items-center sm:p-4">
+          <div className="sg-card w-full rounded-t-3xl p-5 sm:max-w-lg sm:rounded-2xl sm:p-6">
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-bold text-white">
                 {editTarget ? t('announce.editTitle') : t('announce.createTitle')}
@@ -222,7 +222,7 @@ export default function AnunciosPage() {
                 value={form.titulo}
                 onChange={e => setForm(p => ({ ...p, titulo: e.target.value }))}
                 placeholder={t('announce.titlePlaceholder')}
-                className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-blue-500"
+                className="sg-input"
               />
             </div>
 
@@ -233,7 +233,7 @@ export default function AnunciosPage() {
                 onChange={e => setForm(p => ({ ...p, contenido: e.target.value }))}
                 rows={4}
                 placeholder={t('announce.contentPlaceholder')}
-                className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 resize-none"
+                className="sg-input resize-none"
               />
             </div>
 
@@ -257,7 +257,7 @@ export default function AnunciosPage() {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div>
                 <label className="block text-xs font-medium text-gray-400 mb-1">{t('announce.validFrom')}</label>
                 <input
@@ -283,14 +283,14 @@ export default function AnunciosPage() {
               <button
                 onClick={handleSave}
                 disabled={saving}
-                className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-semibold py-2 rounded-xl transition-colors flex items-center justify-center gap-2"
+                className="sg-btn sg-btn-primary flex-1"
               >
                 {saving && <Spinner size={14} />}
                 {saving ? t('common.saving') : t('common.save')}
               </button>
               <button
                 onClick={closeModal}
-                className="bg-gray-700 hover:bg-gray-600 text-gray-200 font-medium px-4 py-2 rounded-xl transition-colors"
+                className="sg-btn sg-btn-secondary px-4"
               >
                 {t('common.cancel')}
               </button>

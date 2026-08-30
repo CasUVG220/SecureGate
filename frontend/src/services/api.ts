@@ -105,6 +105,7 @@ export interface AccesoPayload {
   agente_id: string;
   placa?: string;
   notas?: string;
+  invitacion_qr_id?: string;
 }
 
 export interface CargoGenerado {
@@ -454,6 +455,111 @@ export const deleteMisPreautorizacion = async (id: string): Promise<void> => {
     const body = await res.json();
     throw new Error(body.error || 'Error al eliminar preautorización');
   }
+};
+
+export type InvitacionQrTipo = 'grupal' | 'individual';
+
+export interface InvitacionQr {
+  id: string;
+  tipo: InvitacionQrTipo;
+  etiqueta: string | null;
+  nombre_visitante: string | null;
+  numero_dpi: string | null;
+  placa: string | null;
+  fecha_inicio: string;
+  fecha_fin: string | null;
+  usos_maximos: number | null;
+  usos_actuales: number;
+  activo: boolean;
+  created_at: string;
+}
+
+export interface InvitacionQrInput {
+  tipo: InvitacionQrTipo;
+  etiqueta?: string;
+  nombre_visitante?: string;
+  numero_dpi?: string;
+  placa?: string;
+  fecha_inicio: string;
+  fecha_fin?: string;
+  usos_maximos?: number;
+}
+
+export interface InvitacionQrVerificada {
+  id: string;
+  tipo: InvitacionQrTipo;
+  etiqueta: string | null;
+  nombre_visitante: string | null;
+  numero_dpi: string | null;
+  placa: string | null;
+  residente_id: string;
+  numero_casa: string;
+  residente_nombre: string;
+  usos_maximos: number | null;
+  usos_actuales: number;
+}
+
+export interface ConfigQr {
+  dpi_obligatorio_individual: boolean;
+  requiere_placa: boolean;
+  autorizacion_automatica: boolean;
+  max_intentos_fallidos: number;
+  bloqueo_minutos: number;
+  es_default?: boolean;
+}
+
+export const getConfigQr = async (): Promise<ConfigQr> => {
+  const res = await apiFetch(`${BASE_URL}/api/config-qr`, { headers: authHeaders() });
+  if (!res.ok) throw new Error('Error al cargar la configuración de QR');
+  return res.json();
+};
+
+export const updateConfigQr = async (data: Partial<ConfigQr>): Promise<ConfigQr> => {
+  const res = await apiFetch(`${BASE_URL}/api/config-qr`, {
+    method: 'PUT', headers: authHeaders(), body: JSON.stringify(data),
+  });
+  const body = await res.json();
+  if (!res.ok) throw new Error(body.error || 'Error al guardar la configuración de QR');
+  return body;
+};
+
+export const getMisInvitaciones = async (): Promise<InvitacionQr[]> => {
+  const res = await apiFetch(`${BASE_URL}/api/invitaciones-qr/mis`, { headers: authHeaders() });
+  if (!res.ok) throw new Error('Error al cargar invitaciones QR');
+  return res.json();
+};
+
+export const crearInvitacionQr = async (data: InvitacionQrInput): Promise<InvitacionQr> => {
+  const res = await apiFetch(`${BASE_URL}/api/invitaciones-qr/mis`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify(data),
+  });
+  const body = await res.json();
+  if (!res.ok) throw new Error(body.error || 'Error al crear invitación QR');
+  return body as InvitacionQr;
+};
+
+export const revocarInvitacionQr = async (id: string): Promise<void> => {
+  const res = await apiFetch(
+    `${BASE_URL}/api/invitaciones-qr/mis/${encodeURIComponent(id)}`,
+    { method: 'DELETE', headers: authHeaders() }
+  );
+  if (!res.ok) {
+    const body = await res.json();
+    throw new Error(body.error || 'Error al revocar invitación QR');
+  }
+};
+
+/** Verifica un código QR escaneado en garita. Lanza Error con el motivo de rechazo si no es válido. */
+export const verificarInvitacionQr = async (id: string): Promise<InvitacionQrVerificada> => {
+  const res = await apiFetch(
+    `${BASE_URL}/api/invitaciones-qr/verificar/${encodeURIComponent(id)}`,
+    { headers: authHeaders() }
+  );
+  const body = await res.json();
+  if (!res.ok) throw new Error(body.error || 'Código QR inválido');
+  return body as InvitacionQrVerificada;
 };
 
 export const getMisAccesos = async (): Promise<MiVisita[]> => {
