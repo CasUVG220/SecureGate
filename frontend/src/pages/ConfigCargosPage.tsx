@@ -12,6 +12,7 @@ import {
 import { TableSkeleton, Spinner } from '../components/Skeleton';
 import { useToast } from '../components/Toast';
 import { useTranslation } from '../i18n/useTranslation';
+import ConfiguracionQrPage from './ConfiguracionQrPage';
 
 const FRECUENCIAS = [
   { value: 'mensual',   label: 'Mensual (una vez por mes)' },
@@ -50,7 +51,7 @@ export default function ConfigCargosPage() {
     return (decodeTokenPayload(token)?.sucursal_id as string) ?? null;
   })();
 
-  const [activeTab, setActiveTab] = useState<'mora' | 'programados'>('mora');
+  const [activeTab, setActiveTab] = useState<'mora' | 'programados' | 'qr'>('mora');
 
   // ── Section A: Cargos por Mora ─────────────────────────────────────────
   const [configs, setConfigs]           = useState<ConfigCargo[]>([]);
@@ -101,7 +102,7 @@ export default function ConfigCargosPage() {
 
   useEffect(() => { loadMora(); }, []);
 
-  const handleTabChange = (tab: 'mora' | 'programados') => {
+  const handleTabChange = (tab: 'mora' | 'programados' | 'qr') => {
     setActiveTab(tab);
     if (tab === 'programados' && !progLoaded) loadProg();
   };
@@ -285,7 +286,7 @@ export default function ConfigCargosPage() {
   };
 
   return (
-    <div className="p-6 text-gray-100 space-y-6">
+    <div className="sg-page text-gray-100">
 
       {/* ── Mora modal ────────────────────────────────────────────────────── */}
       {showMoraModal && (
@@ -528,6 +529,14 @@ export default function ConfigCargosPage() {
         >
           Cargos Programados
         </button>
+        <button
+          onClick={() => handleTabChange('qr')}
+          className={`flex-1 py-2.5 text-sm font-semibold transition-colors ${
+            activeTab === 'qr' ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-400 hover:text-gray-200'
+          }`}
+        >
+          {t('qr.configTabLabel')}
+        </button>
       </div>
 
       {/* ════════════════════════════════════════════════════════════
@@ -554,7 +563,7 @@ export default function ConfigCargosPage() {
             <div className="bg-red-900/40 border border-red-700 rounded-lg px-4 py-3 text-red-300 text-sm">{error}</div>
           )}
 
-          <div className="bg-gray-800 rounded-2xl overflow-hidden shadow-xl max-w-3xl">
+          <div className="sg-card overflow-hidden max-w-3xl">
             {!loading && configs.length === 0 ? (
               <p className="text-gray-400 text-sm px-6 py-8 text-center">{t('config.noConfigs')}</p>
             ) : (
@@ -627,7 +636,7 @@ export default function ConfigCargosPage() {
             <div className="bg-red-900/40 border border-red-700 rounded-lg px-4 py-3 text-red-300 text-sm">{progError}</div>
           )}
 
-          <div className="bg-gray-800 rounded-2xl overflow-hidden shadow-xl">
+          <div className="sg-card overflow-hidden">
             {loadingProg ? (
               <table className="w-full text-sm">
                 <tbody><TableSkeleton rows={3} cols={6} /></tbody>
@@ -697,6 +706,11 @@ export default function ConfigCargosPage() {
           </div>
         </div>
       )}
+
+      {/* ════════════════════════════════════════════════════════════
+          SECTION C — Reglas de uso del QR
+      ════════════════════════════════════════════════════════════ */}
+      {activeTab === 'qr' && <ConfiguracionQrPage />}
     </div>
   );
 }
