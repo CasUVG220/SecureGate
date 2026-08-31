@@ -1,3 +1,5 @@
+/* El hook se exporta junto al provider para compartir el canal de notificaciones. */
+/* eslint-disable react-refresh/only-export-components */
 import { createContext, useCallback, useContext, useState } from 'react';
 
 type ToastType = 'success' | 'error' | 'warning';
