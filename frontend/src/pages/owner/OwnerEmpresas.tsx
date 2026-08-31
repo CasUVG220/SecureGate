@@ -173,7 +173,7 @@ export default function OwnerEmpresas() {
   });
 
   return (
-    <div className="p-6 text-gray-100 space-y-5 max-w-6xl">
+    <div className="sg-page text-gray-100">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <h1 className="text-xl font-bold text-white">{t('empresas.title')}</h1>
         <div className="flex gap-3">
@@ -182,11 +182,11 @@ export default function OwnerEmpresas() {
             value={search}
             onChange={e => setSearch(e.target.value)}
             placeholder="Buscar por nombre o NIT…"
-            className="bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white placeholder-gray-400 text-sm focus:outline-none focus:border-blue-500 w-52"
+            className="sg-input w-full sm:w-60"
           />
           <button
             onClick={openCreate}
-            className="flex items-center gap-2 bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white text-sm font-medium px-4 py-2 rounded-lg transition-all shadow-sm"
+            className="sg-btn sg-btn-primary flex items-center justify-center gap-2 text-sm"
           >
             <span className="text-lg leading-none">+</span> {t('empresas.new')}
           </button>
@@ -197,7 +197,7 @@ export default function OwnerEmpresas() {
         <div className="bg-red-900/40 border border-red-700 rounded-lg px-4 py-3 text-red-300 text-sm">{error}</div>
       )}
 
-      <div className="bg-gradient-to-br from-gray-800 to-gray-900 rounded-2xl shadow-xl overflow-hidden border border-gray-700/30">
+      <div className="sg-card overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>

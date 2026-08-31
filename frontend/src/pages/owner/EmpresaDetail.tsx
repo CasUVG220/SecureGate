@@ -119,7 +119,7 @@ export default function EmpresaDetail({ empresaId, onBack }: Props) {
   const empresaNombre = sucursales[0]?.empresa_nombre ?? 'Empresa';
 
   return (
-    <div className="p-4 sm:p-6 text-gray-100 space-y-6 max-w-7xl">
+    <div className="sg-page text-gray-100">
       {/* Header */}
       <div className="flex items-center gap-4">
         <button
@@ -144,7 +144,7 @@ export default function EmpresaDetail({ empresaId, onBack }: Props) {
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         {loading ? (
           Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} className="bg-gray-800 rounded-2xl p-5 border-l-4 border-gray-700 animate-pulse">
+            <div key={i} className="sg-card p-5 border-l-4 border-gray-700 animate-pulse">
               <div className="h-3 bg-gray-700 rounded w-3/4 mb-3" />
               <div className="h-8 bg-gray-700 rounded w-1/2" />
             </div>
@@ -157,7 +157,7 @@ export default function EmpresaDetail({ empresaId, onBack }: Props) {
               [t('dashboard.accessesToday'), stats.total_accesos_hoy,   'border-teal-500'],
               [t('dashboard.pendingPayments'), stats.total_pagos_pendientes, 'border-yellow-500'],
             ] as [string, number, string][]).map(([label, value, color]) => (
-              <div key={label} className={`bg-gray-800 rounded-2xl p-5 shadow-xl border-l-4 ${color}`}>
+              <div key={label} className={`sg-card p-5 sm:p-6 border-l-4 ${color}`}>
                 <p className="text-gray-400 text-xs font-medium">{label}</p>
                 <p className="text-3xl font-bold text-white mt-1">{value}</p>
               </div>
