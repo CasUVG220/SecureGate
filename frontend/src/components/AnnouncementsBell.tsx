@@ -29,6 +29,8 @@ export default function AnnouncementsBell() {
       .finally(() => setLoading(false));
   };
 
+  // La carga inicial sincroniza el panel con la API; el setter ocurre dentro de la promesa.
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { load(); }, []);
 
   const unreadCount = anuncios.filter(a => a.leido_at === null).length;
@@ -69,7 +71,7 @@ export default function AnnouncementsBell() {
       <button
         onClick={togglePanel}
         aria-label={t('announcements.title')}
-        className="relative text-gray-400 hover:text-brand-400 transition-colors p-1.5 rounded-lg hover:bg-white/5"
+        className="relative flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-gray-400 transition-colors hover:bg-white/10 hover:text-emerald-300"
       >
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
@@ -88,8 +90,8 @@ export default function AnnouncementsBell() {
           {/* click-away backdrop */}
           <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
 
-          <div className="absolute right-0 mt-2 w-[92vw] max-w-sm bg-gray-800 border border-gray-700 rounded-2xl shadow-2xl z-40 overflow-hidden">
-            <div className="px-4 py-3 border-b border-gray-700 flex items-center justify-between">
+          <div className="sg-card fixed left-3 right-3 top-[4.75rem] z-40 overflow-hidden rounded-2xl sm:absolute sm:left-auto sm:right-0 sm:top-auto sm:mt-2 sm:w-[min(92vw,26rem)]">
+            <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
               <h3 className="text-white font-semibold text-sm">{t('announcements.title')}</h3>
               {unreadCount > 0 && (
                 <span className="text-xs text-red-400 font-medium">
@@ -98,7 +100,7 @@ export default function AnnouncementsBell() {
               )}
             </div>
 
-            <div className="max-h-[70vh] overflow-y-auto">
+            <div className="max-h-[calc(100vh-7rem)] overflow-y-auto sm:max-h-[70vh]">
               {loading && anuncios.length === 0 ? (
                 <p className="text-gray-400 text-sm text-center py-8">{t('common.loading')}</p>
               ) : anuncios.length === 0 ? (
@@ -112,7 +114,7 @@ export default function AnnouncementsBell() {
                       key={a.id}
                       type="button"
                       onClick={() => handleOpenAnuncio(a)}
-                      className={`w-full text-left px-4 py-3 border-b border-gray-700/60 last:border-0 transition-colors hover:bg-gray-700/40 ${
+                      className={`w-full text-left border-b border-white/10 px-4 py-4 transition-colors last:border-0 hover:bg-white/5 ${
                         unread ? 'bg-gray-700/20 border-l-2 border-l-red-500' : ''
                       }`}
                     >
