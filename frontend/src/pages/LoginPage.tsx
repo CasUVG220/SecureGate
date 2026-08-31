@@ -3,7 +3,7 @@ import { login } from '../services/api';
 import { useTranslation } from '../i18n/useTranslation';
 
 interface LoginPageProps {
-  onLogin: (token: string, rol: string, usuario: Record<string, any>) => void;
+  onLogin: (token: string, rol: string, usuario: Record<string, unknown>) => void;
 }
 
 export default function LoginPage({ onLogin }: LoginPageProps) {
@@ -34,7 +34,7 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
       <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-brand-600/20 rounded-full blur-[120px] pointer-events-none"></div>
       <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-purple-600/20 rounded-full blur-[120px] pointer-events-none"></div>
 
-      <div className="relative bg-dark-800/60 backdrop-blur-xl border border-white/5 rounded-3xl p-10 shadow-2xl w-full max-w-md z-10">
+      <div className="sg-card relative z-10 w-full max-w-md rounded-3xl p-6 sm:p-10">
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-brand-500 to-purple-600 mb-6 shadow-glow">
             <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
@@ -60,7 +60,7 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
-              className="w-full bg-dark-700/50 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-all text-sm"
+              className="sg-input"
               placeholder={t('login.emailPlaceholder')}
             />
           </div>
@@ -74,7 +74,7 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
-              className="w-full bg-dark-700/50 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-all text-sm"
+              className="sg-input"
               placeholder="••••••••"
             />
           </div>
@@ -82,7 +82,7 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-gradient-to-r from-brand-600 to-brand-500 hover:from-brand-500 hover:to-brand-400 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold py-3 rounded-xl transition-all duration-300 shadow-glow hover:shadow-glow-lg text-sm mt-4"
+            className="sg-btn sg-btn-primary mt-4 w-full"
           >
             {loading ? t('login.submitting') : t('login.submit')}
           </button>
