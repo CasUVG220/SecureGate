@@ -111,7 +111,7 @@ export default function ConfiguracionReservasPage() {
   }
 
   return (
-    <div className="space-y-6 max-w-2xl">
+    <div className="sg-page-inner space-y-6">
       <div>
         <h2 className="text-lg font-bold text-white">{t('reservas.configTitle')}</h2>
         <p className="text-sm text-gray-400 mt-0.5">{t('reservas.configSubtitle')}</p>
@@ -129,7 +129,7 @@ export default function ConfiguracionReservasPage() {
         </div>
       )}
 
-      <div className="bg-gray-800 rounded-2xl shadow-xl p-6 space-y-5">
+      <div className="sg-card p-5 sm:p-6 space-y-5">
         <label className="flex items-start gap-3 text-sm text-gray-300">
           <input
             type="checkbox"

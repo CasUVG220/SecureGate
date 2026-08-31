@@ -130,7 +130,7 @@ export default function BlacklistPage() {
   };
 
   return (
-    <div className="p-4 sm:p-6 text-gray-100 space-y-6 max-w-7xl">
+    <div className="sg-page text-gray-100">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-bold text-white">{t('blacklist.title')}</h1>
@@ -138,7 +138,7 @@ export default function BlacklistPage() {
         </div>
         <button
           onClick={openModal}
-          className="flex items-center gap-2 bg-red-700 hover:bg-red-600 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
+          className="sg-btn sg-btn-danger flex items-center gap-2 text-sm"
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
             <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
@@ -154,11 +154,11 @@ export default function BlacklistPage() {
         value={search}
         onChange={e => setSearch(e.target.value)}
         placeholder={t('blacklist.searchPlaceholder')}
-        className="w-full max-w-sm bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-red-500"
+        className="sg-input w-full max-w-sm"
       />
 
       {/* Table */}
-      <div className="bg-gray-800 rounded-2xl shadow-xl overflow-hidden">
+      <div className="sg-card overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
@@ -220,8 +220,8 @@ export default function BlacklistPage() {
 
       {/* Modal */}
       {showModal && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm">
-          <div className="bg-gray-800 rounded-t-2xl sm:rounded-2xl shadow-2xl w-full sm:max-w-md p-6 space-y-5">
+        <div className="sg-drawer-backdrop fixed inset-0 z-50 flex items-end justify-center sm:items-center">
+          <div className="sg-card w-full rounded-t-3xl p-5 sm:max-w-md sm:rounded-2xl sm:p-6">
             <h2 className="text-lg font-bold text-white">{t('blacklist.modalTitle')}</h2>
 
             {formError && (
@@ -241,7 +241,7 @@ export default function BlacklistPage() {
                   value={dpiQuery}
                   onChange={e => handleDpiSearch(e.target.value)}
                   placeholder={t('blacklist.dpiPlaceholder')}
-                  className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-red-500"
+                  className="sg-input"
                 />
                 {dpiLoading && (
                   <div className="absolute right-3 top-8">
@@ -276,7 +276,7 @@ export default function BlacklistPage() {
                 <select
                   value={form.duracion}
                   onChange={e => setForm(prev => ({ ...prev, duracion: e.target.value as BlacklistDuracion }))}
-                  className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-red-500"
+                  className="sg-input"
                 >
                   {DURACION_VALUES.map(d => (
                     <option key={d.value} value={d.value}>{t(d.labelKey)}</option>
@@ -293,7 +293,7 @@ export default function BlacklistPage() {
                     min={1}
                     value={form.dias ?? ''}
                     onChange={e => setForm(prev => ({ ...prev, dias: e.target.value ? parseInt(e.target.value, 10) : undefined }))}
-                    className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-red-500"
+                    className="sg-input"
                   />
                 </div>
               )}
@@ -306,7 +306,7 @@ export default function BlacklistPage() {
                   onChange={e => setForm(prev => ({ ...prev, razon: e.target.value }))}
                   rows={3}
                   placeholder={t('blacklist.reasonPlaceholder')}
-                  className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-red-500 resize-none"
+                  className="sg-input resize-none"
                 />
               </div>
 
@@ -314,7 +314,7 @@ export default function BlacklistPage() {
                 <button
                   type="submit"
                   disabled={saving}
-                  className="flex-1 bg-red-700 hover:bg-red-600 disabled:opacity-50 text-white text-sm font-medium py-2 rounded-lg transition-colors flex items-center justify-center gap-2"
+                  className="sg-btn sg-btn-danger flex-1 text-sm"
                 >
                   {saving && <Spinner size={14} />} {t('blacklist.add')}
                 </button>

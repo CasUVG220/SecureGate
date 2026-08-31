@@ -157,7 +157,7 @@ export default function AreasComunesPage() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="sg-page-inner space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-lg font-bold text-white">{t('reservas.areasTitle')}</h2>
@@ -165,7 +165,7 @@ export default function AreasComunesPage() {
         </div>
         <button
           onClick={openCreate}
-          className="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-4 py-2 rounded-xl text-sm transition-colors"
+          className="sg-btn sg-btn-primary text-sm"
         >
           {t('reservas.newArea')}
         </button>
@@ -180,7 +180,7 @@ export default function AreasComunesPage() {
       {loading ? (
         <p className="text-gray-400 text-sm">{t('common.loading')}</p>
       ) : areas.length === 0 ? (
-        <div className="bg-gray-800 rounded-2xl shadow-xl px-4 py-10 text-center text-gray-500">
+        <div className="sg-card px-4 py-10 text-center text-gray-500">
           {t('reservas.areasEmpty')}
         </div>
       ) : (
@@ -188,7 +188,7 @@ export default function AreasComunesPage() {
           {areas.map(a => (
             <div
               key={a.id}
-              className={`bg-gray-800 rounded-2xl shadow-xl overflow-hidden border border-gray-700 ${
+              className={`sg-card overflow-hidden border border-gray-700 ${
                 a.activa ? '' : 'opacity-60'
               }`}
             >
