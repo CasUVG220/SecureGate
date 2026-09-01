@@ -57,6 +57,8 @@ export default function GestionSucursales() {
       .finally(() => setLoading(false));
   };
 
+  // Carga inicial del módulo de administración por empresa.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { cargar(); }, []);
 
   const closeModal = () => {
@@ -224,19 +226,19 @@ export default function GestionSucursales() {
   });
 
   return (
-    <div className="p-6 text-gray-100 space-y-6 max-w-7xl">
+    <div className="sg-page text-gray-100">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <h1 className="text-xl font-bold text-white">{t('ae.managementTitle')}</h1>
         <div className="flex gap-2">
           <button
             onClick={openUserModal}
-            className="flex items-center gap-2 bg-green-700 hover:bg-green-600 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
+            className="sg-btn sg-btn-primary flex items-center gap-2 text-sm"
           >
             {t('ae.newUser')}
           </button>
           <button
             onClick={openCreateSuc}
-            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
+            className="sg-btn sg-btn-secondary flex items-center gap-2 text-sm"
           >
             {t('ae.newBranch')}
           </button>
@@ -248,15 +250,15 @@ export default function GestionSucursales() {
       )}
 
       {/* Sucursales table */}
-      <div className="bg-gray-800 rounded-2xl shadow-xl overflow-hidden">
-        <div className="px-6 py-4 border-b border-gray-700 space-y-3">
+      <div className="sg-card overflow-hidden">
+        <div className="space-y-3 border-b border-white/10 px-5 py-4 sm:px-6">
           <h2 className="text-base font-semibold text-white">{t('ae.branchesSection')}</h2>
           <input
             type="text"
             value={sucSearch}
             onChange={e => setSucSearch(e.target.value)}
             placeholder="Buscar sucursal…"
-            className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-400 focus:outline-none focus:border-blue-500"
+            className="sg-input"
           />
         </div>
         <div className="overflow-x-auto">
@@ -341,8 +343,8 @@ export default function GestionSucursales() {
       </div>
 
       {/* Staff users table */}
-      <div className="bg-gray-800 rounded-2xl shadow-xl overflow-hidden">
-        <div className="px-6 py-4 border-b border-gray-700 space-y-3">
+      <div className="sg-card overflow-hidden">
+        <div className="space-y-3 border-b border-white/10 px-5 py-4 sm:px-6">
           <div className="flex items-center justify-between gap-4 flex-wrap">
             <h2 className="text-base font-semibold text-white">{t('ae.staffSection')}</h2>
             <div className="flex gap-1 bg-gray-700/50 rounded-lg p-1">
@@ -366,7 +368,7 @@ export default function GestionSucursales() {
             value={staffSearch}
             onChange={e => setStaffSearch(e.target.value)}
             placeholder="Buscar por nombre o email…"
-            className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-400 focus:outline-none focus:border-blue-500"
+            className="sg-input"
           />
         </div>
         <div className="overflow-x-auto">
