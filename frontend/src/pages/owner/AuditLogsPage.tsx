@@ -59,6 +59,8 @@ export default function AuditLogsPage() {
 
   useEffect(() => {
     let cancelled = false;
+    // La consulta sincroniza filtros/paginación con la API al cambiar la vista.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoading(true);
     setError(null);
     getAuditLogs({
@@ -108,7 +110,7 @@ export default function AuditLogsPage() {
   const hasFilters = !!(accion || desde || hasta || busqueda);
 
   return (
-    <div className="p-6 text-gray-100 space-y-6">
+    <div className="sg-page text-gray-100">
       <div>
         <h1 className="text-xl font-bold text-white">{t('nav.auditLogs')}</h1>
         <p className="text-sm text-gray-400 mt-0.5">
@@ -182,7 +184,7 @@ export default function AuditLogsPage() {
       )}
 
       {/* ── Tabla ── */}
-      <div className="bg-gray-800 rounded-2xl overflow-hidden shadow-xl">
+      <div className="sg-card overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
