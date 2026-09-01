@@ -1,3 +1,5 @@
+/* El contexto expone hook y provider para el shell y las pantallas. */
+/* eslint-disable react-refresh/only-export-components */
 import { createContext, useContext, useEffect, useState } from 'react';
 
 type Theme = 'dark' | 'light';
