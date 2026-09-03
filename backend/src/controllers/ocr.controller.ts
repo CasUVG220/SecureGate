@@ -2,22 +2,108 @@ import { Request, Response } from 'express';
 
 const VISION_URL = 'https://vision.googleapis.com/v1/images:annotate';
 
+/**
+ * Fallo técnico real del servicio de OCR (red caída, timeout, credencial
+ * inválida, cuota excedida, respuesta 5xx de Google). Nunca debe traducirse
+ * en un 200 OK — el cliente necesita saber que el servicio falló, no que el
+ * documento es ilegible.
+ */
+export class OcrTechnicalError extends Error {
+  status: number;
+  details: unknown;
+  constructor(message: string, status: number, details?: unknown) {
+    super(message);
+    this.name = 'OcrTechnicalError';
+    this.status = status;
+    this.details = details;
+  }
+}
+
+/** Error de negocio: la imagen en sí es ilegible/corrupta/de mal formato. */
+export class OcrDocumentError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'OcrDocumentError';
+  }
+}
+
 const callVision = async (base64: string): Promise<string> => {
   const key = process.env.GOOGLE_CLOUD_API_KEY;
-  const res = await fetch(`${VISION_URL}?key=${key}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      requests: [{
-        image: { content: base64 },
-        features: [{ type: 'TEXT_DETECTION' }],
-      }],
-    }),
-  });
-  const data = await res.json() as Record<string, unknown>;
+
+  let res: Awaited<ReturnType<typeof fetch>>;
+  try {
+    res = await fetch(`${VISION_URL}?key=${key}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        requests: [{
+          image: { content: base64 },
+          features: [{ type: 'TEXT_DETECTION' }],
+        }],
+      }),
+    });
+  } catch (err) {
+    throw new OcrTechnicalError('No se pudo conectar con el servicio de OCR', 503, err);
+  }
+
+  let data: Record<string, unknown>;
+  try {
+    data = await res.json() as Record<string, unknown>;
+  } catch (err) {
+    throw new OcrTechnicalError('Respuesta inválida del servicio de OCR', 502, err);
+  }
+
+  if (!res.ok) {
+    const errInfo = data.error as { status?: string; message?: string } | undefined;
+    const googleStatus = errInfo?.status;
+
+    if (googleStatus === 'PERMISSION_DENIED' || googleStatus === 'UNAUTHENTICATED') {
+      throw new OcrTechnicalError('Credenciales inválidas para el servicio de OCR', 500, errInfo);
+    }
+    if (googleStatus === 'RESOURCE_EXHAUSTED') {
+      throw new OcrTechnicalError('Cuota del servicio de OCR excedida', 503, errInfo);
+    }
+    if (googleStatus === 'UNAVAILABLE' || googleStatus === 'DEADLINE_EXCEEDED' || res.status >= 500) {
+      throw new OcrTechnicalError('Servicio de OCR no disponible', 503, errInfo);
+    }
+    throw new OcrTechnicalError(`Error del servicio de OCR (HTTP ${res.status})`, 500, errInfo);
+  }
+
   const responses = data.responses as Array<Record<string, unknown>> | undefined;
-  const annotations = responses?.[0]?.textAnnotations as Array<{ description: string }> | undefined;
+  const firstResponse = responses?.[0];
+
+  // Vision responde 200 pero marca un error por-imagen (ej. "Bad image data")
+  // cuando el archivo enviado es inválido/corrupto — eso sí es culpa del
+  // documento, no del servicio.
+  const visionError = firstResponse?.error as { message?: string } | undefined;
+  if (visionError) {
+    throw new OcrDocumentError(visionError.message ?? 'Imagen no válida');
+  }
+
+  const annotations = firstResponse?.textAnnotations as Array<{ description: string }> | undefined;
   return annotations?.[0]?.description ?? '';
+};
+
+const logOcrError = (endpoint: string, docType: string, err: unknown) => {
+  console.error(`[ocr.controller] fallo en ${endpoint}`, {
+    endpoint,
+    docType,
+    timestamp: new Date().toISOString(),
+    error: err instanceof Error
+      ? { name: err.name, message: err.message, ...(err instanceof OcrTechnicalError ? { status: err.status, details: err.details } : {}) }
+      : err,
+  });
+};
+
+const handleOcrFailure = (res: Response, endpoint: string, docType: string, err: unknown, illegibleMessage: string) => {
+  logOcrError(endpoint, docType, err);
+
+  if (err instanceof OcrDocumentError) {
+    return res.status(422).json({ error: illegibleMessage });
+  }
+
+  const status = err instanceof OcrTechnicalError ? err.status : 500;
+  return res.status(status).json({ error: 'No se pudo procesar el documento en este momento, intenta de nuevo más tarde' });
 };
 
 const SKIP_WORDS = /REPÚBLICA|GUATEMALA|LICENCIA|DOCUMENTO|IDENTIFICACIÓN|PERSONAL|CONDUCIR|RENAP|CATEGORIA|CATEGORÍA|VENCE|EMITIDA|CLASE|TIPO|FECHA|BLOOD|SANGRE|SEXO|NACIMIENTO|CENTROAMERICA|REGISTRO|NACIONAL|PERSONAS/i;
@@ -118,10 +204,13 @@ export const scanDpi = async (req: Request, res: Response) => {
 
   try {
     const texto_completo = await callVision(image);
+    if (!texto_completo) {
+      return res.status(422).json({ error: 'No se pudo leer el documento, intenta con una foto más clara' });
+    }
     const { nombre, numero_dpi } = parseIdentificacion(texto_completo);
     res.json({ nombre, numero_dpi, texto_completo });
-  } catch {
-    res.json({ nombre: '', numero_dpi: '', texto_completo: '', error: 'No se pudo leer el documento' });
+  } catch (err) {
+    handleOcrFailure(res, 'scanDpi', 'DPI', err, 'No se pudo leer el documento, intenta con una foto más clara');
   }
 };
 
@@ -131,10 +220,13 @@ export const scanPlaca = async (req: Request, res: Response) => {
 
   try {
     const texto_completo = await callVision(image);
+    if (!texto_completo) {
+      return res.status(422).json({ error: 'No se pudo leer la placa, intenta con una foto más clara' });
+    }
     const placa = parsePlaca(texto_completo);
     res.json({ placa, texto_completo });
-  } catch {
-    res.json({ placa: '', error: 'No se pudo leer la placa' });
+  } catch (err) {
+    handleOcrFailure(res, 'scanPlaca', 'PLACA', err, 'No se pudo leer la placa, intenta con una foto más clara');
   }
 };
 
