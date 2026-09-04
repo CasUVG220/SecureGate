@@ -2,320 +2,708 @@
 @tailwind components;
 @tailwind utilities;
 
-@layer base {
-  body {
-    @apply antialiased text-gray-100 selection:bg-blue-500 selection:text-white;
-  }
+/* ══════════════════════════════════════════════════════════════════════════
+   SecureGate — hoja base del design system
+   ──────────────────────────────────────────────────────────────────────────
+   Los valores de estas variables se generan a partir de `src/styles/tokens.ts`
+   (ver la explicación del mecanismo claro/oscuro en ese archivo). Tailwind
+   emite cada color como `rgb(var(--c-…) / <alpha>)`, así que redefinir el
+   bloque de abajo cambia el tema entero sin duplicar utilidades por pantalla.
 
-  /* Custom sleek scrollbar */
-  ::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
-  }
-  ::-webkit-scrollbar-track {
-    background: transparent;
-  }
-  ::-webkit-scrollbar-thumb {
-    @apply bg-gray-700/50 rounded-full;
-  }
-  html:not(.dark) ::-webkit-scrollbar-thumb {
-    @apply bg-gray-300 rounded-full;
-  }
+   El tema por defecto es el oscuro: es lo que ve cualquiera que abra la app sin
+   sesión. El claro es una preferencia que cada usuario guarda en su perfil, no
+   una lectura de `prefers-color-scheme` (ver ThemeContext).
+
+   La marca es carbón neutro y su relleno se invierte entre temas, así que el
+   texto encima sale de `--c-brand-ink` y nunca de un blanco fijo.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* Identidad de marca. El logo es el logo: no se reinterpreta por tema, así que
+   estas dos variables viven fuera de los bloques de abajo y `html.dark` no las
+   redefine. Se conserva la versión de fondo oscuro: chip carbón con el escudo
+   en blanco, igual en los dos temas. */
+:root {
+  --c-logo: 39 39 42;
+  --c-logo-ink: 255 255 255;
 }
 
-/* ── Light mode overrides ────────────────────────────────────────────────
-   Specificity (0,2,0) beats Tailwind utility (0,1,0).
-   ───────────────────────────────────────────────────────────────────── */
+:root {
+  --c-brand-50: 250 250 250;
+  --c-brand-100: 244 244 245;
+  --c-brand-200: 228 228 231;
+  --c-brand-300: 82 82 91;
+  --c-brand-400: 63 63 70;
+  --c-brand-500: 39 39 42;
+  --c-brand-600: 24 24 27;
+  --c-brand-700: 9 9 11;
+  --c-brand-800: 12 12 14;
+  --c-brand-900: 9 9 11;
+  --c-brand-950: 5 5 6;
+  --c-success-50: 236 253 245;
+  --c-success-100: 209 250 229;
+  --c-success-200: 167 243 208;
+  --c-success-300: 16 185 129;
+  --c-success-400: 4 120 87;
+  --c-success-500: 5 150 105;
+  --c-success-600: 4 120 87;
+  --c-success-700: 6 95 70;
+  --c-success-800: 6 78 59;
+  --c-success-900: 5 58 44;
+  --c-success-950: 2 44 34;
+  --c-warning-50: 255 251 235;
+  --c-warning-100: 254 243 199;
+  --c-warning-200: 253 230 138;
+  --c-warning-300: 217 119 6;
+  --c-warning-400: 180 83 9;
+  --c-warning-500: 194 118 10;
+  --c-warning-600: 180 83 9;
+  --c-warning-700: 146 64 14;
+  --c-warning-800: 120 53 15;
+  --c-warning-900: 96 48 16;
+  --c-warning-950: 69 26 3;
+  --c-danger-50: 254 242 242;
+  --c-danger-100: 254 226 226;
+  --c-danger-200: 254 202 202;
+  --c-danger-300: 239 68 68;
+  --c-danger-400: 220 38 38;
+  --c-danger-500: 220 38 38;
+  --c-danger-600: 185 28 28;
+  --c-danger-700: 153 27 27;
+  --c-danger-800: 127 29 29;
+  --c-danger-900: 107 23 23;
+  --c-danger-950: 69 10 10;
+  --c-neutral-50: 15 23 42;
+  --c-neutral-100: 30 41 59;
+  --c-neutral-200: 51 65 85;
+  --c-neutral-300: 71 85 105;
+  --c-neutral-400: 100 116 139;
+  --c-neutral-500: 148 163 184;
+  --c-neutral-600: 219 226 234;
+  --c-neutral-700: 241 245 249;
+  --c-neutral-800: 255 255 255;
+  --c-neutral-900: 244 246 249;
+  --c-neutral-950: 238 242 246;
+  --c-border-50: 15 23 42;
+  --c-border-100: 30 41 59;
+  --c-border-200: 51 65 85;
+  --c-border-300: 148 163 184;
+  --c-border-400: 182 194 208;
+  --c-border-500: 203 213 225;
+  --c-border-600: 203 213 225;
+  --c-border-700: 226 232 240;
+  --c-border-800: 232 237 243;
+  --c-border-900: 238 242 246;
+  --c-border-950: 244 246 249;
+  /* Semánticas del shell */
+  --c-canvas: 244 246 249;
+  --c-shell: 255 255 255;
+  --c-surface: 255 255 255;
+  --c-surface-raised: 248 250 252;
+  --c-surface-sunken: 241 245 249;
+  --c-overlay: 15 23 42;
+  --c-shadow: 15 23 42;
+  --c-brand-ink: 255 255 255;
+  --c-focus: 39 39 42;
+  --c-hairline: 226 232 240;
 
-/* ─ Solid gray / dark backgrounds ─ */
-html:not(.dark) .bg-gray-950 { background-color: #f8fafc; }
-html:not(.dark) .bg-gray-900 { background-color: #f1f5f9; }
-html:not(.dark) .bg-gray-800 { background-color: #ffffff; }
-html:not(.dark) .bg-gray-750 { background-color: #f8fafc; }
-html:not(.dark) .bg-gray-700 { background-color: #f1f5f9; }
-html:not(.dark) .bg-gray-600 { background-color: #e2e8f0; }
-html:not(.dark) .bg-dark-900 { background-color: #f1f5f9; }
-html:not(.dark) .bg-dark-800 { background-color: #ffffff; }
-html:not(.dark) .bg-dark-700 { background-color: #f8fafc; }
+  /* Lavado del lienzo. Los tramos van en porcentaje del alto de la ventana, no
+     en rem: con una distancia fija el degradado se agotaba antes del pie y las
+     pantallas altas quedaban planas de medio hacia abajo. Así cubre siempre el
+     alto visible, sea cual sea la pantalla. */
+  --c-canvas-gradient: linear-gradient(180deg, #dbe8f7 0%, #eaf0f7 45%, #f4f6f9 100%);
 
-/* ─ Opacity-based backgrounds (dark → light) ─ */
-html:not(.dark) .bg-dark-800\/40 { background-color: rgba(255,255,255,0.92) !important; }
-html:not(.dark) .bg-white\/5    { background-color: rgba(0,0,0,0.04)  !important; }
-html:not(.dark) .bg-white\/10   { background-color: rgba(0,0,0,0.06)  !important; }
-html:not(.dark) .bg-dark-700\/50 { background-color: rgba(0,0,0,0.04) !important; }
-
-/* ─ Borders ─ */
-html:not(.dark) .border-gray-800 { border-color: #e2e8f0; }
-html:not(.dark) .border-gray-700 { border-color: #e2e8f0; }
-html:not(.dark) .border-gray-600 { border-color: #cbd5e1; }
-html:not(.dark) .border-white\/5 { border-color: rgba(0,0,0,0.08) !important; }
-
-/* ─ Dividers ─ */
-html:not(.dark) .divide-white\/5 > * + * { border-color: rgba(0,0,0,0.08) !important; }
-
-/* ─ Text — gray scale ─ */
-html:not(.dark) .text-gray-100 { color: #1e293b; }
-html:not(.dark) .text-gray-200 { color: #334155; }
-html:not(.dark) .text-gray-300 { color: #475569; }
-html:not(.dark) .text-gray-400 { color: #64748b; }
-html:not(.dark) .text-gray-500 { color: #94a3b8; }
-
-/* ─ Primary text: white → near-black (except on colored buttons/backgrounds) ─ */
-html:not(.dark) .text-white:not(button):not([class*="bg-blue-"]):not([class*="bg-brand-"]):not([class*="bg-emerald-"]):not([class*="bg-red-"]):not([class*="bg-green-"]):not([class*="bg-amber-"]):not([class*="bg-teal-"]):not([class*="bg-yellow-"]):not([class*="bg-indigo-"]):not([class*="bg-purple-"]):not([class*="bg-dark-"]) {
-  color: #1e293b;
+  color-scheme: light;
 }
 
-/* ─ Form elements ─ */
-html:not(.dark) input:not([type="checkbox"]):not([type="radio"]),
-html:not(.dark) select,
-html:not(.dark) textarea {
-  background-color: #ffffff !important;
-  border-color: #cbd5e1 !important;
-  color: #1e293b !important;
+html.dark {
+  --c-brand-50: 24 24 27;
+  --c-brand-100: 39 39 42;
+  --c-brand-200: 63 63 70;
+  --c-brand-300: 161 161 170;
+  --c-brand-400: 244 244 245;
+  --c-brand-500: 228 228 231;
+  --c-brand-600: 244 244 245;
+  --c-brand-700: 212 212 216;
+  --c-brand-800: 161 161 170;
+  --c-brand-900: 113 113 122;
+  --c-brand-950: 82 82 91;
+  --c-success-50: 236 253 245;
+  --c-success-100: 209 250 229;
+  --c-success-200: 167 243 208;
+  --c-success-300: 110 231 183;
+  --c-success-400: 52 211 153;
+  --c-success-500: 16 185 129;
+  --c-success-600: 5 150 105;
+  --c-success-700: 4 120 87;
+  --c-success-800: 6 95 70;
+  --c-success-900: 6 78 59;
+  --c-success-950: 2 44 34;
+  --c-warning-50: 255 251 235;
+  --c-warning-100: 254 243 199;
+  --c-warning-200: 253 230 138;
+  --c-warning-300: 252 211 77;
+  --c-warning-400: 251 191 36;
+  --c-warning-500: 245 158 11;
+  --c-warning-600: 217 119 6;
+  --c-warning-700: 180 83 9;
+  --c-warning-800: 146 64 14;
+  --c-warning-900: 120 53 15;
+  --c-warning-950: 69 26 3;
+  --c-danger-50: 254 242 242;
+  --c-danger-100: 254 226 226;
+  --c-danger-200: 254 202 202;
+  --c-danger-300: 252 165 165;
+  --c-danger-400: 248 113 113;
+  --c-danger-500: 239 68 68;
+  --c-danger-600: 220 38 38;
+  --c-danger-700: 185 28 28;
+  --c-danger-800: 153 27 27;
+  --c-danger-900: 127 29 29;
+  --c-danger-950: 69 10 10;
+  --c-neutral-50: 248 250 252;
+  --c-neutral-100: 241 245 249;
+  --c-neutral-200: 226 232 240;
+  --c-neutral-300: 203 213 225;
+  --c-neutral-400: 148 163 184;
+  --c-neutral-500: 100 116 139;
+  --c-neutral-600: 58 74 99;
+  --c-neutral-700: 36 50 74;
+  --c-neutral-800: 19 28 43;
+  --c-neutral-900: 11 18 32;
+  --c-neutral-950: 5 10 20;
+  --c-border-50: 248 250 252;
+  --c-border-100: 241 245 249;
+  --c-border-200: 226 232 240;
+  --c-border-300: 203 213 225;
+  --c-border-400: 148 163 184;
+  --c-border-500: 100 116 139;
+  --c-border-600: 63 79 104;
+  --c-border-700: 42 56 80;
+  --c-border-800: 31 43 62;
+  --c-border-900: 24 34 52;
+  --c-border-950: 15 23 38;
+  --c-canvas: 11 18 32;
+  --c-shell: 19 28 43;
+  --c-surface: 19 28 43;
+  --c-surface-raised: 27 38 55;
+  --c-surface-sunken: 8 14 25;
+  --c-overlay: 2 6 23;
+  --c-shadow: 2 6 23;
+  --c-brand-ink: 24 24 27;
+  --c-focus: 228 228 231;
+  --c-hairline: 42 56 80;
+
+  --c-canvas-gradient: linear-gradient(180deg, #16243d 0%, #101a2c 45%, #0b1220 100%);
+
+  color-scheme: dark;
 }
-html:not(.dark) input::placeholder,
-html:not(.dark) textarea::placeholder { color: #94a3b8 !important; }
 
-/* ─ Skeleton pulses ─ */
-html:not(.dark) [class*="animate-pulse"] .bg-gray-700 { background-color: #e2e8f0; }
-html:not(.dark) [class*="animate-pulse"] .bg-white\/10 { background-color: #e2e8f0 !important; }
-
-/* ─ Gradient stops — flip to light colors ─ */
-html:not(.dark) .from-gray-800 {
-  --tw-gradient-from: #ffffff;
-  --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to, rgb(255 255 255 / 0));
-}
-html:not(.dark) .from-gray-900 {
-  --tw-gradient-from: #f8fafc;
-  --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to, rgb(248 250 252 / 0));
-}
-html:not(.dark) .to-gray-900   { --tw-gradient-to: #f1f5f9; }
-html:not(.dark) .to-gray-800   { --tw-gradient-to: #f8fafc; }
-
-/* ─ Status badges ─ */
-html:not(.dark) .bg-green-900\/50  { background-color: #dcfce7 !important; }
-html:not(.dark) .bg-red-900\/40    { background-color: #fee2e2 !important; }
-html:not(.dark) .bg-red-900\/50    { background-color: #fee2e2 !important; }
-html:not(.dark) .bg-amber-900\/50  { background-color: #fef3c7 !important; }
-html:not(.dark) .bg-yellow-900\/50 { background-color: #fef9c3 !important; }
-
-/* ─ Accent text — darken for light bg readability ─ */
-html:not(.dark) .text-green-400  { color: #047857; }
-html:not(.dark) .text-teal-400   { color: #185b58; }
-html:not(.dark) .text-blue-400   { color: #3f3f46; }
-html:not(.dark) .text-indigo-400 { color: #3f3f46; }
-html:not(.dark) .text-cyan-400   { color: #3f3f46; }
-html:not(.dark) .text-amber-400  { color: #b45309; }
-html:not(.dark) .text-yellow-400 { color: #ca8a04; }
-html:not(.dark) .text-red-400    { color: #dc2626; }
-html:not(.dark) .text-red-300    { color: #dc2626; }
-
-/* ─ Icon wrapper in stat cards ─ */
-html:not(.dark) .bg-gray-700\/50 { background-color: rgba(0,0,0,0.06) !important; }
-
+/* ── Base ────────────────────────────────────────────────────────────────── */
 
 @layer base {
   html {
-    background: #0b0f19;
-    color-scheme: dark;
-  }
-
-  html:not(.dark) {
-    background: #f1f5f9;
-    color-scheme: light;
+    background: rgb(var(--c-canvas));
   }
 
   body {
     min-width: 320px;
     min-height: 100vh;
     overflow-x: hidden;
-    font-family: 'Outfit', ui-sans-serif, system-ui, sans-serif;
+    /* `fixed` ancla el degradado a la ventana, no al documento: así se ve
+       igual en cualquier pantalla y no se desplaza con el contenido. El shell
+       deja pasar el fondo; header y sidebar sí tienen superficie propia. */
+    background: rgb(var(--c-canvas)) var(--c-canvas-gradient) fixed no-repeat;
+    background-size: 100% 100vh;
+    color: rgb(var(--c-neutral-100));
+    font-family: theme('fontFamily.sans');
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  ::selection {
+    background: rgb(var(--c-brand-500) / 0.22);
+    color: rgb(var(--c-neutral-50));
   }
 
   button, a, input, select, textarea {
     -webkit-tap-highlight-color: transparent;
+    font-family: inherit;
   }
 
   :focus-visible {
-    outline: 2px solid #34d399;
-    outline-offset: 3px;
+    outline: 2px solid rgb(var(--c-focus));
+    outline-offset: 2px;
+  }
+
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb {
+    border: 3px solid transparent;
+    border-radius: 999px;
+    background: rgb(var(--c-neutral-500) / 0.45);
+    background-clip: content-box;
+  }
+  ::-webkit-scrollbar-thumb:hover { background: rgb(var(--c-neutral-500) / 0.7); background-clip: content-box; }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      scroll-behavior: auto !important;
+      transition-duration: 0.01ms !important;
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+    }
   }
 }
 
+/* ── Primitivas de layout y superficie ───────────────────────────────────── */
+
 @layer components {
   .sg-page {
-    min-height: 100%;
     width: 100%;
+    min-height: 100%;
     padding: 1.25rem 1rem 2rem;
   }
 
+  .sg-page > * + * { margin-top: 1.25rem; }
+
   .sg-page-inner {
     width: 100%;
-    max-width: 1180px;
+    max-width: 1240px;
     margin-inline: auto;
   }
 
+  @media (min-width: 640px) { .sg-page { padding: 1.5rem 1.5rem 2.5rem; } }
+  @media (min-width: 1024px) { .sg-page { padding: 2rem 2rem 3rem; } }
+
+  .sg-card {
+    border: 1px solid rgb(var(--c-border-700));
+    border-radius: theme('borderRadius.xl');
+    background: rgb(var(--c-surface));
+    box-shadow: theme('boxShadow.card');
+  }
+
+  .sg-stat-card {
+    position: relative;
+    border-radius: theme('borderRadius.xl');
+    background: linear-gradient(175deg, rgb(var(--c-surface-raised) / 0.95) 0%, rgb(var(--c-surface)) 100%);
+    border: 1px solid rgb(var(--c-border-700));
+    box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.28);
+    transition: transform 220ms cubic-bezier(0.16, 1, 0.3, 1),
+                border-color 220ms cubic-bezier(0.16, 1, 0.3, 1),
+                box-shadow 220ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .sg-stat-card::before {
+    position: absolute;
+    top: 0;
+    left: 8%;
+    right: 8%;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.18), transparent);
+    content: '';
+    pointer-events: none;
+  }
+
+  .sg-stat-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 14px 30px -4px rgba(0, 0, 0, 0.45);
+  }
+
+  /* ── HUD Telemetry Strip (Consola de Mando Unificada) ───────────────────── */
+  .sg-telemetry-strip {
+    position: relative;
+    overflow: hidden;
+    border-radius: theme('borderRadius.2xl');
+    border: 1px solid rgb(var(--c-border-700));
+    background: linear-gradient(175deg, rgb(var(--c-surface-raised) / 0.95) 0%, rgb(var(--c-surface)) 100%);
+    box-shadow: 0 4px 24px -2px rgba(0, 0, 0, 0.3);
+  }
+
+  .sg-telemetry-strip::before {
+    position: absolute;
+    top: 0;
+    left: 4%;
+    right: 4%;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.22), transparent);
+    content: '';
+    pointer-events: none;
+  }
+
+  .sg-telemetry-segment {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    padding: 1.25rem 1.35rem;
+    transition: background-color 200ms ease;
+  }
+
+  .sg-telemetry-segment:hover {
+    background-color: rgba(255, 255, 255, 0.025);
+  }
+
+  .sg-card-muted {
+    border: 1px solid rgb(var(--c-border-700));
+    border-radius: theme('borderRadius.lg');
+    background: rgb(var(--c-surface-raised));
+  }
+
   .sg-eyebrow {
-    color: #94a3b8;
-    font-size: 0.72rem;
+    color: rgb(var(--c-brand-400));
+    font-size: theme('fontSize.2xs[0]');
     font-weight: 700;
     letter-spacing: 0.12em;
     text-transform: uppercase;
   }
 
-  .sg-card {
-    border: 1px solid rgba(148, 163, 184, 0.14);
-    border-radius: 1.25rem;
-    background: linear-gradient(145deg, rgba(30, 41, 59, 0.88), rgba(15, 23, 42, 0.92));
-    box-shadow: 0 18px 42px rgba(2, 6, 23, 0.18);
-  }
-
-  .sg-card-muted {
-    border: 1px solid rgba(148, 163, 184, 0.12);
-    border-radius: 1rem;
-    background: rgba(15, 23, 42, 0.48);
-  }
-
   .sg-section-title {
-    color: #f8fafc;
-    font-size: 1.05rem;
+    color: rgb(var(--c-neutral-50));
+    font-size: theme('fontSize.lg[0]');
     font-weight: 700;
     letter-spacing: -0.015em;
   }
 
-  .sg-input {
-    min-height: 2.75rem;
-    width: 100%;
-    border: 1px solid rgba(148, 163, 184, 0.2);
-    border-radius: 0.75rem;
-    background: rgba(15, 23, 42, 0.7);
-    padding: 0.65rem 0.8rem;
-    color: #f8fafc;
-    font-size: 0.875rem;
-    transition: border-color 160ms ease, box-shadow 160ms ease, background 160ms ease;
+  .sg-panel-heading {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 1rem;
   }
 
-  .sg-input::placeholder { color: #64748b; }
-  .sg-input:hover { border-color: rgba(148, 163, 184, 0.35); }
-  .sg-input:focus { border-color: #34d399; box-shadow: 0 0 0 3px rgba(52, 211, 153, 0.14); outline: none; }
+  .sg-panel-heading h1, .sg-panel-heading h2 {
+    color: rgb(var(--c-neutral-50));
+    font-weight: 700;
+    letter-spacing: -0.02em;
+  }
+
+  .sg-panel-heading p { color: rgb(var(--c-neutral-400)); font-size: theme('fontSize.sm[0]'); }
+
+  /* Shared operational dashboard surface for admin roles. */
+  .sg-hero {
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
+    border: 1px solid rgb(var(--c-border-700));
+    border-radius: theme('borderRadius.2xl');
+    padding: 1.25rem;
+    background:
+      radial-gradient(circle at 88% -28%, rgb(var(--c-brand-500) / 0.32), transparent 48%),
+      linear-gradient(128deg, rgb(var(--c-surface-raised)) 0%, rgb(var(--c-surface)) 64%, rgb(var(--c-brand-500) / 0.09) 100%);
+    box-shadow: theme('boxShadow.card');
+  }
+
+  .sg-hero::before {
+    position: absolute;
+    z-index: -1;
+    top: -7rem;
+    right: -5rem;
+    width: 17rem;
+    height: 17rem;
+    border: 1px solid rgb(var(--c-brand-400) / 0.17);
+    border-radius: 999px;
+    box-shadow: 0 0 0 2.5rem rgb(var(--c-brand-500) / 0.035), 0 0 0 5rem rgb(var(--c-brand-500) / 0.025);
+    content: '';
+  }
+
+  .sg-hero-grid {
+    display: grid;
+    align-items: end;
+    gap: 1.25rem;
+  }
+
+  .sg-hero-label {
+    color: rgb(var(--c-brand-400));
+    font-size: theme('fontSize.2xs[0]');
+    font-weight: 800;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+  }
+
+  .sg-hero-title {
+    max-width: 40rem;
+    margin-top: 0.35rem;
+    color: rgb(var(--c-neutral-50));
+    font-size: clamp(1.4rem, 2.4vw, 2rem);
+    font-weight: 750;
+    letter-spacing: -0.035em;
+    line-height: 1.12;
+  }
+
+  .sg-hero-copy {
+    max-width: 38rem;
+    margin-top: 0.55rem;
+    color: rgb(var(--c-neutral-400));
+    font-size: theme('fontSize.sm[0]');
+    line-height: 1.55;
+  }
+
+  .sg-hero-grid > .grid {
+    position: relative;
+    width: 100%;
+  }
+
+  .sg-hero-stat {
+    display: flex;
+    min-width: 0;
+    min-height: 5.25rem;
+    flex-direction: column;
+    justify-content: center;
+    border: 1px solid rgb(var(--c-border-600) / 0.82);
+    border-radius: theme('borderRadius.xl');
+    padding: 0.875rem 1rem;
+    background: rgb(var(--c-surface-sunken) / 0.48);
+    box-shadow: inset 0 1px 0 rgb(var(--c-neutral-50) / 0.035);
+    backdrop-filter: blur(10px);
+  }
+
+  .sg-hero-stat-label {
+    color: rgb(var(--c-neutral-400));
+    font-size: theme('fontSize.2xs[0]');
+    font-weight: 700;
+    letter-spacing: 0.045em;
+    text-transform: uppercase;
+  }
+
+  .sg-hero-stat-value {
+    margin-top: 0.35rem;
+    color: rgb(var(--c-neutral-50));
+    font-size: clamp(1.45rem, 3vw, 2rem);
+    font-weight: 750;
+    letter-spacing: -0.045em;
+    line-height: 1;
+  }
+
+  @media (min-width: 640px) {
+    .sg-hero { padding: 1.5rem; }
+    .sg-hero-grid { grid-template-columns: minmax(0, 1fr) auto; gap: 2rem; }
+    .sg-hero-grid > .grid { width: auto; min-width: 20rem; }
+    .sg-hero-grid > .sg-hero-stat { min-width: 10rem; }
+  }
+
+  /* ── Controles ─────────────────────────────────────────────────────────── */
+
+  .sg-input {
+    width: 100%;
+    min-height: theme('minHeight.control');
+    border: 1px solid rgb(var(--c-border-600));
+    border-radius: theme('borderRadius.lg');
+    background: rgb(var(--c-surface));
+    padding: 0.5rem 0.75rem;
+    color: rgb(var(--c-neutral-100));
+    font-size: theme('fontSize.sm[0]');
+    transition: border-color 150ms ease, box-shadow 150ms ease;
+  }
+
+  .sg-input::placeholder { color: rgb(var(--c-neutral-500)); }
+  .sg-input:hover:not(:disabled) { border-color: rgb(var(--c-border-500)); }
+  .sg-input:focus {
+    border-color: rgb(var(--c-brand-500));
+    box-shadow: 0 0 0 3px rgb(var(--c-brand-500) / 0.16);
+    outline: none;
+  }
+  .sg-input:disabled { cursor: not-allowed; background: rgb(var(--c-surface-sunken)); opacity: 0.7; }
 
   .sg-btn {
-    min-height: 2.75rem;
-    border-radius: 0.75rem;
-    padding: 0.65rem 1rem;
-    font-size: 0.875rem;
-    font-weight: 700;
-    transition: transform 160ms ease, background 160ms ease, box-shadow 160ms ease, opacity 160ms ease;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    min-height: theme('minHeight.control');
+    border-radius: theme('borderRadius.lg');
+    padding: 0.5rem 1rem;
+    font-size: theme('fontSize.sm[0]');
+    font-weight: 600;
+    white-space: nowrap;
+    transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease, opacity 150ms ease;
   }
 
-  .sg-btn:active { transform: scale(0.97); }
   .sg-btn:disabled { cursor: not-allowed; opacity: 0.55; }
-  .sg-btn-primary { background: #059669; color: white; box-shadow: 0 8px 18px rgba(5, 150, 105, 0.22); }
-  .sg-btn-primary:hover:not(:disabled) { background: #10b981; }
-  .sg-btn-secondary { background: rgba(51, 65, 85, 0.85); color: #e2e8f0; }
-  .sg-btn-secondary:hover:not(:disabled) { background: rgba(71, 85, 105, 0.95); }
-  .sg-btn-danger { background: #dc2626; color: white; }
-  .sg-btn-danger:hover:not(:disabled) { background: #ef4444; }
+
+  .sg-btn-primary { background: rgb(var(--c-brand-500)); color: rgb(var(--c-brand-ink)); }
+  .sg-btn-primary:hover:not(:disabled) { background: rgb(var(--c-brand-600)); }
+
+  .sg-btn-secondary {
+    border: 1px solid rgb(var(--c-border-600));
+    background: rgb(var(--c-surface));
+    color: rgb(var(--c-neutral-200));
+  }
+  .sg-btn-secondary:hover:not(:disabled) { background: rgb(var(--c-surface-raised)); color: rgb(var(--c-neutral-50)); }
+
+  .sg-btn-danger { background: rgb(var(--c-danger-500)); color: #ffffff; }
+  .sg-btn-danger:hover:not(:disabled) { background: rgb(var(--c-danger-600)); }
+
+  .sg-btn-ghost { background: transparent; color: rgb(var(--c-neutral-300)); }
+  .sg-btn-ghost:hover:not(:disabled) { background: rgb(var(--c-neutral-500) / 0.12); color: rgb(var(--c-neutral-50)); }
+
+  /* ── Navegación por pestañas ───────────────────────────────────────────── */
 
   .sg-tabbar {
     display: flex;
-    gap: 0.35rem;
+    gap: 0.25rem;
     overflow-x: auto;
+    border-bottom: 1px solid rgb(var(--c-border-700));
     scrollbar-width: none;
-    border-bottom: 1px solid rgba(148, 163, 184, 0.14);
   }
 
   .sg-tabbar::-webkit-scrollbar { display: none; }
+
   .sg-tab {
     flex: 0 0 auto;
-    min-height: 2.75rem;
+    min-height: theme('minHeight.control-lg');
     border-bottom: 2px solid transparent;
-    padding: 0.7rem 0.8rem;
-    color: #94a3b8;
-    font-size: 0.82rem;
-    font-weight: 700;
+    padding: 0.625rem 0.875rem;
+    color: rgb(var(--c-neutral-400));
+    font-size: theme('fontSize.sm[0]');
+    font-weight: 600;
     white-space: nowrap;
-    transition: color 160ms ease, border-color 160ms ease, background 160ms ease;
+    transition: color 150ms ease, border-color 150ms ease;
   }
-  .sg-tab:hover { color: #e2e8f0; }
-  .sg-tab-active { border-color: #34d399; color: #6ee7b7; }
+
+  .sg-tab:hover { color: rgb(var(--c-neutral-100)); }
+  .sg-tab-active { border-color: rgb(var(--c-brand-500)); color: rgb(var(--c-brand-400)); }
+
+  /* ── Estados ───────────────────────────────────────────────────────────── */
 
   .sg-status {
     display: inline-flex;
     align-items: center;
-    gap: 0.35rem;
+    gap: 0.375rem;
     border-radius: 999px;
-    padding: 0.3rem 0.6rem;
-    font-size: 0.7rem;
-    font-weight: 800;
-    line-height: 1;
+    padding: 0.25rem 0.625rem;
+    font-size: theme('fontSize.2xs[0]');
+    font-weight: 700;
+    line-height: 1.1;
   }
 
-  .sg-status::before { width: 0.35rem; height: 0.35rem; border-radius: 999px; background: currentColor; content: ''; }
-
-  .sg-drawer-backdrop { background: rgba(2, 6, 23, 0.64); backdrop-filter: blur(10px); }
-
-  @media (min-width: 640px) {
-    .sg-page { padding: 1.75rem 1.5rem 2.5rem; }
+  .sg-status::before {
+    width: 0.375rem;
+    height: 0.375rem;
+    border-radius: 999px;
+    background: currentColor;
+    content: '';
   }
 
-  @media (min-width: 1024px) {
-    .sg-page { padding: 2.25rem 2.5rem 3rem; }
+  .sg-table-wrap {
+    overflow: hidden;
+    border: 1px solid rgb(var(--c-border-700));
+    border-radius: theme('borderRadius.xl');
+    background: rgb(var(--c-surface));
+    box-shadow: theme('boxShadow.card');
+  }
+
+  .sg-table-wrap th {
+    color: rgb(var(--c-neutral-400));
+    font-size: theme('fontSize.2xs[0]');
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+
+  .sg-table-wrap td, .sg-table-wrap th { border-color: rgb(var(--c-border-700)); }
+
+  .sg-drawer-backdrop { background: rgb(var(--c-overlay) / 0.55); backdrop-filter: blur(4px); }
+
+  /* Placeholder de carga: líneas verticales que se desplazan sobre el bloque.
+     El paso de la animación es exactamente el periodo del patrón (14px), así
+     que el bucle no tiene costura, y el pseudo-elemento se dibuja un periodo
+     más ancho para que no aparezca un hueco al final del recorrido.
+
+     Los keyframes se declaran aquí y no en tailwind.config: Tailwind sólo emite
+     los de las animaciones que se usan como clase `animate-*`, y esta se aplica
+     desde CSS. Por eso la versión anterior se quedó sin animación en el bundle. */
+  @keyframes sg-skeleton-scan {
+    from { transform: translateX(-14px); }
+    to   { transform: translateX(0); }
+  }
+
+  .sg-skeleton {
+    position: relative;
+    overflow: hidden;
+    border-radius: theme('borderRadius.lg');
+    background: rgb(var(--c-neutral-500) / 0.16);
+  }
+
+  .sg-skeleton::after {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: calc(100% + 14px);
+    background-image: repeating-linear-gradient(
+      90deg,
+      rgb(var(--c-neutral-500) / 0.30) 0 2px,
+      transparent 2px 14px
+    );
+    animation: sg-skeleton-scan 900ms linear infinite;
+    content: '';
   }
 
   @media (prefers-reduced-motion: reduce) {
-    *, *::before, *::after { scroll-behavior: auto !important; transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; }
+    .sg-skeleton::after { animation: none; }
   }
+
 }
 
-html:not(.dark) .sg-card {
-  border-color: #e2e8f0;
-  background: linear-gradient(145deg, #ffffff, #f8fafc);
-  box-shadow: 0 18px 42px rgba(15, 23, 42, 0.08);
-}
-html:not(.dark) .sg-card-muted { border-color: #e2e8f0; background: rgba(248, 250, 252, 0.9); }
-html:not(.dark) .sg-section-title { color: #0f172a; }
-html:not(.dark) .sg-input { border-color: #cbd5e1; background: #ffffff; color: #0f172a; }
-html:not(.dark) .sg-input:focus { border-color: #059669; box-shadow: 0 0 0 3px rgba(5, 150, 105, 0.12); }
-html:not(.dark) .sg-tabbar { border-color: #e2e8f0; }
-html:not(.dark) .sg-tab { color: #64748b; }
-html:not(.dark) .sg-tab:hover { color: #334155; }
-html:not(.dark) .sg-tab-active { color: #047857; }
+/* ══════════════════════════════════════════════════════════════════════════
+   Capa de compatibilidad
+   ──────────────────────────────────────────────────────────────────────────
+   Las pantallas todavía sin migrar pintan con utilidades sobre blanco/negro
+   fijos (`bg-white/5`, `text-white`, `bg-black/60`), que no pueden heredar la
+   paleta por variables. Estas reglas las traducen al tema activo. Cada vez que
+   una pantalla pasa a los componentes de `components/ui`, deja de depender de
+   este bloque.
+   ══════════════════════════════════════════════════════════════════════════ */
 
+:root .bg-white\/5     { background-color: rgb(var(--c-neutral-500) / 0.10) !important; }
+:root .bg-white\/10    { background-color: rgb(var(--c-neutral-500) / 0.16) !important; }
+:root .bg-white\/\[0\.02\] { background-color: rgb(var(--c-neutral-500) / 0.06) !important; }
+:root .border-white\/5  { border-color: rgb(var(--c-hairline)) !important; }
+:root .border-white\/10 { border-color: rgb(var(--c-hairline)) !important; }
+:root .border-white\/30 { border-color: rgb(var(--c-neutral-500) / 0.5) !important; }
+:root .divide-white\/5 > * + * { border-color: rgb(var(--c-hairline)) !important; }
+:root .bg-black\/60, :root .bg-black\/70 { background-color: rgb(var(--c-overlay) / 0.55) !important; }
 
-@layer components {
-  /* Compatibilidad con las clases históricas del backoffice mientras cada
-     pantalla se migra gradualmente a los primitives sg-*. */
-  .sg-page > * + * { margin-top: 1.5rem; }
-  .sg-page h1 { letter-spacing: -0.02em; }
-  .sg-page input:not([type='checkbox']):not([type='radio']),
-  .sg-page select,
-  .sg-page textarea {
-    min-height: 2.75rem;
-    border-radius: 0.75rem;
-    transition: border-color 160ms ease, box-shadow 160ms ease, background 160ms ease;
-  }
-  .sg-page input:not([type='checkbox']):not([type='radio']):focus,
-  .sg-page select:focus,
-  .sg-page textarea:focus {
-    border-color: #34d399;
-    box-shadow: 0 0 0 3px rgba(52, 211, 153, 0.14);
-    outline: none;
-  }
-  .sg-page .bg-gray-800.rounded-2xl,
-  .sg-page .bg-gray-800.rounded-xl,
-  .sg-page .bg-gradient-to-br.from-gray-800 {
-    border: 1px solid rgba(148, 163, 184, 0.14);
-    background: linear-gradient(145deg, rgba(30, 41, 59, 0.88), rgba(15, 23, 42, 0.92));
-    box-shadow: 0 18px 42px rgba(2, 6, 23, 0.18);
-  }
-  .sg-page .overflow-x-auto { scrollbar-width: thin; }
+/* `text-white` significa "tinta principal", salvo cuando va sobre un fondo
+   sólido de color (botones, badges, hero), donde debe seguir siendo blanco. */
+html:not(.dark) .text-white:not(button):not(a):not([class*='bg-brand-']):not([class*='bg-blue-']):not([class*='bg-teal-']):not([class*='bg-emerald-']):not([class*='bg-green-']):not([class*='bg-red-']):not([class*='bg-danger-']):not([class*='bg-amber-']):not([class*='bg-yellow-']):not([class*='bg-indigo-']):not([class*='bg-purple-']):not([class*='bg-dark-']):not([class*='bg-gradient-']):not(.sg-btn-primary):not(.sg-btn-danger) {
+  color: rgb(var(--c-neutral-50));
 }
 
-html:not(.dark) .sg-page .bg-gray-800.rounded-2xl,
-html:not(.dark) .sg-page .bg-gray-800.rounded-xl,
-html:not(.dark) .sg-page .bg-gradient-to-br.from-gray-800 {
-  border-color: #e2e8f0;
-  background: linear-gradient(145deg, #ffffff, #f8fafc);
-  box-shadow: 0 18px 42px rgba(15, 23, 42, 0.08);
+/* Los formularios heredados fijan su propio fondo oscuro; se reencauzan al
+   token de superficie para que el modo claro no quede con inputs negros. */
+:root input:not([type='checkbox']):not([type='radio']):not([type='file']),
+:root select,
+:root textarea {
+  border-color: rgb(var(--c-border-600));
+  background-color: rgb(var(--c-surface));
+  color: rgb(var(--c-neutral-100));
+}
+
+:root input::placeholder, :root textarea::placeholder { color: rgb(var(--c-neutral-500)); }
+
+:root .sg-page input:not([type='checkbox']):not([type='radio']):not([type='file']),
+:root .sg-page select,
+:root .sg-page textarea {
+  min-height: theme('minHeight.control');
+  border-radius: theme('borderRadius.lg');
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+
+:root .sg-page input:not([type='checkbox']):not([type='radio']):not([type='file']):focus,
+:root .sg-page select:focus,
+:root .sg-page textarea:focus {
+  border-color: rgb(var(--c-brand-500));
+  box-shadow: 0 0 0 3px rgb(var(--c-brand-500) / 0.16);
+  outline: none;
+}
+
+/* Tarjetas hechas a mano antes de que existiera `.sg-card`. */
+:root .sg-page .bg-gray-800.rounded-2xl,
+:root .sg-page .bg-gray-800.rounded-xl,
+:root .sg-page .bg-gradient-to-br.from-gray-800 {
+  border: 1px solid rgb(var(--c-border-700));
+  background: rgb(var(--c-surface));
+  box-shadow: theme('boxShadow.card');
 }
