@@ -151,15 +151,39 @@ export const createUsuario = async (req: Request, res: Response) => {
   }
 };
 
+const IDIOMAS = ['es', 'en'];
+const TEMAS   = ['dark', 'light'];
+
+/**
+ * Actualiza las preferencias propias. Acepta un campo o los dos.
+ *
+ * Antes exigía idioma Y tema a la vez, y eso obligaba a quien sólo cambiaba uno
+ * a inventar el otro. El selector de idioma leía el tema de localStorage y, al
+ * iniciar sesión, lo leía antes de que el tema del perfil llegara a escribirse:
+ * mandaba el valor por defecto y pisaba en la base la preferencia real del
+ * usuario. Al aceptar parciales, cada preferencia viaja sola y no puede
+ * sobrescribir a la otra.
+ */
 export const updatePreferencias = async (req: Request, res: Response) => {
-  const { idioma, tema } = req.body;
-  if (!idioma || !tema) {
-    return res.status(400).json({ error: 'Campos requeridos: idioma, tema' });
+  const { idioma, tema } = req.body ?? {};
+
+  if (idioma === undefined && tema === undefined) {
+    return res.status(400).json({ error: 'Indica al menos idioma o tema' });
   }
+  if (idioma !== undefined && !IDIOMAS.includes(idioma)) {
+    return res.status(400).json({ error: `idioma debe ser uno de: ${IDIOMAS.join(', ')}` });
+  }
+  if (tema !== undefined && !TEMAS.includes(tema)) {
+    return res.status(400).json({ error: `tema debe ser uno de: ${TEMAS.join(', ')}` });
+  }
+
   try {
     await pool.query(
-      'UPDATE usuarios SET idioma = $1, tema = $2 WHERE id = $3',
-      [idioma, tema, req.user!.id]
+      `UPDATE usuarios
+          SET idioma = COALESCE($1, idioma),
+              tema   = COALESCE($2, tema)
+        WHERE id = $3`,
+      [idioma ?? null, tema ?? null, req.user!.id]
     );
     res.json({ message: 'Preferencias actualizadas' });
   } catch (error) {
