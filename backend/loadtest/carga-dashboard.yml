@@ -1,0 +1,42 @@
+# Prueba de carga sobre GET /api/dashboard (endpoint de lectura pesado).
+#
+# Cada VU hace login como owner (admin@securegate.com) y luego repite la
+# consulta al dashboard 5 veces con el token capturado. Se usa el rol owner
+# a propósito: su condición de tenant es "TRUE" (sin filtro por sucursal),
+# así que dashboard.controller.ts hace el COUNT(*)/ORDER BY más costoso
+# posible sobre registros_acceso y pagos — el peor caso para el hallazgo D3
+# (falta de índices) del análisis de deuda técnica.
+#
+# Requiere rate limiter de /api/auth relajado (ver README.md de esta carpeta).
+#
+# Uso:
+#   artillery run backend/loadtest/carga-dashboard.yml \
+#     --output backend/loadtest/results/carga-dashboard.json
+
+config:
+  target: "http://localhost:3000"
+  environments:
+    vm:
+      target: "http://34.2.1.181:3000"
+  phases:
+    - duration: 60
+      arrivalRate: 30
+      name: "Carga sostenida dashboard"
+
+scenarios:
+  - name: "Login + Dashboard repetido"
+    flow:
+      - post:
+          url: "/api/auth/login"
+          json:
+            email: "admin@securegate.com"
+            password: "admin123"
+          capture:
+            - json: "$.token"
+              as: "token"
+      - loop:
+          - get:
+              url: "/api/dashboard"
+              headers:
+                Authorization: "Bearer {{ token }}"
+        count: 5
