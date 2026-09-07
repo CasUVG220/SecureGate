@@ -1,0 +1,22 @@
+# Prueba de humo (baseline): confirma que el entorno de pruebas responde
+# antes de escalar a las pruebas de carga/estrés reales.
+#
+# Uso:
+#   artillery run backend/loadtest/smoke.yml
+#   artillery run backend/loadtest/smoke.yml --environment vm
+
+config:
+  target: "http://localhost:3000"
+  environments:
+    vm:
+      target: "http://34.2.1.181:3000"
+  phases:
+    - duration: 10
+      arrivalRate: 1
+      name: "Smoke test"
+
+scenarios:
+  - name: "Health check"
+    flow:
+      - get:
+          url: "/health"

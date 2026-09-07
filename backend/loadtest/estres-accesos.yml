@@ -1,0 +1,68 @@
+# Prueba de estrés sobre POST /api/accesos (registro de entrada en garita).
+# Incrementa la carga por fases de 20 en 20 cada 30s, de 20 hasta 200
+# usuarios virtuales/segundo, para encontrar el punto de quiebre del backend
+# actual (VM e2-micro, PostgreSQL en el mismo contenedor).
+#
+# El token de agente y el residente_id se resuelven UNA VEZ antes de correr
+# la prueba (no en cada VU) para que la prueba mida específicamente el costo
+# de /api/accesos y no el de /api/auth/login + /api/residentes en cada
+# iteración.
+#
+# Requiere rate limiter general relajado (ver README.md de esta carpeta) —
+# con el límite de producción (1000 req/15min por IP) esta prueba dispara
+# 429 mucho antes de llegar al límite real del backend.
+#
+# Uso:
+#   source backend/loadtest/setup-env.sh
+#   artillery run backend/loadtest/estres-accesos.yml \
+#     --output backend/loadtest/results/estres-accesos.json
+
+config:
+  target: "http://localhost:3000"
+  environments:
+    vm:
+      target: "http://34.2.1.181:3000"
+  phases:
+    - duration: 30
+      arrivalRate: 20
+      name: "20 req/s"
+    - duration: 30
+      arrivalRate: 40
+      name: "40 req/s"
+    - duration: 30
+      arrivalRate: 60
+      name: "60 req/s"
+    - duration: 30
+      arrivalRate: 80
+      name: "80 req/s"
+    - duration: 30
+      arrivalRate: 100
+      name: "100 req/s"
+    - duration: 30
+      arrivalRate: 120
+      name: "120 req/s"
+    - duration: 30
+      arrivalRate: 140
+      name: "140 req/s"
+    - duration: 30
+      arrivalRate: 160
+      name: "160 req/s"
+    - duration: 30
+      arrivalRate: 180
+      name: "180 req/s"
+    - duration: 30
+      arrivalRate: 200
+      name: "200 req/s"
+
+scenarios:
+  - name: "Registro de entrada"
+    flow:
+      - post:
+          url: "/api/accesos"
+          headers:
+            Authorization: "Bearer {{ $processEnvironment.LOADTEST_TOKEN }}"
+          json:
+            nombre_visitante: "Visitante Carga {{ $randomNumber(1, 999999) }}"
+            numero_dpi: "{{ $randomNumber(100000000000, 999999999999) }}"
+            residente_id: "{{ $processEnvironment.LOADTEST_RESIDENTE_ID }}"
+            agente_id: "{{ $processEnvironment.LOADTEST_AGENTE_ID }}"

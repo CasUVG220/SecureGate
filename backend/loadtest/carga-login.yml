@@ -1,0 +1,43 @@
+# Prueba de carga sobre POST /api/auth/login.
+#
+# Requiere que el rate limiter de /api/auth esté relajado (ver README.md de
+# esta carpeta) — con el límite de producción (10 req/15min por IP) esta
+# prueba solo mediría el 429 del limiter, no el login real.
+#
+# Uso:
+#   RATE_LIMIT_LOGIN_MAX=100000 RATE_LIMIT_GENERAL_MAX=100000 \
+#     docker compose up -d backend
+#   artillery run backend/loadtest/carga-login.yml \
+#     --output backend/loadtest/results/carga-login.json
+
+config:
+  target: "http://localhost:3000"
+  environments:
+    vm:
+      target: "http://34.2.1.181:3000"
+  phases:
+    - duration: 30
+      arrivalRate: 10
+      name: "Warm-up"
+    - duration: 60
+      arrivalRate: 50
+      name: "Carga sostenida"
+
+scenarios:
+  - name: "Login owner"
+    weight: 50
+    flow:
+      - post:
+          url: "/api/auth/login"
+          json:
+            email: "admin@securegate.com"
+            password: "admin123"
+
+  - name: "Login residente"
+    weight: 50
+    flow:
+      - post:
+          url: "/api/auth/login"
+          json:
+            email: "r1@securegate.com"
+            password: "res123"
