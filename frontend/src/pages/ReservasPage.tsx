@@ -5,8 +5,9 @@ import {
   type AreaComun, type Disponibilidad, type Reserva, type PreviewCancelacion,
   type EstadoReserva,
 } from '../services/api';
-import { Spinner } from '../components/Skeleton';
+import { CardSkeleton, SkeletonText, Spinner } from '../components/Skeleton';
 import { useToast } from '../components/Toast';
+import { ROW_ICON, RowActions } from '../components/ui';
 import { useTranslation } from '../i18n/useTranslation';
 import { esImagenValida } from '../utils/imagen';
 
@@ -251,7 +252,7 @@ export default function ReservasPage() {
         <div className="sg-card-muted space-y-2 p-4">
           <p className="text-xs font-semibold text-gray-300">{t('reservas.occupied')}</p>
           {dispLoading ? (
-            <p className="text-xs text-gray-500">{t('common.loading')}</p>
+            <SkeletonText lines={3} />
           ) : !disp || disp.ocupados.length === 0 ? (
             <p className="text-xs text-gray-500">{t('reservas.noOccupied')}</p>
           ) : (
@@ -312,7 +313,7 @@ export default function ReservasPage() {
           <span className="text-xs text-gray-500">{misReservas.length} {misReservas.length === 1 ? 'reserva' : 'reservas'}</span>
         </div>
         {loadingMis ? (
-          <p className="text-sm text-gray-400">{t('common.loading')}</p>
+          <CardSkeleton count={3} />
         ) : misReservas.length === 0 ? (
           <p className="text-sm text-gray-500">{t('reservas.noReservations')}</p>
         ) : (
@@ -340,12 +341,13 @@ export default function ReservasPage() {
                 )}
               </p>
               {(r.estado === 'confirmada' || r.estado === 'pendiente_aprobacion') && r.es_futura && (
-                <button
-                  onClick={() => abrirCancelacion(r)}
-                  className="text-red-400 hover:text-red-300 transition-colors text-sm"
-                >
-                  {t('reservas.cancel')}
-                </button>
+                <RowActions
+                  align="start"
+                  menuLabel={`${t('reservas.cancel')}: ${r.area_nombre}`}
+                  actions={[
+                    { id: 'cancelar', label: t('reservas.cancel'), icon: ROW_ICON.close, tone: 'danger', onClick: () => abrirCancelacion(r) },
+                  ]}
+                />
               )}
             </div>
           ))
@@ -372,7 +374,7 @@ export default function ReservasPage() {
             </p>
 
             {previewLoading ? (
-              <p className="text-sm text-gray-400">{t('common.loading')}</p>
+              <SkeletonText lines={2} />
             ) : preview && !preview.permite_cancelacion ? (
               <div className="bg-red-900/40 border border-red-700 rounded-lg px-3 py-2 text-red-300 text-sm">
                 {t('reservas.cancelDisabled')}

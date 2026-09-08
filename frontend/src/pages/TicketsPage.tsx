@@ -1,8 +1,15 @@
 import { useEffect, useMemo, useState } from 'react';
 import { getTickets, type Ticket, type TicketEstado, type TicketTipo } from '../services/api';
-import { Spinner } from '../components/Skeleton';
+import { Badge, CardSkeleton, EmptyState, Select } from '../components/ui';
 import { useTranslation } from '../i18n/useTranslation';
-import TicketChat, { TIPO_LABEL, ESTADO_BADGE, ESTADO_LABEL } from '../components/TicketChat';
+import TicketChat, { TIPO_LABEL, ESTADO_LABEL } from '../components/TicketChat';
+import type { BadgeTone } from '../components/ui';
+
+const ICON_TICKETS = 'M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z';
+
+const ESTADO_TONE: Record<TicketEstado, BadgeTone> = {
+  abierto: 'warning', en_proceso: 'info', cerrado: 'success',
+};
 
 const TIPOS: TicketTipo[]     = ['mantenimiento', 'queja', 'seguridad', 'otro'];
 const ESTADOS: TicketEstado[] = ['abierto', 'en_proceso', 'cerrado'];
@@ -43,25 +50,38 @@ export default function TicketsPage() {
 
       {/* Filtros */}
       <div className="flex flex-wrap gap-3 mb-4">
-        <select value={fEstado} onChange={e => setFEstado(e.target.value as '' | TicketEstado)}
-          className="sg-input w-full sm:w-auto">
+        <Select
+          wrapperClassName="w-full sm:w-48"
+          value={fEstado}
+          onChange={e => setFEstado(e.target.value as '' | TicketEstado)}
+          aria-label={t('common.status')}
+        >
           <option value="">{t('tickets.allStates')}</option>
           {ESTADOS.map(e => <option key={e} value={e}>{t(ESTADO_LABEL[e])}</option>)}
-        </select>
-        <select value={fTipo} onChange={e => setFTipo(e.target.value as '' | TicketTipo)}
-          className="sg-input w-full sm:w-auto">
+        </Select>
+        <Select
+          wrapperClassName="w-full sm:w-48"
+          value={fTipo}
+          onChange={e => setFTipo(e.target.value as '' | TicketTipo)}
+          aria-label={t('common.type')}
+        >
           <option value="">{t('tickets.allTypes')}</option>
           {TIPOS.map(tp => <option key={tp} value={tp}>{t(TIPO_LABEL[tp])}</option>)}
-        </select>
+        </Select>
       </div>
 
       <div className="flex-1 grid grid-cols-1 lg:grid-cols-[minmax(0,380px)_1fr] gap-4 min-h-0">
         {/* Lista */}
         <div className="sg-card flex min-h-0 flex-col overflow-hidden">
           {loading ? (
-            <div className="flex items-center justify-center py-10"><Spinner size={22} /></div>
+            <div className="p-3"><CardSkeleton count={4} /></div>
           ) : filtered.length === 0 ? (
-            <p className="text-gray-500 text-sm text-center py-10">{t('tickets.empty')}</p>
+            <EmptyState
+              compact
+              icon={ICON_TICKETS}
+              title={fEstado || fTipo ? t('tickets.empty') : t('empty.tickets')}
+              description={fEstado || fTipo ? undefined : t('empty.ticketsHint')}
+            />
           ) : (
             <div className="overflow-y-auto divide-y divide-gray-700/60">
               {filtered.map(tk => (
@@ -81,9 +101,7 @@ export default function TicketsPage() {
                     )}
                   </div>
                   <div className="flex items-center gap-2 mt-1">
-                    <span className={`inline-block text-[10px] font-semibold px-2 py-0.5 rounded-full ${ESTADO_BADGE[tk.estado]}`}>
-                      {t(ESTADO_LABEL[tk.estado])}
-                    </span>
+                    <Badge tone={ESTADO_TONE[tk.estado]}>{t(ESTADO_LABEL[tk.estado])}</Badge>
                     <span className="text-[11px] text-gray-400">{t(TIPO_LABEL[tk.tipo])}</span>
                     <span className="text-[11px] text-gray-500 ml-auto">{fmt(tk.ultimo_mensaje_at)}</span>
                   </div>
