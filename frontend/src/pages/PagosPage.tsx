@@ -1,18 +1,19 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   getPagos, createPago, aprobarPago, rechazarPago, getResidentes,
   type Pago, type Residente,
 } from '../services/api';
-import { TableSkeleton, Spinner } from '../components/Skeleton';
-import { useToast } from '../components/Toast';
+import {
+  Badge, Button, DataTable, EmptyState, ESTADO_PAGO_TONE, Input, Modal, Select, useToast,
+  type Column,
+} from '../components/ui';
+import { Skeleton } from '../components/Skeleton';
 import { useTranslation } from '../i18n/useTranslation';
 
-const BADGE: Record<Pago['estado'], string> = {
-  aprobado:  'bg-green-100 text-green-700',
-  pendiente: 'bg-yellow-100 text-yellow-700',
-  rechazado: 'bg-red-100 text-red-700',
-};
 const EMPTY_FORM = { residente_id: '', monto: '' };
+
+const ICON_SEARCH = 'M21 21l-4.35-4.35M11 19a8 8 0 1 1 0-16 8 8 0 0 1 0 16z';
+const ICON_PAYMENTS = 'M1 4h22v16H1zM1 10h22';
 
 export default function PagosPage() {
   const showToast = useToast();
@@ -29,11 +30,12 @@ export default function PagosPage() {
   const [formError, setFormError]   = useState<string | null>(null);
   const [actionId, setActionId]     = useState<string | null>(null);
 
-  const LABEL: Record<Pago['estado'], string> = {
+  const LABEL: Record<string, string> = {
     aprobado: t('payments.approved'), pendiente: t('payments.pending'), rechazado: t('payments.rejected'),
   };
-  const METODO_LABEL: Record<Pago['metodo'], string> = {
+  const METODO_LABEL: Record<string, string> = {
     efectivo: t('payments.cash'), transferencia: t('payments.transfer'),
+    tarjeta: t('card.payWithCard'), reserva: t('payments.reservation'),
   };
 
   const cargarPagos = () => {
@@ -97,145 +99,156 @@ export default function PagosPage() {
     }
   };
 
-  const q = search.toLowerCase();
-  const filtered = pagos.filter(p =>
-    (!filterEstado || p.estado === filterEstado) &&
-    (`${p.numero_casa} ${p.residente_nombre}`).toLowerCase().includes(q)
-  );
+  const filtered = useMemo(() => {
+    const q = search.toLowerCase();
+    return pagos.filter(p =>
+      (!filterEstado || p.estado === filterEstado) &&
+      (`${p.numero_casa} ${p.residente_nombre}`).toLowerCase().includes(q)
+    );
+  }, [pagos, filterEstado, search]);
+
+  const filtrando = Boolean(search || filterEstado);
+
+  const columns: Column<Pago>[] = [
+    { key: 'casa', header: t('residents.house'), primary: true, className: 'font-bold text-gray-50', cell: p => p.numero_casa },
+    { key: 'residente', header: t('payments.resident'), className: 'text-gray-100', cell: p => p.residente_nombre },
+    {
+      key: 'monto', header: t('common.amount'), align: 'right',
+      className: 'font-semibold tabular-nums text-gray-50',
+      cell: p => `Q${parseFloat(p.monto).toFixed(2)}`,
+    },
+    {
+      key: 'metodo', header: t('payments.method'), className: 'text-gray-300',
+      // `es_simulado` marca los pagos generados por la pasarela de prueba.
+      cell: p => p.es_simulado
+        ? `${METODO_LABEL[p.metodo] ?? p.metodo} · ${t('card.simulated')}`
+        : (METODO_LABEL[p.metodo] ?? p.metodo),
+    },
+    {
+      key: 'estado', header: t('common.status'),
+      cell: p => (
+        <Badge tone={ESTADO_PAGO_TONE[p.estado] ?? 'neutral'} dot>
+          {LABEL[p.estado] ?? p.estado}
+        </Badge>
+      ),
+    },
+    {
+      key: 'fecha', header: t('common.date'), className: 'whitespace-nowrap text-gray-400',
+      cell: p => new Date(p.fecha_pago).toLocaleDateString('es-GT'),
+    },
+    {
+      key: 'acciones', header: t('common.actions'), align: 'right', actions: true,
+      cell: p => p.estado !== 'pendiente' ? null : (
+        <div className="flex flex-wrap justify-end gap-2">
+          <Button size="sm" variant="secondary" loading={actionId === p.id} onClick={() => handleAprobar(p.id)}>
+            {t('common.approve')}
+          </Button>
+          <Button size="sm" variant="ghost" disabled={actionId === p.id} onClick={() => handleRechazar(p.id)} className="text-danger-400 hover:bg-danger-500/12 hover:text-danger-400">
+            {t('common.reject')}
+          </Button>
+        </div>
+      ),
+    },
+  ];
 
   return (
-    <div className="sg-page text-gray-100">
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <h1 className="text-xl font-bold text-white">{t('payments.title')}</h1>
-        <div className="flex gap-3 flex-wrap">
-          <input
-            type="text"
+    <div className="sg-page">
+      <div className="sg-page-inner space-y-5">
+        <header className="sg-panel-heading">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-50">{t('payments.title')}</h1>
+            <div className="mt-1 text-sm text-gray-400">
+              {loading
+                ? <Skeleton height="0.875rem" width="5rem" />
+                : <p>{`${filtered.length} / ${pagos.length}`}</p>}
+            </div>
+          </div>
+          <Button onClick={() => { setForm(EMPTY_FORM); setFormError(null); setShowModal(true); }}>
+            {t('payments.registerCash')}
+          </Button>
+        </header>
+
+        {error && (
+          <p role="alert" className="rounded-xl border border-danger-500/30 bg-danger-500/10 px-4 py-3 text-sm text-danger-400">{error}</p>
+        )}
+
+        <div className="sg-card flex flex-col gap-3 p-4 sm:flex-row">
+          <Input
+            wrapperClassName="flex-1"
+            icon={ICON_SEARCH}
             value={search}
             onChange={e => setSearch(e.target.value)}
             placeholder="Buscar por casa o residente…"
-            className="bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white placeholder-gray-400 text-sm focus:outline-none focus:border-blue-500 w-52"
+            aria-label={t('common.search')}
           />
-          <select
+          <Select
+            wrapperClassName="sm:w-52"
             value={filterEstado}
             onChange={e => setFilterEstado(e.target.value)}
-            className="bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500 appearance-none"
+            aria-label={t('common.status')}
           >
             <option value="">Todos</option>
             <option value="pendiente">{t('payments.pending')}</option>
             <option value="aprobado">{t('payments.approved')}</option>
             <option value="rechazado">{t('payments.rejected')}</option>
-          </select>
-          <button
-            onClick={() => { setForm(EMPTY_FORM); setFormError(null); setShowModal(true); }}
-            className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors"
-          >
-            {t('payments.registerCash')}
-          </button>
+          </Select>
         </div>
+
+        <DataTable
+          columns={columns}
+          rows={filtered}
+          rowKey={p => p.id}
+          loading={loading}
+          caption={t('payments.title')}
+          empty={
+            filtrando ? (
+              <EmptyState
+                icon={ICON_SEARCH}
+                title={t('empty.paymentsFiltered')}
+                action={
+                  <Button variant="secondary" onClick={() => { setSearch(''); setFilterEstado(''); }}>
+                    {t('empty.clearFilters')}
+                  </Button>
+                }
+              />
+            ) : (
+              <EmptyState
+                icon={ICON_PAYMENTS}
+                title={t('payments.noPayments')}
+                description={t('empty.paymentsHint')}
+                action={<Button onClick={() => setShowModal(true)}>{t('empty.addFirst')}</Button>}
+              />
+            )
+          }
+        />
       </div>
 
-      {error && (
-        <div className="bg-red-900/40 border border-red-700 rounded-lg px-4 py-3 text-red-300 text-sm">{error}</div>
-      )}
-
-      <div className="bg-gray-800 rounded-2xl shadow-xl overflow-hidden">
-        {!loading && filtered.length === 0 ? (
-          <p className="text-gray-400 text-sm text-center py-12">{t('payments.noPayments')}</p>
-        ) : (
-          <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-gray-700 text-gray-400 text-left">
-                <th className="px-4 py-3 font-medium">{t('residents.house')}</th>
-                <th className="px-4 py-3 font-medium">{t('payments.resident')}</th>
-                <th className="px-4 py-3 font-medium">{t('common.amount')}</th>
-                <th className="px-4 py-3 font-medium">{t('payments.method')}</th>
-                <th className="px-4 py-3 font-medium">{t('common.status')}</th>
-                <th className="px-4 py-3 font-medium">{t('common.date')}</th>
-                <th className="px-4 py-3 font-medium">{t('common.actions')}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {loading ? (
-                <TableSkeleton rows={6} cols={7} />
-              ) : (
-                filtered.map(p => (
-                  <tr key={p.id} className="border-b border-gray-700 last:border-0">
-                    <td className="px-4 py-3 font-medium">{p.numero_casa}</td>
-                    <td className="px-4 py-3 text-gray-300">{p.residente_nombre}</td>
-                    <td className="px-4 py-3 font-semibold">Q{parseFloat(p.monto).toFixed(2)}</td>
-                    <td className="px-4 py-3 text-gray-300">{METODO_LABEL[p.metodo]}</td>
-                    <td className="px-4 py-3">
-                      <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-semibold ${BADGE[p.estado]}`}>
-                        {LABEL[p.estado]}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-gray-400">
-                      {new Date(p.fecha_pago).toLocaleDateString('es-GT')}
-                    </td>
-                    <td className="px-4 py-3 flex gap-2">
-                      {p.estado === 'pendiente' && (
-                        <>
-                          <button onClick={() => handleAprobar(p.id)} disabled={actionId === p.id}
-                            className="text-xs text-green-400 hover:text-green-300 disabled:opacity-50 font-medium transition-colors flex items-center gap-1">
-                            {actionId === p.id && <Spinner size={12} />}
-                            {t('common.approve')}
-                          </button>
-                          <button onClick={() => handleRechazar(p.id)} disabled={actionId === p.id}
-                            className="text-xs text-red-400 hover:text-red-300 disabled:opacity-50 font-medium transition-colors">
-                            {t('common.reject')}
-                          </button>
-                        </>
-                      )}
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+      <Modal
+        open={showModal}
+        onClose={() => setShowModal(false)}
+        title={t('payments.modalTitle')}
+        dismissible={!saving}
+      >
+        <form onSubmit={handleCrear} className="space-y-4">
+          {formError && (
+            <p role="alert" className="rounded-lg border border-danger-500/30 bg-danger-500/10 px-3 py-2 text-sm text-danger-400">{formError}</p>
+          )}
+          <Select name="residente_id" label={t('payments.resident')} required value={form.residente_id} onChange={handleFormChange}>
+            <option value="">{t('payments.selectResident')}</option>
+            {residentes.map(r => (
+              <option key={r.id} value={r.id}>{t('residents.house')} {r.numero_casa} — {r.nombre}</option>
+            ))}
+          </Select>
+          <Input
+            name="monto" label={t('payments.amountLabel')} required type="number" min="0.01" step="0.01"
+            placeholder="0.00" value={form.monto} onChange={handleFormChange} suffix="Q"
+          />
+          <div className="flex flex-wrap justify-end gap-3 pt-2">
+            <Button variant="ghost" onClick={() => setShowModal(false)} disabled={saving}>{t('common.cancel')}</Button>
+            <Button type="submit" loading={saving}>{saving ? t('common.saving') : t('common.save')}</Button>
           </div>
-        )}
-      </div>
-
-      {showModal && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60">
-          <div className="bg-gray-800 rounded-t-2xl sm:rounded-2xl p-6 sm:p-8 w-full sm:max-w-md shadow-2xl">
-            <h2 className="text-lg font-bold text-white mb-6">{t('payments.modalTitle')}</h2>
-            {formError && (
-              <div className="mb-4 bg-red-900/40 border border-red-700 rounded-lg px-4 py-3 text-red-300 text-sm">{formError}</div>
-            )}
-            <form onSubmit={handleCrear} className="space-y-5">
-              <div>
-                <label className="block text-sm text-gray-300 mb-1">{t('payments.resident')} *</label>
-                <select name="residente_id" value={form.residente_id} onChange={handleFormChange} required
-                  className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-blue-500 transition-colors">
-                  <option value="">{t('payments.selectResident')}</option>
-                  {residentes.map(r => (
-                    <option key={r.id} value={r.id}>Casa {r.numero_casa} — {r.nombre}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm text-gray-300 mb-1">{t('payments.amountLabel')} *</label>
-                <input type="number" name="monto" value={form.monto} onChange={handleFormChange}
-                  required min="0.01" step="0.01" placeholder="0.00"
-                  className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-white placeholder-gray-400 focus:outline-none focus:border-blue-500 transition-colors" />
-              </div>
-              <div className="flex gap-3 pt-2">
-                <button type="submit" disabled={saving}
-                  className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-semibold py-2.5 rounded-lg transition-colors flex items-center justify-center gap-2">
-                  {saving && <Spinner />}
-                  {saving ? t('common.saving') : t('common.save')}
-                </button>
-                <button type="button" onClick={() => setShowModal(false)} disabled={saving}
-                  className="flex-1 bg-gray-700 hover:bg-gray-600 disabled:opacity-50 text-white font-semibold py-2.5 rounded-lg transition-colors">
-                  {t('common.cancel')}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+        </form>
+      </Modal>
     </div>
   );
 }

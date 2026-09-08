@@ -5,6 +5,7 @@ import {
 } from '../services/api';
 import { TableSkeleton, Spinner } from '../components/Skeleton';
 import { useToast } from '../components/Toast';
+import { ROW_ICON, RowActions } from '../components/ui';
 import { useTranslation } from '../i18n/useTranslation';
 
 const today = () => new Date().toISOString().slice(0, 10);
@@ -142,17 +143,21 @@ export default function PreautPage() {
                     <td className="px-4 py-3 text-gray-300">{formatFecha(p.fecha_inicio)}</td>
                     <td className="px-4 py-3 text-gray-300">{formatFecha(p.fecha_fin)}</td>
                     <td className="px-4 py-3">
-                      <div className="flex items-center gap-3">
-                        <button onClick={() => handlePreautHoy(p)}
-                          className="text-xs text-blue-400 hover:text-blue-300 font-medium transition-colors whitespace-nowrap">
-                          Preautorizar hoy
-                        </button>
-                        <button onClick={() => handleEliminar(p.id)} disabled={deletingId === p.id}
-                          className="text-xs text-red-400 hover:text-red-300 disabled:opacity-50 font-medium transition-colors flex items-center gap-1">
-                          {deletingId === p.id && <Spinner size={12} />}
-                          {t('common.delete')}
-                        </button>
-                      </div>
+                      <RowActions
+                        align="start"
+                        menuLabel={`${t('common.actions')}: ${p.nombre_visitante}`}
+                        actions={[
+                          { id: 'hoy', label: 'Preautorizar hoy', icon: ROW_ICON.clock, tone: 'primary', onClick: () => handlePreautHoy(p) },
+                          {
+                            id: 'eliminar',
+                            label: t('common.delete'),
+                            icon: ROW_ICON.trash,
+                            tone: 'danger',
+                            loading: deletingId === p.id,
+                            onClick: () => handleEliminar(p.id),
+                          },
+                        ]}
+                      />
                     </td>
                   </tr>
                 ))

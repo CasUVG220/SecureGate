@@ -7,6 +7,8 @@ import {
   scanPlaca,
   type AccesoActivo,
 } from '../services/api';
+import { CardSkeleton } from '../components/Skeleton';
+import { ROW_ICON, RowActions } from '../components/ui';
 import { useTranslation } from '../i18n/useTranslation';
 
 export default function SalidaPage() {
@@ -352,7 +354,7 @@ export default function SalidaPage() {
             </button>
           </div>
           {activosLoading ? (
-            <p className="text-center text-gray-400 text-sm py-8">Cargando...</p>
+            <div className="p-4"><CardSkeleton count={4} /></div>
           ) : activos.length === 0 ? (
             <p className="text-center text-gray-400 text-sm py-8">No hay visitantes dentro actualmente.</p>
           ) : (
@@ -377,13 +379,19 @@ export default function SalidaPage() {
                         {new Date(a.timestamp_entrada).toLocaleTimeString('es-GT', { hour: '2-digit', minute: '2-digit' })}
                       </td>
                       <td className="px-5 py-3">
-                        <button
-                          onClick={() => handleSalidaActivo(a.registro_id)}
-                          disabled={salidaActivoId === a.registro_id}
-                          className="text-xs text-red-400 hover:text-red-300 disabled:opacity-50 font-medium transition-colors whitespace-nowrap"
-                        >
-                          {salidaActivoId === a.registro_id ? 'Registrando...' : 'Registrar salida'}
-                        </button>
+                        <RowActions
+                          align="start"
+                          actions={[
+                            {
+                              id: 'salida',
+                              label: 'Registrar salida',
+                              icon: ROW_ICON.close,
+                              tone: 'primary',
+                              loading: salidaActivoId === a.registro_id,
+                              onClick: () => handleSalidaActivo(a.registro_id),
+                            },
+                          ]}
+                        />
                       </td>
                     </tr>
                   ))}

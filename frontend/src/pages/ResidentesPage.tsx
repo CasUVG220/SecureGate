@@ -1,16 +1,45 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   getResidentes, createResidente, updateResidente, deleteResidente,
   type Residente, type ResidenteInput, type ResidenteUpdate,
 } from '../services/api';
-import { TableSkeleton, Spinner } from '../components/Skeleton';
-import { useToast } from '../components/Toast';
+import {
+  Badge, Button, DataTable, EmptyState, ESTADO_PAGO_TONE, Input, Modal, Select, useToast,
+  type Column,
+} from '../components/ui';
+import { Skeleton } from '../components/Skeleton';
 import { useTranslation } from '../i18n/useTranslation';
 
 type FormMode = 'none' | 'create' | 'edit';
 
 const EMPTY_CREATE: ResidenteInput = { nombre: '', email: '', password: '', numero_casa: '', telefono: '' };
 const EMPTY_UPDATE: ResidenteUpdate = { numero_casa: '', estado_pago: '', telefono: '', saldo_pendiente: 0 };
+
+const ICON_SEARCH = 'M21 21l-4.35-4.35M11 19a8 8 0 1 1 0-16 8 8 0 0 1 0 16z';
+const ICON_RESIDENTS = 'M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M9 7a4 4 0 1 0 0-8 4 4 0 0 0 0 8z';
+const ICON_PLUS = 'M12 5v14M5 12h14';
+const ICON_EDIT = 'M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z';
+const ICON_TRASH = 'M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M10 11v6M14 11v6';
+
+function IconButton({ path, label, tone, onClick }: { path: string; label: string; tone: 'brand' | 'danger'; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={label}
+      aria-label={label}
+      className={`flex h-9 w-9 items-center justify-center rounded-lg transition-colors ${
+        tone === 'danger'
+          ? 'text-danger-400 hover:bg-danger-500/12'
+          : 'text-brand-400 hover:bg-brand-500/12'
+      }`}
+    >
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d={path} />
+      </svg>
+    </button>
+  );
+}
 
 export default function ResidentesPage() {
   const showToast = useToast();
@@ -30,6 +59,7 @@ export default function ResidentesPage() {
   const [createForm, setCreateForm] = useState<ResidenteInput>(EMPTY_CREATE);
   const [updateForm, setUpdateForm] = useState<ResidenteUpdate>(EMPTY_UPDATE);
   const [saving, setSaving]         = useState(false);
+  const [formError, setFormError]   = useState<string | null>(null);
 
   const cargar = () => {
     setLoading(true);
@@ -49,25 +79,30 @@ export default function ResidentesPage() {
 
   const openEdit = (r: Residente) => {
     setEditTarget(r);
-    setUpdateForm({ numero_casa: r.numero_casa, estado_pago: r.estado_pago, telefono: r.telefono || '', saldo_pendiente: parseFloat(r.saldo_pendiente) });
+    setUpdateForm({
+      numero_casa: r.numero_casa,
+      estado_pago: r.estado_pago,
+      telefono: r.telefono || '',
+      saldo_pendiente: parseFloat(r.saldo_pendiente),
+    });
     setFormMode('edit');
-    setError(null);
+    setFormError(null);
   };
 
   const cancelForm = () => {
     setFormMode('none'); setEditTarget(null);
     setCreateForm(EMPTY_CREATE); setUpdateForm(EMPTY_UPDATE);
-    setError(null);
+    setFormError(null);
   };
 
   const handleCreate = async (e: React.FormEvent) => {
-    e.preventDefault(); setSaving(true); setError(null);
+    e.preventDefault(); setSaving(true); setFormError(null);
     try {
       await createResidente(createForm);
       cancelForm(); cargar();
       showToast(t('residents.created'));
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Error al crear residente');
+      setFormError(err instanceof Error ? err.message : 'Error al crear residente');
     } finally {
       setSaving(false);
     }
@@ -76,13 +111,13 @@ export default function ResidentesPage() {
   const handleUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editTarget) return;
-    setSaving(true); setError(null);
+    setSaving(true); setFormError(null);
     try {
       await updateResidente(editTarget.id, updateForm);
       cancelForm(); cargar();
       showToast(t('residents.updated'));
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Error al actualizar residente');
+      setFormError(err instanceof Error ? err.message : 'Error al actualizar residente');
     } finally {
       setSaving(false);
     }
@@ -90,7 +125,6 @@ export default function ResidentesPage() {
 
   const handleDelete = async (r: Residente) => {
     if (!window.confirm(`${t('residents.confirmDelete')} ${r.numero_casa}?`)) return;
-    setError(null);
     try {
       await deleteResidente(r.id);
       cargar();
@@ -100,186 +134,180 @@ export default function ResidentesPage() {
     }
   };
 
-  const q = search.toLowerCase();
-  const filtered = residentes.filter(r =>
-    (!filterEstado || r.estado_pago === filterEstado) &&
-    (`${r.numero_casa} ${r.nombre} ${r.email}`).toLowerCase().includes(q)
-  );
+  const filtered = useMemo(() => {
+    const q = search.toLowerCase();
+    return residentes.filter(r =>
+      (!filterEstado || r.estado_pago === filterEstado) &&
+      (`${r.numero_casa} ${r.nombre} ${r.email}`).toLowerCase().includes(q)
+    );
+  }, [residentes, filterEstado, search]);
+
+  const filtrando = Boolean(search || filterEstado);
+
+  const columns: Column<Residente>[] = [
+    {
+      key: 'casa', header: t('residents.house'), primary: true,
+      cell: r => <span className="font-bold text-gray-50">{r.numero_casa}</span>,
+    },
+    { key: 'nombre', header: t('common.name'), cell: r => <span className="font-medium text-gray-100">{r.nombre}</span> },
+    { key: 'email',  header: t('common.email'), cell: r => <span className="text-gray-400">{r.email}</span> },
+    {
+      key: 'estado', header: t('residents.paymentStatus'),
+      cell: r => (
+        <Badge tone={ESTADO_PAGO_TONE[r.estado_pago] ?? 'neutral'} dot>
+          {BADGE_LABEL[r.estado_pago] ?? r.estado_pago}
+        </Badge>
+      ),
+    },
+    {
+      key: 'saldo', header: t('residents.balance'), align: 'right',
+      cell: r => <span className="font-semibold tabular-nums text-gray-200">Q{parseFloat(r.saldo_pendiente).toFixed(2)}</span>,
+    },
+    { key: 'telefono', header: t('common.phone'), cell: r => <span className="text-gray-400">{r.telefono || '—'}</span> },
+    {
+      key: 'acciones', header: t('common.actions'), align: 'right', actions: true,
+      cell: r => (
+        <div className="flex justify-end gap-1">
+          <IconButton path={ICON_EDIT} label={t('common.edit')} tone="brand" onClick={() => openEdit(r)} />
+          <IconButton path={ICON_TRASH} label={t('common.delete')} tone="danger" onClick={() => handleDelete(r)} />
+        </div>
+      ),
+    },
+  ];
 
   return (
-    <div className="sg-page text-gray-100">
-      {error && (
-        <div className="bg-red-500/10 border border-red-500/20 text-red-400 text-sm rounded-xl px-4 py-3 flex items-center gap-3">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-          {error}
+    <div className="sg-page">
+      <div className="sg-page-inner space-y-5">
+        <header className="sg-panel-heading">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-50">{t('residents.title')}</h1>
+            <div className="mt-1 text-sm text-gray-400">
+              {loading
+                ? <Skeleton height="0.875rem" width="5rem" />
+                : <p>{`${filtered.length} / ${residentes.length}`}</p>}
+            </div>
+          </div>
+          <Button
+            icon={<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" aria-hidden="true"><path d={ICON_PLUS} /></svg>}
+            onClick={() => { setFormMode('create'); setFormError(null); }}
+          >
+            {t('residents.new')}
+          </Button>
+        </header>
+
+        {error && (
+          <p role="alert" className="rounded-xl border border-danger-500/30 bg-danger-500/10 px-4 py-3 text-sm text-danger-400">{error}</p>
+        )}
+
+        <div className="sg-card flex flex-col gap-3 p-4 sm:flex-row">
+          <Input
+            wrapperClassName="flex-1"
+            icon={ICON_SEARCH}
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Buscar por casa, nombre o email…"
+            aria-label={t('common.search')}
+          />
+          <Select
+            wrapperClassName="sm:w-52"
+            value={filterEstado}
+            onChange={e => setFilterEstado(e.target.value)}
+            aria-label={t('residents.paymentStatus')}
+          >
+            <option value="">Todos</option>
+            <option value="al_dia">{t('residents.current')}</option>
+            <option value="mora">{t('residents.inDebt')}</option>
+            <option value="pendiente">{t('residents.pending')}</option>
+          </Select>
         </div>
-      )}
 
-      {/* Create resident form */}
-      {formMode === 'create' && (
-        <form onSubmit={handleCreate} className="bg-dark-800/60 backdrop-blur-md rounded-3xl p-8 border border-white/5 shadow-2xl space-y-6">
-          <h2 className="font-bold text-white text-xl tracking-tight">{t('residents.createTitle')}</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-            {([
-              ['nombre',     t('residents.fullName'), 'text',     true],
-              ['email',      t('common.email'),       'email',    true],
-              ['password',   t('common.password'),    'password', true],
-              ['numero_casa', t('residents.house'),   'text',     true],
-              ['telefono',   t('common.phone'),       'text',     false],
-            ] as [keyof ResidenteInput, string, string, boolean][]).map(([name, label, type, req]) => (
-              <div key={name}>
-                <label className="block text-sm font-medium text-gray-300 mb-2">{label}{req && <span className="text-brand-400 ml-1">*</span>}</label>
-                <input name={name} type={type} value={createForm[name] ?? ''} onChange={handleCreateChange} required={req}
-                  className="w-full bg-dark-700/50 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-all text-sm" />
-              </div>
-            ))}
+        <DataTable
+          columns={columns}
+          rows={filtered}
+          rowKey={r => r.id}
+          loading={loading}
+          caption={t('residents.title')}
+          empty={
+            filtrando ? (
+              <EmptyState
+                icon={ICON_SEARCH}
+                title={t('empty.residentsFiltered')}
+                description={t('empty.residentsFilteredHint')}
+                action={
+                  <Button variant="secondary" onClick={() => { setSearch(''); setFilterEstado(''); }}>
+                    {t('empty.clearFilters')}
+                  </Button>
+                }
+              />
+            ) : (
+              <EmptyState
+                icon={ICON_RESIDENTS}
+                title={t('residents.noResidents')}
+                description={t('empty.residentsHint')}
+                action={<Button onClick={() => setFormMode('create')}>{t('empty.addFirst')}</Button>}
+              />
+            )
+          }
+        />
+      </div>
+
+      {/* Alta */}
+      <Modal
+        open={formMode === 'create'}
+        onClose={cancelForm}
+        title={t('residents.createTitle')}
+        size="lg"
+        dismissible={!saving}
+      >
+        <form id="residente-create" onSubmit={handleCreate} className="space-y-4">
+          {formError && (
+            <p role="alert" className="rounded-lg border border-danger-500/30 bg-danger-500/10 px-3 py-2 text-sm text-danger-400">{formError}</p>
+          )}
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <Input name="nombre"      label={t('residents.fullName')} required value={createForm.nombre}       onChange={handleCreateChange} />
+            <Input name="email"       label={t('common.email')} type="email" required value={createForm.email} onChange={handleCreateChange} />
+            <Input name="password"    label={t('common.password')} type="password" required value={createForm.password} onChange={handleCreateChange} />
+            <Input name="numero_casa" label={t('residents.house')} required value={createForm.numero_casa}     onChange={handleCreateChange} />
+            <Input name="telefono"    label={t('common.phone')} value={createForm.telefono ?? ''}              onChange={handleCreateChange} wrapperClassName="sm:col-span-2" />
           </div>
-          <div className="flex gap-3 pt-4">
-            <button type="submit" disabled={saving}
-              className="bg-gradient-to-r from-brand-600 to-brand-500 hover:from-brand-500 hover:to-brand-400 disabled:opacity-50 text-white font-semibold px-8 py-2.5 rounded-xl transition-all shadow-glow hover:shadow-glow-lg flex items-center gap-2">
-              {saving && <Spinner />}
-              {saving ? t('common.saving') : t('common.save')}
-            </button>
-            <button type="button" onClick={cancelForm} className="text-gray-400 hover:text-white px-6 py-2.5 rounded-xl hover:bg-white/5 transition-all font-medium">{t('common.cancel')}</button>
+          <div className="flex flex-wrap justify-end gap-3 pt-2">
+            <Button variant="ghost" onClick={cancelForm} disabled={saving}>{t('common.cancel')}</Button>
+            <Button type="submit" loading={saving}>{saving ? t('common.saving') : t('common.save')}</Button>
           </div>
         </form>
-      )}
+      </Modal>
 
-      {/* Edit form */}
-      {formMode === 'edit' && editTarget && (
-        <form onSubmit={handleUpdate} className="bg-dark-800/60 backdrop-blur-md rounded-3xl p-8 border border-white/5 shadow-2xl space-y-6">
-          <h2 className="font-bold text-white text-xl tracking-tight">{t('residents.editTitle')} — Casa {editTarget.numero_casa}</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">{t('residents.house')} <span className="text-brand-400 ml-1">*</span></label>
-              <input name="numero_casa" value={updateForm.numero_casa ?? ''} onChange={handleUpdateChange} required
-                className="w-full bg-dark-700/50 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-all text-sm" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">{t('residents.paymentStatus')}</label>
-              <select name="estado_pago" value={updateForm.estado_pago ?? ''} onChange={handleUpdateChange}
-                className="w-full bg-dark-700/50 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-all text-sm appearance-none">
-                <option value="al_dia" className="bg-dark-800 text-white">{t('residents.current')}</option>
-                <option value="mora" className="bg-dark-800 text-white">{t('residents.inDebt')}</option>
-                <option value="pendiente" className="bg-dark-800 text-white">{t('residents.pending')}</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">{t('common.phone')}</label>
-              <input name="telefono" value={updateForm.telefono ?? ''} onChange={handleUpdateChange}
-                className="w-full bg-dark-700/50 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-all text-sm" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">{t('residents.pendingBalance')}</label>
-              <input name="saldo_pendiente" type="number" min="0" step="0.01" value={updateForm.saldo_pendiente ?? 0} onChange={handleUpdateChange}
-                className="w-full bg-dark-700/50 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-all text-sm" />
-            </div>
-          </div>
-          <div className="flex gap-3 pt-4">
-            <button type="submit" disabled={saving}
-              className="bg-gradient-to-r from-brand-600 to-brand-500 hover:from-brand-500 hover:to-brand-400 disabled:opacity-50 text-white font-semibold px-8 py-2.5 rounded-xl transition-all shadow-glow hover:shadow-glow-lg flex items-center gap-2">
-              {saving && <Spinner />}
-              {saving ? t('common.saving') : t('common.saveChanges')}
-            </button>
-            <button type="button" onClick={cancelForm} className="text-gray-400 hover:text-white px-6 py-2.5 rounded-xl hover:bg-white/5 transition-all font-medium">{t('common.cancel')}</button>
-          </div>
-        </form>
-      )}
-
-      {/* Action bar */}
-      {formMode === 'none' && (
-        <div className="bg-dark-800/40 backdrop-blur-md rounded-3xl p-6 border border-white/5 shadow-lg space-y-4">
-          <div className="flex justify-between items-center">
-            <h1 className="text-2xl font-bold text-white tracking-tight flex items-center gap-3">
-              {t('residents.title')}
-              {!loading && <span className="px-3 py-1 bg-white/5 rounded-full text-sm font-medium text-brand-400 border border-brand-500/20">{filtered.length}</span>}
-            </h1>
-            <button onClick={() => { setFormMode('create'); setError(null); }}
-              className="bg-brand-600 hover:bg-brand-500 text-white font-semibold px-6 py-2.5 rounded-xl transition-all shadow-glow hover:shadow-glow-lg text-sm flex items-center gap-2">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-              {t('residents.new')}
-            </button>
-          </div>
-          <div className="flex gap-3">
-            <input
-              type="text"
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              placeholder="Buscar por casa, nombre o email…"
-              className="flex-1 bg-dark-700/50 border border-white/10 rounded-xl px-4 py-2.5 text-white placeholder-gray-500 focus:outline-none focus:border-brand-500 transition-all text-sm"
-            />
-            <select
-              value={filterEstado}
-              onChange={e => setFilterEstado(e.target.value)}
-              className="bg-dark-700/50 border border-white/10 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-brand-500 transition-all text-sm appearance-none"
-            >
-              <option value="">Todos</option>
+      {/* Edición */}
+      <Modal
+        open={formMode === 'edit'}
+        onClose={cancelForm}
+        title={editTarget ? `${t('residents.editTitle')} — ${t('residents.house')} ${editTarget.numero_casa}` : t('residents.editTitle')}
+        size="lg"
+        dismissible={!saving}
+      >
+        <form onSubmit={handleUpdate} className="space-y-4">
+          {formError && (
+            <p role="alert" className="rounded-lg border border-danger-500/30 bg-danger-500/10 px-3 py-2 text-sm text-danger-400">{formError}</p>
+          )}
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <Input name="numero_casa" label={t('residents.house')} required value={updateForm.numero_casa ?? ''} onChange={handleUpdateChange} />
+            <Select name="estado_pago" label={t('residents.paymentStatus')} value={updateForm.estado_pago ?? ''} onChange={handleUpdateChange}>
               <option value="al_dia">{t('residents.current')}</option>
               <option value="mora">{t('residents.inDebt')}</option>
               <option value="pendiente">{t('residents.pending')}</option>
-            </select>
+            </Select>
+            <Input name="telefono" label={t('common.phone')} value={updateForm.telefono ?? ''} onChange={handleUpdateChange} />
+            <Input
+              name="saldo_pendiente" label={t('residents.pendingBalance')} type="number" min="0" step="0.01"
+              value={updateForm.saldo_pendiente ?? 0} onChange={handleUpdateChange} suffix="Q"
+            />
           </div>
-        </div>
-      )}
-
-      {/* Table */}
-      <div className="bg-dark-800/40 backdrop-blur-md rounded-3xl overflow-hidden shadow-xl border border-white/5">
-        {!loading && filtered.length === 0 ? (
-          <div className="py-20 text-center">
-            <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-white/5 mb-6 shadow-inner">
-              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-gray-500"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-            </div>
-            <p className="text-gray-400 text-base">{t('residents.noResidents')}</p>
+          <div className="flex flex-wrap justify-end gap-3 pt-2">
+            <Button variant="ghost" onClick={cancelForm} disabled={saving}>{t('common.cancel')}</Button>
+            <Button type="submit" loading={saving}>{saving ? t('common.saving') : t('common.saveChanges')}</Button>
           </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-white/5 text-gray-400 text-left bg-white/[0.02]">
-                  <th className="px-6 py-4 font-semibold uppercase tracking-wider text-xs whitespace-nowrap">{t('residents.house')}</th>
-                  <th className="px-6 py-4 font-semibold uppercase tracking-wider text-xs whitespace-nowrap">{t('common.name')}</th>
-                  <th className="px-6 py-4 font-semibold uppercase tracking-wider text-xs whitespace-nowrap">{t('common.email')}</th>
-                  <th className="px-6 py-4 font-semibold uppercase tracking-wider text-xs whitespace-nowrap">{t('residents.paymentStatus')}</th>
-                  <th className="px-6 py-4 font-semibold uppercase tracking-wider text-xs whitespace-nowrap">{t('residents.balance')}</th>
-                  <th className="px-6 py-4 font-semibold uppercase tracking-wider text-xs whitespace-nowrap">{t('common.phone')}</th>
-                  <th className="px-6 py-4 font-semibold uppercase tracking-wider text-xs whitespace-nowrap text-right">{t('common.actions')}</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-white/5">
-                {loading ? (
-                  <TableSkeleton rows={6} cols={7} />
-                ) : (
-                  filtered.map((r) => (
-                    <tr key={r.id} className="hover:bg-white/[0.02] transition-colors group">
-                      <td className="px-6 py-4 font-bold text-white whitespace-nowrap">{r.numero_casa}</td>
-                      <td className="px-6 py-4 text-gray-200 font-medium whitespace-nowrap">{r.nombre}</td>
-                      <td className="px-6 py-4 text-gray-400 whitespace-nowrap">{r.email}</td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border ${r.estado_pago === 'al_dia' ? 'bg-green-500/10 text-green-400 border-green-500/20' : r.estado_pago === 'mora' ? 'bg-red-500/10 text-red-400 border-red-500/20' : 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20'}`}>
-                          {r.estado_pago === 'al_dia' && <div className="w-1.5 h-1.5 rounded-full bg-green-400"></div>}
-                          {r.estado_pago === 'mora' && <div className="w-1.5 h-1.5 rounded-full bg-red-400"></div>}
-                          {r.estado_pago === 'pendiente' && <div className="w-1.5 h-1.5 rounded-full bg-yellow-400"></div>}
-                          {BADGE_LABEL[r.estado_pago] ?? r.estado_pago}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 font-medium text-gray-300 whitespace-nowrap">{parseFloat(r.saldo_pendiente).toFixed(2)}</td>
-                      <td className="px-6 py-4 text-gray-400 whitespace-nowrap">{r.telefono || '—'}</td>
-                      <td className="px-6 py-4 flex gap-2 justify-end whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button onClick={() => openEdit(r)} className="p-2 text-brand-400 hover:text-brand-300 hover:bg-brand-500/10 rounded-lg transition-all" title={t('common.edit')}>
-                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-                        </button>
-                        <button onClick={() => handleDelete(r)} className="p-2 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-lg transition-all" title={t('common.delete')}>
-                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
-                        </button>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+        </form>
+      </Modal>
     </div>
   );
 }
