@@ -5,8 +5,9 @@ import {
   getReservas, getAreas, aprobarReserva, rechazarReserva,
   type Reserva, type AreaComun, type EstadoReserva,
 } from '../services/api';
-import { Spinner } from '../components/Skeleton';
+import { TableSkeleton } from '../components/Skeleton';
 import { useToast } from '../components/Toast';
+import { ROW_ICON, RowActions } from '../components/ui';
 import { useTranslation } from '../i18n/useTranslation';
 
 export const ESTADO_BADGE: Record<EstadoReserva, string> = {
@@ -151,7 +152,7 @@ export default function AdminReservasPage() {
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={7} className="px-4 py-10 text-center text-gray-500">{t('common.loading')}</td></tr>
+                <TableSkeleton rows={5} cols={7} />
               ) : reservas.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="px-4 py-10 text-center text-gray-500">
@@ -196,23 +197,28 @@ export default function AdminReservasPage() {
                     </td>
                     <td className="px-4 py-3">
                       {r.estado === 'pendiente_aprobacion' && (
-                        <div className="flex items-center gap-3">
-                          <button
-                            onClick={() => handleAprobar(r)}
-                            disabled={actionId === r.id}
-                            className="text-emerald-400 hover:text-emerald-300 transition-colors flex items-center gap-1 disabled:opacity-50"
-                          >
-                            {actionId === r.id && <Spinner size={12} />}
-                            {t('reservas.approve')}
-                          </button>
-                          <button
-                            onClick={() => handleRechazar(r)}
-                            disabled={actionId === r.id}
-                            className="text-red-400 hover:text-red-300 transition-colors disabled:opacity-50"
-                          >
-                            {t('reservas.reject')}
-                          </button>
-                        </div>
+                        <RowActions
+                          align="start"
+                          inline={2}
+                          actions={[
+                            {
+                              id: 'aprobar',
+                              label: t('reservas.approve'),
+                              icon: ROW_ICON.check,
+                              tone: 'primary',
+                              loading: actionId === r.id,
+                              onClick: () => handleAprobar(r),
+                            },
+                            {
+                              id: 'rechazar',
+                              label: t('reservas.reject'),
+                              icon: ROW_ICON.close,
+                              tone: 'danger',
+                              disabled: actionId === r.id,
+                              onClick: () => handleRechazar(r),
+                            },
+                          ]}
+                        />
                       )}
                     </td>
                   </tr>
