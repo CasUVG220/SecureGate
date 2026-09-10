@@ -73,9 +73,18 @@ export default function AgentesPage() {
         <div className="bg-red-900/40 border border-red-700 rounded-lg px-4 py-3 text-red-300 text-sm">{error}</div>
       )}
 
+      <div className="sg-panel-heading">
+        <div>
+          <p className="sg-eyebrow">SecureGate · Personal operativo</p>
+          <h1 className="mt-1 text-2xl font-bold tracking-tight text-white sm:text-3xl">Personal y agentes</h1>
+          <p className="mt-1 text-sm text-[var(--sg-text-muted)]">Gestiona quién está listo para proteger la operación de tu comunidad.</p>
+        </div>
+        {!loading && <span className="sg-status bg-emerald-500/10 text-emerald-400">{filtered.length} registrados</span>}
+      </div>
+
       {/* Create agent form */}
       {showForm && (
-        <form onSubmit={handleCreateAgent} className="bg-gray-800 rounded-2xl p-6 space-y-4">
+        <form onSubmit={handleCreateAgent} className="sg-card space-y-4 p-5 sm:p-7">
           <h2 className="font-bold text-white text-lg">{t('residents.createAgentTitle') || 'Nuevo Agente'}</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {([
@@ -86,13 +95,13 @@ export default function AgentesPage() {
               <div key={name}>
                 <label className="block text-sm text-gray-300 mb-1">{label}{req && ' *'}</label>
                 <input name={name} type={type} value={agentForm[name]} onChange={handleAgentChange} required={req}
-                  className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-white placeholder-gray-400 focus:outline-none focus:border-blue-500 transition-colors" />
+                  className="sg-input" />
               </div>
             ))}
           </div>
           <div className="flex gap-3 pt-1">
             <button type="submit" disabled={saving}
-              className="bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-semibold px-6 py-2 rounded-xl transition-colors flex items-center gap-2">
+              className="sg-btn sg-btn-primary flex items-center gap-2">
               {saving && <Spinner />}
               {saving ? t('common.saving') : t('common.create')}
             </button>
@@ -103,14 +112,14 @@ export default function AgentesPage() {
 
       {/* Action bar */}
       {!showForm && (
-        <div className="space-y-3">
+        <div className="sg-card space-y-3 p-5 sm:p-6">
           <div className="flex justify-between items-center">
             <h1 className="text-xl font-bold text-white">
               Personal / Agentes
               {!loading && <span className="ml-2 text-sm font-normal text-gray-400">({filtered.length})</span>}
             </h1>
             <button onClick={() => { setShowForm(true); setError(null); }}
-              className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-5 py-2 rounded-xl transition-colors text-sm">
+              className="sg-btn sg-btn-primary text-sm">
               {t('residents.newAgent') || 'Nuevo Agente'}
             </button>
           </div>
@@ -125,7 +134,7 @@ export default function AgentesPage() {
       )}
 
       {/* Table */}
-      <div className="sg-card overflow-hidden">
+      <div className="sg-table-wrap overflow-hidden">
         {!loading && filtered.length === 0 ? (
           <p className="text-gray-400 text-sm text-center py-10">No hay personal registrado</p>
         ) : (

@@ -3,8 +3,7 @@ import {
   getBlacklist, createBlacklist, deleteBlacklist, buscarVisitantesPorDpi,
   type Blacklist, type BlacklistInput, type BlacklistDuracion, type VisitanteBasico,
 } from '../services/api';
-import { Spinner, TableSkeleton } from '../components/Skeleton';
-import { useToast } from '../components/Toast';
+import { Badge, Button, DataTable, EmptyState, Input, Spinner, useToast, type Column } from '../components/ui';
 import { useTranslation } from '../i18n/useTranslation';
 
 const DURACION_VALUES: { value: BlacklistDuracion; labelKey: string }[] = [
@@ -12,6 +11,9 @@ const DURACION_VALUES: { value: BlacklistDuracion; labelKey: string }[] = [
   { value: '30_dias',       labelKey: 'blacklist.dur30' },
   { value: 'indefinido',    labelKey: 'blacklist.durIndefinido' },
 ];
+
+const ICON_SEARCH = 'M21 21l-4.35-4.35M11 19a8 8 0 1 1 0-16 8 8 0 0 1 0 16z';
+const ICON_SHIELD = 'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10zM12 8v4M12 16h.01';
 
 const EMPTY_FORM: BlacklistInput = {
   visitante_id: '',
@@ -129,93 +131,81 @@ export default function BlacklistPage() {
     return dias === 30 ? t('blacklist.dur30') : t('blacklist.temporal');
   };
 
+  const columns: Column<Blacklist>[] = [
+    { key: 'visitante', header: t('blacklist.colVisitor'), primary: true, className: 'font-semibold text-gray-50', cell: e => e.visitante_nombre },
+    { key: 'dpi', header: t('blacklist.colDpi'), className: 'font-mono text-xs text-gray-400', cell: e => e.numero_dpi },
+    {
+      key: 'razon', header: t('blacklist.colReason'), className: 'text-gray-200',
+      cell: e => <span className="block max-w-52 truncate" title={e.razon}>{e.razon}</span>,
+    },
+    {
+      key: 'tipo', header: t('blacklist.colType'), align: 'center',
+      cell: e => <Badge tone={e.fecha_fin === null ? 'danger' : 'warning'}>{banType(e)}</Badge>,
+    },
+    {
+      key: 'vence', header: t('blacklist.colExpires'), align: 'center', className: 'text-xs text-gray-400',
+      cell: e => (e.fecha_fin === null ? '\u221e' : formatDate(e.fecha_fin)),
+    },
+    { key: 'sucursal', header: t('blacklist.colBranch'), align: 'center', className: 'text-xs text-gray-400', cell: e => e.sucursal_nombre },
+    {
+      key: 'acciones', header: t('common.actions'), align: 'right', actions: true,
+      cell: e => (
+        <Button size="sm" variant="ghost" onClick={() => handleRemove(e)} className="text-success-400 hover:bg-success-500/12 hover:text-success-400">
+          {t('blacklist.remove')}
+        </Button>
+      ),
+    },
+  ];
+
   return (
-    <div className="sg-page text-gray-100">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-bold text-white">{t('blacklist.title')}</h1>
-          <p className="text-sm text-gray-400 mt-0.5">{t('blacklist.subtitle')}</p>
-        </div>
-        <button
-          onClick={openModal}
-          className="sg-btn sg-btn-danger flex items-center gap-2 text-sm"
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-            <line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
-          </svg>
-          {t('blacklist.add')}
-        </button>
-      </div>
+    <div className="sg-page">
+      <div className="sg-page-inner space-y-5">
+        <header className="sg-panel-heading">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-50">{t('blacklist.title')}</h1>
+            <p className="mt-1 text-sm text-gray-400">{t('blacklist.subtitle')}</p>
+          </div>
+          <Button
+            variant="danger"
+            onClick={openModal}
+            icon={
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d={ICON_SHIELD} />
+              </svg>
+            }
+          >
+            {t('blacklist.add')}
+          </Button>
+        </header>
 
-      {/* Search */}
-      <input
-        type="text"
-        value={search}
-        onChange={e => setSearch(e.target.value)}
-        placeholder={t('blacklist.searchPlaceholder')}
-        className="sg-input w-full max-w-sm"
-      />
+        <Input
+          wrapperClassName="max-w-sm"
+          icon={ICON_SEARCH}
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          placeholder={t('blacklist.searchPlaceholder')}
+          aria-label={t('common.search')}
+        />
 
-      {/* Table */}
-      <div className="sg-card overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-gray-700 text-gray-400 text-left">
-                <th className="px-4 py-3 font-medium">{t('blacklist.colVisitor')}</th>
-                <th className="px-4 py-3 font-medium">{t('blacklist.colDpi')}</th>
-                <th className="px-4 py-3 font-medium">{t('blacklist.colReason')}</th>
-                <th className="px-4 py-3 font-medium text-center">{t('blacklist.colType')}</th>
-                <th className="px-4 py-3 font-medium text-center">{t('blacklist.colExpires')}</th>
-                <th className="px-4 py-3 font-medium text-center">{t('blacklist.colBranch')}</th>
-                <th className="px-4 py-3 font-medium">{t('common.actions')}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {loading ? (
-                <TableSkeleton rows={4} cols={7} />
-              ) : filtered.length === 0 ? (
-                <tr>
-                  <td colSpan={7} className="px-4 py-10 text-center text-gray-500">
-                    {t('blacklist.empty')}
-                  </td>
-                </tr>
-              ) : (
-                filtered.map(entry => (
-                  <tr key={entry.id} className="border-b border-gray-700 last:border-0">
-                    <td className="px-4 py-3 font-medium text-white">{entry.visitante_nombre}</td>
-                    <td className="px-4 py-3 text-gray-400 font-mono text-xs">{entry.numero_dpi}</td>
-                    <td className="px-4 py-3 text-gray-300 max-w-[200px] truncate" title={entry.razon}>
-                      {entry.razon}
-                    </td>
-                    <td className="px-4 py-3 text-center">
-                      <span className={`inline-block text-xs font-semibold px-2 py-0.5 rounded-full ${
-                        entry.fecha_fin === null
-                          ? 'bg-red-900/60 text-red-400'
-                          : 'bg-amber-900/50 text-amber-400'
-                      }`}>
-                        {banType(entry)}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-center text-gray-400 text-xs">
-                      {entry.fecha_fin === null ? '∞' : formatDate(entry.fecha_fin)}
-                    </td>
-                    <td className="px-4 py-3 text-center text-gray-400 text-xs">{entry.sucursal_nombre}</td>
-                    <td className="px-4 py-3">
-                      <button
-                        onClick={() => handleRemove(entry)}
-                        className="text-green-400 hover:text-green-300 text-xs font-medium transition-colors"
-                      >
-                        {t('blacklist.remove')}
-                      </button>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
+        <DataTable
+          columns={columns}
+          rows={filtered}
+          rowKey={e => e.id}
+          loading={loading}
+          caption={t('blacklist.title')}
+          empty={
+            search ? (
+              <EmptyState icon={ICON_SEARCH} title={t('blacklist.empty')} />
+            ) : (
+              <EmptyState
+                icon={ICON_SHIELD}
+                title={t('empty.blacklist')}
+                description={t('empty.blacklistHint')}
+                action={<Button variant="danger" onClick={openModal}>{t('blacklist.add')}</Button>}
+              />
+            )
+          }
+        />
       </div>
 
       {/* Modal */}

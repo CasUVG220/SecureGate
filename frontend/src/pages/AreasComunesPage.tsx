@@ -3,8 +3,9 @@ import {
   getAreas, createArea, updateArea, deleteArea,
   type AreaComun, type TarifaTipo,
 } from '../services/api';
-import { Spinner } from '../components/Skeleton';
+import { GridSkeleton, Spinner } from '../components/Skeleton';
 import { useToast } from '../components/Toast';
+import { Button, ROW_ICON, RowActions } from '../components/ui';
 import { useTranslation } from '../i18n/useTranslation';
 import { archivoADataUri, esImagenValida, ImagenError } from '../utils/imagen';
 
@@ -178,7 +179,7 @@ export default function AreasComunesPage() {
       )}
 
       {loading ? (
-        <p className="text-gray-400 text-sm">{t('common.loading')}</p>
+        <GridSkeleton count={6} media />
       ) : areas.length === 0 ? (
         <div className="sg-card px-4 py-10 text-center text-gray-500">
           {t('reservas.areasEmpty')}
@@ -223,21 +224,18 @@ export default function AreasComunesPage() {
                       : t('reservas.approvalNever')}
                   </p>
                 )}
-                <div className="flex gap-3 pt-1 text-sm">
-                  <button
-                    onClick={() => openEdit(a)}
-                    className="text-blue-400 hover:text-blue-300 transition-colors"
-                  >
-                    {t('common.edit')}
-                  </button>
-                  {a.activa && (
-                    <button
-                      onClick={() => handleDelete(a)}
-                      className="text-red-400 hover:text-red-300 transition-colors"
-                    >
-                      {t('common.delete')}
-                    </button>
-                  )}
+                <div className="pt-1">
+                  <RowActions
+                    align="start"
+                    inline={a.activa ? 2 : 1}
+                    menuLabel={`${t('common.actions')}: ${a.nombre}`}
+                    actions={[
+                      { id: 'editar', label: t('common.edit'), icon: ROW_ICON.edit, tone: 'primary', onClick: () => openEdit(a) },
+                      ...(a.activa
+                        ? [{ id: 'eliminar', label: t('common.delete'), icon: ROW_ICON.trash, tone: 'danger' as const, onClick: () => handleDelete(a) }]
+                        : []),
+                    ]}
+                  />
                 </div>
               </div>
             </div>
@@ -317,12 +315,14 @@ export default function AreasComunesPage() {
                     alt=""
                     className="w-full max-h-40 object-contain rounded-lg border border-gray-600 bg-gray-900"
                   />
-                  <button
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-danger-400 hover:bg-danger-500/12 hover:text-danger-400"
                     onClick={() => setForm(prev => ({ ...prev, imagen_url: '' }))}
-                    className="text-red-400 hover:text-red-300 transition-colors text-xs"
                   >
                     {t('reservas.removeImage')}
-                  </button>
+                  </Button>
                 </div>
               )}
             </div>
