@@ -10,6 +10,7 @@ import {
   type HistorialAplicacion,
 } from '../services/api';
 import { TableSkeleton, Spinner } from '../components/Skeleton';
+import { ROW_ICON, RowActions, StatusText } from '../components/ui';
 import { useToast } from '../components/Toast';
 import { useTranslation } from '../i18n/useTranslation';
 import ConfiguracionQrPage from './ConfiguracionQrPage';
@@ -506,17 +507,21 @@ export default function ConfigCargosPage() {
       )}
 
       {/* ── Page header ───────────────────────────────────────────────────── */}
-      <div>
-        <h1 className="text-xl font-bold text-white">{t('config.title')}</h1>
-        <p className="text-sm text-gray-400 mt-0.5">Configuración de cargos para residentes de la sucursal</p>
+      <div className="sg-panel-heading">
+        <div>
+          <p className="sg-eyebrow">SecureGate · Reglas locales</p>
+          <h1 className="mt-1 text-2xl font-bold tracking-tight text-white sm:text-3xl">{t('config.title')}</h1>
+          <p className="mt-1 text-sm text-[var(--sg-text-muted)]">Define cómo tu comunidad gestiona mora, cargos programados y accesos QR.</p>
+        </div>
+        <span className="sg-status bg-emerald-500/10 text-emerald-400">Configuración activa</span>
       </div>
 
       {/* ── Tab bar ───────────────────────────────────────────────────────── */}
-      <div className="flex rounded-xl overflow-hidden border border-gray-700 max-w-md">
+      <div className="sg-tabbar max-w-2xl">
         <button
           onClick={() => handleTabChange('mora')}
           className={`flex-1 py-2.5 text-sm font-semibold transition-colors ${
-            activeTab === 'mora' ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-400 hover:text-gray-200'
+            activeTab === 'mora' ? 'sg-tab-active bg-[color-mix(in_srgb,var(--sg-primary)_12%,transparent)]' : 'sg-tab hover:bg-white/5'
           }`}
         >
           Cargos por Mora
@@ -524,7 +529,7 @@ export default function ConfigCargosPage() {
         <button
           onClick={() => handleTabChange('programados')}
           className={`flex-1 py-2.5 text-sm font-semibold transition-colors ${
-            activeTab === 'programados' ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-400 hover:text-gray-200'
+            activeTab === 'programados' ? 'sg-tab-active bg-[color-mix(in_srgb,var(--sg-primary)_12%,transparent)]' : 'sg-tab hover:bg-white/5'
           }`}
         >
           Cargos Programados
@@ -532,7 +537,7 @@ export default function ConfigCargosPage() {
         <button
           onClick={() => handleTabChange('qr')}
           className={`flex-1 py-2.5 text-sm font-semibold transition-colors ${
-            activeTab === 'qr' ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-400 hover:text-gray-200'
+            activeTab === 'qr' ? 'sg-tab-active bg-[color-mix(in_srgb,var(--sg-primary)_12%,transparent)]' : 'sg-tab hover:bg-white/5'
           }`}
         >
           {t('qr.configTabLabel')}
@@ -554,7 +559,7 @@ export default function ConfigCargosPage() {
               </p>
             </div>
             <button onClick={openMoraCreate}
-              className="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-4 py-2 rounded-xl text-sm transition-colors">
+              className="sg-btn sg-btn-primary text-sm">
               {t('config.new')}
             </button>
           </div>
@@ -591,20 +596,27 @@ export default function ConfigCargosPage() {
                         </td>
                         <td className="px-5 py-3 text-gray-200">Q{parseFloat(cfg.monto).toFixed(2)}</td>
                         <td className="px-5 py-3">
-                          <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-semibold ${cfg.activo ? 'bg-green-100 text-green-700' : 'bg-gray-600 text-gray-300'}`}>
+                          <StatusText kind={cfg.activo ? 'on' : 'off'}>
                             {cfg.activo ? t('common.active') : t('common.inactive')}
-                          </span>
+                          </StatusText>
                         </td>
-                        <td className="px-5 py-3 text-right space-x-3 whitespace-nowrap">
-                          <button onClick={() => openMoraEdit(cfg)} className="text-blue-400 hover:text-blue-300 transition-colors">{t('common.edit')}</button>
-                          <button onClick={() => handleMoraToggle(cfg)} disabled={togglingId === cfg.id}
-                            className="text-yellow-400 hover:text-yellow-300 disabled:opacity-40 transition-colors inline-flex items-center gap-1">
-                            {togglingId === cfg.id && <Spinner size={12} />}
-                            {cfg.activo ? t('common.deactivate') : t('common.activate')}
-                          </button>
-                          {cfg.activo && (
-                            <button onClick={() => handleMoraDelete(cfg)} className="text-red-400 hover:text-red-300 transition-colors">{t('common.delete')}</button>
-                          )}
+                        <td className="px-5 py-3">
+                          <RowActions
+                            menuLabel={`${t('common.actions')}: ${cfg.nombre}`}
+                            actions={[
+                              { id: 'editar', label: t('common.edit'), icon: ROW_ICON.edit, tone: 'primary', onClick: () => openMoraEdit(cfg) },
+                              {
+                                id: 'toggle',
+                                label: cfg.activo ? t('common.deactivate') : t('common.activate'),
+                                icon: cfg.activo ? ROW_ICON.pause : ROW_ICON.play,
+                                loading: togglingId === cfg.id,
+                                onClick: () => handleMoraToggle(cfg),
+                              },
+                              ...(cfg.activo
+                                ? [{ id: 'eliminar', label: t('common.delete'), icon: ROW_ICON.trash, tone: 'danger' as const, onClick: () => handleMoraDelete(cfg) }]
+                                : []),
+                            ]}
+                          />
                         </td>
                       </tr>
                     ))
@@ -627,7 +639,7 @@ export default function ConfigCargosPage() {
               <p className="text-xs text-gray-400 mt-0.5">Aplica cargos manuales a todos los residentes de la sucursal</p>
             </div>
             <button onClick={openProgCreate}
-              className="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-4 py-2 rounded-xl text-sm transition-colors">
+              className="sg-btn sg-btn-primary text-sm">
               + Nuevo cargo programado
             </button>
           </div>
@@ -679,23 +691,26 @@ export default function ConfigCargosPage() {
                         <td className="px-5 py-3 text-center text-gray-300 text-xs">
                           {cp.veces_aplicado ?? 0}
                         </td>
-                        <td className="px-5 py-3 text-right space-x-2 whitespace-nowrap">
-                          {cp.activo && (
-                            <button
-                              onClick={() => setConfirmApply(cp)}
-                              className="bg-emerald-700 hover:bg-emerald-600 text-white text-xs font-semibold px-3 py-1 rounded-lg transition-colors"
-                            >
-                              Aplicar ahora
-                            </button>
-                          )}
-                          <button onClick={() => openHistorial(cp)} className="text-blue-400 hover:text-blue-300 transition-colors text-xs">Historial</button>
-                          <button onClick={() => openProgEdit(cp)} className="text-gray-400 hover:text-gray-200 transition-colors text-xs">{t('common.edit')}</button>
-                          <button onClick={() => handleProgToggle(cp)} className="text-yellow-400 hover:text-yellow-300 transition-colors text-xs">
-                            {cp.activo ? t('common.deactivate') : t('common.activate')}
-                          </button>
-                          {cp.activo && (
-                            <button onClick={() => handleProgDelete(cp)} className="text-red-400 hover:text-red-300 transition-colors text-xs">{t('common.delete')}</button>
-                          )}
+                        <td className="px-5 py-3">
+                          <RowActions
+                            menuLabel={`${t('common.actions')}: ${cp.nombre}`}
+                            actions={[
+                              ...(cp.activo
+                                ? [{ id: 'aplicar', label: 'Aplicar ahora', icon: ROW_ICON.check, tone: 'primary' as const, onClick: () => setConfirmApply(cp) }]
+                                : []),
+                              { id: 'historial', label: 'Historial', icon: ROW_ICON.history, onClick: () => openHistorial(cp) },
+                              { id: 'editar', label: t('common.edit'), icon: ROW_ICON.edit, onClick: () => openProgEdit(cp) },
+                              {
+                                id: 'toggle',
+                                label: cp.activo ? t('common.deactivate') : t('common.activate'),
+                                icon: cp.activo ? ROW_ICON.pause : ROW_ICON.play,
+                                onClick: () => handleProgToggle(cp),
+                              },
+                              ...(cp.activo
+                                ? [{ id: 'eliminar', label: t('common.delete'), icon: ROW_ICON.trash, tone: 'danger' as const, onClick: () => handleProgDelete(cp) }]
+                                : []),
+                            ]}
+                          />
                         </td>
                       </tr>
                     ))}

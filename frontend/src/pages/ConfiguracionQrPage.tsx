@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { getConfigQr, updateConfigQr, type ConfigQr } from '../services/api';
-import { Spinner } from '../components/Skeleton';
+import { FormSkeleton, Spinner } from '../components/Skeleton';
 import { useToast } from '../components/Toast';
 import { useTranslation } from '../i18n/useTranslation';
 
@@ -87,7 +87,7 @@ export default function ConfiguracionQrPage() {
     }
   };
 
-  if (loading) return <p className="text-gray-400 text-sm">{t('common.loading')}</p>;
+  if (loading) return <div className="sg-page-inner"><FormSkeleton fields={4} /></div>;
   if (error && !config) {
     return (
       <div className="bg-red-900/40 border border-red-700 rounded-lg px-4 py-3 text-red-300 text-sm">
