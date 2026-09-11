@@ -5,6 +5,7 @@ import {
   type Sucursal, type SucursalInput, type Usuario,
 } from '../../services/api';
 import { Spinner, TableSkeleton } from '../../components/Skeleton';
+import { ROW_ICON, RowActions, StatusText } from '../../components/ui';
 import { useToast } from '../../components/Toast';
 import { decodeTokenPayload } from '../../services/api';
 import { useTranslation } from '../../i18n/useTranslation';
@@ -245,6 +246,20 @@ export default function GestionSucursales() {
         </div>
       </div>
 
+      <section className="sg-hero" aria-label="Resumen de la organización">
+        <div className="sg-hero-grid">
+          <div>
+            <p className="sg-hero-label">Administración de comunidades</p>
+            <h2 className="sg-hero-title">Personas y sucursales, bajo control.</h2>
+            <p className="sg-hero-copy">Asigna responsables, organiza el personal y mantén cada comunidad lista para operar.</p>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="sg-hero-stat"><p className="sg-hero-stat-label">Comunidades</p><p className="sg-hero-stat-value">{sucursales.length}</p></div>
+            <div className="sg-hero-stat"><p className="sg-hero-stat-label">Personal</p><p className="sg-hero-stat-value">{usuarios.length}</p></div>
+          </div>
+        </div>
+      </section>
+
       {error && (
         <div className="bg-red-900/40 border border-red-700 rounded-lg px-4 py-3 text-red-300 text-sm">{error}</div>
       )}
@@ -293,46 +308,43 @@ export default function GestionSucursales() {
                     <td className="px-4 py-3 text-center">{suc.total_residentes}</td>
                     <td className="px-4 py-3 text-center">{suc.total_agentes}</td>
                     <td className="px-4 py-3 text-center">
-                      <span className={`inline-block text-xs font-semibold px-2 py-0.5 rounded-full ${
-                        suc.activo ? 'bg-green-900/50 text-green-400' : 'bg-gray-700 text-gray-400'
-                      }`}>
+                      <StatusText kind={suc.activo ? 'on' : 'off'}>
                         {suc.activo ? t('common.activeF') : t('common.inactiveF')}
-                      </span>
+                      </StatusText>
                     </td>
                     <td className="px-4 py-3">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <button
-                          onClick={() => openEditSuc(suc)}
-                          className="text-blue-400 hover:text-blue-300 text-xs font-medium transition-colors"
-                        >
-                          {t('common.edit')}
-                        </button>
-                        <span className="text-gray-600">·</span>
-                        <button
-                          onClick={() => openAdminModal(suc)}
-                          className="text-teal-400 hover:text-teal-300 text-xs font-medium transition-colors"
-                        >
-                          {t('empDetail.assignAdmin')}
-                        </button>
-                        <span className="text-gray-600">·</span>
-                        <button
-                          onClick={() => handleToggle(suc)}
-                          className={`text-xs font-medium transition-colors ${
-                            suc.activo
-                              ? 'text-amber-400 hover:text-amber-300'
-                              : 'text-green-400 hover:text-green-300'
-                          }`}
-                        >
-                          {suc.activo ? t('common.deactivate') : t('common.activate')}
-                        </button>
-                        <span className="text-gray-600">·</span>
-                        <button
-                          onClick={() => handleDeleteSucursal(suc)}
-                          className="text-red-400 hover:text-red-300 text-xs font-medium transition-colors"
-                        >
-                          {t('common.delete')}
-                        </button>
-                      </div>
+                      <RowActions
+                        align="start"
+                        menuLabel={`${t('common.actions')}: ${suc.nombre}`}
+                        actions={[
+                          {
+                            id: 'editar',
+                            label: t('common.edit'),
+                            icon: ROW_ICON.edit,
+                            tone: 'primary',
+                            onClick: () => openEditSuc(suc),
+                          },
+                          {
+                            id: 'admin',
+                            label: t('empDetail.assignAdmin'),
+                            icon: ROW_ICON.user,
+                            onClick: () => openAdminModal(suc),
+                          },
+                          {
+                            id: 'toggle',
+                            label: suc.activo ? t('common.deactivate') : t('common.activate'),
+                            icon: suc.activo ? ROW_ICON.pause : ROW_ICON.play,
+                            onClick: () => handleToggle(suc),
+                          },
+                          {
+                            id: 'eliminar',
+                            label: t('common.delete'),
+                            icon: ROW_ICON.trash,
+                            tone: 'danger',
+                            onClick: () => handleDeleteSucursal(suc),
+                          },
+                        ]}
+                      />
                     </td>
                   </tr>
                 ))
@@ -404,19 +416,24 @@ export default function GestionSucursales() {
                     </td>
                     <td className="px-4 py-3 text-gray-400">{u.sucursal_nombre ?? '—'}</td>
                     <td className="px-4 py-3 text-center">
-                      <span className={`inline-block text-xs font-semibold px-2 py-0.5 rounded-full ${
-                        u.activo ? 'bg-green-900/50 text-green-400' : 'bg-gray-700 text-gray-400'
-                      }`}>
+                      <StatusText kind={u.activo ? 'on' : 'off'}>
                         {u.activo ? t('common.active') : t('common.inactive')}
-                      </span>
+                      </StatusText>
                     </td>
                     <td className="px-4 py-3">
-                      <button
-                        onClick={() => handleDeleteUsuario(u)}
-                        className="text-red-400 hover:text-red-300 text-xs font-medium transition-colors"
-                      >
-                        {t('common.delete')}
-                      </button>
+                      <RowActions
+                        align="start"
+                        menuLabel={`${t('common.actions')}: ${u.nombre}`}
+                        actions={[
+                          {
+                            id: 'eliminar',
+                            label: t('common.delete'),
+                            icon: ROW_ICON.trash,
+                            tone: 'danger',
+                            onClick: () => handleDeleteUsuario(u),
+                          },
+                        ]}
+                      />
                     </td>
                   </tr>
                 ))
