@@ -212,6 +212,88 @@ export const crearTransferencia = async (req: Request, res: Response) => {
   }
 };
 
+/**
+ * Decide el resultado de un cobro con tarjeta en la pasarela simulada.
+ *
+ * MOCK — SE REEMPLAZA POR LA INTEGRACIÓN REAL DE VISANET EN UN SPRINT FUTURO.
+ * Cuando eso ocurra, esta función desaparece y `pagarConTarjeta` llamará al
+ * SDK del procesador; el resto del flujo (persistencia, liquidación de saldo)
+ * no cambia.
+ *
+ * La regla es determinística a propósito, para poder demostrar los dos caminos
+ * sin depender del azar: una tarjeta cuyo número termina en 1 se rechaza y
+ * cualquier otra se aprueba.
+ */
+export function simularAutorizacionTarjeta(ultimos4: string): 'aprobado' | 'rechazado' {
+  return ultimos4.endsWith('1') ? 'rechazado' : 'aprobado';
+}
+
+/**
+ * Cobro con tarjeta del residente logueado (pasarela simulada).
+ *
+ * Sólo llegan los últimos 4 dígitos: el número completo, el CVV y la fecha de
+ * vencimiento se validan en el navegador y nunca salen de él, así que el
+ * backend no los recibe ni los almacena.
+ */
+export const pagarConTarjeta = async (req: Request, res: Response) => {
+  const usuario_id = req.user?.id;
+  const { monto, ultimos4, titular } = req.body ?? {};
+
+  if (monto === undefined || !ultimos4) {
+    return res.status(400).json({ error: 'Campos requeridos: monto, ultimos4' });
+  }
+  if (Number(monto) <= 0) {
+    return res.status(400).json({ error: 'El monto debe ser mayor a 0' });
+  }
+  if (!/^[0-9]{4}$/.test(String(ultimos4))) {
+    return res.status(400).json({ error: 'ultimos4 debe tener exactamente 4 dígitos' });
+  }
+
+  const client = await pool.connect();
+  try {
+    const residente = await client.query(
+      'SELECT id, sucursal_id FROM residentes WHERE usuario_id = $1', [usuario_id]
+    );
+    if (residente.rows.length === 0) {
+      return res.status(404).json({ error: 'Residente no encontrado' });
+    }
+    const { id: residente_id, sucursal_id } = residente.rows[0];
+    const estado = simularAutorizacionTarjeta(String(ultimos4));
+
+    await client.query('BEGIN');
+
+    const result = await client.query(
+      `INSERT INTO pagos
+         (sucursal_id, residente_id, monto, metodo, estado, concepto,
+          tarjeta_ultimos4, es_simulado, registrado_por)
+       VALUES ($1, $2, $3, 'tarjeta', $4, $5, $6, TRUE, $7)
+       RETURNING *`,
+      [sucursal_id, residente_id, monto, estado,
+       titular ? `Pago con tarjeta — ${String(titular).slice(0, 80)}` : 'Pago con tarjeta',
+       String(ultimos4), usuario_id]
+    );
+
+    // Una autorización aprobada liquida igual que un pago en efectivo aprobado.
+    if (estado === 'aprobado') {
+      await liquidarCargosReserva(client, residente_id);
+      await client.query(
+        `UPDATE residentes
+            SET estado_pago = 'al_dia', saldo_pendiente = 0, fecha_ultimo_pago = NOW()
+          WHERE id = $1`,
+        [residente_id]
+      );
+    }
+
+    await client.query('COMMIT');
+    res.status(201).json(result.rows[0]);
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
+    res.status(500).json({ error: 'Error al procesar el pago con tarjeta', detail: String(error) });
+  } finally {
+    client.release();
+  }
+};
+
 export const getPendientesVerificacion = async (req: Request, res: Response) => {
   const ts = tenantFilter(req.user!, 'p');
   const extraOffset = ts.params.length + 1;
