@@ -29,9 +29,10 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
     setLang(l);
     localStorage.setItem('language', l);
     import('../services/api').then(({ updatePreferencias }) => {
-      const currentTheme = localStorage.getItem('theme') || 'dark';
       if (localStorage.getItem('token')) {
-        updatePreferencias(l, currentTheme).catch(() => {});
+        // Sólo el idioma: mandar también el tema leído de localStorage pisaba
+        // la preferencia real del usuario al iniciar sesión.
+        updatePreferencias({ idioma: l }).catch(() => {});
       }
     });
   };
