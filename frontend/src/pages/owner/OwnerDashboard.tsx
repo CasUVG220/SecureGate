@@ -4,27 +4,11 @@ import {
   type Empresa, type EmpresaInput,
 } from '../../services/api';
 import { Spinner, TableSkeleton } from '../../components/Skeleton';
+import { ROW_ICON, RowActions, StatusText, TelemetryStrip, TelemetrySkeleton } from '../../components/ui';
 import { useToast } from '../../components/Toast';
 import { useTranslation } from '../../i18n/useTranslation';
 
 const EMPTY: EmpresaInput = { nombre: '', nit: '', logo_url: '' };
-
-function StatCard({ label, value, accent, iconPath }: { label: string; value: number; accent: string; iconPath: string }) {
-  return (
-    <div className="sg-card group relative overflow-hidden p-5 transition-all duration-300 hover:-translate-y-0.5">
-      <div className={`absolute -top-6 -right-6 w-24 h-24 rounded-full blur-2xl opacity-20 transition-all duration-500 group-hover:scale-150 ${accent.replace('text-', 'bg-')}`} />
-      <div className="flex items-start justify-between mb-3 relative z-10">
-        <p className="text-gray-400 text-xs font-semibold uppercase tracking-wide">{label}</p>
-        <div className={`p-2 rounded-lg bg-gray-700/50 ${accent}`}>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            <path d={iconPath} />
-          </svg>
-        </div>
-      </div>
-      <p className="text-3xl font-bold text-white relative z-10">{value}</p>
-    </div>
-  );
-}
 
 interface Props {
   onSelectEmpresa: (id: string) => void;
@@ -116,30 +100,72 @@ export default function OwnerDashboard({ onSelectEmpresa }: Props) {
         </button>
       </div>
 
+      <section className="sg-hero" aria-label="Resumen de la plataforma">
+        <div className="sg-hero-grid">
+          <div>
+            <p className="sg-hero-label">SecureGate · Plataforma</p>
+            <h2 className="sg-hero-title">Una vista de todas tus comunidades.</h2>
+            <p className="sg-hero-copy">Supervisa empresas administradoras, contratistas y las sucursales que operan dentro de la red.</p>
+          </div>
+          <div className="grid grid-cols-3 gap-4">
+            <div className="sg-hero-stat">
+              <p className="sg-hero-stat-label">Empresas</p>
+              <p className="sg-hero-stat-value">{totalEmpresasActivas}</p>
+            </div>
+            <div className="sg-hero-stat">
+              <p className="sg-hero-stat-label">Comunidades</p>
+              <p className="sg-hero-stat-value">{totalSucursalesActivas}</p>
+            </div>
+            <div className="sg-hero-stat">
+              <p className="sg-hero-stat-label">Accesos hoy</p>
+              <p className="sg-hero-stat-value">{accesosHoy}</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {error && (
         <div className="bg-red-900/40 border border-red-700 rounded-lg px-4 py-3 text-red-300 text-sm">{error}</div>
       )}
 
-      {/* Stats */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        {loading ? (
-          Array.from({ length: 3 }).map((_, i) => (
-            <div key={i} className="sg-card p-5 border border-gray-700/50 animate-pulse">
-              <div className="h-3 bg-gray-700 rounded w-3/4 mb-3" />
-              <div className="h-8 bg-gray-700 rounded w-1/2" />
-            </div>
-          ))
-        ) : (
-          <>
-            <StatCard label={t('owner.activeCompanies')} value={totalEmpresasActivas}   accent="text-blue-400"  iconPath="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
-            <StatCard label={t('owner.activeBranches')}  value={totalSucursalesActivas} accent="text-green-400" iconPath="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z M12 7a3 3 0 1 0 0 6 3 3 0 0 0 0-6z" />
-            <StatCard label={t('owner.globalAccesses')}  value={accesosHoy}             accent="text-teal-400"  iconPath="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-          </>
-        )}
-      </div>
+      {/* Consola de Telemetría Global (HUD) */}
+      {loading ? (
+        <TelemetrySkeleton count={3} />
+      ) : (
+        <TelemetryStrip
+          eyebrow="Consola Global · Telemetría de Plataforma"
+          statusBadge={<span className="sg-status bg-emerald-500/10 text-emerald-400">Plataforma activa</span>}
+          items={[
+            {
+              id: 'empresas',
+              label: t('owner.activeCompanies'),
+              value: totalEmpresasActivas,
+              tone: 'brand',
+              icon: 'M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z',
+              hint: 'Empresas administradoras',
+            },
+            {
+              id: 'sucursales',
+              label: t('owner.activeBranches'),
+              value: totalSucursalesActivas,
+              tone: 'success',
+              icon: 'M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z M12 7a3 3 0 1 0 0 6 3 3 0 0 0 0-6z',
+              hint: 'Comunidades conectadas',
+            },
+            {
+              id: 'accesos',
+              label: t('owner.globalAccesses'),
+              value: accesosHoy,
+              tone: 'info',
+              icon: 'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z',
+              hint: 'Movimiento consolidado hoy',
+            },
+          ]}
+        />
+      )}
 
       {/* Tabla empresas */}
-      <div className="sg-card overflow-hidden">
+      <div className="sg-table-wrap">
         <div className="border-b border-white/10 px-5 py-4 sm:px-6">
           <h2 className="text-base font-semibold text-white">{t('owner.companies')}</h2>
         </div>
@@ -170,39 +196,37 @@ export default function OwnerDashboard({ onSelectEmpresa }: Props) {
                     <td className="px-4 py-3 text-gray-400">{emp.nit ?? '—'}</td>
                     <td className="px-4 py-3 text-center">{emp.total_sucursales}</td>
                     <td className="px-4 py-3 text-center">
-                      <span className={`inline-block text-xs font-semibold px-2 py-0.5 rounded-full ${
-                        emp.activo ? 'bg-green-900/50 text-green-400' : 'bg-gray-700 text-gray-400'
-                      }`}>
+                      <StatusText kind={emp.activo ? 'on' : 'off'}>
                         {emp.activo ? t('common.activeF') : t('common.inactiveF')}
-                      </span>
+                      </StatusText>
                     </td>
                     <td className="px-4 py-3">
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => onSelectEmpresa(emp.id)}
-                          className="text-blue-400 hover:text-blue-300 text-xs font-medium transition-colors"
-                        >
-                          {t('owner.viewDetail')}
-                        </button>
-                        <span className="text-gray-600">·</span>
-                        <button
-                          onClick={() => handleToggleActivo(emp)}
-                          className={`text-xs font-medium transition-colors ${
-                            emp.activo
-                              ? 'text-amber-400 hover:text-amber-300'
-                              : 'text-green-400 hover:text-green-300'
-                          }`}
-                        >
-                          {emp.activo ? t('common.deactivate') : t('common.activate')}
-                        </button>
-                        <span className="text-gray-600">·</span>
-                        <button
-                          onClick={() => handleDeleteEmpresa(emp)}
-                          className="text-red-400 hover:text-red-300 text-xs font-medium transition-colors"
-                        >
-                          {t('common.delete')}
-                        </button>
-                      </div>
+                      <RowActions
+                        align="start"
+                        menuLabel={`${t('common.actions')}: ${emp.nombre}`}
+                        actions={[
+                          {
+                            id: 'detalle',
+                            label: t('owner.viewDetail'),
+                            icon: ROW_ICON.view,
+                            tone: 'primary',
+                            onClick: () => onSelectEmpresa(emp.id),
+                          },
+                          {
+                            id: 'toggle',
+                            label: emp.activo ? t('common.deactivate') : t('common.activate'),
+                            icon: emp.activo ? ROW_ICON.pause : ROW_ICON.play,
+                            onClick: () => handleToggleActivo(emp),
+                          },
+                          {
+                            id: 'eliminar',
+                            label: t('common.delete'),
+                            icon: ROW_ICON.trash,
+                            tone: 'danger',
+                            onClick: () => handleDeleteEmpresa(emp),
+                          },
+                        ]}
+                      />
                     </td>
                   </tr>
                 ))
