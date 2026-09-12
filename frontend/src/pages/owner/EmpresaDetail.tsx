@@ -3,7 +3,8 @@ import {
   getEmpresaStats, getSucursales, createSucursal, deleteSucursal, assignAdminSucursal,
   type EmpresaStats, type Sucursal, type SucursalInput,
 } from '../../services/api';
-import { Spinner, TableSkeleton } from '../../components/Skeleton';
+import { Skeleton, Spinner, TableSkeleton } from '../../components/Skeleton';
+import { ROW_ICON, RowActions, StatusText, TelemetryStrip, TelemetrySkeleton } from '../../components/ui';
 import { useToast } from '../../components/Toast';
 import { useTranslation } from '../../i18n/useTranslation';
 
@@ -132,7 +133,7 @@ export default function EmpresaDetail({ empresaId, onBack }: Props) {
           </svg>
         </button>
         <h1 className="text-xl font-bold text-white">
-          {loading ? t('common.loading') : empresaNombre}
+          {loading ? <Skeleton height="1.25rem" width="12rem" /> : empresaNombre}
         </h1>
       </div>
 
@@ -140,31 +141,50 @@ export default function EmpresaDetail({ empresaId, onBack }: Props) {
         <div className="bg-red-900/40 border border-red-700 rounded-lg px-4 py-3 text-red-300 text-sm">{error}</div>
       )}
 
-      {/* Stats de la empresa */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        {loading ? (
-          Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} className="sg-card p-5 border-l-4 border-gray-700 animate-pulse">
-              <div className="h-3 bg-gray-700 rounded w-3/4 mb-3" />
-              <div className="h-8 bg-gray-700 rounded w-1/2" />
-            </div>
-          ))
-        ) : stats ? (
-          <>
-            {([
-              [t('empDetail.branches'),   stats.total_sucursales,       'border-blue-500'],
-              [t('empDetail.residents'),  stats.total_residentes,       'border-green-500'],
-              [t('dashboard.accessesToday'), stats.total_accesos_hoy,   'border-teal-500'],
-              [t('dashboard.pendingPayments'), stats.total_pagos_pendientes, 'border-yellow-500'],
-            ] as [string, number, string][]).map(([label, value, color]) => (
-              <div key={label} className={`sg-card p-5 sm:p-6 border-l-4 ${color}`}>
-                <p className="text-gray-400 text-xs font-medium">{label}</p>
-                <p className="text-3xl font-bold text-white mt-1">{value}</p>
-              </div>
-            ))}
-          </>
-        ) : null}
-      </div>
+      {/* Consola de Telemetría de la Empresa (HUD) */}
+      {loading ? (
+        <TelemetrySkeleton count={4} />
+      ) : stats ? (
+        <TelemetryStrip
+          eyebrow="Consola de Empresa · Métricas de Red"
+          items={[
+            {
+              id: 'sucursales',
+              label: t('empDetail.branches'),
+              value: stats.total_sucursales,
+              tone: 'brand',
+              icon: 'M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z',
+              hint: 'Sedes activas',
+            },
+            {
+              id: 'residentes',
+              label: t('empDetail.residents'),
+              value: stats.total_residentes,
+              tone: 'success',
+              icon: 'M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M9 7a4 4 0 1 0 0-8 4 4 0 0 0 0 8z',
+              hint: 'Directorio de residentes',
+            },
+            {
+              id: 'accesos',
+              label: t('dashboard.accessesToday'),
+              value: stats.total_accesos_hoy,
+              tone: 'info',
+              icon: 'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z',
+              hint: 'Ingresos registrados hoy',
+            },
+            {
+              id: 'pendientes',
+              label: t('dashboard.pendingPayments'),
+              value: stats.total_pagos_pendientes,
+              tone: 'warning',
+              icon: 'M1 4h22v16H1zM1 10h22',
+              hint: 'Pagos por verificar',
+              highlight: stats.total_pagos_pendientes > 0,
+              actionLabel: stats.total_pagos_pendientes > 0 ? 'Verificar →' : undefined,
+            },
+          ]}
+        />
+      ) : null}
 
       {/* Tabla sucursales */}
       <div className="bg-gray-800 rounded-2xl shadow-xl overflow-hidden">
@@ -218,28 +238,31 @@ export default function EmpresaDetail({ empresaId, onBack }: Props) {
                     <td className="px-4 py-3 text-center">{suc.total_residentes}</td>
                     <td className="px-4 py-3 text-center">{suc.total_agentes}</td>
                     <td className="px-4 py-3 text-center">
-                      <span className={`inline-block text-xs font-semibold px-2 py-0.5 rounded-full ${
-                        suc.activo ? 'bg-green-900/50 text-green-400' : 'bg-gray-700 text-gray-400'
-                      }`}>
+                      <StatusText kind={suc.activo ? 'on' : 'off'}>
                         {suc.activo ? t('common.activeF') : t('common.inactiveF')}
-                      </span>
+                      </StatusText>
                     </td>
                     <td className="px-4 py-3">
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => openAdminModal(suc)}
-                          className="text-blue-400 hover:text-blue-300 text-xs font-medium transition-colors"
-                        >
-                          {t('empDetail.assignAdmin')}
-                        </button>
-                        <span className="text-gray-600">·</span>
-                        <button
-                          onClick={() => handleDeleteSucursal(suc)}
-                          className="text-red-400 hover:text-red-300 text-xs font-medium transition-colors"
-                        >
-                          {t('common.delete')}
-                        </button>
-                      </div>
+                      <RowActions
+                        align="start"
+                        menuLabel={`${t('common.actions')}: ${suc.nombre}`}
+                        actions={[
+                          {
+                            id: 'admin',
+                            label: t('empDetail.assignAdmin'),
+                            icon: ROW_ICON.user,
+                            tone: 'primary',
+                            onClick: () => openAdminModal(suc),
+                          },
+                          {
+                            id: 'eliminar',
+                            label: t('common.delete'),
+                            icon: ROW_ICON.trash,
+                            tone: 'danger',
+                            onClick: () => handleDeleteSucursal(suc),
+                          },
+                        ]}
+                      />
                     </td>
                   </tr>
                 ))
