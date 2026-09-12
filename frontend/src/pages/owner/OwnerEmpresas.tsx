@@ -5,6 +5,7 @@ import {
   type Empresa, type EmpresaInput, type Usuario,
 } from '../../services/api';
 import { TableSkeleton, Spinner } from '../../components/Skeleton';
+import { ROW_ICON, RowActions, StatusText } from '../../components/ui';
 import { useToast } from '../../components/Toast';
 import { useTranslation } from '../../i18n/useTranslation';
 
@@ -174,8 +175,33 @@ export default function OwnerEmpresas() {
 
   return (
     <div className="sg-page text-gray-100">
+      <div className="sg-panel-heading">
+        <div>
+          <p className="sg-eyebrow">SecureGate · Portafolio</p>
+          <h1 className="mt-1 text-2xl font-bold tracking-tight text-white sm:text-3xl">{t('empresas.title')}</h1>
+          <p className="mt-1 text-sm text-[var(--sg-text-muted)]">Empresas administradoras y contratistas que operan sobre la plataforma.</p>
+        </div>
+        <div className="flex items-center gap-3">
+          <span className="sg-status bg-emerald-500/10 text-emerald-400">{empresas.filter(e => e.activo).length} activas</span>
+        </div>
+      </div>
+
+      <section className="sg-hero" aria-label="Resumen del portafolio">
+        <div className="sg-hero-grid">
+          <div>
+            <p className="sg-hero-label">Red de clientes</p>
+            <h2 className="sg-hero-title">Administra crecimiento sin perder control.</h2>
+            <p className="sg-hero-copy">Crea organizaciones, asigna responsables y entra al detalle de cada comunidad desde un solo lugar.</p>
+          </div>
+          <div className="sg-hero-stat">
+            <p className="sg-hero-stat-label">Empresas registradas</p>
+            <p className="sg-hero-stat-value">{empresas.length}</p>
+          </div>
+        </div>
+      </section>
+
       <div className="flex items-center justify-between flex-wrap gap-3">
-        <h1 className="text-xl font-bold text-white">{t('empresas.title')}</h1>
+        <h2 className="sg-section-title">Cartera de empresas</h2>
         <div className="flex gap-3">
           <input
             type="text"
@@ -230,46 +256,43 @@ export default function OwnerEmpresas() {
                     <td className="px-4 py-3 text-gray-400">{emp.nit ?? '—'}</td>
                     <td className="px-4 py-3 text-center">{emp.total_sucursales}</td>
                     <td className="px-4 py-3 text-center">
-                      <span className={`inline-block text-xs font-semibold px-2 py-0.5 rounded-full ${
-                        emp.activo ? 'bg-green-900/50 text-green-400' : 'bg-gray-700 text-gray-400'
-                      }`}>
+                      <StatusText kind={emp.activo ? 'on' : 'off'}>
                         {emp.activo ? t('common.activeF') : t('common.inactiveF')}
-                      </span>
+                      </StatusText>
                     </td>
                     <td className="px-4 py-3">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <button
-                          onClick={() => openEdit(emp)}
-                          className="text-blue-400 hover:text-blue-300 text-xs font-medium transition-colors"
-                        >
-                          {t('common.edit')}
-                        </button>
-                        <span className="text-gray-600">·</span>
-                        <button
-                          onClick={() => openAssignAdmin(emp)}
-                          className="text-teal-400 hover:text-teal-300 text-xs font-medium transition-colors"
-                        >
-                          {t('owner.assignAdmin')}
-                        </button>
-                        <span className="text-gray-600">·</span>
-                        <button
-                          onClick={() => handleToggle(emp)}
-                          className={`text-xs font-medium transition-colors ${
-                            emp.activo
-                              ? 'text-amber-400 hover:text-amber-300'
-                              : 'text-green-400 hover:text-green-300'
-                          }`}
-                        >
-                          {emp.activo ? t('common.deactivate') : t('common.activate')}
-                        </button>
-                        <span className="text-gray-600">·</span>
-                        <button
-                          onClick={() => handleDelete(emp)}
-                          className="text-red-400 hover:text-red-300 text-xs font-medium transition-colors"
-                        >
-                          {t('common.delete')}
-                        </button>
-                      </div>
+                      <RowActions
+                        align="start"
+                        menuLabel={`${t('common.actions')}: ${emp.nombre}`}
+                        actions={[
+                          {
+                            id: 'editar',
+                            label: t('common.edit'),
+                            icon: ROW_ICON.edit,
+                            tone: 'primary',
+                            onClick: () => openEdit(emp),
+                          },
+                          {
+                            id: 'admin',
+                            label: t('owner.assignAdmin'),
+                            icon: ROW_ICON.user,
+                            onClick: () => openAssignAdmin(emp),
+                          },
+                          {
+                            id: 'toggle',
+                            label: emp.activo ? t('common.deactivate') : t('common.activate'),
+                            icon: emp.activo ? ROW_ICON.pause : ROW_ICON.play,
+                            onClick: () => handleToggle(emp),
+                          },
+                          {
+                            id: 'eliminar',
+                            label: t('common.delete'),
+                            icon: ROW_ICON.trash,
+                            tone: 'danger',
+                            onClick: () => handleDelete(emp),
+                          },
+                        ]}
+                      />
                     </td>
                   </tr>
                 ))
