@@ -21,10 +21,19 @@ const clientIp = (req: Request): string | null =>
     ?.split(',')[0]
     ?.trim() ?? req.ip ?? '').slice(0, 45) || null;
 
+/** Portales de entrada. Un rol pertenece a uno y sólo a uno. */
+const PORTALES = ['personal', 'residente'] as const;
+type Portal = (typeof PORTALES)[number];
+
+const portalDeRol = (rol: string): Portal => (rol === 'residente' ? 'residente' : 'personal');
+
 export const login = async (req: Request, res: Response) => {
-  const { email, password } = req.body;
+  const { email, password, portal } = req.body;
   if (!email || !password) {
     return res.status(400).json({ error: 'Campos requeridos: email, password' });
+  }
+  if (portal !== undefined && !PORTALES.includes(portal)) {
+    return res.status(400).json({ error: `portal debe ser uno de: ${PORTALES.join(', ')}` });
   }
 
   try {
@@ -45,6 +54,21 @@ export const login = async (req: Request, res: Response) => {
     }
 
     const u = result.rows[0];
+
+    /**
+     * Cada portal admite sólo a su público: las credenciales de un residente no
+     * abren el portal de personal ni al revés. La comprobación va DESPUÉS de
+     * validar la contraseña a propósito — así el mensaje "portal equivocado"
+     * sólo lo ve quien ya demostró ser el titular de la cuenta, y no sirve para
+     * averiguar desde fuera qué correos existen ni con qué rol.
+     */
+    if (portal && portalDeRol(u.rol) !== portal) {
+      return res.status(403).json({
+        error: 'Estas credenciales no pertenecen a este portal',
+        portalCorrecto: portalDeRol(u.rol),
+      });
+    }
+
     const empresa_id:  string | null = u.empresa_id  ?? u.empresa_id_via_sucursal ?? null;
     const sucursal_id: string | null = u.sucursal_id ?? null;
 
