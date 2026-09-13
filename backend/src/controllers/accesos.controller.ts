@@ -14,6 +14,12 @@ export const registrarAcceso = async (req: Request, res: Response) => {
     });
   }
 
+  // Lectura independiente de la transacción: no depende de ninguna fila
+  // resuelta más abajo (solo de numero_dpi/residente_id, ya en el body), así
+  // que se resuelve antes de pedir un cliente del pool en vez de mientras
+  // éste queda retenido sin usarse (hallazgo de carga: backend/loadtest/RESULTADOS.md).
+  const preautorizado = await checkPreautorizacion(numero_dpi, residente_id);
+
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -47,7 +53,17 @@ export const registrarAcceso = async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Agente no encontrado o inactivo' });
     }
 
-    const preautorizado = await checkPreautorizacion(numero_dpi, residente_id);
+    // Blacklist check — antes del upsert de visitante para no escribir (y
+    // luego revertir) esa fila cuando el registro se va a rechazar igual.
+    const ban = await checkBlacklist(numero_dpi, sucursal_id);
+    if (ban) {
+      await client.query('ROLLBACK');
+      return res.status(403).json({
+        error:     'Visitante en blacklist',
+        razon:     ban.razon,
+        fecha_fin: ban.fecha_fin ?? null,
+      });
+    }
 
     // Upsert visitante
     const visitanteExistente = await client.query(
@@ -67,17 +83,6 @@ export const registrarAcceso = async (req: Request, res: Response) => {
       );
       visitante_id = nuevoVisitante.rows[0].id;
       visitante = nuevoVisitante.rows[0];
-    }
-
-    // Blacklist check — deny before registering the access
-    const ban = await checkBlacklist(numero_dpi, sucursal_id);
-    if (ban) {
-      await client.query('ROLLBACK');
-      return res.status(403).json({
-        error:     'Visitante en blacklist',
-        razon:     ban.razon,
-        fecha_fin: ban.fecha_fin ?? null,
-      });
     }
 
     // Validate + consume invitación QR, if this entry comes from a scanned code.

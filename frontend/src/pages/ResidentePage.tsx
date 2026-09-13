@@ -21,39 +21,47 @@ import {
   type TicketTipo,
   type InvitacionQr,
 } from '../services/api';
-import { Spinner } from '../components/Skeleton';
+import { CardSkeleton, Skeleton, StatSkeleton, Spinner } from '../components/Skeleton';
 import { useToast } from '../components/Toast';
 import { useTranslation } from '../i18n/useTranslation';
 import TicketChat, { TIPO_LABEL, ESTADO_BADGE, ESTADO_LABEL } from '../components/TicketChat';
 import QrInviteModal from '../components/QrInviteModal';
+import PagoTarjetaModal from '../components/PagoTarjetaModal';
+import { Badge, Button, ErrorState, ESTADO_PAGO_TONE, ROW_ICON, RowActions } from '../components/ui';
+import { useIsHandheld } from '../hooks/useMediaQuery';
 
 const TICKET_TIPOS: TicketTipo[] = ['mantenimiento', 'queja', 'seguridad', 'otro'];
-
-const BADGE: Record<string, string> = {
-  al_dia:   'bg-green-100 text-green-700',
-  mora:     'bg-red-100 text-red-700',
-  pendiente:'bg-yellow-100 text-yellow-700',
-};
-
-const PAGO_ESTADO_CLASS: Record<string, string> = {
-  pendiente: 'bg-yellow-900/40 text-yellow-400 border-yellow-700/40',
-  aprobado:  'bg-green-900/40 text-green-400 border-green-700/40',
-  rechazado: 'bg-red-900/40 text-red-400 border-red-700/40',
-};
 
 const today = () => new Date().toISOString().slice(0, 10);
 
 const EMPTY_FORM = { nombre_visitante: '', numero_dpi: '', placa: '' };
 const EMPTY_TRF  = { monto: '', referencia: '', banco: '', fecha_transferencia: today() };
 
-export default function ResidentePage() {
+/** Pestañas del portal; la barra inferior de móvil navega directo a una de ellas. */
+export type PortalTab = 'pagos' | 'invitados' | 'qr' | 'solicitudes';
+
+interface ResidentePageProps {
+  /** Pestaña pedida desde el shell (barra inferior en móvil). */
+  requestedTab?: PortalTab;
+  /** Cambia en cada pulsación para reabrir la misma pestaña aunque ya esté activa. */
+  tabNonce?: number;
+}
+
+export default function ResidentePage({ requestedTab, tabNonce = 0 }: ResidentePageProps = {}) {
   const showToast = useToast();
   const { t } = useTranslation();
+  // En teléfono y tablet la barra inferior del shell ya ofrece estas mismas
+  // secciones, así que la barra de pestañas sobra: duplicaba la navegación y
+  // se comía una franja de una pantalla que va justa de alto.
+  const enMano = useIsHandheld();
 
   const BADGE_LABEL: Record<string, string> = {
     al_dia: t('residents.current'), mora: t('residents.inDebt'), pendiente: t('residents.pending'),
   };
-  const PAGO_METODO_LABEL: Record<string, string> = { efectivo: t('payments.cash'), transferencia: t('payments.transfer') };
+  const PAGO_METODO_LABEL: Record<string, string> = {
+    efectivo: t('payments.cash'), transferencia: t('payments.transfer'),
+    tarjeta: t('card.payWithCard'), reserva: t('payments.reservation'),
+  };
   const PAGO_ESTADO_LABEL: Record<string, string> = {
     pendiente: t('payments.pending'), aprobado: t('payments.approved'), rechazado: t('payments.rejected'),
   };
@@ -62,7 +70,7 @@ export default function ResidentePage() {
   const [loading, setLoading]   = useState(true);
   const [error, setError]       = useState<string | null>(null);
 
-  const [tab, setTab]           = useState<'pagos' | 'invitados' | 'qr' | 'solicitudes'>('pagos');
+  const [tab, setTab]           = useState<PortalTab>(requestedTab ?? 'pagos');
 
   // Solicitudes (tickets) tab state
   const [tickets, setTickets]           = useState<Ticket[]>([]);
@@ -86,6 +94,7 @@ export default function ResidentePage() {
   const [imgPreview, setImgPreview]       = useState<string | null>(null);
   const [enviando, setEnviando]           = useState(false);
   const [trfError, setTrfError]           = useState<string | null>(null);
+  const [showTarjeta, setShowTarjeta]     = useState(false);
 
   // Invitados tab state
   const [preauths, setPreauths] = useState<MiPreautorizacion[]>([]);
@@ -161,13 +170,20 @@ export default function ResidentePage() {
       .finally(() => setQrLoading(false));
   };
 
-  const handleTabChange = (tab2: 'pagos' | 'invitados' | 'qr' | 'solicitudes') => {
+  const handleTabChange = (tab2: PortalTab) => {
     setTab(tab2);
     if (tab2 === 'pagos') loadPagos();
     if (tab2 === 'invitados') loadInvitados();
     if (tab2 === 'qr') loadQrInvites();
     if (tab2 === 'solicitudes') loadTickets();
   };
+
+  // La barra inferior de móvil pide una pestaña concreta; `tabNonce` cambia en
+  // cada pulsación para que volver a "Pagos" recargue aunque ya estuviera activa.
+  useEffect(() => {
+    if (!requestedTab) return;
+    handleTabChange(requestedTab);
+  }, [requestedTab, tabNonce]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleRevokeQr = async (inv: InvitacionQr) => {
     if (!window.confirm(t('qr.confirmRevoke'))) return;
@@ -339,19 +355,27 @@ export default function ResidentePage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-24">
-        <p className="text-gray-400 text-sm">{t('common.loading')}</p>
+      <div className="sg-page-inner space-y-6 py-6">
+        <div className="space-y-2">
+          <Skeleton height="1.5rem" width="42%" />
+          <Skeleton height="0.875rem" width="64%" />
+        </div>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <StatSkeleton count={4} />
+        </div>
+        <CardSkeleton count={3} />
       </div>
     );
   }
 
   if (error && !data) {
     return (
-      <div className="flex items-center justify-center py-24">
-        <div className="bg-red-900/40 border border-red-700 rounded-xl p-8 text-center max-w-sm">
-          <p className="text-red-300 font-semibold">{error}</p>
-        </div>
-      </div>
+      <ErrorState
+        title={t('error.title')}
+        description={t('error.desc')}
+        detail={error}
+        action={<Button onClick={() => window.location.reload()}>{t('error.retry')}</Button>}
+      />
     );
   }
 
@@ -367,9 +391,9 @@ export default function ResidentePage() {
             <p className="text-gray-400 text-sm">{t('portal.house')}</p>
             <p className="text-3xl font-bold text-white mt-1">{data!.numero_casa}</p>
           </div>
-          <span className={`mt-1 px-3 py-1 rounded-full text-sm font-semibold ${BADGE[data!.estado_pago] ?? 'bg-gray-600 text-gray-200'}`}>
+          <Badge tone={ESTADO_PAGO_TONE[data!.estado_pago] ?? 'neutral'} dot className="mt-1 self-start">
             {BADGE_LABEL[data!.estado_pago] ?? data!.estado_pago}
-          </span>
+          </Badge>
         </div>
         <div className="mt-5 grid grid-cols-1 gap-4 border-t border-white/10 pt-5 sm:grid-cols-2">
           <div>
@@ -390,7 +414,8 @@ export default function ResidentePage() {
         </div>
       </div>
 
-      {/* Tab bar */}
+      {/* Barra de pestañas: sólo en escritorio (ver `enMano`). */}
+      {!enMano && (
       <div className="sg-tabbar" role="tablist" aria-label="Secciones del portal">
         {(['pagos', 'invitados', 'qr', 'solicitudes'] as const).map(tabKey => (
           <button
@@ -415,6 +440,7 @@ export default function ResidentePage() {
           </button>
         ))}
       </div>
+      )}
 
       {/* ── Tab: Pagos ── */}
       {tab === 'pagos' && (
@@ -463,7 +489,7 @@ export default function ResidentePage() {
             {!showTrf ? (
               <div className="space-y-3">
                 <button
-                  onClick={() => showToast(t('portal.cardComingSoon'), 'warning')}
+                  onClick={() => setShowTarjeta(true)}
                     className="sg-btn sg-btn-primary flex w-full items-center justify-center gap-2"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -577,12 +603,16 @@ export default function ResidentePage() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between gap-2">
                         <p className="text-white font-semibold text-sm">Q{parseFloat(p.monto).toFixed(2)}</p>
-                        <span className={`text-xs font-semibold px-2.5 py-0.5 rounded-full border ${PAGO_ESTADO_CLASS[p.estado] ?? 'bg-gray-600 text-gray-200 border-gray-500'}`}>
+                        <Badge tone={ESTADO_PAGO_TONE[p.estado] ?? 'neutral'} dot>
                           {PAGO_ESTADO_LABEL[p.estado] ?? p.estado}
-                        </span>
+                        </Badge>
                       </div>
-                      <p className="text-gray-400 text-xs mt-0.5">
-                        {new Date(p.fecha_pago).toLocaleDateString('es-GT')} | {PAGO_METODO_LABEL[p.metodo] ?? p.metodo}
+                      <p className="text-gray-400 text-xs mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-1">
+                        <span>
+                          {new Date(p.fecha_pago).toLocaleDateString('es-GT')} | {PAGO_METODO_LABEL[p.metodo] ?? p.metodo}
+                          {p.tarjeta_ultimos4 && ` ···· ${p.tarjeta_ultimos4}`}
+                        </span>
+                        {p.es_simulado && <Badge tone="warning">{t('card.simulated')}</Badge>}
                       </p>
                       {p.referencia && (
                         <p className="text-gray-500 text-xs mt-0.5 font-mono">{p.referencia}</p>
@@ -603,7 +633,7 @@ export default function ResidentePage() {
       {tab === 'invitados' && (
         <div className="space-y-8 lg:grid lg:grid-cols-2 lg:gap-8 lg:space-y-0">
           {invLoading ? (
-            <p className="text-gray-400 text-sm text-center py-10">{t('common.loading')}</p>
+            <CardSkeleton count={4} className="lg:col-span-2" />
           ) : (
             <>
               {/* Visitantes guardados */}
@@ -710,21 +740,30 @@ export default function ResidentePage() {
                           {p.numero_dpi && <p>{t('portal.dpi')}: {p.numero_dpi}</p>}
                           {p.placa      && <p>{t('portal.plate')}: {p.placa}</p>}
                         </div>
-                        <div className="mt-3 flex items-center gap-3">
-                          <button
-                            onClick={() => handlePreautHoy(p)}
-                            disabled={saving}
-                            className="text-xs bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-medium px-3 py-1 rounded-lg transition-colors"
-                          >
-                            Preautorizar hoy
-                          </button>
-                          <button
-                            onClick={() => handleDelete(p.id, p.nombre_visitante)}
-                            disabled={deletingId === p.id}
-                            className="text-xs text-red-400 hover:text-red-300 transition-colors disabled:opacity-50"
-                          >
-                            {deletingId === p.id ? t('portal.deleting') : t('common.delete')}
-                          </button>
+                        <div className="mt-3">
+                          <RowActions
+                            align="start"
+                            inline={2}
+                            menuLabel={`${t('common.actions')}: ${p.nombre_visitante}`}
+                            actions={[
+                              {
+                                id: 'hoy',
+                                label: 'Preautorizar hoy',
+                                icon: ROW_ICON.clock,
+                                tone: 'primary',
+                                disabled: saving,
+                                onClick: () => handlePreautHoy(p),
+                              },
+                              {
+                                id: 'eliminar',
+                                label: t('common.delete'),
+                                icon: ROW_ICON.trash,
+                                tone: 'danger',
+                                loading: deletingId === p.id,
+                                onClick: () => handleDelete(p.id, p.nombre_visitante),
+                              },
+                            ]}
+                          />
                         </div>
                       </div>
                     ))}
@@ -783,7 +822,7 @@ export default function ResidentePage() {
           </div>
 
           {qrLoading ? (
-            <p className="text-gray-400 text-sm">{t('common.loading')}</p>
+            <CardSkeleton count={3} />
           ) : qrInvites.length === 0 ? (
             <div className="sg-card px-4 py-10 text-center text-gray-500">
               {t('qr.noInvites')}
@@ -808,20 +847,22 @@ export default function ResidentePage() {
                         {inv.usos_maximos != null && ` · ${inv.usos_actuales}/${inv.usos_maximos} ${t('qr.usesLabel')}`}
                       </p>
                     </div>
-                    <div className="flex gap-3 text-sm flex-shrink-0">
-                      <button
-                        onClick={() => setViewingQr(inv)}
-                        className="text-blue-400 hover:text-blue-300 transition-colors"
-                      >
-                        {t('qr.viewQr')}
-                      </button>
-                      <button
-                        onClick={() => handleRevokeQr(inv)}
-                        disabled={revokingQrId === inv.id}
-                        className="text-red-400 hover:text-red-300 transition-colors disabled:opacity-50"
-                      >
-                        {t('qr.revoke')}
-                      </button>
+                    <div className="flex-shrink-0">
+                      <RowActions
+                        inline={2}
+                        menuLabel={`${t('common.actions')}: ${inv.nombre_visitante}`}
+                        actions={[
+                          { id: 'ver', label: t('qr.viewQr'), icon: ROW_ICON.view, tone: 'primary', onClick: () => setViewingQr(inv) },
+                          {
+                            id: 'revocar',
+                            label: t('qr.revoke'),
+                            icon: ROW_ICON.close,
+                            tone: 'danger',
+                            loading: revokingQrId === inv.id,
+                            onClick: () => handleRevokeQr(inv),
+                          },
+                        ]}
+                      />
                     </div>
                   </div>
                 );
@@ -973,6 +1014,23 @@ export default function ResidentePage() {
         </div>
       )}
       </div>
+
+      {/* Pasarela de tarjeta simulada; ver PagoTarjetaModal. */}
+      <PagoTarjetaModal
+        open={showTarjeta}
+        onClose={() => setShowTarjeta(false)}
+        saldo={saldo}
+        onResultado={(pago, aprobado) => {
+          // El intento se guarda aprobado o rechazado: en ambos casos entra al
+          // historial, así que se recarga la pestaña de pagos.
+          setMisPagos(prev => [pago, ...prev]);
+          if (aprobado) {
+            showToast(t('card.approved').replace('{monto}', parseFloat(pago.monto).toFixed(2)));
+            setData(prev => prev ? { ...prev, saldo_pendiente: '0.00', estado_pago: 'al_dia' } : prev);
+            getMiResumenMes().then(setResumenMes).catch(() => {});
+          }
+        }}
+      />
     </main>
   );
 }

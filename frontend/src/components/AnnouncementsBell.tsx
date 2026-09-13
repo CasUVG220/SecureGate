@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { getMisAnuncios, marcarAnuncioLeido, type MiAnuncio, type AnuncioPrioridad } from '../services/api';
+import { Skeleton } from './Skeleton';
 import { useTranslation } from '../i18n/useTranslation';
 
 const PRIORIDAD_BADGE: Record<AnuncioPrioridad, string> = {
@@ -102,7 +103,15 @@ export default function AnnouncementsBell() {
 
             <div className="max-h-[calc(100vh-7rem)] overflow-y-auto sm:max-h-[70vh]">
               {loading && anuncios.length === 0 ? (
-                <p className="text-gray-400 text-sm text-center py-8">{t('common.loading')}</p>
+                <div className="space-y-4 px-4 py-4" role="status" aria-label={t('common.loading')}>
+                  {Array.from({ length: 4 }).map((_, i) => (
+                    <div key={i} className="space-y-2 border-b border-white/10 pb-4 last:border-0">
+                      <Skeleton height="0.875rem" width="58%" />
+                      <Skeleton height="0.75rem" width="88%" />
+                      <Skeleton height="0.7rem" width="34%" />
+                    </div>
+                  ))}
+                </div>
               ) : anuncios.length === 0 ? (
                 <p className="text-gray-500 text-sm text-center py-8">{t('announcements.empty')}</p>
               ) : (

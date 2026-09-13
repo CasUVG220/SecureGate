@@ -52,13 +52,31 @@ app.use(cors({
 
 app.use(cookieParser());
 
-// General rate limit — 100 requests per 15 minutes per IP
+/**
+ * Límite general de peticiones.
+ *
+ * El tope anterior (100 por 15 minutos) estaba por debajo del uso normal: una
+ * sesión de administración que recorre el sidebar completo gasta ~75 peticiones
+ * en un par de minutos, y a partir de ahí el API devolvía 429 y las pantallas
+ * mostraban "No se pudo cargar…" de forma intermitente. Como el contador es por
+ * IP, varias personas de la misma administración (o detrás del mismo NAT)
+ * comparten el cupo y lo agotaban todavía más rápido.
+ *
+ * 1000 por 15 minutos sigue frenando el scraping automatizado sin castigar a un
+ * equipo trabajando. El límite estricto de credenciales sigue aparte, en
+ * /api/auth (ver loginLimiter en routes/index.ts).
+ */
 const generalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 100,
+  // Override sólo para pruebas de carga (RATE_LIMIT_GENERAL_MAX) — sin la env
+  // var, el límite de producción sigue siendo 1000.
+  max: parseInt(process.env.RATE_LIMIT_GENERAL_MAX || '1000', 10),
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Demasiadas solicitudes, intenta mas tarde' },
+  // El health check lo consulta Docker cada pocos segundos y no debe consumir
+  // el cupo de nadie.
+  skip: req => req.path === '/health',
 });
 app.use(generalLimiter);
 

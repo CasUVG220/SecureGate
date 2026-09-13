@@ -6,7 +6,7 @@ import {
   decodeTokenPayload,
   type Ticket, type TicketMensaje,
 } from '../services/api';
-import { Spinner } from './Skeleton';
+import { Skeleton, Spinner } from './Skeleton';
 import { useTranslation } from '../i18n/useTranslation';
 
 export const TIPO_LABEL: Record<string, string> = {
@@ -126,7 +126,18 @@ export default function TicketChat({ ticketId, viewerRole, onActivity }: Props) 
       {/* Mensajes */}
       <div className="flex-1 overflow-y-auto p-4 space-y-3 min-h-0">
         {loading ? (
-          <div className="flex items-center justify-center py-8"><Spinner size={22} /></div>
+          /* Burbujas alternadas: mantiene la silueta de la conversación al cargar. */
+          <div className="space-y-3" role="status" aria-label={t('common.loading')}>
+            {[0, 1, 2, 3].map(i => (
+              <div key={i} className={`flex ${i % 2 ? 'justify-end' : 'justify-start'}`}>
+                <Skeleton
+                  height="2.75rem"
+                  width={`${52 + (i % 3) * 12}%`}
+                  className="max-w-[80%] rounded-2xl"
+                />
+              </div>
+            ))}
+          </div>
         ) : mensajes.length === 0 ? (
           <p className="text-gray-500 text-sm text-center py-8">{t('tickets.noMessages')}</p>
         ) : (
