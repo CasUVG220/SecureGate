@@ -31,7 +31,9 @@ import { enviarRecordatoriosReservas } from '../jobs/recordatoriosReservas.job';
 
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 10,
+  // Override sólo para pruebas de carga (RATE_LIMIT_LOGIN_MAX) — sin la env
+  // var, el límite de producción sigue siendo 10.
+  max: parseInt(process.env.RATE_LIMIT_LOGIN_MAX || '10', 10),
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Demasiados intentos de login' },
@@ -42,7 +44,9 @@ const router = Router();
 router.use('/auth', loginLimiter, authRouter);
 router.use('/empresas',   verifyToken, empresasRouter);
 router.use('/sucursales', verifyToken, requireAdminEmpresa,    sucursalesRouter);
-router.use('/usuarios',   verifyToken, requireAdminSucursal,   usuariosRouter);
+// El guard de administración va ruta por ruta: /usuarios/me/preferencias lo
+// usa cualquier usuario para guardar su tema e idioma.
+router.use('/usuarios',   verifyToken, usuariosRouter);
 router.use('/residentes', residentesRouter);
 router.use('/accesos', accesosRouter);
 router.use('/cargos', cargosRouter);

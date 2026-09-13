@@ -7,6 +7,7 @@ import {
 } from '../services/api';
 import { Spinner } from '../components/Skeleton';
 import { useToast } from '../components/Toast';
+import { Button } from '../components/ui';
 import { useTranslation } from '../i18n/useTranslation';
 
 const RAZONES_RECHAZO = [
@@ -109,9 +110,9 @@ export default function VerificacionPage() {
         </div>
         <div className="sg-card p-10 text-center sm:p-12">
           <p className="text-gray-400 text-sm">{t('verification.noPending')}</p>
-          <button onClick={load} className="mt-4 text-blue-400 hover:text-blue-300 text-sm transition-colors">
+          <Button variant="secondary" size="sm" className="mt-4" onClick={load}>
             {t('common.refresh')}
-          </button>
+          </Button>
         </div>
       </div>
     );

@@ -536,6 +536,35 @@ DO $$ BEGIN
   END IF;
 END $$;
 
+-- Pasarela de tarjeta simulada (sprint 7). El intento se guarda en `pagos`
+-- junto a los demás métodos; `es_simulado` distingue lo que salió de la
+-- pasarela de prueba de un cobro real, para que al integrar Visanet se pueda
+-- separar (o purgar) el histórico de demostración sin tocar el resto.
+DO $$ BEGIN
+  ALTER TABLE pagos ADD COLUMN es_simulado BOOLEAN NOT NULL DEFAULT FALSE;
+EXCEPTION WHEN duplicate_column THEN NULL;
+END $$;
+
+-- Últimos 4 dígitos de la tarjeta: es lo único que se guarda del instrumento.
+DO $$ BEGIN
+  ALTER TABLE pagos ADD COLUMN tarjeta_ultimos4 VARCHAR(4);
+EXCEPTION WHEN duplicate_column THEN NULL;
+END $$;
+
+-- metodo += 'tarjeta'.
+DO $$ BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+     WHERE conrelid = 'pagos'::regclass
+       AND conname  = 'pagos_metodo_check'
+       AND pg_get_constraintdef(oid) LIKE '%tarjeta%'
+  ) THEN
+    ALTER TABLE pagos DROP CONSTRAINT IF EXISTS pagos_metodo_check;
+    ALTER TABLE pagos ADD  CONSTRAINT pagos_metodo_check
+      CHECK (metodo IN ('efectivo', 'transferencia', 'reserva', 'tarjeta'));
+  END IF;
+END $$;
+
 -- Notificaciones personales: NULL = anuncio general (comportamiento actual).
 DO $$ BEGIN
   ALTER TABLE anuncios ADD COLUMN residente_id UUID REFERENCES residentes(id) ON DELETE CASCADE;
