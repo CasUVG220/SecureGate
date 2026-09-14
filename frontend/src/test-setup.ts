@@ -19,3 +19,23 @@ Object.defineProperty(globalThis, 'localStorage', {
   configurable: true,
   value: createStorage(),
 });
+
+// jsdom no implementa matchMedia y varios componentes lo consultan para elegir
+// el layout (tabla vs. tarjetas) o el tema inicial. El stub responde "no
+// coincide", que equivale a un viewport de escritorio en tema claro.
+if (!window.matchMedia) {
+  Object.defineProperty(window, 'matchMedia', {
+    configurable: true,
+    writable: true,
+    value: (query: string): MediaQueryList => ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      addListener: () => {},
+      removeListener: () => {},
+      dispatchEvent: () => false,
+    }),
+  });
+}

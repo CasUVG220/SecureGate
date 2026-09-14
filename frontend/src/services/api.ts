@@ -210,14 +210,41 @@ export interface LoginResult {
   usuario: { id: string; nombre: string; email: string; rol: string; idioma?: string; tema?: string };
 }
 
-export const login = async (email: string, password: string): Promise<LoginResult> => {
+/** Error de acceso que además sabe a qué portal pertenece la cuenta. */
+export class PortalIncorrectoError extends Error {
+  // Campo declarado aparte: el proyecto compila con `erasableSyntaxOnly`, que
+  // no admite propiedades declaradas en los parámetros del constructor.
+  portalCorrecto: 'personal' | 'residente';
+
+  constructor(mensaje: string, portalCorrecto: 'personal' | 'residente') {
+    super(mensaje);
+    this.name = 'PortalIncorrectoError';
+    this.portalCorrecto = portalCorrecto;
+  }
+}
+
+/**
+ * Inicia sesión contra un portal concreto. El backend rechaza las credenciales
+ * que no pertenecen a ese portal: un residente no entra por el de personal ni
+ * al revés.
+ */
+export const login = async (
+  email: string,
+  password: string,
+  portal?: 'personal' | 'residente',
+): Promise<LoginResult> => {
   const res = await fetch(`${BASE_URL}/api/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email, password }),
+    body: JSON.stringify({ email, password, portal }),
   });
   const body = await res.json();
-  if (!res.ok) throw new Error(body.error || 'Credenciales incorrectas');
+  if (!res.ok) {
+    if (res.status === 403 && body.portalCorrecto) {
+      throw new PortalIncorrectoError(body.error, body.portalCorrecto);
+    }
+    throw new Error(body.error || 'Credenciales incorrectas');
+  }
   return body;
 };
 
@@ -264,8 +291,13 @@ export interface Pago {
   residente_id: string;
   monto: string;
   fecha_pago: string;
-  metodo: 'efectivo' | 'transferencia';
-  estado: 'pendiente' | 'aprobado' | 'rechazado';
+  metodo: 'efectivo' | 'transferencia' | 'reserva' | 'tarjeta';
+  estado: 'pendiente' | 'aprobado' | 'rechazado' | 'anulado';
+  concepto?: string | null;
+  /** Últimos 4 dígitos de la tarjeta; el número completo nunca llega al backend. */
+  tarjeta_ultimos4?: string | null;
+  /** El cobro salió de la pasarela de prueba, no de un procesador real. */
+  es_simulado?: boolean;
   comprobante: string | null;
   referencia: string | null;
   banco: string | null;
@@ -349,6 +381,31 @@ export const crearTransferencia = async (data: TransferenciaInput): Promise<Pago
   });
   const body = await res.json();
   if (!res.ok) throw new Error(body.error || 'Error al enviar comprobante');
+  return body as Pago;
+};
+
+export interface PagoTarjetaInput {
+  monto: number;
+  /** Últimos 4 dígitos; el PAN completo, el CVV y el vencimiento no salen del navegador. */
+  ultimos4: string;
+  titular?: string;
+}
+
+/**
+ * Cobro con tarjeta contra la pasarela simulada del backend.
+ *
+ * MOCK — el endpoint decide aprobado/rechazado con una regla determinística y
+ * se sustituirá por la integración real de Visanet en un sprint futuro. La
+ * firma de esta función no debería cambiar cuando eso ocurra.
+ */
+export const pagarConTarjeta = async (data: PagoTarjetaInput): Promise<Pago> => {
+  const res = await apiFetch(`${BASE_URL}/api/pagos/tarjeta`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify(data),
+  });
+  const body = await res.json();
+  if (!res.ok) throw new Error((body as { error?: string }).error || 'Error al procesar el pago');
   return body as Pago;
 };
 
@@ -968,15 +1025,24 @@ export const createUsuario = async (data: UsuarioInput): Promise<Usuario> => {
   return body as Usuario;
 };
 
-export const updatePreferencias = async (idioma: string, tema: string): Promise<void> => {
+export interface Preferencias {
+  idioma?: string;
+  tema?: string;
+}
+
+/**
+ * Guarda las preferencias propias. Se manda sólo lo que cambió: enviar las dos
+ * juntas hacía que quien cambiaba una pisara el valor de la otra.
+ */
+export const updatePreferencias = async (prefs: Preferencias): Promise<void> => {
   const res = await apiFetch(`${BASE_URL}/api/usuarios/me/preferencias`, {
     method: 'PUT',
     headers: authHeaders(),
-    body: JSON.stringify({ idioma, tema }),
+    body: JSON.stringify(prefs),
   });
   if (!res.ok) {
-    const body = await res.json();
-    throw new Error(body.error || 'Error al actualizar preferencias');
+    const body = await res.json().catch(() => ({}));
+    throw new Error((body as { error?: string }).error || 'Error al actualizar preferencias');
   }
 };
 
