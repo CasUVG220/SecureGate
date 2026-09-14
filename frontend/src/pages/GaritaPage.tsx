@@ -18,6 +18,7 @@ import {
   type AccesoPayload,
 } from '../services/api';
 import { useTranslation } from '../i18n/useTranslation';
+import { Button, ErrorState } from '../components/ui';
 
 const QR_PREFIX = 'SGQR:';
 
@@ -403,12 +404,7 @@ export default function GaritaPage() {
 
   if (sinSesion) {
     return (
-      <div className="min-h-screen bg-gray-900 flex items-center justify-center">
-        <div className="bg-red-50 border border-red-300 rounded-xl p-8 text-center max-w-sm">
-          <p className="text-red-700 font-semibold text-lg">{t('gate.noSession')}</p>
-          <p className="text-red-600 text-sm mt-2">{t('gate.noSessionDesc')}</p>
-        </div>
-      </div>
+      <ErrorState title={t('gate.noSession')} description={t('gate.noSessionDesc')} />
     );
   }
 
@@ -537,12 +533,9 @@ export default function GaritaPage() {
                       {qrInvitacion.etiqueta || qrInvitacion.nombre_visitante || t('gate.qrValid')}
                       {' · '}{qrInvitacion.residente_nombre}
                     </p>
-                    <button
-                      onClick={handleQrRescan}
-                      className="text-xs text-blue-400 hover:text-blue-300 shrink-0 transition-colors"
-                    >
+                    <Button variant="secondary" size="sm" className="shrink-0" onClick={handleQrRescan}>
                       {t('gate.qrRescan')}
-                    </button>
+                    </Button>
                   </div>
                 ) : qrError ? (
                   <p className="text-xs text-red-400">{qrError}</p>
