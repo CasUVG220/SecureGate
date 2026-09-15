@@ -1,0 +1,62 @@
+/* ══════════════════════════════════════════════════════════════════════════
+   SecureGate Garita — hoja base
+
+   El design system es el de la web y se importa tal cual: tokens de color por
+   tema (`:root` / `html.dark`), tipografía, `.sg-card`, `.sg-input`,
+   `.sg-status`, etc. viven en frontend/src/index.css y Tailwind los procesa
+   aquí con el mismo config (ver tailwind.config.ts). Nada de eso se duplica.
+
+   Abajo sólo va lo que la web no tiene: la fuente auto-hospedada (la garita
+   puede estar sin internet), el shell de app fija sin scroll de documento y
+   la vista previa de cámara.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* Outfit desde el paquete: la web la carga de Google Fonts, pero una garita
+   offline se quedaría con la fuente del sistema y se vería distinta. */
+@import '@fontsource/outfit/400.css';
+@import '@fontsource/outfit/500.css';
+@import '@fontsource/outfit/600.css';
+@import '@fontsource/outfit/700.css';
+@import '@fontsource/outfit/800.css';
+
+@import '../../frontend/src/index.css';
+
+@layer base {
+  /* App de escritorio: la ventana es el viewport, el scroll va dentro de
+     cada columna (ver GaritaPage), no en el documento. */
+  html, body, #root { height: 100%; }
+  body { min-height: 0; overflow: hidden; user-select: none; }
+  input, textarea { user-select: text; }
+}
+
+@layer components {
+  /* ── Vista previa de la webcam ──────────────────────────────────────── */
+  .sg-camera {
+    position: relative;
+    aspect-ratio: 4 / 3;
+    width: 100%;
+    overflow: hidden;
+    display: grid;
+    place-items: center;
+    border-radius: theme('borderRadius.lg');
+    background: rgb(15 23 42);
+    color: rgb(203 213 225);
+  }
+  .sg-camera video { display: block; width: 100%; height: 100%; object-fit: cover; }
+
+  /* Guía de encuadre: el recorte oscurece todo menos la ventana de la placa
+     o del DPI para que el agente centre el documento sin pensar. */
+  .sg-camera-guide { position: absolute; inset: 0; display: grid; place-items: center; pointer-events: none; }
+  .sg-camera-guide-box {
+    width: 62%;
+    aspect-ratio: 3 / 1;
+    border: 2px dashed rgb(255 255 255 / 0.7);
+    border-radius: theme('borderRadius.lg');
+    box-shadow: 0 0 0 999px rgb(15 23 42 / 0.35);
+    transition: width 200ms ease, aspect-ratio 200ms ease;
+  }
+  .sg-camera-guide-box.dpi { width: 70%; aspect-ratio: 1.58 / 1; }
+  /* El QR es cuadrado: la guía lo es también para que el agente sepa a qué
+     distancia poner el teléfono. */
+  .sg-camera-guide-box.qr { width: 48%; aspect-ratio: 1 / 1; }
+}

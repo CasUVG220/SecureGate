@@ -1,0 +1,5 @@
+/target/
+/gen/schemas
+# Generados por scripts/prepare-sidecar.mjs (runtime Node + node_modules + modelos)
+/binaries/
+/resources/sidecar-ocr/

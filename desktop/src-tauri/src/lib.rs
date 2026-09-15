@@ -1,0 +1,247 @@
+//! SecureGate Garita — proceso Rust de la app de escritorio.
+//!
+//! Módulos por dominio (ver cada uno para las decisiones de diseño):
+//! - `fingerprint`   huella de hardware
+//! - `secure_store`  almacén seguro del SO (Credential Manager / Keychain)
+//! - `license`       activación, heartbeat, gracia offline, kill switch
+//! - `auth`          sesión del agente (JWT + refresh)
+//! - `db`            SQLite cifrado (SQLCipher) con clave Argon2
+//! - `garita`        espejo local, evaluación de visitantes, cola de accesos
+//! - `sync`          pull del espejo, push de la cola con backoff, heartbeat
+//! - `ocr`           sidecar de OCR de placas (local, sin red)
+//! - `camera`        permisos de cámara del WebView (WebView2 / Info.plist)
+//! - `hardware`      apertura física de la talanquera (relé USB/Ethernet), por trait
+//!
+//! La captura de cámara no pasa por Rust: `getUserMedia` corre en el WebView
+//! y la imagen capturada llega a `ocr` ya codificada.
+
+mod api;
+mod auth;
+mod camera;
+mod config;
+mod db;
+mod error;
+mod fingerprint;
+mod garita;
+pub mod hardware;
+mod hardware_cmd;
+mod license;
+mod ocr;
+mod secure_store;
+mod sync;
+#[cfg(test)]
+mod integracion_tests;
+
+use chrono::{DateTime, Utc};
+use serde::Serialize;
+use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Mutex, RwLock};
+use tauri::{AppHandle, Manager, State};
+
+use error::AppResult;
+
+pub struct AppState {
+    pub dir_datos: PathBuf,
+    pub config: RwLock<config::Config>,
+    pub fingerprint: String,
+    pub api: api::Api,
+    pub licencia: RwLock<Option<license::LicenciaGuardada>>,
+    pub sesion: RwLock<Option<auth::Sesion>>,
+    pub db: Mutex<Option<rusqlite::Connection>>,
+    pub ocr: Mutex<ocr::Sidecar>,
+    pub push_lock: tokio::sync::Mutex<()>,
+    pub en_linea: AtomicBool,
+    pub ultimo_push_ok: RwLock<Option<DateTime<Utc>>>,
+    pub ultimo_error: RwLock<Option<String>>,
+    /// Driver de talanquera activo. Se reconstruye al abrir la BD (lee
+    /// `config_hardware`) y al guardar una configuración nueva. Sin
+    /// configuración es `SinDriver`: la apertura física es opcional.
+    pub hardware: RwLock<std::sync::Arc<dyn hardware::TalanqueraDriver>>,
+}
+
+impl AppState {
+    pub fn api_url(&self) -> String {
+        self.config.read().unwrap().api_url.clone()
+    }
+    pub fn api_http(&self) -> reqwest::Client {
+        // El Api guarda su Client; para las dos llamadas que necesitan leer
+        // headers (login/refresh) se reutiliza el mismo cliente.
+        self.api.http_client()
+    }
+    pub fn marcar_conexion(&self, ok: bool) {
+        self.en_linea.store(ok, Ordering::Relaxed);
+        if ok {
+            *self.ultimo_error.write().unwrap() = None;
+        }
+    }
+}
+
+/// Foto de todo lo que la UI necesita para decidir qué pantalla mostrar.
+#[derive(Serialize)]
+pub struct EstadoApp {
+    pub licencia: license::LicenciaDto,
+    pub sesion: auth::SesionDto,
+    pub sync: sync::EstadoSync,
+    pub ocr: ocr::EstadoOcr,
+    pub hardware: hardware::EstadoHardware,
+    pub api_url: String,
+    pub version: &'static str,
+}
+
+#[tauri::command]
+fn app_estado(state: State<'_, AppState>) -> EstadoApp {
+    EstadoApp {
+        licencia: license::dto(&state),
+        sesion: auth::dto(&state),
+        sync: sync::estado(&state),
+        ocr: ocr::ocr_estado(state.clone()),
+        hardware: hardware_cmd::estado(&state),
+        api_url: state.api_url(),
+        version: env!("CARGO_PKG_VERSION"),
+    }
+}
+
+#[tauri::command]
+fn app_configurar_api_url(state: State<'_, AppState>, api_url: String) -> AppResult<String> {
+    let url = config::Config::normalizar_url(&api_url)?;
+    // Con una licencia guardada, Rust ya manda su token (y el JWT del agente) a
+    // la URL vigente. Permitir cambiarla desde el WebView dejaría que cualquier
+    // JS inyectado redirigiera esas credenciales a un servidor ajeno. Para
+    // cambiar de servidor hay que desvincular el equipo primero (lo que borra la
+    // licencia, la sesión y la BD local).
+    if url != state.api_url() && state.licencia.read().unwrap().is_some() {
+        return Err(error::AppError::new(
+            "config",
+            "Este equipo ya tiene una licencia activada: desvincúlalo antes de cambiar el servidor",
+        ));
+    }
+    let cfg = config::Config { api_url: url.clone() };
+    cfg.guardar(&state.dir_datos)?;
+    *state.config.write().unwrap() = cfg;
+    Ok(url)
+}
+
+fn construir_estado(app: &AppHandle) -> AppState {
+    let dir_datos = app.path().app_data_dir().expect("app_data_dir");
+    if let Err(e) = secure_store::inicializar() {
+        log::error!("almacén seguro: {}", e.mensaje);
+    }
+    construir_estado_en(dir_datos)
+}
+
+/// Arma el estado a partir de un directorio de datos (el almacén seguro ya
+/// debe estar inicializado). Separado de Tauri para poder testearlo.
+pub fn construir_estado_en(dir_datos: PathBuf) -> AppState {
+    std::fs::create_dir_all(&dir_datos).ok();
+    let config = config::Config::cargar(&dir_datos);
+    let fingerprint = fingerprint::obtener().unwrap_or_else(|e| {
+        log::error!("fingerprint: {e}");
+        String::new()
+    });
+    let licencia = secure_store::leer_json(secure_store::CLAVE_LICENCIA).unwrap_or_else(|e| {
+        log::error!("no se pudo leer la licencia guardada: {}", e.mensaje);
+        None
+    });
+    let sesion = secure_store::leer_json(secure_store::CLAVE_SESION).unwrap_or_else(|e| {
+        log::error!("no se pudo leer la sesión guardada: {}", e.mensaje);
+        None
+    });
+
+    AppState {
+        dir_datos,
+        config: RwLock::new(config),
+        fingerprint,
+        api: api::Api::new(),
+        licencia: RwLock::new(licencia),
+        sesion: RwLock::new(sesion),
+        db: Mutex::new(None),
+        ocr: Mutex::new(ocr::Sidecar::default()),
+        push_lock: tokio::sync::Mutex::new(()),
+        en_linea: AtomicBool::new(false),
+        ultimo_push_ok: RwLock::new(None),
+        ultimo_error: RwLock::new(None),
+        hardware: RwLock::new(std::sync::Arc::new(hardware::SinDriver)),
+    }
+}
+
+#[cfg_attr(mobile, tauri::mobile_entry_point)]
+pub fn run() {
+    tauri::Builder::default()
+        .plugin(tauri_plugin_shell::init())
+        .plugin(
+            tauri_plugin_log::Builder::new()
+                .level(if cfg!(debug_assertions) { log::LevelFilter::Debug } else { log::LevelFilter::Info })
+                .level_for("hyper_util", log::LevelFilter::Warn)
+                .level_for("reqwest", log::LevelFilter::Warn)
+                .build(),
+        )
+        .setup(|app| {
+            let handle = app.handle().clone();
+            let state = construir_estado(&handle);
+            log::info!(
+                "SecureGate Garita {} — datos en {} — API {}",
+                env!("CARGO_PKG_VERSION"),
+                state.dir_datos.display(),
+                state.api_url()
+            );
+
+            // Con licencia guardada, abrir la BD cifrada de inmediato: la
+            // garita debe poder trabajar offline desde el primer segundo.
+            let token = state.licencia.read().unwrap().as_ref().map(|l| l.token.clone());
+            app.manage(state);
+            if let Some(token) = token {
+                let st = app.state::<AppState>();
+                if let Err(e) = garita::preparar_db(&st, None, &token) {
+                    log::error!("no se pudo abrir la BD local: {}", e.mensaje);
+                }
+            }
+
+            camera::configurar(&handle);
+            sync::iniciar_tareas(handle.clone());
+            // Precalentar el OCR en segundo plano para que la primera captura
+            // no espere la carga de modelos. Si falla, la UI cae a manual.
+            tauri::async_runtime::spawn(async move {
+                if let Err(e) = ocr::asegurar_arrancado(&handle).await {
+                    log::warn!("OCR no disponible: {}", e.mensaje);
+                }
+            });
+            Ok(())
+        })
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::Destroyed = event {
+                ocr::detener(&window.state::<AppState>());
+            }
+        })
+        .invoke_handler(tauri::generate_handler![
+            app_estado,
+            app_configurar_api_url,
+            license::licencia_estado,
+            license::licencia_activar,
+            license::licencia_heartbeat,
+            license::licencia_desvincular,
+            auth::sesion_estado,
+            auth::sesion_login,
+            auth::sesion_logout,
+            garita::garita_buscar_residentes,
+            garita::garita_evaluar_visitante,
+            garita::garita_registrar_acceso,
+            garita::garita_verificar_qr,
+            garita::garita_buscar_salida,
+            garita::garita_registrar_salida,
+            hardware_cmd::hardware_estado,
+            hardware_cmd::hardware_puertos,
+            hardware_cmd::hardware_config_set,
+            hardware_cmd::hardware_probar,
+            hardware_cmd::hardware_abrir,
+            garita::garita_accesos_recientes,
+            sync::sync_estado,
+            sync::sync_ahora,
+            ocr::ocr_placa,
+            ocr::ocr_precalentar,
+            ocr::ocr_estado,
+            ocr::ocr_dpi_remoto,
+        ])
+        .run(tauri::generate_context!())
+        .expect("error while running tauri application");
+}

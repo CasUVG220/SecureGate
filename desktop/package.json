@@ -1,0 +1,42 @@
+{
+  "name": "securegate-garita",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "SecureGate Garita — app de escritorio (Tauri) para el rol de agente.",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "tauri": "tauri",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "sidecar:prepare": "node scripts/prepare-sidecar.mjs",
+    "sidecar:prepare:windows": "node scripts/prepare-sidecar.mjs --target windows",
+    "sidecar:bench": "npm --prefix sidecar-ocr run bench",
+    "ui:sync": "node scripts/sync-ui.mjs",
+    "ui:check": "node scripts/sync-ui.mjs --check"
+  },
+  "dependencies": {
+    "@fontsource/outfit": "^5.3.0",
+    "@tauri-apps/api": "^2",
+    "jsqr": "^1.4.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2",
+    "@testing-library/jest-dom": "^7.0.0",
+    "@testing-library/react": "^16.3.2",
+    "@types/react": "^19.1.8",
+    "@types/react-dom": "^19.1.6",
+    "@vitejs/plugin-react": "^6.0.2",
+    "autoprefixer": "^10.6.1",
+    "jsdom": "^29.1.1",
+    "postcss": "^8.5.28",
+    "tailwindcss": "^3.4.19",
+    "typescript": "~5.9.3",
+    "vite": "^8.0.16",
+    "vitest": "^4.1.10"
+  }
+}

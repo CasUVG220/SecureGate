@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  macOS únicamente (desarrollo del equipo; producción es Windows).
+
+  Tauri lo fusiona con el Info.plist que genera: en `tauri dev` lo embebe en el
+  binario (sección __TEXT,__info_plist, ver tauri-codegen) y en `tauri build`
+  lo copia dentro del .app. Sin NSCameraUsageDescription, macOS niega el
+  acceso a la cámara sin preguntar y getUserMedia falla con NotAllowedError.
+-->
+<plist version="1.0">
+<dict>
+  <key>NSCameraUsageDescription</key>
+  <string>SecureGate necesita acceso a la cámara para escanear DPI y placas de visitantes en la garita.</string>
+</dict>
+</plist>
