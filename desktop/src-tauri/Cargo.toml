@@ -1,0 +1,72 @@
+[package]
+name = "securegate-garita"
+version = "0.1.0"
+description = "SecureGate Garita — app de escritorio para el control de accesos"
+authors = ["SecureGate"]
+edition = "2021"
+rust-version = "1.88"
+
+[lib]
+name = "securegate_garita_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-shell = "2"
+tauri-plugin-log = "2"
+log = "0.4"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+
+# HTTP hacia el backend. rustls en vez de OpenSSL del sistema: en Windows no
+# hay OpenSSL instalado y así el binario no depende de nada externo.
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+tokio = { version = "1", features = ["sync", "time", "macros"] }
+
+# SQLite cifrado en reposo. `bundled-sqlcipher-vendored-openssl` compila
+# SQLCipher + OpenSSL dentro del binario (sin DLLs aparte). Requiere Perl (y
+# NASM en Windows) en la máquina de build — ver desktop/README.md.
+rusqlite = { version = "0.40", features = ["bundled-sqlcipher-vendored-openssl"] }
+
+# Derivación de la clave de cifrado (fingerprint + token de licencia → 32 bytes).
+argon2 = "0.6"
+sha2 = "0.10"
+hex = "0.4"
+
+# Fingerprint de hardware: id de máquina del SO + CPU.
+machine-uid = "0.6"
+sysinfo = { version = "0.39", default-features = false, features = ["system"] }
+
+# Almacén seguro nativo (Windows Credential Manager / macOS Keychain).
+keyring-core = "1"
+
+uuid = { version = "1", features = ["v4"] }
+chrono = { version = "0.4", features = ["serde", "clock"] }
+base64 = "0.22"
+serialport = { version = "4", default-features = false }
+ureq = { version = "3", default-features = false }
+
+[target.'cfg(windows)'.dependencies]
+windows-native-keyring-store = "1"
+# Permiso de cámara en WebView2 (src/camera.rs). Mismas versiones que
+# tauri-runtime-wry 2.x para compartir los tipos COM.
+webview2-com = "0.38"
+windows = { version = "0.61", features = ["Win32_Foundation"] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+apple-native-keyring-store = { version = "1", features = ["keychain"] }
+
+[dev-dependencies]
+tempfile = "3"
+
+# Read the optimization guideline for more details: https://tauri.app/concept/size/#cargo-configuration
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = 3
+panic = "abort"
+strip = true
