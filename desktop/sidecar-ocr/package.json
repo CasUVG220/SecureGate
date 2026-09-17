@@ -1,0 +1,17 @@
+{
+  "name": "securegate-ocr-sidecar",
+  "private": true,
+  "version": "0.1.0",
+  "description": "OCR local de placas para la app de garita (ppu-paddle-ocr sobre ONNX Runtime nativo). Corre como proceso hijo de la app Tauri.",
+  "type": "commonjs",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "bench": "node src/bench.js",
+    "test": "node --test src/"
+  },
+  "dependencies": {
+    "onnxruntime-node": "^1.20.0",
+    "ppu-paddle-ocr": "^6.6.0"
+  }
+}

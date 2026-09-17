@@ -1,0 +1,149 @@
+/**
+ * Sidecar de OCR local para la app de garita.
+ *
+ * Proceso hijo de la app Tauri (ver desktop/src-tauri/src/ocr.rs). Habla JSON
+ * por líneas: una petición por línea en stdin, una respuesta por línea en
+ * stdout. Los logs van a stderr para no ensuciar el canal.
+ *
+ * Es 100 % local: los modelos se cargan de disco (--models <dir>) y nunca se
+ * hace una petición de red. La imagen llega en base64, se decodifica en
+ * memoria y se descarta al responder — nunca se escribe a disco.
+ *
+ *   → {"id":"1","op":"recognize","image":"<base64>"}
+ *   ← {"id":"1","ok":true,"texto":"P123ABC","items":[...],"confianza":0.93,
+ *      "ms_inferencia":118,"ms_total":131}
+ *
+ * Al arrancar emite {"evento":"listo","ms_carga":N} cuando los modelos ya
+ * están en memoria; Rust espera ese evento antes de aceptar capturas.
+ */
+'use strict';
+
+const readline = require('node:readline');
+const path = require('node:path');
+const fs = require('node:fs');
+const { performance } = require('node:perf_hooks');
+
+const { PaddleOcrService } = require('ppu-paddle-ocr');
+
+const args = process.argv.slice(2);
+const argValue = (flag) => {
+  const i = args.indexOf(flag);
+  return i >= 0 ? args[i + 1] : undefined;
+};
+
+const modelsDir = argValue('--models') || path.join(__dirname, '..', 'models');
+const MODEL_FILES = {
+  detection: 'PP-OCRv5_mobile_det_infer.ort',
+  recognition: 'en_PP-OCRv5_mobile_rec_infer.ort',
+  charactersDictionary: 'ppocrv5_en_dict.txt',
+};
+
+const log = (...a) => process.stderr.write(`[ocr-sidecar] ${a.join(' ')}\n`);
+const emit = (obj) => process.stdout.write(JSON.stringify(obj) + '\n');
+
+function resolveModels(dir) {
+  const out = {};
+  for (const [k, f] of Object.entries(MODEL_FILES)) {
+    const p = path.join(dir, f);
+    if (!fs.existsSync(p)) {
+      throw new Error(`Modelo no encontrado: ${p} (ejecuta sidecar-ocr/scripts/fetch-models.mjs)`);
+    }
+    out[k] = p;
+  }
+  return out;
+}
+
+/**
+ * Configuración para placas: una sola línea corta, letras latinas y dígitos.
+ * - modelo v5 "en" mobile: diccionario sólo latino → menos confusiones con
+ *   otros alfabetos que el v6 multilingüe.
+ * - minimumConfidence 0.3: preferimos devolver un candidato dudoso (la UI
+ *   lo marca y pide confirmación) a devolver vacío.
+ */
+function createService(models) {
+  return new PaddleOcrService({
+    model: models,
+    recognition: { minimumConfidence: 0.3, spaceRecovery: false },
+    debugging: { debug: false, verbose: false },
+  });
+}
+
+async function recognize(service, imageBase64) {
+  const t0 = performance.now();
+  const bytes = Buffer.from(imageBase64, 'base64');
+  const ab = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+  const t1 = performance.now();
+  // noCache: cada captura es una foto nueva; cachear por bytes no aporta y
+  // retendría imágenes en memoria más tiempo del necesario.
+  const result = await service.recognize(ab, { flatten: true, noCache: true });
+  const t2 = performance.now();
+
+  const items = (result.results || []).map((r) => ({
+    texto: r.text,
+    confianza: Number(r.confidence.toFixed(4)),
+    box: r.box ? { x: r.box.x, y: r.box.y, w: r.box.width, h: r.box.height } : undefined,
+  }));
+
+  return {
+    texto: result.text || '',
+    items,
+    confianza: Number((result.confidence || 0).toFixed(4)),
+    ms_inferencia: Math.round(t2 - t1),
+    ms_total: Math.round(t2 - t0),
+  };
+}
+
+async function main() {
+  const tCarga = performance.now();
+  let service;
+  try {
+    service = createService(resolveModels(modelsDir));
+    await service.initialize();
+  } catch (err) {
+    emit({ evento: 'error_carga', error: String(err && err.message || err) });
+    log('no se pudieron cargar los modelos:', err);
+    process.exit(1);
+  }
+  emit({ evento: 'listo', ms_carga: Math.round(performance.now() - tCarga), modelos: modelsDir });
+
+  const rl = readline.createInterface({ input: process.stdin, crlfDelay: Infinity });
+  // Las peticiones se atienden en serie: una garita hace una captura a la
+  // vez y así el pico de memoria es el de UNA inferencia.
+  let cola = Promise.resolve();
+
+  rl.on('line', (line) => {
+    if (!line.trim()) return;
+    let req;
+    try {
+      req = JSON.parse(line);
+    } catch {
+      emit({ ok: false, error: 'JSON inválido' });
+      return;
+    }
+    cola = cola.then(async () => {
+      if (req.op === 'ping') return emit({ id: req.id, ok: true, pong: true });
+      if (req.op === 'shutdown') { await service.destroy(); process.exit(0); }
+      if (req.op !== 'recognize' || typeof req.image !== 'string') {
+        return emit({ id: req.id, ok: false, error: 'petición inválida' });
+      }
+      try {
+        const r = await recognize(service, req.image);
+        emit({ id: req.id, ok: true, ...r });
+      } catch (err) {
+        emit({ id: req.id, ok: false, error: String(err && err.message || err) });
+      }
+    });
+  });
+
+  rl.on('close', async () => {
+    await cola;
+    await service.destroy().catch(() => {});
+    process.exit(0);
+  });
+}
+
+if (require.main === module) {
+  main().catch((err) => { log('fatal', err); process.exit(1); });
+}
+
+module.exports = { createService, recognize, resolveModels, MODEL_FILES };
