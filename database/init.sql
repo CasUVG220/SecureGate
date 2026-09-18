@@ -290,59 +290,6 @@ CREATE TABLE IF NOT EXISTS ticket_mensajes (
 
 CREATE INDEX IF NOT EXISTS idx_ticket_mensajes_ticket ON ticket_mensajes(ticket_id);
 
--- ── Seeds ─────────────────────────────────────────────────────────────────
-
-DO $$
-DECLARE
-  v_empresa_id    UUID;
-  v_sucursal_id   UUID;
-  v_residente_uid UUID;
-BEGIN
-  -- Empresa demo
-  SELECT id INTO v_empresa_id FROM empresas WHERE nombre = 'Residencial Demo S.A.' LIMIT 1;
-  IF v_empresa_id IS NULL THEN
-    INSERT INTO empresas (nombre) VALUES ('Residencial Demo S.A.') RETURNING id INTO v_empresa_id;
-  END IF;
-
-  -- Sucursal principal
-  SELECT id INTO v_sucursal_id FROM sucursales WHERE empresa_id = v_empresa_id AND nombre = 'Sucursal Principal' LIMIT 1;
-  IF v_sucursal_id IS NULL THEN
-    INSERT INTO sucursales (empresa_id, nombre) VALUES (v_empresa_id, 'Sucursal Principal') RETURNING id INTO v_sucursal_id;
-  END IF;
-
-  -- Owner global (sin sucursal)
-  INSERT INTO usuarios (nombre, email, password_hash, rol)
-    VALUES ('Admin SecureGate', 'admin@securegate.com', crypt('admin123', gen_salt('bf', 10)), 'owner')
-    ON CONFLICT (email) DO NOTHING;
-
-  -- Admin empresa (vinculado a empresa, sin sucursal)
-  INSERT INTO usuarios (nombre, email, password_hash, rol, empresa_id)
-    VALUES ('Admin Empresa', 'empresa@securegate.com', crypt('empresa123', gen_salt('bf', 10)), 'admin_empresa', v_empresa_id)
-    ON CONFLICT (email) DO NOTHING;
-
-  -- Admin sucursal (con sucursal)
-  INSERT INTO usuarios (nombre, email, password_hash, rol, sucursal_id)
-    VALUES ('Admin Sucursal', 'sucursal@securegate.com', crypt('sucursal123', gen_salt('bf', 10)), 'admin_sucursal', v_sucursal_id)
-    ON CONFLICT (email) DO NOTHING;
-
-  -- Agente (con sucursal)
-  INSERT INTO usuarios (nombre, email, password_hash, rol, sucursal_id)
-    VALUES ('Agente Garita 1', 'agente1@securegate.com', crypt('agente123', gen_salt('bf', 10)), 'agente', v_sucursal_id)
-    ON CONFLICT (email) DO NOTHING;
-
-  -- Residente (con sucursal)
-  INSERT INTO usuarios (nombre, email, password_hash, rol, sucursal_id)
-    VALUES ('Residente Demo', 'r1@securegate.com', crypt('res123', gen_salt('bf', 10)), 'residente', v_sucursal_id)
-    ON CONFLICT (email) DO NOTHING;
-
-  -- Perfil residente
-  SELECT id INTO v_residente_uid FROM usuarios WHERE email = 'r1@securegate.com';
-  INSERT INTO residentes (usuario_id, sucursal_id, numero_casa, estado_pago)
-    VALUES (v_residente_uid, v_sucursal_id, 'A-01', 'al_dia')
-    ON CONFLICT (usuario_id) DO NOTHING;
-
-END;
-$$;
 
 -- ── Cargos programados ────────────────────────────────────────────────────
 
@@ -576,5 +523,136 @@ ALTER TABLE anuncios ALTER COLUMN creado_por DROP NOT NULL;
 
 CREATE INDEX IF NOT EXISTS idx_anuncios_residente
   ON anuncios(residente_id) WHERE residente_id IS NOT NULL;
+
+-- ── Sprint 8: app de escritorio (garita) ───────────────────────────────────
+
+-- Licencia por dispositivo. El código nace sin fingerprint (emitido, aún no
+-- activado); la activación lo vincula a una máquina y ya no puede reusarse en
+-- otra. `estado` sólo distingue activa/revocada: un código sin activar es una
+-- licencia activa que todavía no tiene dispositivo.
+CREATE TABLE IF NOT EXISTS licencias_dispositivo (
+  id                 UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  sucursal_id        UUID NOT NULL REFERENCES sucursales(id) ON DELETE RESTRICT,
+  codigo_activacion  VARCHAR(40) NOT NULL UNIQUE,
+  fingerprint        VARCHAR(128),
+  etiqueta           VARCHAR(100),
+  estado             VARCHAR(20) NOT NULL DEFAULT 'activa' CHECK (estado IN ('activa', 'revocada')),
+  activado_en        TIMESTAMP,
+  ultimo_heartbeat   TIMESTAMP,
+  revocado_en        TIMESTAMP,
+  creado_por         UUID REFERENCES usuarios(id) ON DELETE SET NULL,
+  created_at         TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_licencias_sucursal ON licencias_dispositivo(sucursal_id);
+
+-- Registros que llegan desde la garita offline. `registrado_en` es el reloj
+-- del dispositivo (lo manda el cliente, no es fuente de verdad);
+-- `recibido_en` lo sella el servidor al recibirlo. Nunca se fusionan.
+-- `id_cliente` es el UUID que genera la app antes de encolar: la cola
+-- reintenta con backoff y este campo hace idempotente cada reintento.
+DO $$ BEGIN
+  ALTER TABLE registros_acceso ADD COLUMN registrado_en TIMESTAMP;
+EXCEPTION WHEN duplicate_column THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  ALTER TABLE registros_acceso ADD COLUMN recibido_en TIMESTAMP NOT NULL DEFAULT NOW();
+EXCEPTION WHEN duplicate_column THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  ALTER TABLE registros_acceso ADD COLUMN capturado_manualmente BOOLEAN NOT NULL DEFAULT FALSE;
+EXCEPTION WHEN duplicate_column THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  ALTER TABLE registros_acceso ADD COLUMN origen VARCHAR(20) NOT NULL DEFAULT 'web'
+    CHECK (origen IN ('web', 'desktop'));
+EXCEPTION WHEN duplicate_column THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  ALTER TABLE registros_acceso ADD COLUMN id_cliente UUID;
+EXCEPTION WHEN duplicate_column THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  ALTER TABLE registros_acceso ADD COLUMN licencia_id UUID REFERENCES licencias_dispositivo(id) ON DELETE SET NULL;
+EXCEPTION WHEN duplicate_column THEN NULL;
+END $$;
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_registros_acceso_id_cliente
+  ON registros_acceso(id_cliente) WHERE id_cliente IS NOT NULL;
+
+-- ── Sprint 9: aprovisionamiento en cascada por invitación ─────────────────
+--
+-- Invitación por email con enlace de un solo uso para los roles
+-- administrativos: owner → admin_empresa → admin_sucursal. Cada nivel sólo
+-- invita al inmediato inferior dentro de su alcance. No tiene NINGUNA
+-- relación con `licencias_dispositivo` (app de garita, ligada a hardware):
+-- son dos sistemas de aprovisionamiento separados a propósito.
+--
+-- `token_hash`: se guarda el SHA-256 del token (como en refresh_tokens), nunca
+-- el token en claro; el enlace sólo existe en el email. `empresa_nombre`: una
+-- invitación de admin_empresa puede CREAR la empresa al aceptarse (empresa_id
+-- NULL + empresa_nombre) o sumar un admin a una existente (empresa_id).
+CREATE TABLE IF NOT EXISTS invitaciones (
+  id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  email           VARCHAR(150) NOT NULL,
+  rol_invitado    VARCHAR(20) NOT NULL CHECK (rol_invitado IN ('admin_empresa', 'admin_sucursal')),
+  empresa_id      UUID REFERENCES empresas(id) ON DELETE CASCADE,
+  empresa_nombre  VARCHAR(150),
+  sucursal_id     UUID REFERENCES sucursales(id) ON DELETE CASCADE,
+  token_hash      VARCHAR(64) NOT NULL UNIQUE,
+  invitado_por    UUID NOT NULL REFERENCES usuarios(id) ON DELETE RESTRICT,
+  estado          VARCHAR(20) NOT NULL DEFAULT 'pendiente'
+                    CHECK (estado IN ('pendiente', 'aceptada', 'expirada', 'revocada')),
+  expira_en       TIMESTAMP NOT NULL,
+  created_at      TIMESTAMP NOT NULL DEFAULT NOW(),
+  aceptada_en     TIMESTAMP,
+  revocada_en     TIMESTAMP,
+  usuario_id      UUID REFERENCES usuarios(id) ON DELETE SET NULL,
+  CONSTRAINT invitaciones_alcance_chk CHECK (
+    (rol_invitado = 'admin_sucursal' AND empresa_id IS NOT NULL AND sucursal_id IS NOT NULL)
+    OR
+    (rol_invitado = 'admin_empresa' AND sucursal_id IS NULL AND (empresa_id IS NOT NULL OR empresa_nombre IS NOT NULL))
+  )
+);
+
+CREATE INDEX IF NOT EXISTS idx_invitaciones_estado_expira ON invitaciones(estado, expira_en);
+CREATE INDEX IF NOT EXISTS idx_invitaciones_empresa       ON invitaciones(empresa_id);
+CREATE INDEX IF NOT EXISTS idx_invitaciones_invitado_por  ON invitaciones(invitado_por);
+
+-- ── Suspensión de operaciones por empresa (owner) ──────────────────────────
+-- `activo = FALSE` es baja (eliminar/desactivar); `suspendida = TRUE` es una
+-- pausa reversible (impago, incumplimiento). En ambos casos login, refresh y
+-- licencias de garita de esa empresa responden 423 con el motivo.
+DO $$ BEGIN
+  ALTER TABLE empresas ADD COLUMN suspendida BOOLEAN NOT NULL DEFAULT FALSE;
+EXCEPTION WHEN duplicate_column THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  ALTER TABLE empresas ADD COLUMN suspension_motivo VARCHAR(300);
+EXCEPTION WHEN duplicate_column THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  ALTER TABLE empresas ADD COLUMN suspendida_en TIMESTAMP;
+EXCEPTION WHEN duplicate_column THEN NULL;
+END $$;
+
+-- ── Auditoría: resultado de cada acción ────────────────────────────────────
+-- El middleware auditLog registra ahora al TERMINAR la petición, con el código
+-- HTTP de la respuesta (un 403 o un login fallido también dejan rastro). El
+-- detalle contextual (p. ej. el correo intentado en un login) va en
+-- datos_nuevos, que ya existía.
+DO $$ BEGIN
+  ALTER TABLE audit_logs ADD COLUMN status_code INTEGER;
+EXCEPTION WHEN duplicate_column THEN NULL;
+END $$;
+
+CREATE INDEX IF NOT EXISTS idx_audit_sucursal ON audit_logs(sucursal_id);
 
 SELECT 'SecureGate DB inicializada correctamente' AS mensaje;
