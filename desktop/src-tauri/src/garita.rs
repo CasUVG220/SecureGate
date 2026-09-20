@@ -1,0 +1,598 @@
+//! Operaciones de garita sobre la BD local: abrir/cerrar la base cifrada,
+//! buscar residentes, evaluar a un visitante (blacklist / preautorización) y
+//! encolar accesos. Todo esto funciona sin internet.
+
+use chrono::{Local, Utc};
+use rusqlite::{params, Connection, OptionalExtension};
+use serde::{Deserialize, Serialize};
+use serde_json::json;
+use tauri::State;
+
+use crate::error::{AppError, AppResult};
+use crate::{db, secure_store, AppState};
+
+// ── Apertura de la BD ───────────────────────────────────────────────────────
+
+fn sal_instalacion() -> AppResult<Vec<u8>> {
+    if let Some(hex_sal) = secure_store::leer(secure_store::CLAVE_DB_SAL)? {
+        return hex::decode(hex_sal).map_err(|e| AppError::interno(format!("sal corrupta: {e}")));
+    }
+    let sal: [u8; 16] = uuid::Uuid::new_v4().into_bytes();
+    secure_store::guardar(secure_store::CLAVE_DB_SAL, &hex::encode(sal))?;
+    Ok(sal.to_vec())
+}
+
+/// Abre la BD con la clave derivada de `token_nuevo`. Si ya estaba abierta
+/// con `token_anterior` (reactivación), la recifra en vez de perderla.
+pub fn preparar_db(state: &AppState, token_anterior: Option<&str>, token_nuevo: &str) -> AppResult<()> {
+    preparar_db_sin_hardware(state, token_anterior, token_nuevo)?;
+    // La config de la talanquera vive en esta BD: se activa en cuanto abre.
+    crate::hardware_cmd::cargar_desde_db(state);
+    Ok(())
+}
+
+fn preparar_db_sin_hardware(state: &AppState, token_anterior: Option<&str>, token_nuevo: &str) -> AppResult<()> {
+    let sal = sal_instalacion()?;
+    let nueva = db::derivar_clave(&state.fingerprint, token_nuevo, &sal)?;
+    let ruta = state.dir_datos.join(db::NOMBRE_ARCHIVO);
+
+    let mut guard = state.db.lock().unwrap();
+    if let Some(conn) = guard.as_ref() {
+        db::recifrar(conn, &nueva)?;
+        return Ok(());
+    }
+
+    match db::abrir(&ruta, &nueva) {
+        Ok(conn) => {
+            *guard = Some(conn);
+            Ok(())
+        }
+        Err(e) if e.codigo == "db_clave" => {
+            if let Some(viejo) = token_anterior {
+                let vieja = db::derivar_clave(&state.fingerprint, viejo, &sal)?;
+                let conn = db::abrir(&ruta, &vieja)?;
+                db::recifrar(&conn, &nueva)?;
+                *guard = Some(conn);
+                return Ok(());
+            }
+            // Sin forma de abrirla: se aparta (no se borra) y se empieza de
+            // cero. Sólo pasa si se desvinculó la licencia con datos locales.
+            let bak = state.dir_datos.join(format!("{}.ilegible-{}", db::NOMBRE_ARCHIVO, Utc::now().timestamp()));
+            log::warn!("BD local ilegible con la licencia actual; apartada en {}", bak.display());
+            std::fs::rename(&ruta, &bak).map_err(|e| AppError::interno(e.to_string()))?;
+            for suf in ["-wal", "-shm"] {
+                let _ = std::fs::remove_file(state.dir_datos.join(format!("{}{suf}", db::NOMBRE_ARCHIVO)));
+            }
+            *guard = Some(db::abrir(&ruta, &nueva)?);
+            Ok(())
+        }
+        Err(e) => Err(e),
+    }
+}
+
+pub fn cerrar_db(state: &AppState) {
+    *state.db.lock().unwrap() = None;
+}
+
+/// Ejecuta `f` con la conexión abierta. Error `db_cerrada` si no hay licencia.
+pub fn con_db<T>(state: &AppState, f: impl FnOnce(&Connection) -> AppResult<T>) -> AppResult<T> {
+    let guard = state.db.lock().unwrap();
+    let conn = guard
+        .as_ref()
+        .ok_or_else(|| AppError::new("db_cerrada", "La base local no está abierta (¿licencia activada?)"))?;
+    f(conn)
+}
+
+// ── Modelos ─────────────────────────────────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Residente {
+    pub id: String,
+    pub numero_casa: String,
+    pub nombre: String,
+    pub estado_pago: String,
+    pub telefono: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct Evaluacion {
+    pub bloqueado: bool,
+    pub razon_bloqueo: Option<String>,
+    pub preautorizado: bool,
+    pub preautorizacion: Option<Preautorizacion>,
+    pub visitante_conocido: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Preautorizacion {
+    pub id: String,
+    pub residente_id: String,
+    pub nombre_visitante: String,
+    pub numero_dpi: Option<String>,
+    pub placa: Option<String>,
+    pub fecha_inicio: String,
+    pub fecha_fin: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct NuevoAcceso {
+    pub nombre_visitante: String,
+    pub numero_dpi: String,
+    pub residente_id: String,
+    pub placa: Option<String>,
+    pub notas: Option<String>,
+    pub capturado_manualmente: bool,
+    /// Invitación QR que presentó el visitante, si entró por ese camino. El
+    /// backend la usa para contar el uso y para bloquearla tras varios
+    /// intentos fallidos.
+    #[serde(default)]
+    pub invitacion_qr_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct AccesoPendiente {
+    pub id_cliente: String,
+    pub registrado_en: String,
+    pub estado: String,
+    pub intentos: i64,
+    pub ultimo_error: Option<String>,
+    pub sincronizado_en: Option<String>,
+    pub nombre_visitante: String,
+    pub numero_dpi: String,
+    pub placa: Option<String>,
+    pub residente_casa: Option<String>,
+    pub capturado_manualmente: bool,
+}
+
+// ── Consultas ───────────────────────────────────────────────────────────────
+
+pub fn buscar_residentes(conn: &Connection, q: &str, limite: usize) -> AppResult<Vec<Residente>> {
+    let patron = format!("%{}%", q.trim());
+    let mut st = conn.prepare(
+        "SELECT id, numero_casa, nombre, estado_pago, telefono FROM residentes_local
+         WHERE numero_casa LIKE ?1 COLLATE NOCASE OR nombre LIKE ?1 COLLATE NOCASE
+         ORDER BY CASE WHEN numero_casa LIKE ?1 THEN 0 ELSE 1 END, numero_casa
+         LIMIT ?2",
+    )?;
+    let rows = st.query_map(params![patron, limite as i64], |r| {
+        Ok(Residente {
+            id: r.get(0)?,
+            numero_casa: r.get(1)?,
+            nombre: r.get(2)?,
+            estado_pago: r.get(3)?,
+            telefono: r.get(4)?,
+        })
+    })?;
+    Ok(rows.collect::<Result<_, _>>()?)
+}
+
+/// Misma regla que `checkBlacklist` + `checkPreautorizacion` del backend,
+/// evaluada contra el espejo local. `hoy` en fecha local (las
+/// preautorizaciones son por día calendario).
+pub fn evaluar_visitante(
+    conn: &Connection,
+    numero_dpi: &str,
+    placa: Option<&str>,
+    residente_id: Option<&str>,
+    hoy: &str,
+    ahora_iso: &str,
+) -> AppResult<Evaluacion> {
+    let dpi = numero_dpi.trim();
+    // Blacklist de sucursal (residente_id NULL) o del residente destino.
+    let ban: Option<(String, Option<String>)> = conn
+        .query_row(
+            "SELECT razon, visitante_nombre FROM blacklist_local
+             WHERE numero_dpi = ?1
+               AND (fecha_fin IS NULL OR fecha_fin > ?2)
+               AND (residente_id IS NULL OR residente_id = ?3)
+             LIMIT 1",
+            params![dpi, ahora_iso, residente_id.unwrap_or("")],
+            |r| Ok((r.get(0)?, r.get(1)?)),
+        )
+        .optional()?;
+
+    let placa_norm = placa.map(|p| p.trim().to_uppercase()).filter(|p| !p.is_empty());
+    let pre: Option<Preautorizacion> = conn
+        .query_row(
+            "SELECT id, residente_id, nombre_visitante, numero_dpi, placa, fecha_inicio, fecha_fin
+             FROM preautorizaciones_local
+             WHERE fecha_inicio <= ?1 AND fecha_fin IS NOT NULL AND fecha_fin >= ?1
+               AND (?2 = '' OR residente_id = ?2)
+               AND (numero_dpi = ?3 OR (?4 IS NOT NULL AND UPPER(placa) = ?4))
+             LIMIT 1",
+            params![hoy, residente_id.unwrap_or(""), dpi, placa_norm],
+            |r| {
+                Ok(Preautorizacion {
+                    id: r.get(0)?,
+                    residente_id: r.get(1)?,
+                    nombre_visitante: r.get(2)?,
+                    numero_dpi: r.get(3)?,
+                    placa: r.get(4)?,
+                    fecha_inicio: r.get(5)?,
+                    fecha_fin: r.get(6)?,
+                })
+            },
+        )
+        .optional()?;
+
+    let conocido: Option<String> = conn
+        .query_row(
+            "SELECT nombre_visitante FROM accesos_pendientes WHERE numero_dpi = ?1 ORDER BY registrado_en DESC LIMIT 1",
+            [dpi],
+            |r| r.get(0),
+        )
+        .optional()?;
+
+    Ok(Evaluacion {
+        bloqueado: ban.is_some(),
+        razon_bloqueo: ban.as_ref().map(|b| b.0.clone()),
+        preautorizado: pre.is_some(),
+        visitante_conocido: conocido.or(ban.and_then(|b| b.1)).or(pre.as_ref().map(|p| p.nombre_visitante.clone())),
+        preautorizacion: pre,
+    })
+}
+
+/// Encola un acceso. Se escribe SIEMPRE local primero; sincronizar es
+/// asunto de `sync`. Devuelve el id_cliente (UUID) generado.
+pub fn encolar_acceso(conn: &Connection, agente_id: &str, a: &NuevoAcceso) -> AppResult<String> {
+    if a.nombre_visitante.trim().is_empty() || a.numero_dpi.trim().is_empty() || a.residente_id.trim().is_empty() {
+        return Err(AppError::new("validacion", "Nombre, DPI y residente son obligatorios"));
+    }
+    let hoy = Local::now().format("%Y-%m-%d").to_string();
+    let ahora = Utc::now().to_rfc3339();
+    let ev = evaluar_visitante(conn, &a.numero_dpi, a.placa.as_deref(), Some(&a.residente_id), &hoy, &ahora)?;
+    if ev.bloqueado {
+        return Err(AppError::new(
+            "blacklist",
+            format!("Visitante en lista negra: {}", ev.razon_bloqueo.unwrap_or_default()),
+        ));
+    }
+
+    let id_cliente = uuid::Uuid::new_v4().to_string();
+    let registrado_en = Utc::now().to_rfc3339();
+    let placa = a.placa.as_deref().map(|p| p.trim().to_uppercase()).filter(|p| !p.is_empty());
+    let payload = json!({
+        "id_cliente": id_cliente,
+        "registrado_en": registrado_en,
+        "nombre_visitante": a.nombre_visitante.trim(),
+        "numero_dpi": a.numero_dpi.trim(),
+        "residente_id": a.residente_id,
+        "agente_id": agente_id,
+        "placa": placa,
+        "notas": a.notas.as_deref().map(str::trim).filter(|n| !n.is_empty()),
+        "capturado_manualmente": a.capturado_manualmente,
+        "invitacion_qr_id": a.invitacion_qr_id.as_deref().map(str::trim).filter(|v| !v.is_empty()),
+    });
+    let casa: Option<String> = conn
+        .query_row("SELECT numero_casa FROM residentes_local WHERE id = ?1", [&a.residente_id], |r| r.get(0))
+        .optional()?;
+
+    conn.execute(
+        "INSERT INTO accesos_pendientes
+           (id_cliente, payload, registrado_en, estado, intentos, proximo_intento_en,
+            nombre_visitante, numero_dpi, placa, residente_casa, capturado_manualmente)
+         VALUES (?1, ?2, ?3, 'pendiente', 0, ?3, ?4, ?5, ?6, ?7, ?8)",
+        params![
+            id_cliente,
+            payload.to_string(),
+            registrado_en,
+            a.nombre_visitante.trim(),
+            a.numero_dpi.trim(),
+            placa,
+            casa,
+            a.capturado_manualmente as i64,
+        ],
+    )?;
+    Ok(id_cliente)
+}
+
+pub fn listar_recientes(conn: &Connection, limite: usize) -> AppResult<Vec<AccesoPendiente>> {
+    let mut st = conn.prepare(
+        "SELECT id_cliente, registrado_en, estado, intentos, ultimo_error, sincronizado_en,
+                nombre_visitante, numero_dpi, placa, residente_casa, capturado_manualmente
+         FROM accesos_pendientes ORDER BY registrado_en DESC LIMIT ?1",
+    )?;
+    let rows = st.query_map([limite as i64], |r| {
+        Ok(AccesoPendiente {
+            id_cliente: r.get(0)?,
+            registrado_en: r.get(1)?,
+            estado: r.get(2)?,
+            intentos: r.get(3)?,
+            ultimo_error: r.get(4)?,
+            sincronizado_en: r.get(5)?,
+            nombre_visitante: r.get(6)?,
+            numero_dpi: r.get(7)?,
+            placa: r.get(8)?,
+            residente_casa: r.get(9)?,
+            capturado_manualmente: r.get::<_, i64>(10)? != 0,
+        })
+    })?;
+    Ok(rows.collect::<Result<_, _>>()?)
+}
+
+// ── Comandos Tauri ──────────────────────────────────────────────────────────
+
+#[tauri::command]
+pub fn garita_buscar_residentes(state: State<'_, AppState>, q: String) -> AppResult<Vec<Residente>> {
+    con_db(&state, |c| buscar_residentes(c, &q, 20))
+}
+
+#[tauri::command]
+pub fn garita_evaluar_visitante(
+    state: State<'_, AppState>,
+    numero_dpi: String,
+    placa: Option<String>,
+    residente_id: Option<String>,
+) -> AppResult<Evaluacion> {
+    let hoy = Local::now().format("%Y-%m-%d").to_string();
+    let ahora = Utc::now().to_rfc3339();
+    con_db(&state, |c| evaluar_visitante(c, &numero_dpi, placa.as_deref(), residente_id.as_deref(), &hoy, &ahora))
+}
+
+/// Comprueba una invitación QR contra el backend.
+///
+/// Es la única parte de la garita que EXIGE conexión: la vigencia, los usos
+/// restantes y la revocación viven en el servidor y un espejo local podría
+/// dejar pasar un QR ya gastado o revocado hace un minuto. Sin red, el agente
+/// sigue por el camino manual (DPI), que funciona offline como siempre.
+#[tauri::command]
+pub async fn garita_verificar_qr(state: State<'_, AppState>, id: String) -> AppResult<serde_json::Value> {
+    crate::license::exigir_uso(&state)?;
+    let (jwt, lic) = crate::auth::credenciales(&state).await?;
+    let base = state.api_url();
+    state
+        .api
+        .get(
+            &base,
+            &format!("/invitaciones-qr/verificar/{}", id.trim()),
+            &crate::api::Credenciales { jwt: Some(&jwt), licencia: Some(&lic) },
+        )
+        .await
+}
+
+/// Busca el acceso ABIERTO de un vehículo por su placa, para darle salida.
+///
+/// Online, como el QR y por el mismo motivo: la entrada pudo registrarla otra
+/// garita o la web, y el espejo local sólo guarda lo que ha salido de ESTE
+/// equipo. Cerrar una salida con datos viejos dejaría vehículos dentro para
+/// siempre. Devuelve `null` si no hay ninguno abierto con esa placa.
+#[tauri::command]
+pub async fn garita_buscar_salida(state: State<'_, AppState>, placa: String) -> AppResult<Option<serde_json::Value>> {
+    crate::license::exigir_uso(&state)?;
+    let (jwt, lic) = crate::auth::credenciales(&state).await?;
+    let base = state.api_url();
+    let cred = crate::api::Credenciales { jwt: Some(&jwt), licencia: Some(&lic) };
+    match state.api.get_con::<serde_json::Value>(&base, "/accesos/activo", &[("placa", placa.trim())], &cred).await {
+        Ok(v) => Ok(Some(v)),
+        // El backend responde 404 cuando no hay nada abierto: no es un error
+        // que deba ver el agente como fallo, es "este carro no está dentro".
+        Err(e) if e.codigo == "no_encontrado" => Ok(None),
+        Err(e) => Err(e),
+    }
+}
+
+/// Cierra la salida de un acceso abierto y, ya cerrada, abre la talanquera.
+#[derive(Debug, Clone, Serialize)]
+pub struct SalidaConApertura {
+    pub registro: serde_json::Value,
+    pub apertura: crate::hardware::ResultadoApertura,
+}
+
+#[tauri::command]
+pub async fn garita_registrar_salida(state: State<'_, AppState>, registro_id: String) -> AppResult<SalidaConApertura> {
+    crate::license::exigir_uso(&state)?;
+    let (jwt, lic) = crate::auth::credenciales(&state).await?;
+    let base = state.api_url();
+    let registro = state
+        .api
+        .put(
+            &base,
+            &format!("/accesos/{}/salida", registro_id.trim()),
+            &json!({}),
+            &crate::api::Credenciales { jwt: Some(&jwt), licencia: Some(&lic) },
+        )
+        .await?;
+    let apertura = crate::hardware_cmd::abrir_en_segundo_plano(&state).await;
+    Ok(SalidaConApertura { registro, apertura })
+}
+
+/// Acceso recién encolado + qué pasó con la talanquera. Van juntos pero son
+/// independientes: el acceso ya está guardado aunque `apertura` haya fallado.
+#[derive(Debug, Clone, Serialize)]
+pub struct RegistroConApertura {
+    pub acceso: AccesoPendiente,
+    pub apertura: crate::hardware::ResultadoApertura,
+}
+
+/// Registra el acceso en la cola local, dispara un intento de sincronización
+/// inmediato en segundo plano (no se espera: la garita no debe bloquearse
+/// por la red) y, con el acceso YA guardado, manda abrir la talanquera.
+///
+/// El orden importa: si el relé falla, el registro no se revierte; se
+/// devuelve el fallo en `apertura` para que el agente abra a mano.
+#[tauri::command]
+pub async fn garita_registrar_acceso(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+    acceso: NuevoAcceso,
+) -> AppResult<RegistroConApertura> {
+    crate::license::exigir_uso(&state)?;
+    let agente_id = state
+        .sesion
+        .read()
+        .unwrap()
+        .as_ref()
+        .map(|s| s.usuario.id.clone())
+        .ok_or_else(|| AppError::new("sin_sesion", "Inicia sesión para registrar accesos"))?;
+    let id = con_db(&state, |c| encolar_acceso(c, &agente_id, &acceso))?;
+    let fila = con_db(&state, |c| {
+        listar_recientes(c, 50)?
+            .into_iter()
+            .find(|a| a.id_cliente == id)
+            .ok_or_else(|| AppError::interno("no se encontró el acceso recién encolado"))
+    })?;
+    crate::sync::disparar_push(app);
+    let apertura = crate::hardware_cmd::abrir_en_segundo_plano(&state).await;
+    Ok(RegistroConApertura { acceso: fila, apertura })
+}
+
+#[tauri::command]
+pub fn garita_accesos_recientes(state: State<'_, AppState>, limite: Option<usize>) -> AppResult<Vec<AccesoPendiente>> {
+    con_db(&state, |c| listar_recientes(c, limite.unwrap_or(30)))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn db() -> Connection {
+        let c = Connection::open_in_memory().unwrap();
+        db::aplicar_esquema(&c).unwrap();
+        c.execute_batch(
+            "INSERT INTO residentes_local VALUES ('r1','A-12','Ana López','al_dia',NULL);
+             INSERT INTO residentes_local VALUES ('r2','B-3','Beto Ruiz','mora','5555');
+             INSERT INTO blacklist_local VALUES ('b1','1111111111111','Malo','Robo','2099-01-01T00:00:00Z',NULL);
+             INSERT INTO blacklist_local VALUES ('b2','2222222222222','Vencido','Viejo','2020-01-01T00:00:00Z',NULL);
+             INSERT INTO blacklist_local VALUES ('b3','3333333333333','SoloAna','No lo quiere',NULL,'r1');
+             INSERT INTO preautorizaciones_local VALUES ('p1','r1','Primo Pérez','4444444444444',NULL,'2026-09-01','2026-09-30');
+             INSERT INTO preautorizaciones_local VALUES ('p2','r2','Taxi','','P123ABC','2026-09-01','2026-09-30');",
+        )
+        .unwrap();
+        c
+    }
+    const HOY: &str = "2026-09-19";
+    const AHORA: &str = "2026-09-19T12:00:00Z";
+
+    #[test]
+    fn busca_residentes_por_casa_o_nombre() {
+        let c = db();
+        assert_eq!(buscar_residentes(&c, "a-12", 10).unwrap()[0].id, "r1");
+        assert_eq!(buscar_residentes(&c, "beto", 10).unwrap()[0].id, "r2");
+        assert!(buscar_residentes(&c, "zzz", 10).unwrap().is_empty());
+    }
+
+    #[test]
+    fn blacklist_de_sucursal_bloquea_y_la_vencida_no() {
+        let c = db();
+        let e = evaluar_visitante(&c, "1111111111111", None, Some("r2"), HOY, AHORA).unwrap();
+        assert!(e.bloqueado);
+        assert_eq!(e.razon_bloqueo.as_deref(), Some("Robo"));
+        assert!(!evaluar_visitante(&c, "2222222222222", None, None, HOY, AHORA).unwrap().bloqueado);
+    }
+
+    #[test]
+    fn blacklist_de_residente_solo_aplica_a_ese_residente() {
+        let c = db();
+        assert!(evaluar_visitante(&c, "3333333333333", None, Some("r1"), HOY, AHORA).unwrap().bloqueado);
+        assert!(!evaluar_visitante(&c, "3333333333333", None, Some("r2"), HOY, AHORA).unwrap().bloqueado);
+    }
+
+    #[test]
+    fn preautorizacion_por_dpi_o_placa_vigente_hoy() {
+        let c = db();
+        let e = evaluar_visitante(&c, "4444444444444", None, Some("r1"), HOY, AHORA).unwrap();
+        assert!(e.preautorizado);
+        assert_eq!(e.visitante_conocido.as_deref(), Some("Primo Pérez"));
+        assert!(evaluar_visitante(&c, "9", Some("p123abc"), Some("r2"), HOY, AHORA).unwrap().preautorizado);
+        assert!(!evaluar_visitante(&c, "4444444444444", None, Some("r1"), "2026-10-01", AHORA).unwrap().preautorizado);
+    }
+
+    /// Un acceso que entró con QR debe llevar el id hasta el backend: es lo
+    /// que descuenta el uso de la invitación y la bloquea tras fallos.
+    #[test]
+    fn encolar_conserva_la_invitacion_qr_en_el_payload() {
+        let c = db();
+        let id = encolar_acceso(
+            &c,
+            "agente-1",
+            &NuevoAcceso {
+                nombre_visitante: "Ana".into(),
+                numero_dpi: "5555555555555".into(),
+                residente_id: "r1".into(),
+                placa: None,
+                notas: None,
+                capturado_manualmente: false,
+                invitacion_qr_id: Some("  inv-9  ".into()),
+            },
+        )
+        .unwrap();
+        let payload: serde_json::Value =
+            c.query_row("SELECT payload FROM accesos_pendientes WHERE id_cliente = ?1", [&id], |r| r.get::<_, String>(0))
+                .map(|s| serde_json::from_str(&s).unwrap())
+                .unwrap();
+        assert_eq!(payload["invitacion_qr_id"], "inv-9");
+
+        // Una cadena vacía no es una invitación: viaja como nulo.
+        let id2 = encolar_acceso(
+            &c,
+            "agente-1",
+            &NuevoAcceso {
+                nombre_visitante: "Beto".into(),
+                numero_dpi: "5555555555556".into(),
+                residente_id: "r1".into(),
+                placa: None,
+                notas: None,
+                capturado_manualmente: true,
+                invitacion_qr_id: Some("   ".into()),
+            },
+        )
+        .unwrap();
+        let p2: serde_json::Value =
+            c.query_row("SELECT payload FROM accesos_pendientes WHERE id_cliente = ?1", [&id2], |r| r.get::<_, String>(0))
+                .map(|s| serde_json::from_str(&s).unwrap())
+                .unwrap();
+        assert!(p2["invitacion_qr_id"].is_null());
+    }
+
+    #[test]
+    fn encolar_escribe_pendiente_con_payload_completo_y_rechaza_blacklist() {
+        let c = db();
+        let id = encolar_acceso(
+            &c,
+            "agente-1",
+            &NuevoAcceso {
+                nombre_visitante: " Juan ".into(),
+                numero_dpi: "5555555555555".into(),
+                residente_id: "r1".into(),
+                placa: Some("p 123abc".into()),
+                notas: None,
+                capturado_manualmente: true,
+                invitacion_qr_id: None,
+            },
+        )
+        .unwrap();
+        let fila = &listar_recientes(&c, 10).unwrap()[0];
+        assert_eq!(fila.id_cliente, id);
+        assert_eq!(fila.estado, "pendiente");
+        assert_eq!(fila.residente_casa.as_deref(), Some("A-12"));
+        assert!(fila.capturado_manualmente);
+        let payload: serde_json::Value =
+            c.query_row("SELECT payload FROM accesos_pendientes WHERE id_cliente = ?1", [&id], |r| r.get::<_, String>(0))
+                .map(|s| serde_json::from_str(&s).unwrap())
+                .unwrap();
+        assert_eq!(payload["id_cliente"], id);
+        assert_eq!(payload["agente_id"], "agente-1");
+        assert_eq!(payload["nombre_visitante"], "Juan");
+        assert_eq!(payload["placa"], "P 123ABC");
+        assert_eq!(payload["capturado_manualmente"], true);
+        assert!(payload["registrado_en"].as_str().unwrap().contains('T'));
+        // Sin QR el campo viaja nulo, no ausente: el backend distingue.
+        assert!(payload["invitacion_qr_id"].is_null());
+
+        let err = encolar_acceso(
+            &c,
+            "agente-1",
+            &NuevoAcceso {
+                nombre_visitante: "X".into(),
+                numero_dpi: "1111111111111".into(),
+                residente_id: "r1".into(),
+                placa: None,
+                notas: None,
+                capturado_manualmente: false,
+                invitacion_qr_id: None,
+            },
+        )
+        .unwrap_err();
+        assert_eq!(err.codigo, "blacklist");
+    }
+}
