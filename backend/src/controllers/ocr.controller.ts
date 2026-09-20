@@ -30,11 +30,13 @@ export class OcrDocumentError extends Error {
 const callVision = async (base64: string): Promise<string> => {
   const key = process.env.GOOGLE_CLOUD_API_KEY;
 
+  // La clave va en el header y NO en la query string: en la URL termina en los
+  // logs de proxies y en los mensajes de error de fetch.
   let res: Awaited<ReturnType<typeof fetch>>;
   try {
-    res = await fetch(`${VISION_URL}?key=${key}`, {
+    res = await fetch(VISION_URL, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key ?? '' },
       body: JSON.stringify({
         requests: [{
           image: { content: base64 },
@@ -198,9 +200,24 @@ const parsePlaca = (text: string): string => {
   return matches.sort((a, b) => b.length - a.length)[0].trim().replace(/\s+/g, '-');
 };
 
+/** ~5 MB de imagen ≈ 7 M caracteres de base64. */
+const IMAGEN_MAX_CHARS = 7_000_000;
+const BASE64_RE = /^[A-Za-z0-9+/=\r\n]+$/;
+
+/** `image` debe ser una cadena base64 (sin prefijo data:) de tamaño acotado. */
+const imagenInvalida = (image: unknown): string | null => {
+  if (typeof image !== 'string' || image.length === 0) return 'image requerida';
+  if (image.length > IMAGEN_MAX_CHARS) return 'La imagen es demasiado grande (máx. 5 MB)';
+  const limpia = image.replace(/^data:image\/[a-z+.-]+;base64,/i, '');
+  if (!BASE64_RE.test(limpia)) return 'image debe estar codificada en base64';
+  return null;
+};
+
 export const scanDpi = async (req: Request, res: Response) => {
-  const { image } = req.body as { image?: string };
-  if (!image) return res.status(400).json({ error: 'image requerida' });
+  const { image: imagenCruda } = req.body as { image?: string };
+  const problema = imagenInvalida(imagenCruda);
+  if (problema) return res.status(problema.startsWith('La imagen') ? 413 : 400).json({ error: problema });
+  const image = (imagenCruda as string).replace(/^data:image\/[a-z+.-]+;base64,/i, '');
 
   try {
     const texto_completo = await callVision(image);
@@ -215,8 +232,10 @@ export const scanDpi = async (req: Request, res: Response) => {
 };
 
 export const scanPlaca = async (req: Request, res: Response) => {
-  const { image } = req.body as { image?: string };
-  if (!image) return res.status(400).json({ error: 'image requerida' });
+  const { image: imagenCruda } = req.body as { image?: string };
+  const problema = imagenInvalida(imagenCruda);
+  if (problema) return res.status(problema.startsWith('La imagen') ? 413 : 400).json({ error: problema });
+  const image = (imagenCruda as string).replace(/^data:image\/[a-z+.-]+;base64,/i, '');
 
   try {
     const texto_completo = await callVision(image);
