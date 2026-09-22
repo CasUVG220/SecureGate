@@ -36,14 +36,15 @@ const usuario = (rol: string) => ({
 const reqCon = (body: Record<string, unknown>) =>
   ({ body, headers: {}, ip: '127.0.0.1' } as unknown as Request);
 
-/** El SELECT de credenciales resuelve; el INSERT del refresh token también. */
+/** El SELECT de la cuenta resuelve, crypt() confirma la contraseña y el INSERT del refresh token también. */
 function credencialesValidas(rol: string) {
   mockPool.query.mockReset();
-  mockPool.query.mockImplementation((sql: string) =>
-    String(sql).includes('FROM usuarios')
-      ? Promise.resolve({ rows: [usuario(rol)] })
-      : Promise.resolve({ rows: [], rowCount: 1 })
-  );
+  mockPool.query.mockImplementation((sql: string) => {
+    const q = String(sql);
+    if (q.includes('crypt(')) return Promise.resolve({ rows: [{ ok: true }] });
+    if (q.includes('FROM usuarios')) return Promise.resolve({ rows: [{ ...usuario(rol), password_hash: 'hash-real' }] });
+    return Promise.resolve({ rows: [], rowCount: 1 });
+  });
 }
 
 describe('login por portal', () => {

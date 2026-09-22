@@ -1,4 +1,5 @@
 import { JwtPayload } from '../middleware/auth.middleware';
+import { esUuid } from './http';
 
 export interface TenantSql {
   joinClause: string;
@@ -47,21 +48,49 @@ export function ownershipParams(user: JwtPayload): [string, string | null, strin
   return [user.rol, user.empresa_id, user.sucursal_id];
 }
 
+/** Ejecutor mínimo de consultas (Pool o PoolClient). */
+interface Consultable {
+  query: (text: string, params?: unknown[]) => Promise<{ rows: any[] }>;
+}
+
+export type ResultadoSucursal =
+  | { ok: true; id: string }
+  | { ok: false; status: 400 | 403; error: string };
+
 /**
- * Resolves sucursal_id for write operations.
- * Priority: JWT sucursal_id → body value → DB fallback (first active sucursal).
- * Returns null if none found.
+ * Resuelve la sucursal sobre la que va a escribir el usuario.
+ *
+ * - Quien tiene sucursal en el JWT (admin_sucursal, agente, residente) escribe
+ *   SIEMPRE en la suya; un `sucursal_id` distinto en el body se ignora.
+ * - owner y admin_empresa no tienen sucursal propia: deben indicarla en el body
+ *   y se comprueba contra la base que la sucursal esté activa y sea de su
+ *   alcance (el owner, cualquiera; el admin de empresa, las de su empresa).
+ *
+ * Antes esta función caía a "la primera sucursal activa de toda la base" y no
+ * validaba el body: un admin de empresa que omitía el campo publicaba anuncios,
+ * áreas o configuración en una empresa ajena.
  */
-export async function resolveSucursalId(
-  userSucursalId: string | null,
-  bodySucursalId?: string,
-  pool?: import('pg').Pool
-): Promise<string | null> {
-  if (userSucursalId) return userSucursalId;
-  if (bodySucursalId) return bodySucursalId;
-  if (!pool) return null;
-  const fallback = await pool.query(
-    'SELECT id FROM sucursales WHERE activo = TRUE ORDER BY created_at LIMIT 1'
+export async function resolverSucursal(
+  user: JwtPayload,
+  bodySucursalId: unknown,
+  db: Consultable,
+): Promise<ResultadoSucursal> {
+  if (user.sucursal_id) return { ok: true, id: user.sucursal_id };
+
+  if (bodySucursalId === undefined || bodySucursalId === null || bodySucursalId === '') {
+    return { ok: false, status: 400, error: 'Especifica sucursal_id.' };
+  }
+  if (!esUuid(bodySucursalId)) {
+    return { ok: false, status: 400, error: 'sucursal_id inválido.' };
+  }
+
+  const r = await db.query(
+    `SELECT s.id FROM sucursales s
+     WHERE s.id = $1
+       AND s.activo = TRUE
+       AND ($2::text = 'owner' OR ($2::text = 'admin_empresa' AND s.empresa_id = $3))`,
+    [bodySucursalId, user.rol, user.empresa_id],
   );
-  return fallback.rows[0]?.id ?? null;
+  if (r.rows.length === 0) return { ok: false, status: 403, error: 'Sin acceso a esa sucursal' };
+  return { ok: true, id: r.rows[0].id };
 }

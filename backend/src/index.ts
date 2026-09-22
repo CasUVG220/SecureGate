@@ -1,3 +1,4 @@
+import './utils/asyncErrors';
 import express from 'express';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
@@ -8,24 +9,45 @@ import cron from 'node-cron';
 import apiRouter from './routes';
 import { revisarEstadosMora } from './jobs/mora.job';
 import { enviarRecordatoriosReservas } from './jobs/recordatoriosReservas.job';
+import { expirarInvitaciones } from './jobs/invitaciones.job';
 import { runMigrations } from './db/migrate';
 import { APP_TZ } from './utils/reservas';
+import { validarEntorno, trustProxyHops } from './config/env';
+import { esErrorDeDatos, esConflictoUnico, soloQueryTexto } from './utils/http';
+import { cabecerasApi, noEncontrado } from './middleware/hardening.middleware';
 
 dotenv.config();
+
+// Falla rápido y en voz alta si el entorno no es seguro (secreto JWT público o
+// ausente en producción, CORS sin allowlist…). Ver config/env.ts.
+try {
+  validarEntorno();
+} catch (err) {
+  console.error(`[env] ${(err as Error).message}`);
+  process.exit(1);
+}
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Security headers
-app.use(helmet());
-app.use(helmet.contentSecurityPolicy({
-  directives: {
-    defaultSrc: ["'self'"],
-    scriptSrc:  ["'self'"],
-    styleSrc:   ["'self'", "'unsafe-inline'"],
-    imgSrc:     ["'self'", 'data:', 'https:'],
+// `req.ip` (rate limit y auditoría) sólo confía en X-Forwarded-For si se declara
+// cuántos proxies hay delante. Sin esto, cualquier cliente podía falsificar su
+// IP con esa cabecera. Detrás de nginx: TRUST_PROXY=1.
+app.set('trust proxy', trustProxyHops());
+
+// Security headers. Una sola llamada: la API sólo devuelve JSON, así que el CSP
+// puede ser el más restrictivo posible.
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc:     ["'none'"],
+      frameAncestors: ["'none'"],
+    },
   },
+  crossOriginResourcePolicy: { policy: 'same-site' },
 }));
+
+app.use(cabecerasApi);
 
 // CORS — credentials required for httpOnly refresh-token cookie.
 //
@@ -80,14 +102,41 @@ const generalLimiter = rateLimit({
 });
 app.use(generalLimiter);
 
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ limit: '50mb', extended: true }));
+// Límite de cuerpo: 100 kb por defecto. Antes eran 50 MB para TODA la API y
+// antes de autenticar, lo que permitía tumbar el proceso con unas pocas
+// peticiones. Sólo las rutas que reciben una imagen en base64 (foto del
+// documento para OCR, imagen de un área, comprobante de transferencia) tienen
+// margen mayor.
+const RUTAS_CON_IMAGEN = ['/api/ocr', '/api/areas', '/api/pagos/transferencia'];
+const jsonPequeno = express.json({ limit: '100kb' });
+const jsonConImagen = express.json({ limit: '8mb' });
+app.use((req, res, next) => {
+  const conImagen = RUTAS_CON_IMAGEN.some(p => req.path === p || req.path.startsWith(`${p}/`));
+  return (conImagen ? jsonConImagen : jsonPequeno)(req, res, next);
+});
+app.use(express.urlencoded({ limit: '100kb', extended: false }));
 
 app.get('/health', (_req, res) => {
   res.json({ status: 'ok', service: 'SecureGate Backend', version: '1.0.0' });
 });
 
-app.use('/api', apiRouter);
+app.use('/api', soloQueryTexto, apiRouter);
+
+app.use(noEncontrado);
+
+// Manejador central de errores: nunca devuelve el stack ni mensajes internos.
+app.use((err: Error & { type?: string; status?: number }, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  if (err.type === 'entity.too.large') return res.status(413).json({ error: 'El cuerpo de la petición es demasiado grande' });
+  if (err.type === 'entity.parse.failed' || err instanceof SyntaxError) return res.status(400).json({ error: 'JSON inválido' });
+  // UUID/fecha mal formado, texto demasiado largo, byte NUL, CHECK/FK/NOT NULL…:
+  // datos inválidos del cliente, no un fallo del servidor (ver utils/http.ts).
+  const codigoPg = (err as { code?: string }).code;
+  if (esConflictoUnico(codigoPg)) return res.status(409).json({ error: 'Ya existe un registro con esos datos' });
+  if (esErrorDeDatos(codigoPg)) return res.status(400).json({ error: 'Identificador o valor con formato inválido' });
+  console.error('[error] excepción no controlada', { message: err.message });
+  res.status(err.status && err.status >= 400 && err.status < 500 ? err.status : 500)
+    .json({ error: 'Error en el servidor' });
+});
 
 // Revisión diaria del ciclo de mora a las 00:05
 cron.schedule('5 0 * * *', () => {
@@ -109,9 +158,20 @@ cron.schedule('0 8 * * *', () => {
     .catch(err => console.error('[recordatorios.job] Error en recordatorios de reservas:', err));
 }, { timezone: APP_TZ });
 
+// Invitaciones administrativas vencidas → 'expirada', a diario a las 00:15.
+cron.schedule('15 0 * * *', () => {
+  expirarInvitaciones()
+    .then(r => console.log(`[invitaciones.job] Invitaciones expiradas: ${r.expiradas}`))
+    .catch(err => console.error('[invitaciones.job] Error al expirar invitaciones:', err));
+}, { timezone: APP_TZ });
+
 // Guarda de migraciones: pone el esquema al día antes de aceptar tráfico.
-runMigrations().finally(() => {
-  app.listen(PORT, () => {
-    console.log(`SecureGate Backend corriendo en puerto ${PORT}`);
+// (runMigrations documenta que no lanza, pero si la base está caída al arrancar
+// `pool.connect()` sí rechaza: sin este catch era una unhandledRejection.)
+runMigrations()
+  .catch(err => console.error('[migrate] No se pudo conectar para migrar; el backend arranca igual:', (err as Error).message))
+  .finally(() => {
+    app.listen(PORT, () => {
+      console.log(`SecureGate Backend corriendo en puerto ${PORT}`);
+    });
   });
-});
