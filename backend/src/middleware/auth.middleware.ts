@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
+import { tokenRevocado } from '../utils/revocacion';
 
 export type UserRol = 'owner' | 'admin_empresa' | 'admin_sucursal' | 'agente' | 'residente';
 
@@ -27,6 +28,11 @@ declare global {
   }
 }
 
+export const ROLES: readonly UserRol[] = ['owner', 'admin_empresa', 'admin_sucursal', 'agente', 'residente'];
+
+/** Roles del personal (todo lo que no es residente). Lista blanca a propósito. */
+export const ROLES_PERSONAL: readonly UserRol[] = ['owner', 'admin_empresa', 'admin_sucursal', 'agente'];
+
 export const verifyToken = (req: Request, res: Response, next: NextFunction) => {
   const authHeader = req.headers['authorization'];
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -35,7 +41,22 @@ export const verifyToken = (req: Request, res: Response, next: NextFunction) => 
 
   const token = authHeader.split(' ')[1];
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET as string) as JwtPayload;
+    // Algoritmo fijado: sin `algorithms`, jsonwebtoken acepta lo que declare el
+    // propio token en su cabecera.
+    const decoded = jwt.verify(token, process.env.JWT_SECRET as string, { algorithms: ['HS256'] }) as
+      JwtPayload & { typ?: string };
+    // Los tokens de licencia (typ: 'licencia') se firman con el mismo secreto y
+    // no llevan rol. Antes pasaban este middleware y, como `requireStaff` sólo
+    // excluía a 'residente', un token de garita robado valía como sesión de
+    // personal. Una sesión de usuario siempre trae un rol conocido y ningún typ.
+    if (decoded.typ !== undefined || !ROLES.includes(decoded.rol)) {
+      return res.status(403).json({ error: 'Token inválido o expirado' });
+    }
+    // Cuenta desactivada, rol cambiado o empresa suspendida DESPUÉS de emitirse
+    // este token: se corta ya, sin esperar a que caduque (utils/revocacion.ts).
+    if (tokenRevocado(decoded as JwtPayload & { iat?: number })) {
+      return res.status(401).json({ error: 'Sesión revocada' });
+    }
     req.user = decoded;
     next();
   } catch {
@@ -67,7 +88,7 @@ export const requireAdminSucursal = (req: Request, res: Response, next: NextFunc
 };
 
 export const requireStaff = (req: Request, res: Response, next: NextFunction) => {
-  if (!req.user || req.user.rol === 'residente') {
+  if (!req.user || !ROLES_PERSONAL.includes(req.user.rol)) {
     return res.status(403).json({ error: 'Acceso restringido a personal' });
   }
   next();
