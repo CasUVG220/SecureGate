@@ -5,8 +5,8 @@ export { default as Badge } from './Badge';
 export { ESTADO_PAGO_TONE } from './estados';
 export type { BadgeProps, BadgeTone } from './Badge';
 
-export { default as Card, StatCard } from './Card';
-export type { CardProps, StatCardProps, StatTone } from './Card';
+export { default as Card } from './Card';
+export type { CardProps } from './Card';
 
 export { default as EmptyState } from './EmptyState';
 export type { EmptyStateProps } from './EmptyState';
@@ -35,7 +35,5 @@ export type { Column, DataTableProps } from './Table';
 export { ToastProvider, useToast } from './Toast';
 export type { ToastItem, ToastType } from './Toast';
 
-export { default as TelemetryStrip, TelemetrySkeleton } from './TelemetryStrip';
-export type { TelemetryItemProps, TelemetryStripProps, TelemetryTone } from './TelemetryStrip';
 
 export { cx } from './cx';

@@ -116,7 +116,7 @@ export function FormSkeleton({ fields = 4, className }: { fields?: number; class
   );
 }
 
-/** Bloques de métrica en carga, con la misma silueta y proporción que StatCard. */
+/** Bloques de métrica en carga (portal del residente). */
 export function StatSkeleton({ count = 4 }: { count?: number }) {
   return (
     <>
