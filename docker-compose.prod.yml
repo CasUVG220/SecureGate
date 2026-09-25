@@ -16,10 +16,17 @@
 
 services:
 
+  # ── Base de datos ──────────────────────────────────────────────────────────
+  # Desde Sprint 8 la base de producción vive en Cloud SQL y el backend llega
+  # a ella por el Cloud SQL Auth Proxy (abajo). El Postgres en contenedor se
+  # conserva bajo el perfil `local-db` para entornos sin Cloud SQL:
+  #   docker compose -f docker-compose.prod.yml --profile local-db up -d
+  # y en ese caso DATABASE_URL debe apuntar a db:5432.
   db:
     image: postgres:15-alpine
     container_name: securegate-db
     restart: unless-stopped
+    profiles: ["local-db"]
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-securegate}
       POSTGRES_USER: ${POSTGRES_USER:-sguser}
@@ -39,12 +46,31 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
+      target: prod
     container_name: securegate-backend
     restart: unless-stopped
+    # Endurecimiento del contenedor: sin capacidades de Linux extra y sin poder
+    # escalar privilegios (el proceso ya corre como el usuario `node`, no root).
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
     environment:
       NODE_ENV: production
       PORT: 3000
-      DATABASE_URL: postgresql://${POSTGRES_USER:-sguser}:${POSTGRES_PASSWORD:?define POSTGRES_PASSWORD en el entorno}@db:5432/${POSTGRES_DB:-securegate}
+      # Un salto de proxy (nginx): req.ip toma la IP real del cliente para el
+      # rate limit y la auditoría, y X-Forwarded-For del cliente ya no se cree.
+      TRUST_PROXY: "1"
+      # Clave de Google Vision (OCR de respaldo). Opcional.
+      GOOGLE_CLOUD_API_KEY: ${GOOGLE_CLOUD_API_KEY:-}
+      # OJO: aquí NO se define PAGOS_TARJETA_SIMULADA ni SEED_DEMO, y no deben
+      # definirse: la pasarela de tarjeta es un mock que liquida deudas.
+      # Cloud SQL vía el proxy: postgresql://USUARIO:PASSWORD@cloud-sql-proxy:5432/securegate
+      # (con --profile local-db: postgresql://USUARIO:PASSWORD@db:5432/securegate)
+      DATABASE_URL: ${DATABASE_URL:?define DATABASE_URL (ver scripts/migrate-to-cloudsql.sh)}
+      # db-f1-micro admite 25 conexiones; db-g1-small 50. Ajusta con la instancia.
+      DB_POOL_MAX: ${DB_POOL_MAX:-10}
+      # ≥ 32 caracteres y no público: si no, el backend se niega a arrancar.
+      # Genera uno con `openssl rand -hex 48`.
       JWT_SECRET: ${JWT_SECRET:?define JWT_SECRET en el entorno}
       # Origenes permitidos por CORS. En produccion es obligatorio: el
       # backend no refleja el origen del navegador fuera de desarrollo.
@@ -54,8 +80,23 @@ services:
     volumes:
       - ./database/init.sql:/app/database/init.sql:ro
     depends_on:
-      db:
-        condition: service_healthy
+      - cloud-sql-proxy
+    networks:
+      - securegate-network
+
+  # Túnel autenticado hacia Cloud SQL: cifra la conexión y autentica con IAM,
+  # así la instancia no necesita IP pública abierta ni "redes autorizadas".
+  # En la VM de GCP usa la service account adjunta (necesita el rol
+  # roles/cloudsql.client); fuera de GCP monta un JSON de SA y añade
+  # `--credentials-file /secrets/sa.json`.
+  cloud-sql-proxy:
+    image: gcr.io/cloud-sql-connectors/cloud-sql-proxy:2.25.4
+    container_name: securegate-cloud-sql-proxy
+    restart: unless-stopped
+    command:
+      - "--address=0.0.0.0"
+      - "--port=5432"
+      - "${CLOUD_SQL_CONNECTION_NAME:?define CLOUD_SQL_CONNECTION_NAME, p. ej. securegate-503823:us-central1:securegate-pg}"
     networks:
       - securegate-network
 
@@ -63,12 +104,16 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      target: prod
+      args:
+        # Detras de nginx el frontend y la API comparten dominio, asi que la
+        # URL base es el propio origen HTTPS. Se hornea en el build.
+        VITE_API_URL: ${PUBLIC_URL:?define PUBLIC_URL, p. ej. https://midominio.com}
     container_name: securegate-frontend
     restart: unless-stopped
-    environment:
-      # Detras de nginx el frontend y la API comparten dominio, asi que la
-      # URL base es el propio origen HTTPS.
-      VITE_API_URL: ${PUBLIC_URL:?define PUBLIC_URL, p. ej. https://midominio.com}
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
     depends_on:
       - backend
     networks:
@@ -81,6 +126,8 @@ services:
     ports:
       - "80:80"
       - "443:443"
+    security_opt:
+      - no-new-privileges:true
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - /etc/letsencrypt:/etc/letsencrypt:ro

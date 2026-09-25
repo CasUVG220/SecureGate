@@ -12,9 +12,12 @@ services:
     environment:
       POSTGRES_DB: securegate
       POSTGRES_USER: sguser
-      POSTGRES_PASSWORD: sgpassword123
+      # Sólo desarrollo. Cámbiala en .env si esta base queda accesible desde fuera.
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-sgpassword123}
     ports:
-      - "5433:5432"
+      # Sólo el propio equipo: antes escuchaba en 0.0.0.0 con una contraseña
+      # publicada en el repositorio, o sea, abierta a toda la red de la VM.
+      - "127.0.0.1:5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql
@@ -30,13 +33,35 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
+      target: dev
     container_name: securegate-backend
     restart: unless-stopped
     environment:
       NODE_ENV: development
       PORT: 3000
-      DATABASE_URL: postgresql://sguser:sgpassword123@db:5432/securegate
-      JWT_SECRET: securegate_jwt_secret_dev
+      # Cuentas demo (admin@securegate.com …) y pago con tarjeta simulado: SÓLO
+      # en este compose de desarrollo. El de producción no los define, y el
+      # backend en producción desactiva las cuentas demo y responde 501 al pago.
+      SEED_DEMO: "true"
+      PAGOS_TARJETA_SIMULADA: "true"
+
+      # Por defecto apunta al Postgres local del compose (servicio `db`). Para
+      # trabajar contra Cloud SQL (Sprint 8) exporta DATABASE_URL en el shell
+      # antes de `docker compose up` (ver scripts/migrate-to-cloudsql.sh); el
+      # servicio `db` sigue levantándose pero el backend no lo usa.
+      DATABASE_URL: "${DATABASE_URL:-postgresql://sguser:${POSTGRES_PASSWORD:-sgpassword123}@db:5432/securegate}"
+      # Tamaño del pool de pg. 20 va bien con el Postgres local (max_connections
+      # 100); contra Cloud SQL db-f1-micro (25 conexiones) bájalo a 10.
+      DB_POOL_MAX: "${DB_POOL_MAX:-20}"
+      # Sin valor por defecto a propósito: el que estaba aquí era público (vivía en
+      # el repositorio) y con él cualquiera fabricaba un token de owner. Si no lo
+      # defines en .env, el backend genera uno aleatorio en cada arranque (las
+      # sesiones y licencias de garita se invalidan al reiniciar). deploy.sh
+      # crea uno persistente la primera vez.
+      JWT_SECRET: ${JWT_SECRET:-}
+      # Opcional. Vacío: en desarrollo el CORS refleja el origen del navegador.
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-}
+      GOOGLE_CLOUD_API_KEY: ${GOOGLE_CLOUD_API_KEY:-}
       TZ: America/Guatemala
       APP_TZ: America/Guatemala
       # Overrides sólo para pruebas de carga (ver backend/loadtest/). Sin
@@ -49,6 +74,7 @@ services:
     volumes:
       - ./backend/src:/app/src
       - ./database/init.sql:/app/database/init.sql:ro
+      - ./database/seed-dev.sql:/app/database/seed-dev.sql:ro
     depends_on:
       db:
         condition: service_healthy
@@ -59,6 +85,7 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      target: dev
     container_name: securegate-frontend
     restart: unless-stopped
     environment:
