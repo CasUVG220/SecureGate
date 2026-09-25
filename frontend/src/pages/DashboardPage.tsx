@@ -1,20 +1,22 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { getDashboard, type DashboardData } from '../services/api';
-import { Badge, Button, EmptyState, TelemetryStrip, TelemetrySkeleton, cx } from '../components/ui';
+import {
+  AccesosPorHora, BarList, ResumenCifras, ResumenCifrasEsqueleto, comparar, fmtNumero, rellenar,
+} from '../components/charts';
+import { Badge, Button, EmptyState, cx } from '../components/ui';
 import Skeleton from '../components/ui/Skeleton';
 import { useTranslation } from '../i18n/useTranslation';
 import { inicial, tiempoRelativo } from '../utils/tiempo';
 
 const ICON = {
-  accesos:    'M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M9 7a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75',
-  mora:       'M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6',
-  pendientes: 'M12 8v4l3 2M12 3a9 9 0 100 18 9 9 0 000-18z',
-  dentro:     'M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2zM9 22V12h6v10',
-  inbox:      'M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3',
+  dentro: 'M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2zM9 22V12h6v10',
+  inbox:  'M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3',
 };
 
-export default function DashboardPage() {
-  const { t } = useTranslation();
+const LOCALE = { es: 'es-GT', en: 'en-US' } as const;
+
+export default function DashboardPage({ onNavigate }: { onNavigate?: (pagina: string) => void } = {}) {
+  const { t, language: lang } = useTranslation();
   const [data, setData]       = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   // Se guarda la clave de traducción, no el texto: `t` cambia de identidad en
@@ -39,8 +41,6 @@ export default function DashboardPage() {
   useEffect(() => { cargar(); }, [cargar]);
 
   const recientes = useMemo(() => data?.accesos_recientes ?? [], [data]);
-  // Visitantes todavía dentro entre los últimos accesos que devuelve la API.
-  const dentro = useMemo(() => recientes.filter(a => !a.timestamp_salida).length, [recientes]);
 
   /** Casas con más movimiento entre los accesos recientes, de mayor a menor. */
   const topCasas = useMemo(() => {
@@ -52,41 +52,22 @@ export default function DashboardPage() {
       .slice(0, 5);
   }, [recientes]);
 
+  const n = (x: number) => fmtNumero(x, lang);
+  // Sólo la inicial en mayúscula ("Jueves, 24 de septiembre"): `capitalize`
+  // de CSS la pondría en cada palabra.
+  const fecha = new Date().toLocaleDateString(LOCALE[lang], { weekday: 'long', day: 'numeric', month: 'long' });
+  const hoy = fecha.charAt(0).toUpperCase() + fecha.slice(1);
+
   return (
     <div className="sg-page">
       <div className="sg-page-inner space-y-5">
         <header className="sg-panel-heading">
           <div>
-            <p className="sg-eyebrow">SecureGate</p>
-            <h1 className="mt-1 text-2xl font-bold text-gray-50 sm:text-3xl">{t('dashboard.title')}</h1>
+            <h1 className="text-2xl font-bold text-gray-50 sm:text-3xl">{t('dashboard.title')}</h1>
             <p className="mt-1 text-sm text-gray-400">{t('dashboard.subtitle')}</p>
           </div>
-          <Badge tone="success" dot>{t('dashboard.gateOnline')}</Badge>
+          <p className="text-sm font-medium text-gray-300">{hoy}</p>
         </header>
-
-        <section className="sg-hero" aria-label="Resumen de control de acceso">
-          <div className="sg-hero-grid">
-            <div>
-              <p className="sg-hero-label">Control de acceso</p>
-              <h2 className="sg-hero-title">Todo lo importante de tu comunidad, en una mirada.</h2>
-              <p className="sg-hero-copy">Monitorea la actividad de la garita y detecta pagos o residentes que requieren seguimiento.</p>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="sg-hero-stat">
-                <p className="sg-hero-stat-label">Dentro ahora</p>
-                <p className="sg-hero-stat-value">
-                  {loading ? <Skeleton height="1.75rem" width="2.5rem" /> : dentro}
-                </p>
-              </div>
-              <div className="sg-hero-stat">
-                <p className="sg-hero-stat-label">Accesos hoy</p>
-                <p className="sg-hero-stat-value">
-                  {loading ? <Skeleton height="1.75rem" width="2.5rem" /> : data?.accesos_hoy ?? 0}
-                </p>
-              </div>
-            </div>
-          </div>
-        </section>
 
         {errorKey && (
           <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-danger-500/30 bg-danger-500/10 px-4 py-3 text-sm text-danger-400">
@@ -95,48 +76,54 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {/* Consola de Telemetría Operativa (HUD) */}
-        {loading ? (
-          <TelemetrySkeleton count={4} />
+        {loading && !data ? (
+          <ResumenCifrasEsqueleto filas={3} />
         ) : data ? (
-          <TelemetryStrip
-            eyebrow="Consola de Garita · Telemetría en Vivo"
-            statusBadge={<Badge tone="success" dot>{t('dashboard.gateOnline')}</Badge>}
-            items={[
-              {
-                id: 'accesos',
-                label: t('dashboard.accessesToday'),
-                value: data.accesos_hoy,
-                icon: ICON.accesos,
-                tone: 'brand',
-                hint: t('dashboard.todayHint'),
-              },
+          <ResumenCifras
+            ariaLabel={t('dashboard.summary')}
+            principal={{
+              etiqueta: t('dashboard.accessesToday'),
+              valor: n(data.accesos_hoy),
+              comparacion: comparar(data.accesos_hoy, data.accesos_ayer_misma_hora, {
+                formato: n, bueno: null, lang,
+                frente: t('dashboard.vsYesterday'),
+                sinBase: t('dashboard.noYesterday'),
+              }),
+              grafico: (
+                <AccesosPorHora
+                  porHora={data.accesos_por_hora}
+                  lang={lang}
+                  etiquetas={{ serie: t('dashboard.accessesToday'), maximo: t('stats.chart.peak'), vacio: t('dashboard.noAccessesToday') }}
+                  ariaLabel={`${t('dashboard.byHour')}. ${t('stats.chart.keyboardHint')}`}
+                />
+              ),
+            }}
+            filas={[
               {
                 id: 'dentro',
-                label: t('dashboard.insideNow'),
-                value: dentro,
-                icon: ICON.dentro,
-                tone: 'success',
-                hint: t('dashboard.insideNowHint'),
+                etiqueta: t('dashboard.insideNow'),
+                valor: n(data.dentro_ahora),
+                nota: t('dashboard.insideNowHint'),
               },
               {
                 id: 'pendientes',
-                label: t('dashboard.pendingPayments'),
-                value: data.pagos_pendientes,
-                icon: ICON.pendientes,
-                tone: 'warning',
-                hint: t('dashboard.pendingHint'),
-                highlight: data.pagos_pendientes > 0,
-                actionLabel: data.pagos_pendientes > 0 ? 'Verificar →' : undefined,
+                etiqueta: t('dashboard.pendingPayments'),
+                valor: n(data.pagos_pendientes),
+                nota: data.pagos_pendientes ? t('dashboard.pendingHint') : t('dashboard.pendingNone'),
+                atencion: data.pagos_pendientes > 0 ? 'warning' : undefined,
+                accion: onNavigate && data.pagos_pendientes > 0
+                  ? { texto: t('dashboard.goVerify'), onClick: () => onNavigate('verificacion') }
+                  : undefined,
               },
               {
                 id: 'mora',
-                label: t('dashboard.residentsInDebt'),
-                value: data.residentes_mora,
-                icon: ICON.mora,
-                tone: 'danger',
-                hint: t('dashboard.debtHint'),
-                highlight: data.residentes_mora > 0,
+                etiqueta: t('dashboard.residentsInDebt'),
+                valor: n(data.residentes_mora),
+                nota: data.residentes_mora ? t('dashboard.debtHint') : t('dashboard.debtNone'),
+                atencion: data.residentes_mora > 0 ? 'danger' : undefined,
+                accion: onNavigate && data.residentes_mora > 0
+                  ? { texto: t('dashboard.goResidents'), onClick: () => onNavigate('residentes') }
+                  : undefined,
               },
             ]}
           />
@@ -145,18 +132,15 @@ export default function DashboardPage() {
         {/* En pantallas anchas la actividad ocupa dos tercios y el resumen el
             tercio restante, en vez de apilarse a lo largo de toda la página. */}
         <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
-          <section className="sg-card overflow-hidden xl:col-span-2">
+          <section className="sg-card min-w-0 overflow-hidden xl:col-span-2">
             <header className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-700 px-5 py-4">
               <div>
                 <h2 className="text-base font-bold tracking-tight text-gray-50">{t('dashboard.recentAccesses')}</h2>
                 <p className="mt-0.5 text-sm text-gray-400">{t('dashboard.recentSubtitle')}</p>
               </div>
-              {!loading && dentro > 0 && (
-                <Badge tone="success" dot>{dentro} {t('dashboard.openAccesses')}</Badge>
-              )}
             </header>
 
-            {loading ? (
+            {loading && !data ? (
               <ul className="divide-y divide-gray-700">
                 {Array.from({ length: 5 }).map((_, i) => (
                   <li key={i} className="flex items-center gap-3 px-5 py-3.5">
@@ -215,11 +199,11 @@ export default function DashboardPage() {
             )}
           </section>
 
-          <section className="sg-card p-5">
+          <section className="sg-card min-w-0 p-5">
             <h2 className="text-base font-bold tracking-tight text-gray-50">{t('dashboard.topHouses')}</h2>
             <p className="mt-0.5 text-sm text-gray-400">{t('dashboard.topHousesHint')}</p>
 
-            {loading ? (
+            {loading && !data ? (
               <div className="mt-5 space-y-4">
                 {Array.from({ length: 4 }).map((_, i) => (
                   <div key={i} className="space-y-2">
@@ -231,28 +215,11 @@ export default function DashboardPage() {
             ) : topCasas.length === 0 ? (
               <EmptyState compact icon={ICON.dentro} title={t('dashboard.noAccesses')} />
             ) : (
-              <ul className="mt-5 space-y-4">
-                {topCasas.map(casa => (
-                  <li key={casa.numero}>
-                    <div className="flex items-baseline justify-between gap-3">
-                      <span className="text-sm font-semibold text-gray-100">
-                        {t('dashboard.unit')} {casa.numero}
-                      </span>
-                      <span className="text-xs font-bold tabular-nums text-gray-400">
-                        {casa.total} {t('dashboard.visits')}
-                      </span>
-                    </div>
-                    {/* La barra compara contra la casa con más movimiento, no
-                        contra el total: hace legible la diferencia relativa. */}
-                    <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-gray-500/15">
-                      <div
-                        className="h-full rounded-full bg-brand-500"
-                        style={{ width: `${Math.round((casa.total / topCasas[0].total) * 100)}%` }}
-                      />
-                    </div>
-                  </li>
-                ))}
-              </ul>
+              <BarList
+                className="mt-5"
+                items={topCasas.map(c => ({ id: c.numero, etiqueta: `${t('dashboard.unit')} ${c.numero}`, valor: c.total }))}
+                formato={x => rellenar(t(x === 1 ? 'stats.unit.visitOne' : 'stats.unit.visits'), { n: n(x) })}
+              />
             )}
           </section>
         </div>
