@@ -2,6 +2,14 @@
 #
 # SecureGate — Backup diario de PostgreSQL a Google Cloud Storage
 #
+# ¡OJO! Sólo sirve para el Postgres EN CONTENEDOR (docker-compose.yml, o el
+# perfil `local-db` de producción). Desde el Sprint 8 la base de producción es
+# Cloud SQL, que NO tiene contenedor `securegate-db`: allí usa los backups
+# automáticos y la recuperación a un punto en el tiempo de Cloud SQL
+#   gcloud sql instances patch securegate-pg --backup-start-time=03:00 \
+#     --enable-point-in-time-recovery
+# y prueba una restauración periódicamente.
+#
 # Hace pg_dump del contenedor de la base de datos, lo comprime con timestamp,
 # lo sube a un bucket de GCS, limpia los backups locales antiguos y mantiene
 # una retención de los últimos 30 backups en el bucket.
