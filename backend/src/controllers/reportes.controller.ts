@@ -1,14 +1,25 @@
 import { Request, Response } from 'express';
 import pool from '../db/pool';
 import { tenantFilter } from '../utils/tenant';
+import { serverError } from '../utils/http';
 
+/**
+ * Escapa una celda CSV y neutraliza la "inyección de fórmulas": un visitante
+ * registrado como `=HYPERLINK(...)` o `@SUM(...)` se ejecutaría al abrir el
+ * archivo en Excel/Sheets. Las celdas de texto que empiezan con = + - @ (o
+ * tab/retorno) se prefijan con una comilla simple, que las vuelve texto.
+ * Los números negativos legítimos (monto) se dejan tal cual.
+ */
 const escapeCSV = (value: unknown): string => {
-  const str = value == null ? '' : String(value);
-  if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+  let str = value == null ? '' : String(value);
+  if (typeof value !== 'number' && /^[=+\-@\t\r]/.test(str)) str = `'${str}`;
+  if (str.includes(',') || str.includes('"') || str.includes('\n') || str.includes('\r')) {
     return `"${str.replace(/"/g, '""')}"`;
   }
   return str;
 };
+
+const FECHA_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 const toRow = (fields: unknown[]): string => fields.map(escapeCSV).join(',');
 
@@ -16,6 +27,9 @@ export const reporteAccesos = async (req: Request, res: Response) => {
   const { desde, hasta } = req.query as { desde?: string; hasta?: string };
   if (!desde || !hasta) {
     return res.status(400).json({ error: 'Parámetros desde y hasta requeridos' });
+  }
+  if (!FECHA_RE.test(desde) || !FECHA_RE.test(hasta)) {
+    return res.status(400).json({ error: 'desde y hasta deben tener el formato AAAA-MM-DD' });
   }
 
   const ts = tenantFilter(req.user!, 'ra');
@@ -66,7 +80,7 @@ export const reporteAccesos = async (req: Request, res: Response) => {
     res.setHeader('Content-Disposition', `attachment; filename="accesos_${desde}_${hasta}.csv"`);
     res.send(lines.join('\n'));
   } catch (error) {
-    res.status(500).json({ error: 'Error al generar reporte de accesos', detail: String(error) });
+    serverError(res, error, 'Error al generar reporte de accesos');
   }
 };
 
@@ -74,6 +88,9 @@ export const reportePagos = async (req: Request, res: Response) => {
   const { desde, hasta } = req.query as { desde?: string; hasta?: string };
   if (!desde || !hasta) {
     return res.status(400).json({ error: 'Parámetros desde y hasta requeridos' });
+  }
+  if (!FECHA_RE.test(desde) || !FECHA_RE.test(hasta)) {
+    return res.status(400).json({ error: 'desde y hasta deben tener el formato AAAA-MM-DD' });
   }
 
   const ts = tenantFilter(req.user!, 'p');
@@ -110,6 +127,6 @@ export const reportePagos = async (req: Request, res: Response) => {
     res.setHeader('Content-Disposition', `attachment; filename="pagos_${desde}_${hasta}.csv"`);
     res.send(lines.join('\n'));
   } catch (error) {
-    res.status(500).json({ error: 'Error al generar reporte de pagos', detail: String(error) });
+    serverError(res, error, 'Error al generar reporte de pagos');
   }
 };

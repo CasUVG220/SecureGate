@@ -1,5 +1,10 @@
 import { Request, Response } from 'express';
 import pool from '../db/pool';
+import { ownershipParams, resolverSucursal } from '../utils/tenant';
+import { validarPassword, BCRYPT_COST } from '../utils/password';
+import { revocarAccesoDeUsuario } from '../utils/revocacion';
+import { revocarSesionesDeUsuario } from './auth.controller';
+import { serverError } from '../utils/http';
 
 export const getUsuarios = async (req: Request, res: Response) => {
   const user = req.user!;
@@ -32,7 +37,7 @@ export const getUsuarios = async (req: Request, res: Response) => {
     );
     res.json(result.rows);
   } catch (err) {
-    res.status(500).json({ error: 'Error al obtener usuarios', detail: String(err) });
+    serverError(res, err, 'Error al obtener usuarios');
   }
 };
 
@@ -53,23 +58,52 @@ export const getUsuariosSucursal = async (req: Request, res: Response) => {
     );
     res.json(result.rows);
   } catch (err) {
-    res.status(500).json({ error: 'Error al obtener usuarios', detail: String(err) });
+    serverError(res, err, 'Error al obtener usuarios');
   }
 };
 
+/**
+ * Baja lógica de un usuario. Cada rol sólo puede dar de baja a quien tiene por
+ * debajo y dentro de su alcance:
+ *
+ *   owner            → cualquiera menos otro owner
+ *   admin_empresa    → admin_sucursal / agente / residente de SU empresa
+ *   admin_sucursal   → admin_sucursal / agente / residente de SU sucursal
+ *
+ * Nadie se da de baja a sí mismo. Antes el UPDATE no filtraba nada: un admin de
+ * sucursal de la empresa X podía desactivar al owner o a los admins de otras
+ * empresas con sólo conocer el UUID.
+ */
 export const deleteUsuario = async (req: Request, res: Response) => {
   const { id } = req.params;
+  const user = req.user!;
   try {
     const result = await pool.query(
-      `UPDATE usuarios SET activo = FALSE WHERE id = $1 RETURNING id, nombre, email, rol, activo`,
-      [id]
+      `UPDATE usuarios u SET activo = FALSE
+        WHERE u.id = $1
+          AND u.id <> $2
+          AND u.activo = TRUE
+          AND (
+            ($3::text = 'owner' AND u.rol <> 'owner')
+            OR ($3::text = 'admin_empresa'
+                AND u.rol IN ('admin_sucursal', 'agente', 'residente')
+                AND EXISTS (SELECT 1 FROM sucursales s WHERE s.id = u.sucursal_id AND s.empresa_id = $4))
+            OR ($3::text = 'admin_sucursal'
+                AND u.rol IN ('admin_sucursal', 'agente', 'residente')
+                AND u.sucursal_id = $5)
+          )
+        RETURNING u.id, u.nombre, u.email, u.rol, u.activo`,
+      [id, user.id, ...ownershipParams(user)]
     );
     if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'Usuario no encontrado' });
+      return res.status(404).json({ error: 'Usuario no encontrado o sin acceso' });
     }
+    // Sin refresh token no renueva la sesión, y el access token vigente se corta ya.
+    await revocarSesionesDeUsuario(pool, id);
+    revocarAccesoDeUsuario(id);
     res.json(result.rows[0]);
   } catch (error) {
-    res.status(500).json({ error: 'Error al eliminar usuario', detail: String(error) });
+    serverError(res, error, 'Error al eliminar usuario');
   }
 };
 
@@ -96,26 +130,23 @@ export const createUsuario = async (req: Request, res: Response) => {
     return res.status(400).json({ error: 'numero_casa es requerido para rol residente' });
   }
 
-  let resolvedSucursalId: string | null = user.sucursal_id;
-  if ((user.rol === 'owner' || user.rol === 'admin_empresa') && req.body.sucursal_id) {
-    resolvedSucursalId = req.body.sucursal_id;
-  }
+  const correo = email.trim().toLowerCase();
+  const problemaPassword = validarPassword(password, correo);
+  if (problemaPassword) return res.status(400).json({ error: problemaPassword });
 
-  if (!resolvedSucursalId && user.rol !== 'owner') {
-    return res.status(400).json({ error: 'No tienes sucursal asignada' });
+  // La sucursal sale del JWT; owner/admin_empresa deben indicarla y se comprueba
+  // que sea de su alcance (antes se aceptaba cualquier sucursal_id del body).
+  const sucResuelta = await resolverSucursal(user, req.body.sucursal_id, pool);
+  if (sucResuelta.ok === false) {
+    return res.status(sucResuelta.status).json({ error: sucResuelta.error });
   }
+  const resolvedSucursalId = sucResuelta.id;
 
-  let resolvedEmpresaId: string | null = user.empresa_id;
-
-  if (resolvedSucursalId && !resolvedEmpresaId) {
-    const sucCheck = await pool.query(
-      'SELECT empresa_id FROM sucursales WHERE id = $1',
-      [resolvedSucursalId]
-    );
-    if (sucCheck.rows.length > 0) {
-      resolvedEmpresaId = sucCheck.rows[0].empresa_id as string;
-    }
-  }
+  const sucCheck = await pool.query(
+    'SELECT empresa_id FROM sucursales WHERE id = $1',
+    [resolvedSucursalId]
+  );
+  const resolvedEmpresaId: string | null = sucCheck.rows[0]?.empresa_id ?? user.empresa_id;
 
   const client = await pool.connect();
   try {
@@ -123,9 +154,9 @@ export const createUsuario = async (req: Request, res: Response) => {
 
     const userResult = await client.query(
       `INSERT INTO usuarios (nombre, email, password_hash, rol, sucursal_id, empresa_id, activo)
-       VALUES ($1, $2, crypt($3, gen_salt('bf')), $4, $5, $6, TRUE)
+       VALUES ($1, $2, crypt($3, gen_salt('bf', ${BCRYPT_COST})), $4, $5, $6, TRUE)
        RETURNING id, nombre, email, rol, sucursal_id, empresa_id, activo, created_at`,
-      [nombre, email, password, rol, resolvedSucursalId, resolvedEmpresaId]
+      [nombre.trim(), correo, password, rol, resolvedSucursalId, resolvedEmpresaId]
     );
     const newUser = userResult.rows[0] as { id: string };
 
@@ -145,7 +176,7 @@ export const createUsuario = async (req: Request, res: Response) => {
     if (e.code === '23505') {
       return res.status(409).json({ error: 'El email ya está registrado' });
     }
-    res.status(500).json({ error: 'Error al crear usuario', detail: String(err) });
+    serverError(res, err, 'Error al crear usuario');
   } finally {
     client.release();
   }
@@ -187,6 +218,6 @@ export const updatePreferencias = async (req: Request, res: Response) => {
     );
     res.json({ message: 'Preferencias actualizadas' });
   } catch (error) {
-    res.status(500).json({ error: 'Error al actualizar preferencias', detail: String(error) });
+    serverError(res, error, 'Error al actualizar preferencias');
   }
 };

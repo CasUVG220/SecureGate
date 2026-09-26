@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import pool from '../db/pool';
 import { tenantFilter, ownershipClause, ownershipParams } from '../utils/tenant';
 import { APP_TZ, Consultable } from '../utils/reservas';
+import { serverError } from '../utils/http';
 
 /**
  * Marca como saldados los cargos de reserva pendientes del residente.
@@ -26,6 +27,15 @@ export async function liquidarCargosReserva(
   return result.rowCount ?? 0;
 }
 
+/** Monto positivo, finito y con tope razonable. */
+const montoValido = (v: unknown): boolean => {
+  const n = Number(v);
+  return Number.isFinite(n) && n > 0 && n <= 1_000_000;
+};
+
+/** El comprobante es un data URI; ~5 MB de imagen ≈ 7 M caracteres en base64. */
+const COMPROBANTE_MAX_CHARS = 7_000_000;
+
 export const getPagos = async (req: Request, res: Response) => {
   const ts = tenantFilter(req.user!, 'p');
   try {
@@ -41,7 +51,7 @@ export const getPagos = async (req: Request, res: Response) => {
     );
     res.json(result.rows);
   } catch (error) {
-    res.status(500).json({ error: 'Error al obtener pagos', detail: String(error) });
+    serverError(res, error, 'Error al obtener pagos');
   }
 };
 
@@ -52,7 +62,7 @@ export const createPago = async (req: Request, res: Response) => {
   if (!residente_id || monto === undefined || !registrado_por) {
     return res.status(400).json({ error: 'Campos requeridos: residente_id, monto' });
   }
-  if (Number(monto) <= 0) {
+  if (!montoValido(monto)) {
     return res.status(400).json({ error: 'El monto debe ser mayor a 0' });
   }
 
@@ -60,10 +70,11 @@ export const createPago = async (req: Request, res: Response) => {
   try {
     await client.query('BEGIN');
 
-    // Get residente + sucursal_id in one query
+    // Residente dentro del alcance de quien cobra (antes se aceptaba cualquiera).
     const residente = await client.query(
-      'SELECT id, sucursal_id FROM residentes WHERE id = $1',
-      [residente_id]
+      `SELECT id, sucursal_id FROM residentes WHERE id = $1
+         AND ${ownershipClause('residentes', 2)}`,
+      [residente_id, ...ownershipParams(req.user!)]
     );
     if (residente.rows.length === 0) {
       await client.query('ROLLBACK');
@@ -92,7 +103,7 @@ export const createPago = async (req: Request, res: Response) => {
     res.status(201).json(pagoResult.rows[0]);
   } catch (error) {
     await client.query('ROLLBACK');
-    res.status(500).json({ error: 'Error al crear pago', detail: String(error) });
+    serverError(res, error, 'Error al crear pago');
   } finally {
     client.release();
   }
@@ -108,7 +119,8 @@ export const aprobarPago = async (req: Request, res: Response) => {
       `SELECT p.residente_id, p.estado
        FROM pagos p
        WHERE p.id = $1
-         AND ${ownershipClause('p', 2)}`,
+         AND ${ownershipClause('p', 2)}
+       FOR UPDATE OF p`,
       [id, ...ownershipParams(req.user!)]
     );
     if (pagoResult.rows.length === 0) {
@@ -121,6 +133,12 @@ export const aprobarPago = async (req: Request, res: Response) => {
     if (pagoResult.rows[0].estado === 'aprobado') {
       await client.query('ROLLBACK');
       return res.status(409).json({ error: 'El pago ya fue aprobado' });
+    }
+    // Un pago rechazado no se "resucita" aprobándolo después: hay que registrar
+    // otro. (Con FOR UPDATE dos aprobaciones simultáneas ya no liquidan dos veces.)
+    if (pagoResult.rows[0].estado !== 'pendiente') {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ error: `El pago tiene estado '${pagoResult.rows[0].estado}' y no puede aprobarse` });
     }
 
     const updated = await client.query(
@@ -140,7 +158,7 @@ export const aprobarPago = async (req: Request, res: Response) => {
     res.json(updated.rows[0]);
   } catch (error) {
     await client.query('ROLLBACK');
-    res.status(500).json({ error: 'Error al aprobar pago', detail: String(error) });
+    serverError(res, error, 'Error al aprobar pago');
   } finally {
     client.release();
   }
@@ -171,7 +189,7 @@ export const rechazarPago = async (req: Request, res: Response) => {
     }
     res.json(result.rows[0]);
   } catch (error) {
-    res.status(500).json({ error: 'Error al rechazar pago', detail: String(error) });
+    serverError(res, error, 'Error al rechazar pago');
   }
 };
 
@@ -184,8 +202,15 @@ export const crearTransferencia = async (req: Request, res: Response) => {
       error: 'Campos requeridos: monto, referencia, banco, fecha_transferencia',
     });
   }
-  if (Number(monto) <= 0) {
+  if (!montoValido(monto)) {
     return res.status(400).json({ error: 'El monto debe ser mayor a 0' });
+  }
+  if (String(referencia).length > 100 || String(banco).length > 100 ||
+      Number.isNaN(Date.parse(String(fecha_transferencia)))) {
+    return res.status(400).json({ error: 'referencia, banco o fecha_transferencia inválidos' });
+  }
+  if (comprobante != null && (typeof comprobante !== 'string' || comprobante.length > COMPROBANTE_MAX_CHARS)) {
+    return res.status(413).json({ error: 'El comprobante es demasiado grande (máx. 5 MB)' });
   }
 
   try {
@@ -208,7 +233,7 @@ export const crearTransferencia = async (req: Request, res: Response) => {
     );
     res.status(201).json(result.rows[0]);
   } catch (error) {
-    res.status(500).json({ error: 'Error al registrar comprobante', detail: String(error) });
+    serverError(res, error, 'Error al registrar comprobante');
   }
 };
 
@@ -236,13 +261,22 @@ export function simularAutorizacionTarjeta(ultimos4: string): 'aprobado' | 'rech
  * backend no los recibe ni los almacena.
  */
 export const pagarConTarjeta = async (req: Request, res: Response) => {
+  // La pasarela es un MOCK que liquida la deuda con cualquier tarjeta. Sólo se
+  // habilita de forma explícita (PAGOS_TARJETA_SIMULADA=true, docker-compose de
+  // desarrollo); en producción responde 501 hasta que exista la integración
+  // real. Sin este interruptor, cualquier residente podía dejar su saldo en 0
+  // con una sola petición.
+  if (process.env.PAGOS_TARJETA_SIMULADA !== 'true') {
+    return res.status(501).json({ error: 'El pago con tarjeta no está disponible todavía' });
+  }
+
   const usuario_id = req.user?.id;
   const { monto, ultimos4, titular } = req.body ?? {};
 
   if (monto === undefined || !ultimos4) {
     return res.status(400).json({ error: 'Campos requeridos: monto, ultimos4' });
   }
-  if (Number(monto) <= 0) {
+  if (!montoValido(monto)) {
     return res.status(400).json({ error: 'El monto debe ser mayor a 0' });
   }
   if (!/^[0-9]{4}$/.test(String(ultimos4))) {
@@ -288,7 +322,7 @@ export const pagarConTarjeta = async (req: Request, res: Response) => {
     res.status(201).json(result.rows[0]);
   } catch (error) {
     await client.query('ROLLBACK').catch(() => {});
-    res.status(500).json({ error: 'Error al procesar el pago con tarjeta', detail: String(error) });
+    serverError(res, error, 'Error al procesar el pago con tarjeta');
   } finally {
     client.release();
   }
@@ -315,7 +349,7 @@ export const getPendientesVerificacion = async (req: Request, res: Response) => 
     );
     res.json(result.rows);
   } catch (error) {
-    res.status(500).json({ error: 'Error al obtener pagos pendientes', detail: String(error) });
+    serverError(res, error, 'Error al obtener pagos pendientes');
   }
 };
 
@@ -334,7 +368,7 @@ export const getMisPagos = async (req: Request, res: Response) => {
     );
     res.json(result.rows);
   } catch (error) {
-    res.status(500).json({ error: 'Error al obtener pagos', detail: String(error) });
+    serverError(res, error, 'Error al obtener pagos');
   }
 };
 
@@ -381,8 +415,6 @@ export const getMiResumenMes = async (req: Request, res: Response) => {
       estado_pago,
     });
   } catch (error) {
-    res
-      .status(500)
-      .json({ error: 'Error al obtener el resumen del mes', detail: String(error) });
+    serverError(res, error, 'Error al obtener el resumen del mes');
   }
 };

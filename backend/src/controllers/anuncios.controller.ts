@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import pool from '../db/pool';
-import { tenantFilter, ownershipClause, ownershipParams, resolveSucursalId } from '../utils/tenant';
+import { tenantFilter, ownershipClause, ownershipParams, resolverSucursal } from '../utils/tenant';
+import { serverError } from '../utils/http';
 
 const PRIORIDADES = ['normal', 'importante', 'urgente'];
 
@@ -32,7 +33,7 @@ export const getAnuncios = async (req: Request, res: Response) => {
     );
     res.json(result.rows);
   } catch (error) {
-    res.status(500).json({ error: 'Error al obtener anuncios', detail: String(error) });
+    serverError(res, error, 'Error al obtener anuncios');
   }
 };
 
@@ -47,10 +48,11 @@ export const createAnuncio = async (req: Request, res: Response) => {
     return res.status(400).json({ error: 'prioridad debe ser: normal, importante o urgente' });
   }
 
-  const sucursal_id = await resolveSucursalId(req.user!.sucursal_id, bodySucursalId, pool);
-  if (!sucursal_id) {
-    return res.status(400).json({ error: 'No se pudo determinar la sucursal del anuncio' });
+  const sucResuelta = await resolverSucursal(req.user!, bodySucursalId, pool);
+  if (sucResuelta.ok === false) {
+    return res.status(sucResuelta.status).json({ error: sucResuelta.error });
   }
+  const sucursal_id = sucResuelta.id;
 
   try {
     const result = await pool.query(
@@ -65,7 +67,7 @@ export const createAnuncio = async (req: Request, res: Response) => {
     );
     res.status(201).json(result.rows[0]);
   } catch (error) {
-    res.status(500).json({ error: 'Error al crear anuncio', detail: String(error) });
+    serverError(res, error, 'Error al crear anuncio');
   }
 };
 
@@ -102,7 +104,7 @@ export const updateAnuncio = async (req: Request, res: Response) => {
     }
     res.json(result.rows[0]);
   } catch (error) {
-    res.status(500).json({ error: 'Error al actualizar anuncio', detail: String(error) });
+    serverError(res, error, 'Error al actualizar anuncio');
   }
 };
 
@@ -122,7 +124,7 @@ export const deleteAnuncio = async (req: Request, res: Response) => {
     }
     res.json({ message: 'Anuncio eliminado', id: result.rows[0].id });
   } catch (error) {
-    res.status(500).json({ error: 'Error al eliminar anuncio', detail: String(error) });
+    serverError(res, error, 'Error al eliminar anuncio');
   }
 };
 
@@ -158,7 +160,7 @@ export const getMisAnuncios = async (req: Request, res: Response) => {
     );
     res.json(result.rows);
   } catch (error) {
-    res.status(500).json({ error: 'Error al obtener anuncios', detail: String(error) });
+    serverError(res, error, 'Error al obtener anuncios');
   }
 };
 
@@ -167,22 +169,40 @@ export const marcarLeido = async (req: Request, res: Response) => {
   const usuario_id = req.user?.id;
   try {
     const residente = await pool.query(
-      'SELECT id FROM residentes WHERE usuario_id = $1',
+      'SELECT id, sucursal_id FROM residentes WHERE usuario_id = $1',
       [usuario_id]
     );
     if (residente.rows.length === 0) {
       return res.status(404).json({ error: 'Residente no encontrado' });
     }
-    const residente_id = residente.rows[0].id;
+    const { id: residente_id, sucursal_id } = residente.rows[0];
 
-    await pool.query(
+    // Sólo se marca un anuncio que el residente PUEDE ver: de su sucursal y,
+    // si es personal, dirigido a él (mismo criterio que getMisAnuncios). Antes se
+    // insertaba la lectura sobre cualquier id: un residente de otra empresa
+    // inflaba el contador de lecturas ajeno y el 200 confirmaba que el anuncio
+    // existía (hallazgo S-05, backend/securitytest).
+    const anuncio = await pool.query(
       `INSERT INTO anuncio_lecturas (anuncio_id, residente_id)
-       VALUES ($1, $2)
-       ON CONFLICT (anuncio_id, residente_id) DO NOTHING`,
-      [id, residente_id]
+       SELECT a.id, $2 FROM anuncios a
+        WHERE a.id = $1
+          AND a.sucursal_id = $3
+          AND (a.residente_id IS NULL OR a.residente_id = $2)
+       ON CONFLICT (anuncio_id, residente_id) DO NOTHING
+       RETURNING anuncio_id`,
+      [id, residente_id, sucursal_id]
     );
+    if (anuncio.rows.length === 0) {
+      // O no existe / no es suyo, o ya estaba leído: se distingue sin filtrar ajenos.
+      const visible = await pool.query(
+        `SELECT 1 FROM anuncios a
+          WHERE a.id = $1 AND a.sucursal_id = $2 AND (a.residente_id IS NULL OR a.residente_id = $3)`,
+        [id, sucursal_id, residente_id]
+      );
+      if (visible.rows.length === 0) return res.status(404).json({ error: 'Anuncio no encontrado' });
+    }
     res.json({ anuncio_id: id, leido: true });
   } catch (error) {
-    res.status(500).json({ error: 'Error al marcar anuncio como leído', detail: String(error) });
+    serverError(res, error, 'Error al marcar anuncio como leído');
   }
 };

@@ -1,5 +1,6 @@
 import { Router } from 'express';
-import { verifyToken } from '../middleware/auth.middleware';
+import { verifyToken, requireStaff, requireAdminSucursal } from '../middleware/auth.middleware';
+import { auditLog } from '../middleware/audit.middleware';
 import {
   getPreautorizaciones,
   createPreautorizacion,
@@ -12,13 +13,14 @@ import {
 
 const router = Router();
 
-router.get('/buscar',     verifyToken, buscarPreautorizacion);
+// Lectura y administración: sólo personal. El residente usa /mis (lo suyo).
+router.get('/buscar',     verifyToken, requireStaff, buscarPreautorizacion);
 router.get('/mis',        verifyToken, getMisPreautorizaciones);
-router.post('/mis',       verifyToken, createMisPreautorizacion);
+router.post('/mis',       verifyToken, auditLog({ accion: 'PREAUTORIZACION_CREADA', tabla: 'preautorizaciones' }), createMisPreautorizacion);
 router.delete('/mis/:id', verifyToken, deleteMisPreautorizacion);
 
-router.get('/',       verifyToken, getPreautorizaciones);
-router.post('/',      verifyToken, createPreautorizacion);
-router.delete('/:id', verifyToken, deletePreautorizacion);
+router.get('/',       verifyToken, requireStaff, getPreautorizaciones);
+router.post('/',      verifyToken, requireAdminSucursal, auditLog({ accion: 'PREAUTORIZACION_CREADA', tabla: 'preautorizaciones' }), createPreautorizacion);
+router.delete('/:id', verifyToken, requireAdminSucursal, auditLog({ accion: 'PREAUTORIZACION_ELIMINADA', tabla: 'preautorizaciones' }), deletePreautorizacion);
 
 export default router;

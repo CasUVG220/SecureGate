@@ -1,7 +1,8 @@
 import { Request, Response } from 'express';
 import pool from '../db/pool';
-import { resolveSucursalId } from '../utils/tenant';
+import { resolverSucursal } from '../utils/tenant';
 import { DEFAULTS_RESERVAS, getConfigEfectiva } from '../utils/reservas';
+import { serverError } from '../utils/http';
 
 /**
  * Configuración de reservas de la sucursal.
@@ -9,14 +10,11 @@ import { DEFAULTS_RESERVAS, getConfigEfectiva } from '../utils/reservas';
  * `es_default: true` SIN crear la fila — la fila nace cuando el admin guarda.
  */
 export const getConfigReservas = async (req: Request, res: Response) => {
-  const sucursal_id = await resolveSucursalId(
-    req.user!.sucursal_id,
-    req.query.sucursal_id as string | undefined,
-    pool
-  );
-  if (!sucursal_id) {
-    return res.status(400).json({ error: 'No se pudo determinar la sucursal' });
+  const sucResuelta = await resolverSucursal(req.user!, req.query.sucursal_id as string | undefined, pool);
+  if (sucResuelta.ok === false) {
+    return res.status(sucResuelta.status).json({ error: sucResuelta.error });
   }
+  const sucursal_id = sucResuelta.id;
 
   try {
     const existente = await pool.query(
@@ -29,9 +27,7 @@ export const getConfigReservas = async (req: Request, res: Response) => {
     const config = await getConfigEfectiva(pool, sucursal_id);
     res.json({ ...config, sucursal_id, es_default: false });
   } catch (error) {
-    res
-      .status(500)
-      .json({ error: 'Error al obtener la configuración de reservas', detail: String(error) });
+    serverError(res, error, 'Error al obtener la configuración de reservas');
   }
 };
 
@@ -47,14 +43,11 @@ export const updateConfigReservas = async (req: Request, res: Response) => {
     buffer_motivo,
   } = req.body;
 
-  const sucursal_id = await resolveSucursalId(
-    req.user!.sucursal_id,
-    req.body.sucursal_id,
-    pool
-  );
-  if (!sucursal_id) {
-    return res.status(400).json({ error: 'No se pudo determinar la sucursal' });
+  const sucResuelta = await resolverSucursal(req.user!, req.body.sucursal_id, pool);
+  if (sucResuelta.ok === false) {
+    return res.status(sucResuelta.status).json({ error: sucResuelta.error });
   }
+  const sucursal_id = sucResuelta.id;
 
   // Validar la coherencia de los límites aquí y no dejar que el CHECK devuelva
   // un 23514 crudo en el campo `detail`.
@@ -134,8 +127,6 @@ export const updateConfigReservas = async (req: Request, res: Response) => {
     );
     res.json({ ...result.rows[0], es_default: false });
   } catch (error) {
-    res
-      .status(500)
-      .json({ error: 'Error al guardar la configuración de reservas', detail: String(error) });
+    serverError(res, error, 'Error al guardar la configuración de reservas');
   }
 };

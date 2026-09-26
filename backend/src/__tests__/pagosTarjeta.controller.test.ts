@@ -57,6 +57,14 @@ describe('simularAutorizacionTarjeta — regla mock determinística', () => {
 });
 
 describe('pagarConTarjeta', () => {
+  // La pasarela simulada sólo se habilita de forma explícita (ver el controller).
+  const previo = process.env.PAGOS_TARJETA_SIMULADA;
+  beforeAll(() => { process.env.PAGOS_TARJETA_SIMULADA = 'true'; });
+  afterAll(() => {
+    if (previo === undefined) delete process.env.PAGOS_TARJETA_SIMULADA;
+    else process.env.PAGOS_TARJETA_SIMULADA = previo;
+  });
+
   it('aprobado: registra el pago simulado y deja el saldo en 0', async () => {
     const client = makeClient('aprobado');
     mockPool.connect.mockResolvedValue(client);
@@ -132,4 +140,27 @@ describe('pagarConTarjeta', () => {
     expect(client.query.mock.calls.map(c => c[0] as string)).not.toContain('BEGIN');
     expect(client.release).toHaveBeenCalled();
   });
+});
+
+describe('pagarConTarjeta — interruptor de la pasarela simulada', () => {
+  const previo = process.env.PAGOS_TARJETA_SIMULADA;
+  afterEach(() => {
+    if (previo === undefined) delete process.env.PAGOS_TARJETA_SIMULADA;
+    else process.env.PAGOS_TARJETA_SIMULADA = previo;
+  });
+
+  it.each([undefined, 'false', '1', ''])(
+    'PAGOS_TARJETA_SIMULADA=%p → 501 y NO toca la base (nadie liquida su deuda con una tarjeta falsa)',
+    async valor => {
+      if (valor === undefined) delete process.env.PAGOS_TARJETA_SIMULADA;
+      else process.env.PAGOS_TARJETA_SIMULADA = valor;
+      mockPool.connect.mockClear();
+
+      const res = makeRes();
+      await pagarConTarjeta(reqCon({ monto: 100, ultimos4: '0000' }), res);
+
+      expect(res.status).toHaveBeenCalledWith(501);
+      expect(mockPool.connect).not.toHaveBeenCalled();
+    },
+  );
 });

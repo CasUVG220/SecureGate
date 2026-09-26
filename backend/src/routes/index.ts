@@ -23,42 +23,52 @@ import ticketsRouter from './tickets.routes';
 import areasRouter from './areas.routes';
 import reservasRouter from './reservas.routes';
 import configReservasRouter from './config-reservas.routes';
-import { verifyToken, requireOwner, requireAdminEmpresa, requireAdminSucursal } from '../middleware/auth.middleware';
+import licenciasRouter from './licencias.routes';
+import syncRouter from './sync.routes';
+import invitacionesRouter from './invitaciones.routes';
+import { verifyToken, requireOwner, requireAdminEmpresa, requireAdminSucursal, requireStaff } from '../middleware/auth.middleware';
 import { getDashboard } from '../controllers/dashboard.controller';
 import { getAuditLogs } from '../controllers/audit.controller';
 import { revisarEstadosMora } from '../jobs/mora.job';
 import { enviarRecordatoriosReservas } from '../jobs/recordatoriosReservas.job';
-
-const loginLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  // Override sólo para pruebas de carga (RATE_LIMIT_LOGIN_MAX) — sin la env
-  // var, el límite de producción sigue siendo 10.
-  max: parseInt(process.env.RATE_LIMIT_LOGIN_MAX || '10', 10),
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { error: 'Demasiados intentos de login' },
-});
+import { expirarInvitaciones } from '../jobs/invitaciones.job';
+import { serverError } from '../utils/http';
 
 const router = Router();
 
-router.use('/auth', loginLimiter, authRouter);
+// Los límites de intentos viven en auth.routes.ts (por IP y por cuenta).
+router.use('/auth', authRouter);
 router.use('/empresas',   verifyToken, empresasRouter);
 router.use('/sucursales', verifyToken, requireAdminEmpresa,    sucursalesRouter);
 // El guard de administración va ruta por ruta: /usuarios/me/preferencias lo
 // usa cualquier usuario para guardar su tema e idioma.
 router.use('/usuarios',   verifyToken, usuariosRouter);
+// residentes/accesos/preautorizaciones/pagos aplican verifyToken y su guard de
+// rol ruta por ruta (hay rutas /me y /mis abiertas al residente).
 router.use('/residentes', residentesRouter);
 router.use('/accesos', accesosRouter);
-router.use('/cargos', cargosRouter);
+// Configuración de cargos por sucursal: sólo administración. Antes /cargos no
+// tenía NINGÚN middleware de autenticación.
+router.use('/cargos', verifyToken, requireAdminSucursal, cargosRouter);
 router.use('/pagos', pagosRouter);
 router.use('/preautorizaciones', preautorizacionesRouter);
-router.use('/ocr', ocrRouter);
-router.use('/reportes', reportesRouter);
-router.use('/configuracion-cargos', configuracionCargosRouter);
+// Proxy hacia Google Vision con nuestra API key: sólo personal autenticado y
+// con límite propio (cuesta dinero por llamada). Antes era anónimo.
+const ocrLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: parseInt(process.env.RATE_LIMIT_OCR_MAX || '30', 10),
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Demasiadas lecturas de documento, espera un momento' },
+});
+router.use('/ocr', verifyToken, requireStaff, ocrLimiter, ocrRouter);
+// Los CSV traen DPI y nombre de todos los visitantes: administración.
+router.use('/reportes', verifyToken, requireAdminSucursal, reportesRouter);
+router.use('/configuracion-cargos', verifyToken, requireAdminSucursal, configuracionCargosRouter);
 
 router.use('/blacklist',          verifyToken, blacklistRouter);
-router.use('/visitantes',         verifyToken, visitantesRouter);
-router.use('/cargos-programados', verifyToken, cargosProgramadosRouter);
+router.use('/visitantes',         verifyToken, requireStaff, visitantesRouter);
+router.use('/cargos-programados', verifyToken, requireAdminSucursal, cargosProgramadosRouter);
 router.use('/anuncios',           verifyToken, anunciosRouter);
 router.use('/tickets',            verifyToken, ticketsRouter);
 router.use('/areas',              verifyToken, areasRouter);
@@ -66,8 +76,14 @@ router.use('/reservas',           verifyToken, reservasRouter);
 router.use('/config-reservas',    verifyToken, configReservasRouter);
 router.use('/invitaciones-qr',    verifyToken, invitacionesQrRouter);
 router.use('/config-qr',          configQrRouter);
+// App de escritorio (Sprint 8): licencias por dispositivo y espejo offline.
+router.use('/licencias',          licenciasRouter);
+router.use('/sync',               syncRouter);
+// Aprovisionamiento en cascada (owner → admin_empresa → admin_sucursal). Va
+// sin verifyToken global: GET /:token y POST /:token/aceptar son públicos.
+router.use('/invitaciones',       invitacionesRouter);
 
-router.get('/dashboard',   verifyToken, getDashboard);
+router.get('/dashboard',   verifyToken, requireStaff, getDashboard);
 router.get('/audit-logs', verifyToken, requireOwner, getAuditLogs);
 
 // Dispara manualmente la revisión del ciclo de mora (demo/testing)
@@ -76,7 +92,7 @@ router.post('/admin/ejecutar-revision-mora', verifyToken, requireOwner, async (_
     const resumen = await revisarEstadosMora();
     res.json({ ejecutado: true, ...resumen });
   } catch (error) {
-    res.status(500).json({ error: 'Error al ejecutar revisión de mora', detail: String(error) });
+    serverError(res, error, 'Error al ejecutar revisión de mora');
   }
 });
 
@@ -86,20 +102,28 @@ router.post('/admin/ejecutar-recordatorios-reservas', verifyToken, requireOwner,
     const resumen = await enviarRecordatoriosReservas();
     res.json({ ejecutado: true, ...resumen });
   } catch (error) {
-    res.status(500).json({ error: 'Error al ejecutar recordatorios de reservas', detail: String(error) });
+    serverError(res, error, 'Error al ejecutar recordatorios de reservas');
   }
 });
 
-router.get('/status', async (req, res) => {
+// Dispara manualmente la expiración de invitaciones (demo/testing)
+router.post('/admin/ejecutar-expiracion-invitaciones', verifyToken, requireOwner, async (_req, res) => {
   try {
-    const result = await pool.query('SELECT NOW() as tiempo, current_database() as base_datos');
-    res.json({
-      backend: 'conectado',
-      base_datos: 'conectada',
-      info: result.rows[0],
-    });
+    const resumen = await expirarInvitaciones();
+    res.json({ ejecutado: true, ...resumen });
   } catch (error) {
-    res.status(500).json({ backend: 'conectado', base_datos: 'error', error: String(error) });
+    serverError(res, error, 'Error al expirar invitaciones');
+  }
+});
+
+// Público a propósito (monitoreo), pero sin filtrar nada de la base: antes
+// devolvía el nombre de la base y el texto crudo del error.
+router.get('/status', async (_req, res) => {
+  try {
+    await pool.query('SELECT 1');
+    res.json({ backend: 'conectado', base_datos: 'conectada' });
+  } catch {
+    res.status(503).json({ backend: 'conectado', base_datos: 'error' });
   }
 });
 

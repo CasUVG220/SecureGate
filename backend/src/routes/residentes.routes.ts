@@ -15,15 +15,19 @@ router.get('/',           verifyToken, requireStaff, ctrl.getResidentes);
 router.get('/me',         verifyToken, ctrl.getResidenteMe);
 router.get('/:id/pago',   verifyToken, requireStaff, ctrl.getResidentePago);
 router.get('/:id',        verifyToken, requireStaff, ctrl.getResidenteById);
+// Alta y baja de residentes: sólo administración. Antes bastaba con estar
+// autenticado, así que un residente podía crear y borrar a sus vecinos.
 router.post(
   '/',
   verifyToken,
+  requireAdminSucursal,
   body('numero_casa').notEmpty().isLength({ max: 20 }),
   body('telefono').optional({ nullable: true, checkFalsy: true }).isMobilePhone('any'),
   validateRequest,
+  auditLog({ accion: 'RESIDENTE_CREADO', tabla: 'residentes' }),
   ctrl.createResidente,
 );
-router.put('/:id',        verifyToken, requireAdminSucursal, ctrl.updateResidente);
-router.delete('/:id',     verifyToken, auditLog({ accion: 'RESIDENTE_ELIMINADO', tabla: 'residentes' }), ctrl.deleteResidente);
+router.put('/:id',        verifyToken, requireAdminSucursal, auditLog({ accion: 'RESIDENTE_ACTUALIZADO', tabla: 'residentes' }), ctrl.updateResidente);
+router.delete('/:id',     verifyToken, requireAdminSucursal, auditLog({ accion: 'RESIDENTE_ELIMINADO', tabla: 'residentes' }), ctrl.deleteResidente);
 
 export default router;
