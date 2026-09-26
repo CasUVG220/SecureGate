@@ -4,7 +4,9 @@ import {
   type EmpresaStats, type Sucursal, type SucursalInput,
 } from '../../services/api';
 import { Skeleton, Spinner, TableSkeleton } from '../../components/Skeleton';
-import { ROW_ICON, RowActions, StatusText, TelemetryStrip, TelemetrySkeleton } from '../../components/ui';
+import { ROW_ICON, RowActions, StatusText } from '../../components/ui';
+import { ResumenCifrasEsqueleto } from '../../components/charts';
+import ResumenEmpresa from '../admin_empresa/ResumenEmpresa';
 import { useToast } from '../../components/Toast';
 import { useTranslation } from '../../i18n/useTranslation';
 
@@ -141,50 +143,7 @@ export default function EmpresaDetail({ empresaId, onBack }: Props) {
         <div className="bg-red-900/40 border border-red-700 rounded-lg px-4 py-3 text-red-300 text-sm">{error}</div>
       )}
 
-      {/* Consola de Telemetría de la Empresa (HUD) */}
-      {loading ? (
-        <TelemetrySkeleton count={4} />
-      ) : stats ? (
-        <TelemetryStrip
-          eyebrow="Consola de Empresa · Métricas de Red"
-          items={[
-            {
-              id: 'sucursales',
-              label: t('empDetail.branches'),
-              value: stats.total_sucursales,
-              tone: 'brand',
-              icon: 'M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z',
-              hint: 'Sedes activas',
-            },
-            {
-              id: 'residentes',
-              label: t('empDetail.residents'),
-              value: stats.total_residentes,
-              tone: 'success',
-              icon: 'M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M9 7a4 4 0 1 0 0-8 4 4 0 0 0 0 8z',
-              hint: 'Directorio de residentes',
-            },
-            {
-              id: 'accesos',
-              label: t('dashboard.accessesToday'),
-              value: stats.total_accesos_hoy,
-              tone: 'info',
-              icon: 'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z',
-              hint: 'Ingresos registrados hoy',
-            },
-            {
-              id: 'pendientes',
-              label: t('dashboard.pendingPayments'),
-              value: stats.total_pagos_pendientes,
-              tone: 'warning',
-              icon: 'M1 4h22v16H1zM1 10h22',
-              hint: 'Pagos por verificar',
-              highlight: stats.total_pagos_pendientes > 0,
-              actionLabel: stats.total_pagos_pendientes > 0 ? 'Verificar →' : undefined,
-            },
-          ]}
-        />
-      ) : null}
+      {loading ? <ResumenCifrasEsqueleto filas={3} /> : stats ? <ResumenEmpresa stats={stats} /> : null}
 
       {/* Tabla sucursales */}
       <div className="bg-gray-800 rounded-2xl shadow-xl overflow-hidden">

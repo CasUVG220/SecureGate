@@ -1,13 +1,16 @@
 import { useEffect, useState } from 'react';
 import {
   getEmpresas, createEmpresa, updateEmpresa, deleteEmpresa, assignAdminEmpresa,
+  suspenderEmpresa, reactivarEmpresa, eliminarEmpresaDefinitivo,
   getUsuarios, createUsuario,
   type Empresa, type EmpresaInput, type Usuario,
 } from '../../services/api';
 import { TableSkeleton, Spinner } from '../../components/Skeleton';
-import { ROW_ICON, RowActions, StatusText } from '../../components/ui';
+import { Button, Input, Modal, ROW_ICON, RowActions, StatusText, Textarea } from '../../components/ui';
 import { useToast } from '../../components/Toast';
+import InvitacionesPanel from '../../components/InvitacionesPanel';
 import { useTranslation } from '../../i18n/useTranslation';
+import { rellenar } from '../../components/charts/format';
 
 type Modal = 'none' | 'create' | 'edit' | 'assignAdmin';
 type AssignMode = 'existing' | 'create';
@@ -34,6 +37,13 @@ export default function OwnerEmpresas() {
   const [form, setForm]                 = useState<EmpresaInput>(EMPTY);
   const [saving, setSaving]             = useState(false);
   const [formError, setFormError]       = useState<string | null>(null);
+  /** Empresa a suspender (modal con motivo). */
+  const [suspendTarget, setSuspendTarget] = useState<Empresa | null>(null);
+  const [motivo, setMotivo]             = useState('');
+  /** Empresa a borrar físicamente (modal con nombre + contraseña del owner). */
+  const [hardTarget, setHardTarget]     = useState<Empresa | null>(null);
+  const [confirmNombre, setConfirmNombre] = useState('');
+  const [ownerPassword, setOwnerPassword] = useState('');
 
   const cargar = () => {
     setLoading(true);
@@ -151,6 +161,51 @@ export default function OwnerEmpresas() {
     }
   };
 
+  const handleSuspend = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!suspendTarget) return;
+    if (motivo.trim().length < 3) { setFormError(t('owner.suspendMotivoRequired')); return; }
+    setSaving(true); setFormError(null);
+    try {
+      await suspenderEmpresa(suspendTarget.id, motivo.trim());
+      setSuspendTarget(null); setMotivo('');
+      cargar();
+      showToast(t('owner.companySuspended'), 'warning');
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : 'Error al suspender empresa');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleReactivate = async (emp: Empresa) => {
+    try {
+      await reactivarEmpresa(emp.id);
+      cargar();
+      showToast(t('owner.companyReactivated'), 'success');
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Error al reactivar empresa', 'error');
+    }
+  };
+
+  const handleHardDelete = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!hardTarget) return;
+    if (confirmNombre.trim() !== hardTarget.nombre) { setFormError(t('owner.hardDeleteNameMismatch')); return; }
+    if (!ownerPassword) { setFormError(t('owner.hardDeletePasswordRequired')); return; }
+    setSaving(true); setFormError(null);
+    try {
+      const r = await eliminarEmpresaDefinitivo(hardTarget.id, ownerPassword);
+      setHardTarget(null); setConfirmNombre(''); setOwnerPassword('');
+      cargar();
+      showToast(`${t('owner.hardDeleted')}: ${r.nombre}`, 'warning');
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : 'Error al eliminar empresa');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const handleDelete = async (emp: Empresa) => {
     if (!window.confirm(`${t('owner.confirmDeleteEmpresa')} "${emp.nombre}"?`)) return;
     try {
@@ -177,28 +232,12 @@ export default function OwnerEmpresas() {
     <div className="sg-page text-gray-100">
       <div className="sg-panel-heading">
         <div>
-          <p className="sg-eyebrow">SecureGate · Portafolio</p>
-          <h1 className="mt-1 text-2xl font-bold tracking-tight text-white sm:text-3xl">{t('empresas.title')}</h1>
-          <p className="mt-1 text-sm text-[var(--sg-text-muted)]">Empresas administradoras y contratistas que operan sobre la plataforma.</p>
-        </div>
-        <div className="flex items-center gap-3">
-          <span className="sg-status bg-emerald-500/10 text-emerald-400">{empresas.filter(e => e.activo).length} activas</span>
+          <h1 className="text-2xl font-bold tracking-tight text-gray-50 sm:text-3xl">{t('empresas.title')}</h1>
+          <p className="mt-1 text-sm text-gray-400">
+            {rellenar(t('empresas.counts'), { total: empresas.length, activas: empresas.filter(e => e.activo).length })}
+          </p>
         </div>
       </div>
-
-      <section className="sg-hero" aria-label="Resumen del portafolio">
-        <div className="sg-hero-grid">
-          <div>
-            <p className="sg-hero-label">Red de clientes</p>
-            <h2 className="sg-hero-title">Administra crecimiento sin perder control.</h2>
-            <p className="sg-hero-copy">Crea organizaciones, asigna responsables y entra al detalle de cada comunidad desde un solo lugar.</p>
-          </div>
-          <div className="sg-hero-stat">
-            <p className="sg-hero-stat-label">Empresas registradas</p>
-            <p className="sg-hero-stat-value">{empresas.length}</p>
-          </div>
-        </div>
-      </section>
 
       <div className="flex items-center justify-between flex-wrap gap-3">
         <h2 className="sg-section-title">Cartera de empresas</h2>
@@ -256,9 +295,15 @@ export default function OwnerEmpresas() {
                     <td className="px-4 py-3 text-gray-400">{emp.nit ?? '—'}</td>
                     <td className="px-4 py-3 text-center">{emp.total_sucursales}</td>
                     <td className="px-4 py-3 text-center">
-                      <StatusText kind={emp.activo ? 'on' : 'off'}>
-                        {emp.activo ? t('common.activeF') : t('common.inactiveF')}
-                      </StatusText>
+                      {!emp.activo ? (
+                        <StatusText kind="off">{t('common.inactiveF')}</StatusText>
+                      ) : emp.suspendida ? (
+                        <StatusText kind="bad">
+                          <span title={emp.suspension_motivo ?? ''}>{t('owner.suspended')}</span>
+                        </StatusText>
+                      ) : (
+                        <StatusText kind="on">{t('common.activeF')}</StatusText>
+                      )}
                     </td>
                     <td className="px-4 py-3">
                       <RowActions
@@ -278,6 +323,11 @@ export default function OwnerEmpresas() {
                             icon: ROW_ICON.user,
                             onClick: () => openAssignAdmin(emp),
                           },
+                          ...(emp.activo ? [
+                            emp.suspendida
+                              ? { id: 'reactivar', label: t('owner.reactivate'), icon: ROW_ICON.play, onClick: () => handleReactivate(emp) }
+                              : { id: 'suspender', label: t('owner.suspend'), icon: ROW_ICON.pause, tone: 'danger' as const, onClick: () => { setSuspendTarget(emp); setMotivo(''); setFormError(null); } },
+                          ] : []),
                           {
                             id: 'toggle',
                             label: emp.activo ? t('common.deactivate') : t('common.activate'),
@@ -285,11 +335,17 @@ export default function OwnerEmpresas() {
                             onClick: () => handleToggle(emp),
                           },
                           {
-                            id: 'eliminar',
-                            label: t('common.delete'),
+                            id: 'baja',
+                            label: t('owner.softDelete'),
+                            icon: ROW_ICON.pause,
+                            onClick: () => handleDelete(emp),
+                          },
+                          {
+                            id: 'eliminar-definitivo',
+                            label: t('owner.hardDelete'),
                             icon: ROW_ICON.trash,
                             tone: 'danger',
-                            onClick: () => handleDelete(emp),
+                            onClick: () => { setHardTarget(emp); setConfirmNombre(''); setOwnerPassword(''); setFormError(null); },
                           },
                         ]}
                       />
@@ -301,6 +357,85 @@ export default function OwnerEmpresas() {
           </table>
         </div>
       </div>
+
+      {/* Aprovisionamiento en cascada: el owner invita al admin de cada empresa. */}
+      <InvitacionesPanel modo="owner" empresas={empresas} />
+
+      {/* ── Modal: suspender operaciones ── */}
+      <Modal
+        open={!!suspendTarget}
+        onClose={() => setSuspendTarget(null)}
+        title={t('owner.suspendTitle')}
+        description={suspendTarget ? `${t('empresas.title')}: ${suspendTarget.nombre}` : undefined}
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setSuspendTarget(null)}>{t('common.cancel')}</Button>
+            <Button variant="danger" type="submit" form="form-suspender" loading={saving}>{t('owner.suspend')}</Button>
+          </>
+        }
+      >
+        <form id="form-suspender" onSubmit={handleSuspend} className="space-y-4">
+          <p className="text-sm text-gray-300">{t('owner.suspendDesc')}</p>
+          {formError && <p role="alert" className="rounded-lg border border-danger-500/30 bg-danger-500/10 px-4 py-3 text-sm font-medium text-danger-400">{formError}</p>}
+          <Textarea
+            label={t('owner.suspendMotivo')}
+            required
+            minLength={3}
+            maxLength={300}
+            rows={3}
+            autoFocus
+            value={motivo}
+            onChange={e => setMotivo(e.target.value)}
+            hint={t('owner.suspendMotivoHint')}
+          />
+        </form>
+      </Modal>
+
+      {/* ── Modal: eliminar definitivamente (nombre + contraseña del owner) ── */}
+      <Modal
+        open={!!hardTarget}
+        onClose={() => { if (!saving) setHardTarget(null); }}
+        dismissible={!saving}
+        title={t('owner.hardDeleteTitle')}
+        description={hardTarget ? `${t('empresas.title')}: ${hardTarget.nombre}` : undefined}
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setHardTarget(null)} disabled={saving}>{t('common.cancel')}</Button>
+            <Button variant="danger" type="submit" form="form-eliminar-definitivo" loading={saving} disabled={!hardTarget || confirmNombre.trim() !== hardTarget.nombre || !ownerPassword}>
+              {t('owner.hardDeleteConfirm')}
+            </Button>
+          </>
+        }
+      >
+        <form id="form-eliminar-definitivo" onSubmit={handleHardDelete} className="space-y-4" autoComplete="off">
+          <p role="alert" className="rounded-lg border border-danger-500/30 bg-danger-500/10 px-4 py-3 text-sm font-medium text-danger-400">
+            {t('owner.hardDeleteWarning')}
+          </p>
+          <ul className="list-disc space-y-0.5 pl-5 text-xs text-gray-400">
+            <li>{t('owner.hardDeleteScope1')}</li>
+            <li>{t('owner.hardDeleteScope2')}</li>
+            <li>{t('owner.hardDeleteScope3')}</li>
+          </ul>
+          {formError && <p role="alert" className="rounded-lg border border-danger-500/30 bg-danger-500/10 px-4 py-3 text-sm font-medium text-danger-400">{formError}</p>}
+          <Input
+            label={t('owner.hardDeleteTypeName').replace('{nombre}', hardTarget?.nombre ?? '')}
+            required
+            autoFocus
+            autoComplete="off"
+            value={confirmNombre}
+            onChange={e => setConfirmNombre(e.target.value)}
+          />
+          <Input
+            type="password"
+            label={t('owner.hardDeletePassword')}
+            required
+            autoComplete="current-password"
+            value={ownerPassword}
+            onChange={e => setOwnerPassword(e.target.value)}
+            hint={t('owner.hardDeletePasswordHint')}
+          />
+        </form>
+      </Modal>
 
       {/* ── Modal: assign admin empresa ── */}
       {modal === 'assignAdmin' && assignTarget && (

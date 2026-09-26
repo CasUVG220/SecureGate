@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
 import {
   getEmpresas, createEmpresa, updateEmpresa, deleteEmpresa, getDashboard,
-  type Empresa, type EmpresaInput,
+  type DashboardData, type Empresa, type EmpresaInput,
 } from '../../services/api';
 import { Spinner, TableSkeleton } from '../../components/Skeleton';
-import { ROW_ICON, RowActions, StatusText, TelemetryStrip, TelemetrySkeleton } from '../../components/ui';
+import { ROW_ICON, RowActions, StatusText } from '../../components/ui';
+import { AccesosPorHora, ResumenCifras, ResumenCifrasEsqueleto, comparar, fmtNumero, rellenar } from '../../components/charts';
 import { useToast } from '../../components/Toast';
 import { useTranslation } from '../../i18n/useTranslation';
 
@@ -16,10 +17,10 @@ interface Props {
 
 export default function OwnerDashboard({ onSelectEmpresa }: Props) {
   const showToast = useToast();
-  const { t } = useTranslation();
+  const { t, language } = useTranslation();
 
   const [empresas, setEmpresas]   = useState<Empresa[]>([]);
-  const [accesosHoy, setAccesosHoy] = useState(0);
+  const [dash, setDash]           = useState<DashboardData | null>(null);
   const [loading, setLoading]     = useState(true);
   const [error, setError]         = useState<string | null>(null);
 
@@ -33,7 +34,7 @@ export default function OwnerDashboard({ onSelectEmpresa }: Props) {
     Promise.all([getEmpresas(), getDashboard()])
       .then(([emp, dash]) => {
         setEmpresas(emp);
-        setAccesosHoy(dash.accesos_hoy);
+        setDash(dash);
       })
       .catch(() => setError('No se pudo cargar el panel.'))
       .finally(() => setLoading(false));
@@ -42,6 +43,7 @@ export default function OwnerDashboard({ onSelectEmpresa }: Props) {
   useEffect(() => { cargar(); }, []);
 
   const totalEmpresasActivas   = empresas.filter(e => e.activo).length;
+  const n = (x: number) => fmtNumero(x, language);
   const totalSucursalesActivas = empresas.reduce((s, e) => s + (e.activo ? e.total_sucursales : 0), 0);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) =>
@@ -100,69 +102,47 @@ export default function OwnerDashboard({ onSelectEmpresa }: Props) {
         </button>
       </div>
 
-      <section className="sg-hero" aria-label="Resumen de la plataforma">
-        <div className="sg-hero-grid">
-          <div>
-            <p className="sg-hero-label">SecureGate · Plataforma</p>
-            <h2 className="sg-hero-title">Una vista de todas tus comunidades.</h2>
-            <p className="sg-hero-copy">Supervisa empresas administradoras, contratistas y las sucursales que operan dentro de la red.</p>
-          </div>
-          <div className="grid grid-cols-3 gap-4">
-            <div className="sg-hero-stat">
-              <p className="sg-hero-stat-label">Empresas</p>
-              <p className="sg-hero-stat-value">{totalEmpresasActivas}</p>
-            </div>
-            <div className="sg-hero-stat">
-              <p className="sg-hero-stat-label">Comunidades</p>
-              <p className="sg-hero-stat-value">{totalSucursalesActivas}</p>
-            </div>
-            <div className="sg-hero-stat">
-              <p className="sg-hero-stat-label">Accesos hoy</p>
-              <p className="sg-hero-stat-value">{accesosHoy}</p>
-            </div>
-          </div>
-        </div>
-      </section>
-
       {error && (
-        <div className="bg-red-900/40 border border-red-700 rounded-lg px-4 py-3 text-red-300 text-sm">{error}</div>
+        <div role="alert" className="rounded-xl border border-danger-500/30 bg-danger-500/10 px-4 py-3 text-sm text-danger-400">{error}</div>
       )}
 
-      {/* Consola de Telemetría Global (HUD) */}
-      {loading ? (
-        <TelemetrySkeleton count={3} />
-      ) : (
-        <TelemetryStrip
-          eyebrow="Consola Global · Telemetría de Plataforma"
-          statusBadge={<span className="sg-status bg-emerald-500/10 text-emerald-400">Plataforma activa</span>}
-          items={[
+      {loading && !dash ? (
+        <ResumenCifrasEsqueleto filas={3} />
+      ) : dash ? (
+        <ResumenCifras
+          ariaLabel={t('owner.summary')}
+          principal={{
+            etiqueta: t('owner.globalAccesses'),
+            valor: n(dash.accesos_hoy),
+            comparacion: comparar(dash.accesos_hoy, dash.accesos_ayer_misma_hora, {
+              formato: n, bueno: null, lang: language,
+              frente: t('dashboard.vsYesterday'),
+              sinBase: t('dashboard.noYesterday'),
+            }),
+            grafico: (
+              <AccesosPorHora
+                porHora={dash.accesos_por_hora}
+                lang={language}
+                etiquetas={{ serie: t('owner.globalAccesses'), maximo: t('stats.chart.peak'), vacio: t('dashboard.noAccessesToday') }}
+                ariaLabel={`${t('dashboard.byHour')}. ${t('stats.chart.keyboardHint')}`}
+              />
+            ),
+          }}
+          filas={[
             {
               id: 'empresas',
-              label: t('owner.activeCompanies'),
-              value: totalEmpresasActivas,
-              tone: 'brand',
-              icon: 'M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z',
-              hint: 'Empresas administradoras',
+              etiqueta: t('owner.activeCompanies'),
+              valor: n(totalEmpresasActivas),
+              nota: rellenar(t('owner.ofRegistered'), { n: n(empresas.length) }),
+              barra: empresas.length
+                ? { tipo: 'proporcion', fraccion: totalEmpresasActivas / empresas.length, tono: 'series', etiqueta: t('owner.activeCompanies') }
+                : undefined,
             },
-            {
-              id: 'sucursales',
-              label: t('owner.activeBranches'),
-              value: totalSucursalesActivas,
-              tone: 'success',
-              icon: 'M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z M12 7a3 3 0 1 0 0 6 3 3 0 0 0 0-6z',
-              hint: 'Comunidades conectadas',
-            },
-            {
-              id: 'accesos',
-              label: t('owner.globalAccesses'),
-              value: accesosHoy,
-              tone: 'info',
-              icon: 'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z',
-              hint: 'Movimiento consolidado hoy',
-            },
+            { id: 'comunidades', etiqueta: t('owner.activeBranches'), valor: n(totalSucursalesActivas), nota: t('owner.branchesHint') },
+            { id: 'dentro', etiqueta: t('dashboard.insideNow'), valor: n(dash.dentro_ahora), nota: t('dashboard.insideNowHint') },
           ]}
         />
-      )}
+      ) : null}
 
       {/* Tabla empresas */}
       <div className="sg-table-wrap">
@@ -191,7 +171,7 @@ export default function OwnerDashboard({ onSelectEmpresa }: Props) {
                 </tr>
               ) : (
                 empresas.map(emp => (
-                  <tr key={emp.id} className="border-b border-gray-700 last:border-0 hover:bg-gray-750">
+                  <tr key={emp.id} className="border-b border-gray-700 last:border-0 hover:bg-gray-500/[0.06]">
                     <td className="px-4 py-3 font-medium text-white">{emp.nombre}</td>
                     <td className="px-4 py-3 text-gray-400">{emp.nit ?? '—'}</td>
                     <td className="px-4 py-3 text-center">{emp.total_sucursales}</td>
