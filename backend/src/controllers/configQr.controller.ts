@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import pool from '../db/pool';
-import { resolveSucursalId } from '../utils/tenant';
+import { resolverSucursal } from '../utils/tenant';
+import { serverError } from '../utils/http';
 
 export interface ConfigQr {
   dpi_obligatorio_individual: boolean;
@@ -43,14 +44,11 @@ export async function getConfigQrEfectiva(db: Consultable, sucursal_id: string):
 }
 
 export const getConfigQr = async (req: Request, res: Response) => {
-  const sucursal_id = await resolveSucursalId(
-    req.user!.sucursal_id,
-    req.query.sucursal_id as string | undefined,
-    pool
-  );
-  if (!sucursal_id) {
-    return res.status(400).json({ error: 'No se pudo determinar la sucursal' });
+  const sucResuelta = await resolverSucursal(req.user!, req.query.sucursal_id as string | undefined, pool);
+  if (sucResuelta.ok === false) {
+    return res.status(sucResuelta.status).json({ error: sucResuelta.error });
   }
+  const sucursal_id = sucResuelta.id;
 
   try {
     const existente = await pool.query('SELECT * FROM configuracion_qr WHERE sucursal_id = $1', [sucursal_id]);
@@ -60,7 +58,7 @@ export const getConfigQr = async (req: Request, res: Response) => {
     const config = await getConfigQrEfectiva(pool, sucursal_id);
     res.json({ ...config, sucursal_id, es_default: false });
   } catch (error) {
-    res.status(500).json({ error: 'Error al obtener la configuración de QR', detail: String(error) });
+    serverError(res, error, 'Error al obtener la configuración de QR');
   }
 };
 
@@ -73,10 +71,11 @@ export const updateConfigQr = async (req: Request, res: Response) => {
     bloqueo_minutos,
   } = req.body;
 
-  const sucursal_id = await resolveSucursalId(req.user!.sucursal_id, req.body.sucursal_id, pool);
-  if (!sucursal_id) {
-    return res.status(400).json({ error: 'No se pudo determinar la sucursal' });
+  const sucResuelta = await resolverSucursal(req.user!, req.body.sucursal_id, pool);
+  if (sucResuelta.ok === false) {
+    return res.status(sucResuelta.status).json({ error: sucResuelta.error });
   }
+  const sucursal_id = sucResuelta.id;
 
   if (max_intentos_fallidos !== undefined && Number(max_intentos_fallidos) <= 0) {
     return res.status(400).json({ error: 'max_intentos_fallidos debe ser mayor a 0' });
@@ -111,6 +110,6 @@ export const updateConfigQr = async (req: Request, res: Response) => {
     );
     res.json({ ...result.rows[0], es_default: false });
   } catch (error) {
-    res.status(500).json({ error: 'Error al guardar la configuración de QR', detail: String(error) });
+    serverError(res, error, 'Error al guardar la configuración de QR');
   }
 };

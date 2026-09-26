@@ -1,12 +1,11 @@
 import { Request, Response } from 'express';
 import pool from '../db/pool';
+import { tenantFilter, ownershipClause, ownershipParams } from '../utils/tenant';
+import { serverError } from '../utils/http';
 
 export const getCargos = async (req: Request, res: Response) => {
+  const ts = tenantFilter(req.user!, 'cp');
   try {
-    const sucursal_id = req.user!.sucursal_id;
-    const params: string[] = [];
-    const where = sucursal_id ? (params.push(sucursal_id), 'WHERE cp.sucursal_id = $1') : '';
-
     const result = await pool.query(
       `SELECT cp.*,
          (SELECT COUNT(*) FROM cargos_programados_historial cph
@@ -14,13 +13,14 @@ export const getCargos = async (req: Request, res: Response) => {
          (SELECT COUNT(DISTINCT cph.residente_id) FROM cargos_programados_historial cph
           WHERE cph.cargo_programado_id = cp.id) AS residentes_afectados
        FROM cargos_programados cp
-       ${where}
+       ${ts.joinClause}
+       WHERE ${ts.whereClause}
        ORDER BY cp.created_at DESC`,
-      params
+      ts.params
     );
     res.json(result.rows);
   } catch (error) {
-    res.status(500).json({ error: 'Error al obtener cargos programados', detail: String(error) });
+    serverError(res, error, 'Error al obtener cargos programados');
   }
 };
 
@@ -28,6 +28,10 @@ export const createCargo = async (req: Request, res: Response) => {
   const { nombre, descripcion, monto, frecuencia, aplica_a } = req.body;
   if (!nombre || monto === undefined) {
     return res.status(400).json({ error: 'Campos requeridos: nombre, monto' });
+  }
+  const montoNum = Number(monto);
+  if (!Number.isFinite(montoNum) || montoNum <= 0 || montoNum > 1_000_000) {
+    return res.status(400).json({ error: 'monto debe ser un número mayor a 0' });
   }
   const sucursal_id = req.user!.sucursal_id;
   if (!sucursal_id) {
@@ -50,7 +54,7 @@ export const createCargo = async (req: Request, res: Response) => {
     );
     res.status(201).json({ ...result.rows[0], veces_aplicado: 0, residentes_afectados: 0 });
   } catch (error) {
-    res.status(500).json({ error: 'Error al crear cargo programado', detail: String(error) });
+    serverError(res, error, 'Error al crear cargo programado');
   }
 };
 
@@ -66,15 +70,16 @@ export const updateCargo = async (req: Request, res: Response) => {
            frecuencia  = COALESCE($4, frecuencia),
            activo      = COALESCE($5, activo)
        WHERE id = $6
+         AND ${ownershipClause('cargos_programados', 7)}
        RETURNING *`,
-      [nombre ?? null, descripcion ?? null, monto ?? null, frecuencia ?? null, activo ?? null, id]
+      [nombre ?? null, descripcion ?? null, monto ?? null, frecuencia ?? null, activo ?? null, id, ...ownershipParams(req.user!)]
     );
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Cargo programado no encontrado' });
     }
     res.json(result.rows[0]);
   } catch (error) {
-    res.status(500).json({ error: 'Error al actualizar cargo programado', detail: String(error) });
+    serverError(res, error, 'Error al actualizar cargo programado');
   }
 };
 
@@ -82,15 +87,17 @@ export const deleteCargo = async (req: Request, res: Response) => {
   const { id } = req.params;
   try {
     const result = await pool.query(
-      `UPDATE cargos_programados SET activo = FALSE WHERE id = $1 RETURNING *`,
-      [id]
+      `UPDATE cargos_programados SET activo = FALSE
+        WHERE id = $1 AND ${ownershipClause('cargos_programados', 2)}
+        RETURNING *`,
+      [id, ...ownershipParams(req.user!)]
     );
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Cargo programado no encontrado' });
     }
     res.json(result.rows[0]);
   } catch (error) {
-    res.status(500).json({ error: 'Error al eliminar cargo programado', detail: String(error) });
+    serverError(res, error, 'Error al eliminar cargo programado');
   }
 };
 
@@ -100,21 +107,20 @@ export const aplicarCargo = async (req: Request, res: Response) => {
   try {
     await client.query('BEGIN');
 
+    // Alcance + FOR UPDATE: dos aplicaciones simultáneas del mismo cargo se
+    // serializan sobre la fila, así el chequeo de duplicado de abajo es fiable.
     const cargoResult = await client.query(
-      `SELECT * FROM cargos_programados WHERE id = $1 AND activo = TRUE`,
-      [id]
+      `SELECT * FROM cargos_programados
+        WHERE id = $1 AND activo = TRUE
+          AND ${ownershipClause('cargos_programados', 2)}
+        FOR UPDATE`,
+      [id, ...ownershipParams(req.user!)]
     );
     if (cargoResult.rows.length === 0) {
       await client.query('ROLLBACK');
       return res.status(404).json({ error: 'Cargo programado no encontrado o inactivo' });
     }
     const cargo = cargoResult.rows[0];
-
-    const userSucursal = req.user!.sucursal_id;
-    if (userSucursal && cargo.sucursal_id !== userSucursal) {
-      await client.query('ROLLBACK');
-      return res.status(403).json({ error: 'Sin acceso a este cargo' });
-    }
 
     // Deduplication check per frecuencia
     const frecuencia: string = cargo.frecuencia;
@@ -177,7 +183,7 @@ export const aplicarCargo = async (req: Request, res: Response) => {
     });
   } catch (error) {
     await client.query('ROLLBACK');
-    res.status(500).json({ error: 'Error al aplicar cargo programado', detail: String(error) });
+    serverError(res, error, 'Error al aplicar cargo programado');
   } finally {
     client.release();
   }
@@ -194,13 +200,15 @@ export const getHistorial = async (req: Request, res: Response) => {
          u.nombre        AS aplicado_por_nombre
        FROM cargos_programados_historial h
        JOIN usuarios u ON u.id = h.aplicado_por
+       JOIN cargos_programados cp ON cp.id = h.cargo_programado_id
        WHERE h.cargo_programado_id = $1
+         AND ${ownershipClause('cp', 2)}
        GROUP BY h.applied_at, h.aplicado_por, u.nombre
        ORDER BY h.applied_at DESC`,
-      [id]
+      [id, ...ownershipParams(req.user!)]
     );
     res.json(result.rows);
   } catch (error) {
-    res.status(500).json({ error: 'Error al obtener historial', detail: String(error) });
+    serverError(res, error, 'Error al obtener historial');
   }
 };

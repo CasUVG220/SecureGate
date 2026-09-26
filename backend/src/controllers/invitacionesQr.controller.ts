@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import pool from '../db/pool';
 import { getConfigQrEfectiva } from './configQr.controller';
+import { serverError } from '../utils/http';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -28,7 +29,7 @@ export const getMisInvitaciones = async (req: Request, res: Response) => {
     );
     res.json(result.rows);
   } catch (error) {
-    res.status(500).json({ error: 'Error al obtener invitaciones QR', detail: String(error) });
+    serverError(res, error, 'Error al obtener invitaciones QR');
   }
 };
 
@@ -87,7 +88,7 @@ export const createMisInvitacion = async (req: Request, res: Response) => {
     );
     res.status(201).json(result.rows[0]);
   } catch (error) {
-    res.status(500).json({ error: 'Error al crear invitación QR', detail: String(error) });
+    serverError(res, error, 'Error al crear invitación QR');
   }
 };
 
@@ -109,7 +110,7 @@ export const deleteMisInvitacion = async (req: Request, res: Response) => {
     }
     res.json({ message: 'Invitación QR revocada' });
   } catch (error) {
-    res.status(500).json({ error: 'Error al revocar invitación QR', detail: String(error) });
+    serverError(res, error, 'Error al revocar invitación QR');
   }
 };
 
@@ -174,6 +175,6 @@ export const verificarInvitacion = async (req: Request, res: Response) => {
       usos_actuales: inv.usos_actuales,
     });
   } catch (error) {
-    res.status(500).json({ error: 'Error al verificar invitación QR', detail: String(error) });
+    serverError(res, error, 'Error al verificar invitación QR');
   }
 };

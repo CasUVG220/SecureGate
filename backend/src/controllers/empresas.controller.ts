@@ -1,26 +1,39 @@
 import { Request, Response } from 'express';
 import pool from '../db/pool';
+import { esUuid } from '../utils/http';
+import { revocarAccesoDeEmpresa, revocarAccesoDeUsuario } from '../utils/revocacion';
+import { revocarSesionesDeUsuario } from './auth.controller';
+import { serverError } from '../utils/http';
 
 export const getEmpresas = async (_req: Request, res: Response) => {
   try {
     const result = await pool.query(
+      // Sin filtrar por activo: es la vista del owner, que necesita ver (y
+      // poder reactivar) las empresas dadas de baja o suspendidas.
       `SELECT e.*, COUNT(s.id)::int AS total_sucursales
        FROM empresas e
        LEFT JOIN sucursales s ON s.empresa_id = e.id AND s.activo = TRUE
-       WHERE e.activo = TRUE
        GROUP BY e.id
-       ORDER BY e.created_at DESC`
+       ORDER BY e.activo DESC, e.suspendida ASC, e.created_at DESC`
     );
     res.json(result.rows);
   } catch (error) {
-    res.status(500).json({ error: 'Error al obtener empresas', detail: String(error) });
+    serverError(res, error, 'Error al obtener empresas');
   }
 };
+
+/** El logo se pinta como <img src>; sólo se aceptan URLs http(s) razonables. */
+const LOGO_RE = /^https?:\/\/[^\s"'<>]{4,500}$/i;
+const logoInvalido = (v: unknown): boolean =>
+  v !== undefined && v !== null && v !== '' && (typeof v !== 'string' || !LOGO_RE.test(v));
 
 export const createEmpresa = async (req: Request, res: Response) => {
   const { nombre, nit, logo_url } = req.body;
   if (!nombre) {
     return res.status(400).json({ error: 'Campo requerido: nombre' });
+  }
+  if (logoInvalido(logo_url)) {
+    return res.status(400).json({ error: 'logo_url debe ser una URL http(s) válida' });
   }
 
   try {
@@ -32,13 +45,89 @@ export const createEmpresa = async (req: Request, res: Response) => {
     );
     res.status(201).json(result.rows[0]);
   } catch (error) {
-    res.status(500).json({ error: 'Error al crear empresa', detail: String(error) });
+    serverError(res, error, 'Error al crear empresa');
+  }
+};
+
+
+/**
+ * Cierra las sesiones vivas de todos los usuarios de la empresa (admins,
+ * agentes y residentes de sus sucursales). Los access tokens caducan solos
+ * en ≤ 1 h; sin refresh no vuelven a entrar.
+ */
+export const revocarSesionesDeEmpresa = async (db: import('pg').PoolClient | import('pg').Pool, empresaId: string) => {
+  // Access tokens vigentes de toda la empresa: se cortan ya (utils/revocacion.ts).
+  revocarAccesoDeEmpresa(empresaId);
+  await db.query(
+    `UPDATE refresh_tokens SET revoked = TRUE
+     WHERE revoked = FALSE AND usuario_id IN (
+       SELECT u.id FROM usuarios u
+       LEFT JOIN sucursales s ON s.id = u.sucursal_id
+       WHERE u.empresa_id = $1 OR s.empresa_id = $1
+     )`,
+    [empresaId],
+  );
+};
+
+/**
+ * PATCH /empresas/:id/suspender — pausa reversible (impago, incumplimiento).
+ * Desde este momento el login y las licencias de garita (activar, heartbeat,
+ * sync) de la empresa responden 423 con el motivo; nada se borra ni se
+ * desactiva. Las sesiones que YA estaban abiertas se cortan aquí mismo
+ * (access tokens y refresh tokens revocados), así que su siguiente /auth/refresh
+ * responde 401 y no 423: el cliente ve el motivo al volver a iniciar sesión.
+ */
+export const suspenderEmpresa = async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const motivo = String((req.body as { motivo?: string }).motivo ?? '').trim();
+  if (motivo.length < 3 || motivo.length > 300) {
+    return res.status(400).json({ error: 'motivo es requerido (3-300 caracteres)' });
+  }
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const r = await client.query(
+      `UPDATE empresas SET suspendida = TRUE, suspension_motivo = $2, suspendida_en = NOW()
+       WHERE id = $1 AND activo = TRUE RETURNING *`,
+      [id, motivo],
+    );
+    if (r.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Empresa no encontrada o inactiva' });
+    }
+    await revocarSesionesDeEmpresa(client, id);
+    await client.query('COMMIT');
+    res.json(r.rows[0]);
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
+    serverError(res, error, 'Error al suspender empresa');
+  } finally {
+    client.release();
+  }
+};
+
+/** PATCH /empresas/:id/reactivar — levanta la suspensión. */
+export const reactivarEmpresa = async (req: Request, res: Response) => {
+  const { id } = req.params;
+  try {
+    const r = await pool.query(
+      `UPDATE empresas SET suspendida = FALSE, suspension_motivo = NULL, suspendida_en = NULL
+       WHERE id = $1 AND suspendida = TRUE RETURNING *`,
+      [id],
+    );
+    if (r.rows.length === 0) return res.status(404).json({ error: 'Empresa no encontrada o no está suspendida' });
+    res.json(r.rows[0]);
+  } catch (error) {
+    serverError(res, error, 'Error al reactivar empresa');
   }
 };
 
 export const updateEmpresa = async (req: Request, res: Response) => {
   const { id } = req.params;
   const { nombre, nit, logo_url, activo } = req.body;
+  if (logoInvalido(logo_url)) {
+    return res.status(400).json({ error: 'logo_url debe ser una URL http(s) válida' });
+  }
 
   try {
     const result = await pool.query(
@@ -56,9 +145,13 @@ export const updateEmpresa = async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Empresa no encontrada' });
     }
 
+    // Desactivar es bloquear el acceso (login/refresh/licencias lo comprueban);
+    // las sesiones que ya estaban abiertas se cierran aquí.
+    if (activo === false) await revocarSesionesDeEmpresa(pool, id);
+
     res.json(result.rows[0]);
   } catch (error) {
-    res.status(500).json({ error: 'Error al actualizar empresa', detail: String(error) });
+    serverError(res, error, 'Error al actualizar empresa');
   }
 };
 
@@ -114,12 +207,29 @@ export const deleteEmpresa = async (req: Request, res: Response) => {
         [sucIds]
       );
 
+      // Kill switch de los equipos de garita: el siguiente heartbeat falla.
+      await client.query(
+        `UPDATE licencias_dispositivo SET estado = 'revocada', revocado_en = NOW()
+         WHERE sucursal_id = ANY($1::uuid[]) AND estado = 'activa'`,
+        [sucIds]
+      );
+
       // Deactivate all sucursales
       await client.query(
         `UPDATE sucursales SET activo = FALSE WHERE empresa_id = $1`,
         [id]
       );
     }
+
+    // Invitaciones administrativas pendientes de la empresa dejan de servir.
+    await client.query(
+      `UPDATE invitaciones SET estado = 'revocada', revocada_en = NOW()
+       WHERE empresa_id = $1 AND estado = 'pendiente'`,
+      [id]
+    );
+
+    // Sesiones abiertas de cualquiera de la empresa.
+    await revocarSesionesDeEmpresa(client, id);
 
     // Deactivate empresa-level users (admin_empresa)
     await client.query(
@@ -143,7 +253,95 @@ export const deleteEmpresa = async (req: Request, res: Response) => {
     res.json({ message: 'Empresa y todos sus recursos desactivados', id });
   } catch (error) {
     await client.query('ROLLBACK');
-    res.status(500).json({ error: 'Error al eliminar empresa', detail: String(error) });
+    serverError(res, error, 'Error al eliminar empresa');
+  } finally {
+    client.release();
+  }
+};
+
+
+/**
+ * POST /empresas/:id/eliminar-definitivo — borrado físico, irreversible.
+ *
+ * A diferencia de deleteEmpresa (baja suave), esto elimina la empresa y TODO
+ * lo que cuelga de ella: sucursales, usuarios, residentes, accesos, pagos,
+ * reservas, tickets, anuncios, licencias de garita, invitaciones… Se
+ * conservan `audit_logs` (las FKs hacen SET NULL: queda el rastro de que
+ * existió) y los `visitantes`/`vehiculos`, que son globales.
+ *
+ * Exige la contraseña del owner que lo ejecuta: el JWT no basta para una
+ * acción que no se puede deshacer. Las FKs son RESTRICT, así que el orden de
+ * los DELETE es el de las dependencias, dentro de una sola transacción.
+ */
+export const eliminarEmpresaDefinitivo = async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const { password } = req.body as { password?: string };
+  if (!password) return res.status(400).json({ error: 'Se requiere la contraseña del owner' });
+
+  const client = await pool.connect();
+  try {
+    const owner = await client.query(
+      `SELECT 1 FROM usuarios WHERE id = $1 AND rol = 'owner' AND activo = TRUE
+         AND password_hash = crypt($2, password_hash)`,
+      [req.user!.id, password],
+    );
+    if (owner.rows.length === 0) {
+      return res.status(403).json({ error: 'Contraseña incorrecta' });
+    }
+
+    await client.query('BEGIN');
+    const emp = await client.query('SELECT id, nombre FROM empresas WHERE id = $1 FOR UPDATE', [id]);
+    if (emp.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Empresa no encontrada' });
+    }
+
+    const suc = await client.query('SELECT id FROM sucursales WHERE empresa_id = $1', [id]);
+    const S: string[] = suc.rows.map((r: { id: string }) => r.id);
+    const usr = await client.query(
+      'SELECT id FROM usuarios WHERE empresa_id = $1 OR sucursal_id = ANY($2::uuid[])',
+      [id, S],
+    );
+    const U: string[] = usr.rows.map((r: { id: string }) => r.id);
+    const resd = await client.query('SELECT id FROM residentes WHERE sucursal_id = ANY($1::uuid[])', [S]);
+    const R: string[] = resd.rows.map((r: { id: string }) => r.id);
+
+    // Orden: primero lo que referencia (RESTRICT) a residentes/usuarios/
+    // sucursales, luego residentes, usuarios, sucursales y la empresa.
+    const pasos: Array<[string, string, unknown[]]> = [
+      ['cargos_automaticos',            `DELETE FROM cargos_automaticos WHERE residente_id = ANY($1::uuid[]) OR registro_acceso_id IN (SELECT id FROM registros_acceso WHERE sucursal_id = ANY($2::uuid[]))`, [R, S]],
+      ['registros_acceso',              `DELETE FROM registros_acceso WHERE sucursal_id = ANY($1::uuid[]) OR residente_id = ANY($2::uuid[]) OR agente_id = ANY($3::uuid[])`, [S, R, U]],
+      ['reservas_areas',                `DELETE FROM reservas_areas WHERE residente_id = ANY($1::uuid[]) OR area_id IN (SELECT id FROM areas_comunes WHERE sucursal_id = ANY($2::uuid[]))`, [R, S]],
+      ['areas_comunes',                 `DELETE FROM areas_comunes WHERE sucursal_id = ANY($1::uuid[])`, [S]],
+      ['pagos',                         `DELETE FROM pagos WHERE sucursal_id = ANY($1::uuid[]) OR residente_id = ANY($2::uuid[]) OR registrado_por = ANY($3::uuid[])`, [S, R, U]],
+      ['cargos_programados_historial',  `DELETE FROM cargos_programados_historial WHERE residente_id = ANY($1::uuid[]) OR aplicado_por = ANY($2::uuid[]) OR cargo_programado_id IN (SELECT id FROM cargos_programados WHERE sucursal_id = ANY($3::uuid[]))`, [R, U, S]],
+      ['cargos_programados',            `DELETE FROM cargos_programados WHERE sucursal_id = ANY($1::uuid[]) OR creado_por = ANY($2::uuid[])`, [S, U]],
+      ['configuracion_cargos',          `DELETE FROM configuracion_cargos WHERE sucursal_id = ANY($1::uuid[])`, [S]],
+      ['invitaciones_qr',               `DELETE FROM invitaciones_qr WHERE sucursal_id = ANY($1::uuid[]) OR residente_id = ANY($2::uuid[])`, [S, R]],
+      ['preautorizaciones',             `DELETE FROM preautorizaciones WHERE sucursal_id = ANY($1::uuid[]) OR residente_id = ANY($2::uuid[])`, [S, R]],
+      ['tickets',                       `DELETE FROM tickets WHERE sucursal_id = ANY($1::uuid[]) OR residente_id = ANY($2::uuid[])`, [S, R]],
+      ['ticket_mensajes',               `DELETE FROM ticket_mensajes WHERE autor_id = ANY($1::uuid[])`, [U]],
+      ['anuncios',                      `DELETE FROM anuncios WHERE sucursal_id = ANY($1::uuid[]) OR residente_id = ANY($2::uuid[]) OR creado_por = ANY($3::uuid[])`, [S, R, U]],
+      ['visitante_blacklist',           `DELETE FROM visitante_blacklist WHERE sucursal_id = ANY($1::uuid[]) OR creado_por = ANY($2::uuid[])`, [S, U]],
+      ['residente_visitante_blacklist', `DELETE FROM residente_visitante_blacklist WHERE residente_id = ANY($1::uuid[]) OR creado_por = ANY($2::uuid[])`, [R, U]],
+      ['licencias_dispositivo',         `DELETE FROM licencias_dispositivo WHERE sucursal_id = ANY($1::uuid[])`, [S]],
+      ['invitaciones',                  `DELETE FROM invitaciones WHERE empresa_id = $1 OR sucursal_id = ANY($2::uuid[]) OR invitado_por = ANY($3::uuid[]) OR usuario_id = ANY($3::uuid[])`, [id, S, U]],
+      ['refresh_tokens',                `DELETE FROM refresh_tokens WHERE usuario_id = ANY($1::uuid[])`, [U]],
+      ['residentes',                    `DELETE FROM residentes WHERE id = ANY($1::uuid[])`, [R]],
+      ['usuarios',                      `DELETE FROM usuarios WHERE id = ANY($1::uuid[])`, [U]],
+      ['sucursales',                    `DELETE FROM sucursales WHERE id = ANY($1::uuid[])`, [S]],
+      ['empresas',                      `DELETE FROM empresas WHERE id = $1`, [id]],
+    ];
+    const eliminado: Record<string, number> = {};
+    for (const [tabla, sql, params] of pasos) {
+      const r = await client.query(sql, params);
+      eliminado[tabla] = r.rowCount ?? 0;
+    }
+    await client.query('COMMIT');
+    res.json({ message: 'Empresa eliminada definitivamente', id, nombre: emp.rows[0].nombre, eliminado });
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
+    serverError(res, error, 'Error al eliminar la empresa definitivamente');
   } finally {
     client.release();
   }
@@ -171,11 +369,23 @@ export const assignAdminEmpresa = async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Empresa no encontrada' });
     }
 
+    // El nuevo admin no puede ser un owner (se le quitaría el rol) ni un
+    // residente. Se comprueba ANTES de degradar al admin actual.
+    const candidato = await client.query(
+      `SELECT id FROM usuarios WHERE id = $1 AND rol IN ('admin_empresa', 'admin_sucursal', 'agente')`,
+      [usuario_id]
+    );
+    if (candidato.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Usuario no encontrado o su rol no permite ser admin de empresa' });
+    }
+
     // Remove current admin_empresa of this empresa (demote to agente)
-    await client.query(
+    const degradados = await client.query(
       `UPDATE usuarios SET rol = 'agente', empresa_id = NULL
-       WHERE empresa_id = $1 AND rol = 'admin_empresa'`,
-      [id]
+       WHERE empresa_id = $1 AND rol = 'admin_empresa' AND id <> $2
+       RETURNING id`,
+      [id, usuario_id]
     );
 
     // Assign new admin_empresa
@@ -187,16 +397,17 @@ export const assignAdminEmpresa = async (req: Request, res: Response) => {
       [id, usuario_id]
     );
 
-    if (result.rows.length === 0) {
-      await client.query('ROLLBACK');
-      return res.status(404).json({ error: 'Usuario no encontrado' });
-    }
-
     await client.query('COMMIT');
+
+    // Los cambios de rol se aplican de inmediato: sesiones cerradas.
+    for (const u of [...degradados.rows.map((r: { id: string }) => r.id), usuario_id]) {
+      await revocarSesionesDeUsuario(pool, u);
+      revocarAccesoDeUsuario(u);
+    }
     res.json(result.rows[0]);
   } catch (error) {
     await client.query('ROLLBACK');
-    res.status(500).json({ error: 'Error al asignar admin empresa', detail: String(error) });
+    serverError(res, error, 'Error al asignar admin empresa');
   } finally {
     client.release();
   }
@@ -204,6 +415,10 @@ export const assignAdminEmpresa = async (req: Request, res: Response) => {
 
 export const getEmpresaStats = async (req: Request, res: Response) => {
   const { id } = req.params;
+  // Un admin de empresa sólo ve las métricas de la suya (antes veía cualquiera).
+  if (!esUuid(id) || (req.user!.rol === 'admin_empresa' && req.user!.empresa_id !== id)) {
+    return res.status(403).json({ error: 'Sin acceso a esta empresa' });
+  }
 
   try {
     const [
@@ -262,6 +477,6 @@ export const getEmpresaStats = async (req: Request, res: Response) => {
       sucursales:             sucursalesDetalle.rows,
     });
   } catch (error) {
-    res.status(500).json({ error: 'Error al obtener estadísticas', detail: String(error) });
+    serverError(res, error, 'Error al obtener estadísticas');
   }
 };

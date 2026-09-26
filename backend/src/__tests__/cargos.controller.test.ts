@@ -27,8 +27,8 @@ function makeRes() {
 describe('aplicarCargo — prevención de doble cobro', () => {
   it('retorna 409 y NO vuelve a aplicar un cargo ya aplicado (aplicado=true)', async () => {
     const client = {
-      query: jest.fn((sql: string) => {
-        if (sql.includes('SELECT residente_id, monto, aplicado')) {
+      query: jest.fn((sql: string, _params?: unknown[]) => {
+        if (sql.includes('FROM cargos_automaticos ca')) {
           // El cargo ya fue aplicado previamente
           return Promise.resolve({ rows: [{ residente_id: 'r1', monto: '50.00', aplicado: true }] });
         }
@@ -38,7 +38,10 @@ describe('aplicarCargo — prevención de doble cobro', () => {
     };
     mockPool.connect.mockResolvedValue(client);
 
-    const req = { params: { id: 'cargo-1' } } as unknown as Request;
+    const req = {
+      params: { id: 'cargo-1' },
+      user: { id: 'u-1', rol: 'admin_sucursal', sucursal_id: 'suc-1', empresa_id: null },
+    } as unknown as Request;
     const res = makeRes();
 
     await aplicarCargo(req, res);
@@ -51,6 +54,13 @@ describe('aplicarCargo — prevención de doble cobro', () => {
     const sqls = client.query.mock.calls.map(c => c[0] as string);
     expect(sqls.some(s => s.includes('UPDATE cargos_automaticos SET aplicado'))).toBe(false);
     expect(sqls.some(s => s.includes('UPDATE residentes'))).toBe(false);
+
+    // La consulta del cargo se limita al alcance del usuario y bloquea la fila
+    const cargoSql = sqls.find(s => s.includes('FROM cargos_automaticos ca'))!;
+    expect(cargoSql).toContain('FOR UPDATE OF ca');
+    expect(cargoSql).toContain('sucursales _os');
+    const cargoParams = client.query.mock.calls.find(c => String(c[0]).includes('FROM cargos_automaticos ca'))![1];
+    expect(cargoParams).toEqual(['cargo-1', 'admin_sucursal', null, 'suc-1']);
 
     // Se abrió transacción, se revirtió y se liberó el cliente
     expect(sqls).toContain('BEGIN');

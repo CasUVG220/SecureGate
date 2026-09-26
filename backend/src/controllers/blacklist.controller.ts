@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import pool from '../db/pool';
-import { tenantFilter, ownershipClause, ownershipParams, resolveSucursalId } from '../utils/tenant';
+import { tenantFilter, ownershipClause, ownershipParams, resolverSucursal } from '../utils/tenant';
+import { serverError } from '../utils/http';
 
 export interface BlacklistMatch {
   id: string;
@@ -76,7 +77,7 @@ export const getBlacklist = async (req: Request, res: Response) => {
     );
     res.json(result.rows);
   } catch (error) {
-    res.status(500).json({ error: 'Error al obtener blacklist', detail: String(error) });
+    serverError(res, error, 'Error al obtener blacklist');
   }
 };
 
@@ -111,10 +112,11 @@ export const createBlacklist = async (req: Request, res: Response) => {
     return res.status(400).json({ error: "duracion debe ser 'temporal_dias', '30_dias' o 'indefinido'" });
   }
 
-  const sucursalId = await resolveSucursalId(req.user!.sucursal_id, bodySucursalId, pool);
-  if (!sucursalId) {
-    return res.status(400).json({ error: 'No se pudo determinar la sucursal del ban' });
+  const sucResuelta = await resolverSucursal(req.user!, bodySucursalId, pool);
+  if (sucResuelta.ok === false) {
+    return res.status(sucResuelta.status).json({ error: sucResuelta.error });
   }
+  const sucursalId = sucResuelta.id;
 
   try {
     const result = await pool.query(
@@ -126,7 +128,7 @@ export const createBlacklist = async (req: Request, res: Response) => {
     );
     res.status(201).json(result.rows[0]);
   } catch (error) {
-    res.status(500).json({ error: 'Error al agregar a blacklist', detail: String(error) });
+    serverError(res, error, 'Error al agregar a blacklist');
   }
 };
 
@@ -146,6 +148,6 @@ export const deleteBlacklist = async (req: Request, res: Response) => {
     }
     res.json({ id: result.rows[0].id, removed: true });
   } catch (error) {
-    res.status(500).json({ error: 'Error al remover de blacklist', detail: String(error) });
+    serverError(res, error, 'Error al remover de blacklist');
   }
 };

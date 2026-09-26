@@ -4,30 +4,95 @@ import { checkPreautorizacion } from './preautorizaciones.controller';
 import { checkBlacklist } from './blacklist.controller';
 import { getConfigQrEfectiva } from './configQr.controller';
 import { tenantFilter, ownershipClause, ownershipParams } from '../utils/tenant';
+import { serverError } from '../utils/http';
+
+/**
+ * Marca de tiempo que reporta la garita offline. Se guarda tal cual en
+ * `registrado_en` (el servidor no la corrige), pero como `timestamp_entrada`
+ * alimenta reportes y cargos, ahí se acota: nunca en el futuro respecto al
+ * servidor, y nunca más antigua que la ventana de gracia offline (con margen).
+ * Devuelve null si el valor no es una fecha — el caller responde 400.
+ */
+export const MAX_ANTIGUEDAD_REGISTRO_DIAS = 30;
+export const resolverRegistradoEn = (raw: unknown, ahora: Date = new Date()): Date | null | undefined => {
+  if (raw === undefined || raw === null || raw === '') return undefined;
+  const d = new Date(String(raw));
+  if (Number.isNaN(d.getTime())) return null;
+  const minimo = ahora.getTime() - MAX_ANTIGUEDAD_REGISTRO_DIAS * 24 * 60 * 60 * 1000;
+  if (d.getTime() < minimo) return null;
+  return d;
+};
 
 export const registrarAcceso = async (req: Request, res: Response) => {
-  const { nombre_visitante, numero_dpi, foto, residente_id, agente_id, placa, notas, invitacion_qr_id } = req.body;
+  const {
+    nombre_visitante, numero_dpi, foto, residente_id, placa, notas, invitacion_qr_id,
+    registrado_en, capturado_manualmente, id_cliente,
+  } = req.body;
 
-  if (!nombre_visitante || !numero_dpi || !residente_id || !agente_id) {
+  // El agente que registra es SIEMPRE el de la sesión. Antes se leía `agente_id`
+  // del body, así que cualquiera podía atribuir un acceso a otra persona y
+  // ensuciar la auditoría.
+  const agente_id: string = req.user!.id;
+
+  if (!nombre_visitante || !numero_dpi || !residente_id) {
     return res.status(400).json({
-      error: 'Campos requeridos: nombre_visitante, numero_dpi, residente_id, agente_id',
+      error: 'Campos requeridos: nombre_visitante, numero_dpi, residente_id',
     });
+  }
+  if (String(nombre_visitante).length > 150 || String(numero_dpi).length > 20 ||
+      (placa != null && String(placa).length > 20) ||
+      (foto != null && (typeof foto !== 'string' || foto.length > 500)) ||
+      (notas != null && String(notas).length > 500)) {
+    return res.status(400).json({ error: 'Alguno de los campos excede su longitud máxima' });
+  }
+
+  // Un equipo de garita sólo registra en la sucursal de su licencia: la sesión
+  // del agente y la licencia del dispositivo tienen que coincidir.
+  if (req.licencia && req.user!.sucursal_id !== req.licencia.sucursal_id) {
+    return res.status(403).json({ error: 'La sesión del agente no corresponde a la sucursal de esta licencia' });
+  }
+
+  // Campos de la app de escritorio. `registrado_en` = reloj del dispositivo;
+  // `recibido_en` lo sella el INSERT con NOW(). Nunca se fusionan.
+  const registradoEn = resolverRegistradoEn(registrado_en);
+  if (registradoEn === null) {
+    return res.status(400).json({ error: 'registrado_en inválido o demasiado antiguo' });
+  }
+  const origen: 'web' | 'desktop' = req.licencia ? 'desktop' : 'web';
+  const manual = capturado_manualmente === true || capturado_manualmente === 'true';
+
+  // Idempotencia de la cola offline: si este id_cliente ya se recibió (un
+  // reintento tras perder la respuesta), se devuelve el registro existente en
+  // vez de duplicarlo. 200, no 201: no se creó nada nuevo.
+  if (id_cliente) {
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(id_cliente))) {
+      return res.status(400).json({ error: 'id_cliente debe ser un UUID' });
+    }
+    const previo = await pool.query(
+      'SELECT * FROM registros_acceso WHERE id_cliente = $1', [id_cliente]
+    );
+    if (previo.rows.length > 0) {
+      return res.status(200).json({ registro: previo.rows[0], duplicado: true });
+    }
   }
 
   // Lectura independiente de la transacción: no depende de ninguna fila
   // resuelta más abajo (solo de numero_dpi/residente_id, ya en el body), así
   // que se resuelve antes de pedir un cliente del pool en vez de mientras
-  // éste queda retenido sin usarse (hallazgo de carga: backend/loadtest/RESULTADOS.md).
+  // éste queda retenido sin usarse (hallazgo de carga: backend/loadtest/RESULTADOS-sprint7.md).
   const preautorizado = await checkPreautorizacion(numero_dpi, residente_id);
 
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
 
-    // Verify residente exists and get their sucursal_id
+    // El residente tiene que pertenecer al alcance de quien registra: antes se
+    // aceptaba cualquier id, así que un agente podía registrar una visita (y
+    // disparar el cargo por mora) contra un residente de otra empresa.
     const residenteResult = await client.query(
-      'SELECT id, estado_pago, sucursal_id FROM residentes WHERE id = $1',
-      [residente_id]
+      `SELECT id, estado_pago, sucursal_id, saldo_pendiente FROM residentes WHERE id = $1
+         AND ${ownershipClause('residentes', 2)}`,
+      [residente_id, ...ownershipParams(req.user!)]
     );
     if (residenteResult.rows.length === 0) {
       await client.query('ROLLBACK');
@@ -75,7 +140,10 @@ export const registrarAcceso = async (req: Request, res: Response) => {
     if (visitanteExistente.rows.length > 0) {
       visitante_id = visitanteExistente.rows[0].id;
       const v = await client.query('SELECT * FROM visitantes WHERE id = $1', [visitante_id]);
-      visitante = v.rows[0];
+      // `visitantes` es global (un DPI = una fila para todos los condominios):
+      // no se devuelve la foto que subió otro tenant.
+      const { id, nombre, numero_dpi: dpi } = v.rows[0];
+      visitante = { id, nombre, numero_dpi: dpi };
     } else {
       const nuevoVisitante = await client.query(
         'INSERT INTO visitantes (nombre, numero_dpi, foto) VALUES ($1, $2, $3) RETURNING *',
@@ -172,13 +240,19 @@ export const registrarAcceso = async (req: Request, res: Response) => {
       vehiculo_id = vehiculoResult.rows[0].id;
     }
 
-    // Create access record with sucursal_id
+    // Create access record with sucursal_id.
+    // timestamp_entrada = hora real de la visita (reloj de la garita, acotado a
+    // NOW() para que un reloj adelantado no cree entradas en el futuro);
+    // recibido_en = NOW() del servidor, siempre.
     const registroResult = await client.query(
       `INSERT INTO registros_acceso
-         (sucursal_id, visitante_id, residente_id, vehiculo_id, agente_id, tipo, notas, invitacion_qr_id)
-       VALUES ($1, $2, $3, $4, $5, 'entrada', $6, $7)
+         (sucursal_id, visitante_id, residente_id, vehiculo_id, agente_id, tipo, notas, invitacion_qr_id,
+          timestamp_entrada, registrado_en, recibido_en, capturado_manualmente, origen, id_cliente, licencia_id)
+       VALUES ($1, $2, $3, $4, $5, 'entrada', $6, $7,
+               LEAST(COALESCE($8::timestamptz, NOW()), NOW()), $8::timestamptz, NOW(), $9, $10, $11, $12)
        RETURNING *`,
-      [sucursal_id, visitante_id, residente_id, vehiculo_id, agente_id, notas || null, invitacion_qr_id || null]
+      [sucursal_id, visitante_id, residente_id, vehiculo_id, agente_id, notas || null, invitacion_qr_id || null,
+       registradoEn ?? null, manual, origen, id_cliente || null, req.licencia?.id ?? null]
     );
     const registro = registroResult.rows[0];
 
@@ -291,41 +365,54 @@ export const registrarAcceso = async (req: Request, res: Response) => {
     });
   } catch (error) {
     await client.query('ROLLBACK');
-    res.status(500).json({ error: 'Error al registrar acceso', detail: String(error) });
+    // Carrera entre dos reintentos del mismo id_cliente: el índice único
+    // detiene al segundo; responde como duplicado en vez de 500.
+    if (id_cliente && (error as { code?: string }).code === '23505') {
+      const previo = await pool.query('SELECT * FROM registros_acceso WHERE id_cliente = $1', [id_cliente]);
+      if (previo.rows.length > 0) {
+        return res.status(200).json({ registro: previo.rows[0], duplicado: true });
+      }
+    }
+    serverError(res, error, 'Error al registrar acceso');
   } finally {
     client.release();
   }
 };
 
-export const registrarSalida = async (req: Request, res: Response) => {
+/**
+ * Marca la salida de un acceso. Un id fuera del alcance del usuario responde
+ * 404 igual que uno inexistente: distinguirlos (403 vs 404) revelaba qué UUID
+ * existían en otros condominios.
+ */
+const marcarSalida = async (req: Request, res: Response, tipoSalida: boolean) => {
   const { id } = req.params;
   try {
     const result = await pool.query(
       `UPDATE registros_acceso
-       SET tipo = 'salida', timestamp_salida = NOW()
+       SET ${tipoSalida ? "tipo = 'salida', " : ''}timestamp_salida = NOW()
        WHERE id = $1
          AND timestamp_salida IS NULL
          AND ${ownershipClause('registros_acceso', 2)}
        RETURNING *`,
       [id, ...ownershipParams(req.user!)]
     );
-    if (result.rows.length === 0) {
-      const existe = await pool.query(
-        'SELECT id, timestamp_salida FROM registros_acceso WHERE id = $1', [id]
-      );
-      if (existe.rows.length === 0) {
-        return res.status(404).json({ error: 'Registro de acceso no encontrado' });
-      }
-      if (existe.rows[0].timestamp_salida !== null) {
-        return res.status(409).json({ error: 'La salida ya fue registrada para este acceso' });
-      }
-      return res.status(403).json({ error: 'Sin acceso a este registro' });
+    if (result.rows.length > 0) return res.json(result.rows[0]);
+
+    const visible = await pool.query(
+      `SELECT id, timestamp_salida FROM registros_acceso
+        WHERE id = $1 AND ${ownershipClause('registros_acceso', 2)}`,
+      [id, ...ownershipParams(req.user!)]
+    );
+    if (visible.rows.length === 0) {
+      return res.status(404).json({ error: 'Registro de acceso no encontrado' });
     }
-    res.json(result.rows[0]);
+    return res.status(409).json({ error: 'La salida ya fue registrada para este acceso' });
   } catch (error) {
-    res.status(500).json({ error: 'Error al registrar salida', detail: String(error) });
+    return serverError(res, error, 'Error al registrar salida');
   }
 };
+
+export const registrarSalida = (req: Request, res: Response) => marcarSalida(req, res, true);
 
 export const getAccesoActivo = async (req: Request, res: Response) => {
   const { placa } = req.query as { placa?: string };
@@ -381,39 +468,11 @@ export const getAccesoActivo = async (req: Request, res: Response) => {
       placa: row.placa,
     });
   } catch (error) {
-    res.status(500).json({ error: 'Error al buscar acceso activo', detail: String(error) });
+    serverError(res, error, 'Error al buscar acceso activo');
   }
 };
 
-export const registrarSalidaPut = async (req: Request, res: Response) => {
-  const { id } = req.params;
-  try {
-    const existe = await pool.query(
-      'SELECT id, timestamp_salida FROM registros_acceso WHERE id = $1', [id]
-    );
-    if (existe.rows.length === 0) {
-      return res.status(404).json({ error: 'Registro de acceso no encontrado' });
-    }
-    if (existe.rows[0].timestamp_salida !== null) {
-      return res.status(409).json({ error: 'La salida ya fue registrada para este acceso' });
-    }
-
-    const result = await pool.query(
-      `UPDATE registros_acceso
-       SET timestamp_salida = NOW()
-       WHERE id = $1
-         AND ${ownershipClause('registros_acceso', 2)}
-       RETURNING *`,
-      [id, ...ownershipParams(req.user!)]
-    );
-    if (result.rows.length === 0) {
-      return res.status(403).json({ error: 'Sin acceso a este registro' });
-    }
-    res.json(result.rows[0]);
-  } catch (error) {
-    res.status(500).json({ error: 'Error al registrar salida', detail: String(error) });
-  }
-};
+export const registrarSalidaPut = (req: Request, res: Response) => marcarSalida(req, res, false);
 
 export const getAccesosActivos = async (req: Request, res: Response) => {
   const ts = tenantFilter(req.user!, 'ra');
@@ -456,7 +515,7 @@ export const getAccesosActivos = async (req: Request, res: Response) => {
       placa: row.placa ?? null,
     })));
   } catch (error) {
-    res.status(500).json({ error: 'Error al obtener accesos activos', detail: String(error) });
+    serverError(res, error, 'Error al obtener accesos activos');
   }
 };
 
@@ -484,6 +543,6 @@ export const getMisAccesos = async (req: Request, res: Response) => {
     );
     res.json(result.rows);
   } catch (error) {
-    res.status(500).json({ error: 'Error al obtener historial de accesos', detail: String(error) });
+    serverError(res, error, 'Error al obtener historial de accesos');
   }
 };

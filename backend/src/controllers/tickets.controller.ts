@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import pool from '../db/pool';
 import { tenantFilter, ownershipClause, ownershipParams } from '../utils/tenant';
 import { censurarTexto } from '../utils/profanityFilter';
+import { serverError } from '../utils/http';
 
 const TIPOS = ['mantenimiento', 'queja', 'seguridad', 'otro'];
 
@@ -50,7 +51,7 @@ export const createTicket = async (req: Request, res: Response) => {
     res.status(201).json(ticket);
   } catch (error) {
     await client.query('ROLLBACK');
-    res.status(500).json({ error: 'Error al crear ticket', detail: String(error) });
+    serverError(res, error, 'Error al crear ticket');
   } finally {
     client.release();
   }
@@ -79,7 +80,7 @@ export const getMisTickets = async (req: Request, res: Response) => {
     );
     res.json(result.rows);
   } catch (error) {
-    res.status(500).json({ error: 'Error al obtener tickets', detail: String(error) });
+    serverError(res, error, 'Error al obtener tickets');
   }
 };
 
@@ -110,7 +111,7 @@ export const getTickets = async (req: Request, res: Response) => {
     );
     res.json(result.rows);
   } catch (error) {
-    res.status(500).json({ error: 'Error al obtener tickets', detail: String(error) });
+    serverError(res, error, 'Error al obtener tickets');
   }
 };
 
@@ -169,7 +170,7 @@ export const getMensajes = async (req: Request, res: Response) => {
     );
     res.json({ ticket, mensajes: mensajes.rows });
   } catch (error) {
-    res.status(500).json({ error: 'Error al obtener mensajes', detail: String(error) });
+    serverError(res, error, 'Error al obtener mensajes');
   }
 };
 
@@ -211,7 +212,7 @@ export const addMensaje = async (req: Request, res: Response) => {
 
     res.status(201).json(inserted.rows[0]);
   } catch (error) {
-    res.status(500).json({ error: 'Error al enviar mensaje', detail: String(error) });
+    serverError(res, error, 'Error al enviar mensaje');
   }
 };
 
@@ -234,6 +235,6 @@ export const cerrarTicket = async (req: Request, res: Response) => {
     }
     res.json(result.rows[0]);
   } catch (error) {
-    res.status(500).json({ error: 'Error al cerrar ticket', detail: String(error) });
+    serverError(res, error, 'Error al cerrar ticket');
   }
 };

@@ -1,7 +1,8 @@
 import { Request, Response } from 'express';
 import pool from '../db/pool';
-import { tenantFilter, ownershipClause, ownershipParams, resolveSucursalId } from '../utils/tenant';
+import { tenantFilter, ownershipClause, ownershipParams, resolverSucursal } from '../utils/tenant';
 import { TarifaTipo } from '../utils/reservas';
+import { serverError } from '../utils/http';
 
 const TARIFAS: TarifaTipo[] = ['gratis', 'por_hora', 'unica'];
 
@@ -57,7 +58,7 @@ export const getAreas = async (req: Request, res: Response) => {
     );
     res.json(result.rows);
   } catch (error) {
-    res.status(500).json({ error: 'Error al obtener áreas comunes', detail: String(error) });
+    serverError(res, error, 'Error al obtener áreas comunes');
   }
 };
 
@@ -75,10 +76,11 @@ export const createArea = async (req: Request, res: Response) => {
   const tarifa = validarTarifa(tarifa_tipo ?? 'gratis', tarifa_monto);
   if ('error' in tarifa) return res.status(400).json({ error: tarifa.error });
 
-  const sucursal_id = await resolveSucursalId(req.user!.sucursal_id, bodySucursalId, pool);
-  if (!sucursal_id) {
-    return res.status(400).json({ error: 'No se pudo determinar la sucursal del área' });
+  const sucResuelta = await resolverSucursal(req.user!, bodySucursalId, pool);
+  if (sucResuelta.ok === false) {
+    return res.status(sucResuelta.status).json({ error: sucResuelta.error });
   }
+  const sucursal_id = sucResuelta.id;
 
   try {
     const result = await pool.query(
@@ -96,7 +98,7 @@ export const createArea = async (req: Request, res: Response) => {
     );
     res.status(201).json(result.rows[0]);
   } catch (error) {
-    res.status(500).json({ error: 'Error al crear área común', detail: String(error) });
+    serverError(res, error, 'Error al crear área común');
   }
 };
 
@@ -163,7 +165,7 @@ export const updateArea = async (req: Request, res: Response) => {
     }
     res.json(result.rows[0]);
   } catch (error) {
-    res.status(500).json({ error: 'Error al actualizar área común', detail: String(error) });
+    serverError(res, error, 'Error al actualizar área común');
   }
 };
 
@@ -202,6 +204,6 @@ export const deleteArea = async (req: Request, res: Response) => {
     }
     res.json(result.rows[0]);
   } catch (error) {
-    res.status(500).json({ error: 'Error al eliminar área común', detail: String(error) });
+    serverError(res, error, 'Error al eliminar área común');
   }
 };

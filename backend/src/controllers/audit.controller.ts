@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import pool from '../db/pool';
+import { serverError } from '../utils/http';
 
 export const getAuditLogs = async (req: Request, res: Response) => {
   const limit     = Math.min(parseInt(req.query.limit  as string) || 50, 200);
@@ -36,6 +37,7 @@ export const getAuditLogs = async (req: Request, res: Response) => {
     const result = await pool.query(
       `SELECT al.id, al.accion, al.tabla_afectada, al.registro_id,
               al.ip_address, al.user_agent, al.sucursal_id, al.created_at,
+              al.status_code, al.datos_nuevos,
               u.nombre AS usuario_nombre, u.email AS usuario_email
        FROM audit_logs al
        LEFT JOIN usuarios u ON al.usuario_id = u.id
@@ -57,6 +59,6 @@ export const getAuditLogs = async (req: Request, res: Response) => {
       offset,
     });
   } catch (error) {
-    res.status(500).json({ error: 'Error al obtener logs de auditoría', detail: String(error) });
+    serverError(res, error, 'Error al obtener logs de auditoría');
   }
 };

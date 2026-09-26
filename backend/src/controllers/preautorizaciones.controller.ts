@@ -1,22 +1,35 @@
 import { Request, Response } from 'express';
 import pool from '../db/pool';
 import { tenantFilter, ownershipClause, ownershipParams } from '../utils/tenant';
+import { serverError, esUuid } from '../utils/http';
 
-/** Verifica si existe una preautorización activa y vigente para el DPI + residente. */
+/**
+ * Verifica si existe una preautorización activa y vigente para el residente que
+ * coincida con el DPI del visitante o, si la preautorización es sólo de placa,
+ * con la placa.
+ *
+ * Antes `numero_dpi IS NULL` contaba como comodín: una preautorización creada
+ * sólo con placa marcaba como "preautorizado" a CUALQUIER visitante de ese
+ * residente.
+ */
 export const checkPreautorizacion = async (
   numero_dpi: string,
-  residente_id: string
+  residente_id: string,
+  placa?: string | null,
 ): Promise<boolean> => {
   const result = await pool.query(
     `SELECT 1 FROM preautorizaciones
      WHERE residente_id = $1
-       AND (numero_dpi = $2 OR numero_dpi IS NULL)
+       AND (
+         numero_dpi = $2
+         OR (numero_dpi IS NULL AND placa IS NOT NULL AND $3::text IS NOT NULL AND UPPER(placa) = UPPER($3::text))
+       )
        AND activo = TRUE
        AND fecha_inicio <= NOW()::date
        AND fecha_fin IS NOT NULL
        AND fecha_fin >= NOW()::date
      LIMIT 1`,
-    [residente_id, numero_dpi]
+    [residente_id, numero_dpi, placa ?? null]
   );
   return result.rows.length > 0;
 };
@@ -63,7 +76,7 @@ export const buscarPreautorizacion = async (req: Request, res: Response) => {
     }
     res.json(result.rows[0]);
   } catch (error) {
-    res.status(500).json({ error: 'Error al buscar preautorización', detail: String(error) });
+    serverError(res, error, 'Error al buscar preautorización');
   }
 };
 
@@ -83,7 +96,7 @@ export const getPreautorizaciones = async (req: Request, res: Response) => {
     );
     res.json(result.rows);
   } catch (error) {
-    res.status(500).json({ error: 'Error al obtener preautorizaciones', detail: String(error) });
+    serverError(res, error, 'Error al obtener preautorizaciones');
   }
 };
 
@@ -101,9 +114,11 @@ export const createPreautorizacion = async (req: Request, res: Response) => {
 
   try {
     // Get residente and their sucursal_id
+    // Sólo residentes del alcance de quien crea la preautorización.
     const residente = await pool.query(
-      'SELECT id, sucursal_id FROM residentes WHERE id = $1',
-      [residente_id]
+      `SELECT id, sucursal_id FROM residentes WHERE id = $1
+         AND ${ownershipClause('residentes', 2)}`,
+      [residente_id, ...ownershipParams(req.user!)]
     );
     if (residente.rows.length === 0) {
       return res.status(404).json({ error: 'Residente no encontrado' });
@@ -120,7 +135,7 @@ export const createPreautorizacion = async (req: Request, res: Response) => {
     );
     res.status(201).json(result.rows[0]);
   } catch (error) {
-    res.status(500).json({ error: 'Error al crear preautorización', detail: String(error) });
+    serverError(res, error, 'Error al crear preautorización');
   }
 };
 
@@ -150,7 +165,7 @@ export const deletePreautorizacion = async (req: Request, res: Response) => {
     }
     res.json({ message: 'Preautorización eliminada', id: result.rows[0].id });
   } catch (error) {
-    res.status(500).json({ error: 'Error al eliminar preautorización', detail: String(error) });
+    serverError(res, error, 'Error al eliminar preautorización');
   }
 };
 
@@ -177,7 +192,7 @@ export const getMisPreautorizaciones = async (req: Request, res: Response) => {
     );
     res.json(result.rows);
   } catch (error) {
-    res.status(500).json({ error: 'Error al obtener preautorizaciones', detail: String(error) });
+    serverError(res, error, 'Error al obtener preautorizaciones');
   }
 };
 
@@ -205,7 +220,7 @@ export const createMisPreautorizacion = async (req: Request, res: Response) => {
     );
     res.status(201).json(result.rows[0]);
   } catch (error) {
-    res.status(500).json({ error: 'Error al crear preautorización', detail: String(error) });
+    serverError(res, error, 'Error al crear preautorización');
   }
 };
 
@@ -227,6 +242,6 @@ export const deleteMisPreautorizacion = async (req: Request, res: Response) => {
     }
     res.json({ message: 'Preautorización eliminada' });
   } catch (error) {
-    res.status(500).json({ error: 'Error al eliminar preautorización', detail: String(error) });
+    serverError(res, error, 'Error al eliminar preautorización');
   }
 };

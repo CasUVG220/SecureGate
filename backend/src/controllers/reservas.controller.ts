@@ -16,6 +16,7 @@ import {
   Consultable,
   ConfigReservas,
 } from '../utils/reservas';
+import { serverError } from '../utils/http';
 
 const RE_FECHA = /^\d{4}-\d{2}-\d{2}$/;
 const RE_HORA = /^\d{1,2}:\d{2}(:\d{2})?$/;
@@ -85,6 +86,18 @@ export const getDisponibilidad = async (req: Request, res: Response) => {
       if (!residente || residente.sucursal_id !== area.sucursal_id) {
         return res.status(403).json({ error: 'Sin acceso a esta área' });
       }
+    } else {
+      // El personal sólo ve las áreas de SU alcance (owner: todas; admin de
+      // empresa: las de su empresa; el resto: las de su sucursal). Antes bastaba
+      // ser cualquier usuario no residente para leer nombre, tarifa y horarios
+      // ocupados de un área de OTRA empresa (hallazgo S-04, backend/securitytest).
+      const enAlcance = await pool.query(
+        `SELECT 1 FROM areas_comunes a WHERE a.id = $1 AND ${ownershipClause('a', 2)}`,
+        [area_id, ...ownershipParams(req.user!)]
+      );
+      if (enAlcance.rows.length === 0) {
+        return res.status(403).json({ error: 'Sin acceso a esta área' });
+      }
     }
 
     const config = await getConfigEfectiva(pool, area.sucursal_id);
@@ -118,7 +131,7 @@ export const getDisponibilidad = async (req: Request, res: Response) => {
       ocupados: ocupados.rows,
     });
   } catch (error) {
-    res.status(500).json({ error: 'Error al obtener disponibilidad', detail: String(error) });
+    serverError(res, error, 'Error al obtener disponibilidad');
   }
 };
 
@@ -296,7 +309,7 @@ export const crearReserva = async (req: Request, res: Response) => {
     if (esViolacionExclusion(error)) {
       return res.status(409).json({ error: MSG_HORARIO_TOMADO });
     }
-    res.status(500).json({ error: 'Error al crear la reserva', detail: String(error) });
+    serverError(res, error, 'Error al crear la reserva');
   } finally {
     client.release();
   }
@@ -352,7 +365,7 @@ export const aprobarReserva = async (req: Request, res: Response) => {
     res.json({ ...actualizada.rows[0], area_nombre: reserva.area_nombre });
   } catch (error) {
     await client.query('ROLLBACK');
-    res.status(500).json({ error: 'Error al aprobar la reserva', detail: String(error) });
+    serverError(res, error, 'Error al aprobar la reserva');
   } finally {
     client.release();
   }
@@ -418,7 +431,7 @@ export const rechazarReserva = async (req: Request, res: Response) => {
     res.json({ ...actualizada.rows[0], area_nombre: reserva.area_nombre });
   } catch (error) {
     await client.query('ROLLBACK');
-    res.status(500).json({ error: 'Error al rechazar la reserva', detail: String(error) });
+    serverError(res, error, 'Error al rechazar la reserva');
   } finally {
     client.release();
   }
@@ -575,7 +588,7 @@ export const cancelarReserva = async (req: Request, res: Response) => {
     });
   } catch (error) {
     await client.query('ROLLBACK');
-    res.status(500).json({ error: 'Error al cancelar la reserva', detail: String(error) });
+    serverError(res, error, 'Error al cancelar la reserva');
   } finally {
     client.release();
   }
@@ -628,9 +641,7 @@ export const getPreviewCancelacion = async (req: Request, res: Response) => {
       horas_limite_cancelacion_parcial: config.horas_limite_cancelacion_parcial,
     });
   } catch (error) {
-    res
-      .status(500)
-      .json({ error: 'Error al calcular el reembolso', detail: String(error) });
+    serverError(res, error, 'Error al calcular el reembolso');
   }
 };
 
@@ -656,7 +667,7 @@ export const getMisReservas = async (req: Request, res: Response) => {
     );
     res.json(result.rows);
   } catch (error) {
-    res.status(500).json({ error: 'Error al obtener tus reservas', detail: String(error) });
+    serverError(res, error, 'Error al obtener tus reservas');
   }
 };
 
@@ -692,6 +703,6 @@ export const getReservas = async (req: Request, res: Response) => {
     );
     res.json(result.rows);
   } catch (error) {
-    res.status(500).json({ error: 'Error al obtener reservas', detail: String(error) });
+    serverError(res, error, 'Error al obtener reservas');
   }
 };
