@@ -1,0 +1,19 @@
+# POST /api/licencias/heartbeat (Sprint 8): la app lo llama cada 15 min; con N garitas son N/900 req/s.
+# Cada llamada valida el JWT de licencia, hace un JOIN licencia+sucursal+empresa y un UPDATE.
+config:
+  target: "http://localhost:3000"
+  phases:
+    - { duration: 20, arrivalRate: 25,  name: "25 req/s" }
+    - { duration: 20, arrivalRate: 50,  name: "50 req/s" }
+    - { duration: 20, arrivalRate: 100, name: "100 req/s" }
+    - { duration: 20, arrivalRate: 150, name: "150 req/s" }
+    - { duration: 20, arrivalRate: 200, name: "200 req/s" }
+scenarios:
+  - name: "Heartbeat"
+    flow:
+      - post:
+          url: "/api/licencias/heartbeat"
+          headers:
+            X-Licencia-Token: "{{ $processEnvironment.LOADTEST_LIC_TOKEN }}"
+          json:
+            fingerprint: "{{ $processEnvironment.LOADTEST_FINGERPRINT }}"

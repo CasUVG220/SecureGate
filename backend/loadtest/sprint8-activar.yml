@@ -1,0 +1,27 @@
+# POST /api/licencias/activar (Sprint 8): primer uso de un código (UPDATE condicional) y reactivación
+# desde la misma máquina (mismo fingerprint → token nuevo). Cada fila del CSV es un código con su
+# fingerprint; el pool se recorre al azar, así que ~la mitad de las peticiones son reactivaciones.
+# Requiere: source backend/loadtest/setup-sprint8.sh  y el override docker-compose.loadtest.yml
+config:
+  target: "http://localhost:3000"
+  processor: "./sprint8-processor.js"
+  payload:
+    path: "./results/activar-codigos.csv"
+    fields: ["codigo", "fingerprint"]
+    order: random
+    skipHeader: false
+  phases:
+    - { duration: 20, arrivalRate: 10,  name: "10 req/s" }
+    - { duration: 20, arrivalRate: 25,  name: "25 req/s" }
+    - { duration: 20, arrivalRate: 50,  name: "50 req/s" }
+    - { duration: 20, arrivalRate: 100, name: "100 req/s" }
+    - { duration: 20, arrivalRate: 150, name: "150 req/s" }
+scenarios:
+  - name: "Activar licencia"
+    flow:
+      - post:
+          url: "/api/licencias/activar"
+          json:
+            codigo: "{{ codigo }}"
+            fingerprint: "{{ fingerprint }}"
+            nombre_dispositivo: "carga"

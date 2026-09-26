@@ -71,5 +71,13 @@ Ver `cleanup.sql` para el detalle de qué borra.
 
 ## Resultados
 
-Ver `RESULTADOS.md` para el análisis completo (métricas, punto de quiebre,
+Ver `RESULTADOS-sprint7.md` (Sprint 7) para el análisis completo (métricas, punto de quiebre,
 correlación con D3 del análisis de deuda técnica, y recomendaciones).
+
+## 5. Endpoints del Sprint 8 (app de garita)
+
+`sprint8-activar.yml`, `sprint8-heartbeat.yml`, `sprint8-sync-garita.yml` y `sprint8-accesos-idcliente.yml`.
+Necesitan además relajar los limitadores de `activar` y `heartbeat`, que `docker-compose.yml` no expone; para
+eso existe `docker-compose.loadtest.yml` (ver la sección 2 de `RESULTADOS.md`), y datos que prepara
+`source backend/loadtest/setup-sprint8.sh`. Se ejecutan con `npm run loadtest:activar | :heartbeat | :sync | :accesos-idcliente`, o todos juntos y con muestreo de
+recursos con `backend/loadtest/run-sprint8.sh`. Resultados en `RESULTADOS.md` (Sprint 8).

@@ -1,0 +1,18 @@
+# GET /api/sync/garita (Sprint 8): snapshot del espejo offline de la garita (residentes, preautorizaciones,
+# blacklist…). Doble llave: sesión de agente + licencia del dispositivo. Es la consulta más pesada del Sprint 8.
+config:
+  target: "http://localhost:3000"
+  phases:
+    - { duration: 20, arrivalRate: 5,  name: "5 req/s" }
+    - { duration: 20, arrivalRate: 10, name: "10 req/s" }
+    - { duration: 20, arrivalRate: 20, name: "20 req/s" }
+    - { duration: 20, arrivalRate: 40, name: "40 req/s" }
+    - { duration: 20, arrivalRate: 80, name: "80 req/s" }
+scenarios:
+  - name: "Sync de garita"
+    flow:
+      - get:
+          url: "/api/sync/garita"
+          headers:
+            Authorization: "Bearer {{ $processEnvironment.LOADTEST_TOKEN }}"
+            X-Licencia-Token: "{{ $processEnvironment.LOADTEST_LIC_TOKEN }}"
