@@ -1,262 +1,317 @@
-# Resultados — Pruebas de carga y estrés (Sprint 7)
+# Resultados — Pruebas de carga y estrés (Sprint 8)
 
-Ambiente: local (`docker-compose.yml`), backend + PostgreSQL 15 en contenedores separados
-sobre la misma máquina, base de datos con los datos semilla de `database/init.sql` (sin
-volumen de producción). No se corrió contra la VM de GCP (34.2.1.181): no fue alcanzable
-desde este entorno, y de cualquier forma las pruebas de estrés no deben apuntar a un
-ambiente con datos reales de clientes.
+Alcance: los cuatro endpoints que introdujo el Sprint 8 para la **app de escritorio de la garita** y que el
+Sprint 7 no cubría: `POST /api/licencias/activar`, `POST /api/licencias/heartbeat`, `GET /api/sync/garita` y
+`POST /api/accesos` con `id_cliente` (cola offline idempotente) y licencia de dispositivo.
 
-Fecha de ejecución: 2026-09-08.
+Ambiente: local (`docker-compose.yml`), backend Node 20 + PostgreSQL 15 en contenedores separados sobre la misma
+máquina, con el **pool de `pg` en `max: 20`** (`DB_POOL_MAX`) y los datos semilla de desarrollo. No se corrió contra
+la VM de GCP ni contra Cloud SQL: no deben recibir carga sintética y la prueba local no mide su latencia de red.
+
+Fecha de ejecución: 2026-09-29. Herramienta: Artillery 2.0.34 (la misma del Sprint 7). El reporte del Sprint 7
+(login, dashboard, estrés de `POST /accesos` y el fix del pool) se conserva íntegro en
+[`RESULTADOS-sprint7.md`](RESULTADOS-sprint7.md); aquí se compara contra él en la sección 6.
+
+## Resumen
+
+- **0 errores en 94 761 peticiones** (2 corridas completas de los 4 escenarios + 2 corridas extra de accesos, una de ellas
+  con el pool en 10). Ningún 5xx ni timeout; sin excepciones en los logs del backend de la corrida 2.
+- **`activar`, `heartbeat` y `sync/garita` no muestran degradación** en el rango probado (hasta 150, 200 y 80 req/s;
+  p99 ≤ 19 ms). Con 6–8 de las 20 conexiones del pool y el backend a ≤ 71 % de un núcleo.
+- **`POST /accesos` con licencia e `id_cliente` es el único que llega a exigir al sistema:** a partir de ~185 req/s la
+  latencia de cola sube (p99 entre 11 y 262 ms según la corrida), el pool llegó a **20 de 20 conexiones** y
+  Postgres a **92 % de un núcleo** en su pico. Siguió sin errores.
+- **La idempotencia se cumple bajo carga, comprobada en la base:** 10 400 altas nuevas (201) y 3 138 reintentos con el
+  mismo `id_cliente` (200 `duplicado`) dejaron **10 400 filas, 10 400 `id_cliente` distintos**, todas `origen = desktop`.
+- **La variabilidad entre corridas es grande en la cola** (p99 de 16.9, 130 y 39 ms con la misma configuración), por
+  lo que estos números son un orden de magnitud, no una garantía. Ver sección 4e.
+- **Lo que no se midió y pesa:** producción usa Cloud SQL (latencia de red por consulta) y `DB_POOL_MAX=10` por
+  defecto; `sync/garita` se probó con una sucursal casi vacía (respuesta de 283 bytes). Ver sección 8.
 
 ## 1. Herramienta usada
 
-**[Artillery](https://www.artillery.io/) 2.0.34** (`backend/package.json`, devDependency).
+**[Artillery](https://www.artillery.io/) 2.0.34** (`backend/package.json`, devDependency), como en el Sprint 7:
+escenarios YAML versionados, `capture`/variables de entorno para inyectar tokens, salida con percentiles por ventana
+de 10 s y reportes HTML estáticos propios (`npm run loadtest:report`; `artillery report` está deprecado en 2.x).
 
-Se eligió por:
-- Configuración declarativa en YAML — los 4 escenarios quedan versionados en `backend/loadtest/*.yml`, revisables en PR como cualquier otro cambio de código.
-- Buena integración con Node.js/Express: soporta capturar JSON de una respuesta (`capture`) e inyectarlo en requests siguientes (`{{ token }}`), necesario para los escenarios que dependen de login.
-- Salida agregada por fases con percentiles (p50/p95/p99) sin necesidad de instrumentación adicional en el backend.
-- Instalación y curva de aprendizaje mínimas para un entregable de sprint.
+Para el Sprint 8 se añadió:
+- **`sprint8-processor.js`**: genera un `id_cliente` (UUID v4) y un DPI sintético por iteración, tal como lo hace la app
+  antes de encolar un acceso.
+- **Payload CSV** (`results/activar-codigos.csv`) con 300 códigos de activación, cada uno con su fingerprint, recorrido
+  al azar: ~mitad primeras activaciones (`UPDATE … WHERE fingerprint IS NULL`) y ~mitad reactivaciones desde la misma
+  máquina (token nuevo).
+- **`muestreo-recursos.sh`**: cada ~1 s toma `docker stats` (CPU y memoria de backend y Postgres) y `pg_stat_activity`
+  (conexiones totales y consultas activas) para saber **cuánto** se cargó el sistema y no solo cuánto tardó.
+- **`sprint8-resumen.js`**: genera las tablas de este documento directamente desde los JSON y CSV.
 
-Nota: el subcomando `artillery report` (generación de reporte HTML) fue **deprecado en
-Artillery 2.x** — ahora redirige a subir los resultados a Artillery Cloud, un servicio de
-terceros no aplicable a datos de un entregable académico. En su lugar se escribió
-`backend/loadtest/generate-reports.js`, que genera reportes HTML estáticos y
-autocontenidos a partir del JSON de salida (`npm run loadtest:report`). Los reportes están
-en `backend/loadtest/results/*.html`.
+## 2. Ambiente y ajuste previo: rate limiting
 
-## 2. Ajuste necesario antes de correr las pruebas: rate limiting
-
-El backend tiene dos rate limiters por IP (`backend/src/index.ts`, `backend/src/routes/index.ts`):
-`/api/auth` permite 10 req/15min, y el límite general permite 1000 req/15min para el resto
-de rutas. Como Artillery genera todo el tráfico desde una sola IP, con los límites de
-producción las pruebas de carga solo habrían medido el 429 del rate limiter a los pocos
-segundos, no la capacidad real del backend/BD.
-
-Se agregó un override opcional por variable de entorno (`RATE_LIMIT_LOGIN_MAX`,
-`RATE_LIMIT_GENERAL_MAX`), con los valores de producción como default — sin definir esas
-variables, el comportamiento no cambia. Las pruebas de carga/estrés se corrieron con el
-backend levantado así:
+Los limitadores por IP frenarían a Artillery (una sola IP) mucho antes que al backend: `activar` 10 / 15 min,
+`heartbeat` 60 / 15 min, general 1 000 / 15 min. `docker-compose.yml` solo expone algunos de esos overrides, así que en
+lugar de tocarlo se creó **`docker-compose.loadtest.yml`**, un override **solo para carga** (límites en 100 000 y
+`DB_POOL_MAX` configurable, 20 por defecto):
 
 ```bash
-RATE_LIMIT_LOGIN_MAX=100000 RATE_LIMIT_GENERAL_MAX=100000 docker compose up -d backend
+docker compose -f docker-compose.yml -f backend/loadtest/docker-compose.loadtest.yml up -d backend
+backend/loadtest/run-sprint8.sh        # prepara datos, corre los 4 escenarios y muestrea recursos
+docker compose up -d backend           # al terminar: vuelve a los límites de producción
 ```
 
-y el límite se restauró a los valores de producción (10 / 1000) inmediatamente después,
-con `docker compose up -d backend` sin esas variables exportadas.
+Después de cada tanda se volvió a los límites de producción y se restauró la base (los datos sintéticos —10 400
+registros de acceso, 300 licencias de prueba— no quedan). Que los límites de producción **sí** funcionan (10
+activaciones, 60 heartbeats y 1 000 peticiones por IP, con 429 al superarlos) está medido en
+`backend/securitytest/RESULTADOS.md`, sección 3f.
 
-## 3. Resultados por escenario
+Datos de prueba (`setup-sprint8.sh`, contra las cuentas demo del compose de desarrollo): token de `agente1`, un
+`residente_id`, **una licencia activada** (token + fingerprint) de la misma sucursal que el agente y 300 códigos sin
+activar.
 
-### a) `smoke.yml` — prueba de humo
+## 3. Escenarios
 
-| Config | 1 VU, 10s, `GET /health` |
-|---|---|
-| Requests | 10/10 exitosos (200) |
-| p50 / p95 / p99 | 6 / 8 / 8 ms |
-| Errores | 0 |
-
-Confirma que el ambiente responde antes de escalar. Sin degradación, como se espera con 1 VU.
-
-### b) `carga-login.yml` — prueba de carga en login
-
-| Config | Warm-up: 10 VU/s × 30s → Carga sostenida: 50 VU/s × 60s. 50% `admin@securegate.com`, 50% `r1@securegate.com` |
-|---|---|
-| Requests | 3300/3300 exitosos (200) |
-| Tasa de error | 0% |
-| Throughput | ~36 req/s promedio (limitado por la duración de las fases, no por el backend) |
-| p50 / p95 / p99 | 53 / 57.4 / 80.6 ms |
-| Latencia máx. | 182 ms |
-
-**¿Degradación?** Ninguna. El login hace un `bcrypt` compare (`crypt()` en Postgres) más un
-`INSERT` en `refresh_tokens`; el costo está dominado por el hash de la contraseña (~50 ms
-constantes, por diseño de bcrypt/blowfish), no por carga — la latencia se mantuvo estable
-durante toda la fase de 50 VU/s sostenidos, sin crecimiento de p99 a lo largo del tiempo.
-
-### c) `carga-dashboard.yml` — prueba de carga en `GET /api/dashboard`
-
-| Config | 30 VU/s × 60s. Cada VU: login como owner (`admin@securegate.com`) + 5 llamadas a `GET /api/dashboard` con el token capturado |
-|---|---|
-| Requests | 10 800/10 800 exitosos (200) |
-| Tasa de error | 0% |
-| Throughput | ~180 req/s promedio |
-| p50 / p95 / p99 (combinado login+dashboard) | 1 / 53 / 54.1 ms |
-| Latencia máx. | 90 ms |
-
-**¿Degradación?** No se observó degradación con el volumen de datos actual. El p50 de 1 ms
-corresponde a las 5 llamadas a `/api/dashboard` por VU (rápidas); el p95/p99 de ~53 ms
-corresponde al login (1 de cada 6 requests de cada VU, dominado por el mismo costo de
-bcrypt que en el escenario anterior). Las consultas del dashboard en sí — `COUNT(*)` sobre
-`registros_acceso` y `pagos`, `ORDER BY timestamp_entrada LIMIT 10` — no mostraron ningún
-crecimiento de latencia bajo los 30 VU/s sostenidos.
-
-Se usó deliberadamente el rol **owner**, cuya condición de tenant en
-`dashboard.controller.ts` es `TRUE` (sin filtro por sucursal) — es el peor caso posible para
-el hallazgo D3, porque fuerza un `COUNT(*)` y un `ORDER BY` sin filtro sobre toda la tabla.
-
-**Relación con D3 (deuda técnica):** la propia base de datos semilla de desarrollo
-prácticamente no tiene filas en `registros_acceso` (la tabla no tiene ningún `INSERT` en
-`database/init.sql`) ni en `pagos`. Con 0-10 filas, un `COUNT(*)` completo cuesta lo mismo
-haya o no índice — el índice no importa hasta que el volumen crece lo suficiente para que
-un *sequential scan* sea costoso. Esto es exactamente lo que dice el propio hallazgo D3:
-*"esto no es un problema hoy con poco volumen de datos, pero escalará mal a medida que
-crezcan los registros de acceso y pagos históricos"* (`backlog/DEUDA_TECNICA.md:98`). Esta
-prueba **confirma** esa lectura en vez de contradecirla: no hay degradación visible porque
-el volumen de datos de desarrollo es demasiado bajo para exponer el problema — no porque el
-problema no exista. Para reproducir numéricamente el impacto de D3 haría falta poblar
-`registros_acceso`/`pagos` con un volumen representativo de producción (decenas o cientos de
-miles de filas) y repetir este mismo escenario; queda fuera del alcance de esta ronda de
-pruebas.
-
-### d) `estres-accesos.yml` — prueba de estrés en `POST /api/accesos`
-
-| Config | Fases de 30s, arrancando en 20 VU/s y subiendo de 20 en 20 hasta 200 VU/s (10 fases) |
-|---|---|
-| Requests totales | 33 000 intentados |
-| Exitosos (201) | 14 785 (44.8%) |
-| Fallidos (`ERR_SOCKET_TIMEOUT`, cliente) | 18 215 (55.2%) |
-| p50 / p95 / p99 (solo exitosos) | 4 / 10.1 / 16.9 ms |
-
-**Progresión por fase** (tasa de error = fallidos ÷ intentados en esa fase):
-
-| Fase (VU/s) | Requests intentados | Fallidos | Tasa de error | p99 observado |
-|---|---|---|---|---|
-| 20  | 469  | 0    | 0%    | 7 ms (máx. de la fase) |
-| 40  | 1073 | 0    | 0%    | 7 ms |
-| 60  | 1672 | 0    | 0%    | 6 ms |
-| 80  | 2273 | 0    | 0%    | 7 ms |
-| 100 | 2871 | 0    | 0%    | 8 ms |
-| 120 | 3472 | 0    | 0%    | 7 ms |
-| **140** | 4074 | 0    | 0%    | **12 → 34 → 125 ms** (subiendo dentro de la propia fase, en sus 3 ventanas de ~10s) |
-| **160** | 4671 | 4510 | **96.6%** | timeouts (>10 s) |
-| 180 | 5273 | 5113 | 97.0% | timeouts (>10 s) |
-| 200 | 5871 | 5711 | 97.3% | timeouts (>10 s) |
-
-(El resto de los 33 000 requests — 1281 + 881 — corresponden a las ventanas de "drenado"
-después de terminar la fase de 200 VU/s, mientras los VUs ya en cola seguían
-completando o expirando.)
-
-No hubo ningún error 5xx del backend en ningún momento (se revisaron los logs del
-contenedor `securegate-backend`: no hay excepciones ni mensajes de error durante la
-prueba). Los `ERR_SOCKET_TIMEOUT` son del lado del cliente Artillery: la petición no
-recibió respuesta dentro del timeout por defecto (10 s), no porque el servidor respondiera
-con error, sino porque la petición quedó esperando en cola más tiempo del que Artillery
-estuvo dispuesto a esperar.
-
-## 4. Punto de quiebre
-
-- **Inicio de degradación: ~140 VU/s.** Dentro de esa misma fase de 30s, el p99 sube de
-  12 ms a 125 ms — la señal de que las peticiones empiezan a acumularse en cola en vez de
-  procesarse de inmediato.
-- **Colapso: 160 VU/s.** 96.6% de las peticiones ya no reciben respuesta dentro de 10 s. De
-  160 a 200 VU/s el sistema se mantiene en ese ~97% de fallos sin seguir empeorando — no se
-  "cae" con errores 5xx, simplemente deja de poder atender la tasa de llegada de peticiones
-  por encima de lo que el pool de 10 conexiones alcanza a drenar.
-
-**Causa raíz identificada:** `backend/src/db/pool.ts` crea el `Pool` de `pg` sin fijar
-`max` — se queda en el default de **10 conexiones concurrentes**. `registrarAcceso`
-(`accesos.controller.ts`) hace `BEGIN` y retiene un único cliente del pool durante varias
-consultas secuenciales (verificar residente, verificar agente, chequeo de
-preautorización/blacklist, upsert de visitante, insert de registro) hasta el `COMMIT`. Con
-sólo 10 conexiones disponibles, a partir de ~140-160 VU/s las peticiones entrantes superan
-la capacidad de 10 transacciones concurrentes y se acumulan esperando un cliente libre; el
-`Pool` de `pg` no tiene `connectionTimeoutMillis` configurado (default: sin límite), así que
-esas peticiones esperan indefinidamente del lado del servidor hasta que Artillery las da
-por perdidas a los 10 s. Esto es consistente con que los requests que sí lograron completar
-siguieron siendo rápidos (p99 ≈ 17 ms) durante toda la prueba, incluso a 200 VU/s: el
-backend no se volvió lento por request individual, se quedó sin conexiones disponibles
-para atender más en paralelo.
-
-Esto **no** es un cuello de botella de CPU/memoria de la VM ni de tiempo de consulta —
-es agotamiento del pool de conexiones a PostgreSQL.
-
-## 5. Acciones de mitigación recomendadas (priorizado)
-
-1. **Configurar `max` explícito en el pool de `pg`, con margen sobre `max_connections` de
-   Postgres** (`backend/src/db/pool.ts`). Es la causa raíz directa del punto de quiebre
-   encontrado en esta prueba — sin este cambio, cualquier pico de tráfico por encima de
-   ~140 VU/s en endpoints que abren transacción (no solo `/api/accesos`) se comporta igual.
-   Acompañarlo de un `connectionTimeoutMillis` explícito para que una petición falle rápido
-   con un 503 controlado en vez de colgarse indefinidamente.
-2. **Agregar los índices faltantes en `registros_acceso` y `pagos` (D3, ya identificado en
-   `backlog/DEUDA_TECNICA.md`).** No se manifestó en `carga-dashboard.yml` por el volumen
-   de datos bajo del ambiente de desarrollo (ver sección 3c), pero el propio hallazgo D3 ya
-   documenta que escalará mal con el histórico de producción — el costo de la migración
-   (~4h, según la estimación existente en el documento de deuda técnica) es bajo comparado
-   con el riesgo de degradación silenciosa en producción a medida que crece el historial de
-   accesos y pagos.
-3. **Aumentar el tamaño de la VM (e2-micro → e2-medium)** — recomendado con menor prioridad
-   que 1 y 2: esta prueba no mostró presión de CPU/memoria (los requests que sí se
-   procesaron se mantuvieron rápidos incluso a 200 VU/s), así que más VM por sí sola no
-   habría movido el punto de quiebre encontrado — el límite fue el pool de conexiones, no
-   los recursos de la VM. Vale la pena revisarlo igual una vez resuelto el punto 1, dado que
-   más conexiones concurrentes sí van a exigir más CPU/RAM del contenedor de Postgres.
-4. **Cachear `GET /api/dashboard`** si los datos no cambian con frecuencia — razonable a
-   futuro (menos consultas repetidas de `COUNT(*)`), pero no es la prioridad actual: en esta
-   ronda de pruebas el endpoint respondió en ~1 ms bajo 30 VU/s sostenidos, muy por debajo
-   de cualquier umbral que justifique la complejidad de invalidación de una caché.
-
-## 6. Resultado después del fix
-
-Fecha de ejecución: 2026-09-08 (mismo ambiente: local, backend + PostgreSQL 15 en
-contenedores separados, misma base de datos semilla, mismos rate limiters relajados
-temporalmente — ver sección 2). Fix aplicado: `backend/src/db/pool.ts` ahora fija
-`max: 20` (configurable con `DB_POOL_MAX`), `idleTimeoutMillis: 30000` e
-`connectionTimeoutMillis: 5000`; además `registrarAcceso` mueve el chequeo de
-preautorización antes de pedir el cliente del pool, y el chequeo de blacklist antes
-del upsert de `visitantes`, para retener el cliente transaccional el menor tiempo
-posible (`backend/src/controllers/accesos.controller.ts`).
-
-Se corrió exactamente el mismo escenario (`estres-accesos.yml`, mismas 10 fases de 20 a
-200 VU/s) con `npm run loadtest:estres`.
-
-| Fase (VU/s) | Antes — % éxito | Antes — p99 | Después — % éxito | Después — p99 |
-|---|---|---|---|---|
-| 20  | 100% | 7 ms   | 100% | 16.9 ms |
-| 40  | 100% | 7 ms   | 100% | 12.1 ms |
-| 60  | 100% | 6 ms   | 100% | 13.1 ms |
-| 80  | 100% | 7 ms   | 100% | 7.9 ms |
-| 100 | 100% | 8 ms   | 100% | 7 ms |
-| 120 | 100% | 7 ms   | 100% | 7.9 ms |
-| 140 | 100% (degradando dentro de la fase) | 12→125 ms | 100% | 10.9 ms |
-| 160 | 3.4% (colapso) | timeout (>10 s) | 100% | 7 ms |
-| 180 | 3.0% (colapso) | timeout (>10 s) | 100% | 6 ms |
-| 200 | 2.7% (colapso) | timeout (>10 s) | 100% | 7 ms |
-
-(p99 "después" tomado de la última ventana de ~10s completa dentro de cada fase, a
-partir de `loadtest/results/estres-accesos.json`.)
-
-**Resumen agregado (33 000 requests):**
-
-| Métrica | Antes | Después |
+| Escenario | Endpoint y qué ejercita | Fases (20 s cada una) |
 |---|---|---|
-| Exitosos (201) | 14 785 (44.8%) | **33 000 (100%)** |
-| Fallidos | 18 215 (55.2%, `ERR_SOCKET_TIMEOUT`) | **0** |
-| p50 / p95 / p99 | 4 / 10.1 / 16.9 ms | 3 / 7.9 / 12.1 ms |
-| Latencia máx. | — | 38 ms |
+| `sprint8-activar.yml` | `POST /licencias/activar`: búsqueda del código con JOIN a sucursal y empresa, `UPDATE` condicional y firma del JWT de licencia | 10 → 25 → 50 → 100 → 150 VU/s |
+| `sprint8-heartbeat.yml` | `POST /licencias/heartbeat`: verifica el JWT, JOIN licencia+sucursal+empresa, comprueba el fingerprint y hace un `UPDATE` | 25 → 50 → 100 → 150 → 200 VU/s |
+| `sprint8-sync-garita.yml` | `GET /sync/garita`: doble llave (sesión de agente + licencia) y el snapshot del espejo offline | 5 → 10 → 20 → 40 → 80 VU/s |
+| `sprint8-accesos-idcliente.yml` | `POST /accesos` como lo manda la app: con `X-Licencia-Token` (validación extra de licencia) e `id_cliente`. **70 %** altas nuevas y **30 %** reintentos que envían el mismo `id_cliente` dos veces | 20 → 60 → 100 → 140 → 200 VU/s |
 
-**Nuevo punto de quiebre: no se encontró dentro del rango probado (hasta 200 VU/s).**
-Con `max: 20` en el pool (el doble del default de `pg`) y un solo backend Node en la
-misma VM, las 10 fases de la prueba — incluyendo el pico de 200 VU/s que antes colapsaba
-al 97% de fallos — se completaron con 0 errores y latencias por request que se mantienen
-en el mismo orden de magnitud observado antes de la fase de degradación (single-digit a
-bajo-doble-digito de milisegundos). Se revisaron los logs de `securegate-backend` durante
-la corrida: sin excepciones ni errores.
+En el escenario de accesos las peticiones por segundo superan a los VU/s porque el 30 % de los usuarios virtuales
+hace dos peticiones: 200 VU/s ≈ 260 req/s.
 
-Esto confirma el diagnóstico de la sección 4: el cuello de botella no era CPU, memoria ni
-tiempo de consulta — era el `max` no configurado del pool de `pg` (quedaba en el default
-de 10). Encontrar el nuevo punto de quiebre real (con `max: 20` y `max_connections: 100`
-de Postgres) requeriría fases por encima de 200 VU/s, fuera del rango de este escenario;
-dado que 200 VU/s ya excede varias veces el tráfico esperado para el tamaño actual de la
-base de residentes, no se priorizó extender la prueba en esta ronda.
+## 4. Resultados
 
-## 7. Archivos generados
+Los números de las tablas 4a a 4d son de la **corrida 2** (la que tiene el muestreo de recursos). Las corridas 1 y 3,
+sin muestreo, están en la sección 4e. Latencias en milisegundos.
 
-- `backend/loadtest/*.yml` — los 4 escenarios.
-- `backend/loadtest/results/*.json` — salida cruda de Artillery.
-- `backend/loadtest/results/*.html` — reportes HTML legibles (generados con
-  `npm run loadtest:report`).
-- `backend/loadtest/setup-env.sh` — obtiene token de agente + `residente_id` antes de la
-  prueba de estrés.
-- `backend/loadtest/cleanup.sql` — limpieza de datos sintéticos post-prueba (ya ejecutado:
-  se borraron 14 789 registros de acceso y 5 149 refresh tokens generados durante esta
-  ronda; la base de datos de desarrollo quedó en el mismo estado de `database/init.sql`).
+### 4a. Resumen por escenario
+
+| Escenario | VU creados | Peticiones | Duración | req/s medio | Códigos | Errores | p50 | p95 | p99 | p99.9 | máx |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| activar | 6700 | 6700 | 100 s | 67 | 200 ×6700 | **0** | 3 | 10.1 | 15 | 47.9 | 89 |
+| heartbeat | 10500 | 10500 | 100 s | 105 | 200 ×10500 | **0** | 3 | 7.9 | 19.1 | 104.6 | 138 |
+| sync-garita | 3100 | 3100 | 99 s | 31 | 200 ×3100 | **0** | 5 | 10.9 | 13.9 | 22 | 49 |
+| accesos-idcliente | 10400 | 13538 | 100 s | 135 | 201 ×10400, 200 ×3138 | **0** | 5 | 18 | 130.3 | 290.1 | 374 |
+
+### 4b. Recursos durante la carga
+
+| Escenario | Backend CPU (media / pico) | Backend memoria (pico) | Postgres CPU (media / pico) | Postgres memoria (pico) | Conexiones a Postgres (pico de 20) | Consultas activas (pico) |
+|---|---|---|---|---|---|---|
+| activar | 23.1 % / **71 %** | 288.1 MiB | 5.6 % / 8.4 % | 104.8 MiB | **6** | 1 |
+| heartbeat | 25.6 % / **70.9 %** | 275.6 MiB | 5.6 % / 8.2 % | 104.9 MiB | **6** | 1 |
+| sync | 25.4 % / **59.8 %** | 265.4 MiB | 7.7 % / 10.5 % | 110.1 MiB | **8** | 2 |
+| accesos-idcliente | 37.4 % / **253.9 %** | 290.3 MiB | 20.6 % / 92.3 % | 143 MiB | **20** | 2 |
+
+Notas: el CPU de Docker es porcentaje de **un núcleo** (253.9 % ≈ 2.5 núcleos de la VM de Docker); la media se calcula
+sobre las muestras con carga real (backend > 15 %). El pool de `pg` tiene `max: 20`.
+
+### 4c. `activar`, `heartbeat` y `sync/garita`
+
+Sin errores ni degradación. Los tres usan **6–8 conexiones** del pool y el backend nunca pasa de 71 % de un núcleo. La
+ventana más lenta de cada escenario es la **primera** (calentamiento del JIT y del pool), no la de mayor carga:
+
+- **`activar`:** de 3 a 150 req/s el p50 baja de ~10 a 2 ms. Es una consulta con JOIN por clave primaria y un
+  `UPDATE` de una fila; la mitad de las peticiones son reactivaciones y no compiten por el `UPDATE` condicional
+  (comprobado en la base: las 300 licencias del pool quedaron activadas).
+- **`heartbeat`:** hasta 200 req/s el p50 es 2 ms. Hubo dos ventanas con cola más alta (p99 de 102 y 93 ms a 50 y 148
+  req/s, sin relación con la carga: la ventana de 200 req/s tiene p99 de 7 ms), coherente con ruido del host.
+- **`sync/garita`:** p99 ≤ 22 ms hasta 80 req/s. **Cuidado con la lectura:** la respuesta pesa **283 bytes de media**
+  porque la sucursal demo casi no tiene datos; el costo real del snapshot depende del tamaño de la sucursal
+  (sección 8).
+
+**activar: ventanas de 10 s**
+
+| Ventana | req/s | p50 | p95 | p99 | máx | errores |
+|---|---|---|---|---|---|---|
+| 0–10 s | 3 | 10.1 | 15 | 16 | 19 | 0 |
+| 10–20 s | 10 | 10.9 | 19.1 | 53 | 89 | 0 |
+| 20–30 s | 15 | 8.9 | 13.1 | 16 | 21 | 0 |
+| 30–40 s | 25 | 7.9 | 10.9 | 13.9 | 18 | 0 |
+| 40–50 s | 33 | 7 | 10.9 | 15 | 30 | 0 |
+| 50–60 s | 50 | 5 | 10.1 | 16 | 54 | 0 |
+| 60–70 s | 67 | 4 | 7.9 | 8.9 | 14 | 0 |
+| 70–80 s | 100 | 3 | 6 | 16 | 50 | 0 |
+| 80–90 s | 117 | 3 | 6 | 8.9 | 15 | 0 |
+| 90–100 s | 150 | 2 | 6 | 23.8 | 72 | 0 |
+| 100–110 s | 100 | 2 | 6 | 10.1 | 16 | 0 |
+
+**heartbeat: ventanas de 10 s**
+
+| Ventana | req/s | p50 | p95 | p99 | máx | errores |
+|---|---|---|---|---|---|---|
+| 0–10 s | 23 | 7 | 10.9 | 12.1 | 18 | 0 |
+| 10–20 s | 25 | 7 | 10.9 | 13.9 | 15 | 0 |
+| 20–30 s | 49 | 5 | 10.1 | 13.9 | 18 | 0 |
+| 30–40 s | 50 | 5 | 13.9 | 102.5 | 138 | 0 |
+| 40–50 s | 97 | 3 | 7 | 19.9 | 80 | 0 |
+| 50–60 s | 100 | 3 | 6 | 10.9 | 32 | 0 |
+| 60–70 s | 148 | 2 | 7 | 92.8 | 116 | 0 |
+| 70–80 s | 150 | 2 | 7.9 | 29.1 | 41 | 0 |
+| 80–90 s | 197 | 2 | 5 | 7 | 14 | 0 |
+| 90–100 s | 200 | 2 | 5 | 7 | 30 | 0 |
+| 100–110 s | 11 | 2 | 4 | 5 | 5 | 0 |
+
+**sync: ventanas de 10 s**
+
+| Ventana | req/s | p50 | p95 | p99 | máx | errores |
+|---|---|---|---|---|---|---|
+| 0–10 s | 2 | 7.9 | 10.1 | 10.1 | 16 | 0 |
+| 10–20 s | 5 | 8.9 | 13.1 | 16 | 20 | 0 |
+| 20–30 s | 7 | 8.9 | 13.1 | 13.9 | 16 | 0 |
+| 30–40 s | 10 | 8.9 | 13.1 | 15 | 18 | 0 |
+| 40–50 s | 15 | 8.9 | 16 | 22 | 31 | 0 |
+| 50–60 s | 20 | 8.9 | 12.1 | 16.9 | 49 | 0 |
+| 60–70 s | 30 | 7 | 10.9 | 13.9 | 19 | 0 |
+| 70–80 s | 40 | 6 | 10.1 | 13.1 | 18 | 0 |
+| 80–90 s | 60 | 5 | 7.9 | 10.1 | 13 | 0 |
+| 90–100 s | 80 | 4 | 7 | 8.9 | 10 | 0 |
+| 100–110 s | 41 | 4 | 7 | 7.9 | 9 | 0 |
+
+**accesos-idcliente: ventanas de 10 s**
+
+| Ventana | req/s | p50 | p95 | p99 | máx | errores |
+|---|---|---|---|---|---|---|
+| 0–10 s | 25 | 10.1 | 16 | 19.9 | 26 | 0 |
+| 10–20 s | 27 | 8.9 | 15 | 19.1 | 22 | 0 |
+| 20–30 s | 77 | 4 | 7.9 | 10.9 | 19 | 0 |
+| 30–40 s | 77 | 4 | 7.9 | 13.9 | 35 | 0 |
+| 40–50 s | 131 | 3 | 6 | 8.9 | 26 | 0 |
+| 50–60 s | 130 | 4 | 7.9 | 16.9 | 58 | 0 |
+| 60–70 s | 185 | 7.9 | 46.1 | 262.5 | 374 | 0 |
+| 70–80 s | 181 | 7 | 19.9 | 71.5 | 143 | 0 |
+| 80–90 s | 262 | 5 | 58.6 | 183.1 | 225 | 0 |
+| 90–100 s | 260 | 5 | 12.1 | 74.4 | 104 | 0 |
+
+
+### 4d. `POST /accesos` con `id_cliente` y licencia
+
+Es el endpoint caliente de la garita: cada petición valida la licencia (consulta con JOIN), busca un posible reintento por
+`id_cliente`, comprueba la preautorización y luego abre una transacción de ~6 consultas (residente, agente, blacklist,
+upsert de visitante, inserción del registro).
+
+- **De 20 a ~130 req/s:** p99 de 9–20 ms, pool en 5–8 conexiones.
+- **Desde ~185 req/s:** aparece la cola. En la corrida 2 el pool pasó a **20/20 conexiones** justo en esa ventana
+  y Postgres subió a **92 % de un núcleo** (pico); el p99 llegó a 262 ms y el máximo a 374 ms. A 260 req/s la
+  cola siguió alta (p99 183 y 74 ms). El p50 se mantuvo en 5–8 ms: la mayoría de las peticiones no notó nada.
+- **Sin errores en ningún momento:** las peticiones esperaron pool pero ninguna llegó al `connectionTimeoutMillis` de
+  5 s ni devolvió 5xx.
+
+**Idempotencia (corrida 2), en la base de datos:**
+
+| Comprobación | Resultado |
+|---|---|
+| Peticiones con `id_cliente` nuevo → 201 | 10 400 |
+| Reintentos con el mismo `id_cliente` → 200 `{duplicado: true}` | 3 138 |
+| Filas en `registros_acceso` con `id_cliente` | **10 400** |
+| `id_cliente` distintos | **10 400** (ningún reintento creó un registro) |
+| `origen` de esas filas | `desktop` (viene de la licencia) |
+
+### 4e. Variabilidad entre corridas (mismo escenario, misma configuración)
+
+| Escenario | Corrida 1 (sin muestreo): p50/p95/p99/máx | Corrida 2 (con muestreo): p50/p95/p99/máx |
+|---|---|---|
+| activar | 3 / 10.1 / 16.9 / 142 ms | 3 / 10.1 / 15 / 89 ms |
+| heartbeat | 3 / 7 / 10.1 / 40 ms | 3 / 7.9 / 19.1 / 138 ms |
+| sync-garita | 6 / 10.9 / 13.9 / 35 ms | 5 / 10.9 / 13.9 / 49 ms |
+| accesos-idcliente | 5 / 10.9 / 16.9 / 95 ms | 5 / 18 / 130.3 / 374 ms |
+
+Por eso se repitió `POST /accesos` (el único con diferencia notable), incluyendo una corrida con el pool en 10:
+
+| Corrida | Pool | Peticiones | Errores | p50 / p95 / p99 / p99.9 / máx | Ventana más lenta |
+|---|---|---|---|---|---|
+| 1 · sin muestreo | 20 | 13 566 | 0 | 5 / 10.9 / 16.9 / 48.9 / 95 ms | 209 req/s: p99 44.3 ms |
+| 2 · con muestreo | 20 | 13 538 | 0 | 5 / 18 / 130.3 / 290.1 / 374 ms | 185 req/s: p99 262.5 ms |
+| 3 · sin muestreo | 20 | 13 563 | 0 | 5 / 10.9 / 39.3 / 106.7 / 159 ms | 263 req/s: p99 96.6 ms |
+| 4 · sin muestreo | **10** | 13 494 | 0 | 4 / 10.9 / 16 / 47.9 / 59 ms | 206 req/s: p99 30.3 ms |
+
+Lectura: **la cola varía más entre corridas idénticas que entre configuraciones**. La corrida 2 (la peor) es también la que
+tuvo el muestreo de `docker stats`/`psql` cada segundo y la desktop de desarrollo corriendo en la misma máquina;
+la corrida con pool 10 salió tan bien como la mejor de pool 20. No se puede atribuir la diferencia a una causa
+única con este montaje; lo defendible es el rango: **a 185–260 req/s el p99 de `POST /accesos` oscila entre ~11 y ~260 ms,
+con 0 errores**, y el pool de 20 puede llegar a saturarse.
+
+## 5. Punto de saturación y capacidad
+
+- **No se encontró punto de quiebre** (errores o timeouts) en ningún escenario ni corrida. El colapso del Sprint 7
+  (96 % de fallos a 160 VU/s con el pool en 10) **no reaparece**: aquel fix (mover consultas fuera de la transacción y
+  fijar `max`) sigue funcionando también con la consulta extra de licencia.
+- **Inicio de saturación de `POST /accesos`: ~185 req/s (≈ 140 VU/s de altas),** cuando el pool toca 20/20 y la cola se
+  alarga. Es el mismo orden de magnitud en el que el Sprint 7 empezaba a degradar (140 VU/s), esta vez sin caer.
+- **Dimensionamiento.** Una garita manda 1 heartbeat cada 15 min (1/900 req/s); si se supone del orden de un acceso por
+  minuto por garita en hora pico (supuesto, no medido), los 200 req/s de heartbeat equivalen a ~180 000 garitas y los
+  ~185 req/s de accesos (≈ 11 000 por minuto) a miles de garitas en pico. La capacidad excede por órdenes de magnitud el uso esperado. **El escenario que sí importa es
+  la reconexión:** una garita que vuelve tras horas offline vacía su cola de golpe. Por ejemplo, si 50 garitas reconectan a la vez con
+  ~500 registros cada una son 25 000 peticiones; que esa ráfaga se reparta (backoff con jitter en la cola de la app)
+  importa más que el pool.
+- **Restricciones operativas de los límites de producción** (medidas en `securitytest`, sección 3f): `activar`
+  admite **10 intentos por IP cada 15 min** (instalar más de 10 garitas desde una misma red en ese lapso da 429) y
+  `heartbeat` **60 por IP cada 15 min** (cada garita usa 1, así que hasta ~60 garitas detrás de una misma IP pública).
+
+## 6. Comparación con el Sprint 7
+
+| | Sprint 7 (tras el fix) | Sprint 8 |
+|---|---|---|
+| Endpoint de referencia | `POST /accesos` (agente, sin licencia) | `POST /accesos` con licencia + `id_cliente` (el 30 % son reintentos) |
+| Carga máxima | 200 VU/s (200 req/s), 33 000 peticiones | 200 VU/s (~260 req/s), ~13 500 peticiones por corrida |
+| Errores | 0 | 0 (4 corridas) |
+| p50 / p95 / p99 | 3 / 7.9 / 12.1 ms | 4–5 / 10.9–18 / 16–130 ms |
+| Máximo | 38 ms | 59–374 ms |
+| Pool | 20 | 20 (y una corrida con 10) |
+
+`POST /accesos` cuesta algo más que en el Sprint 7 y su cola es más ancha: hay una consulta más de validación de
+licencia por petición, una de búsqueda por `id_cliente`, y las ráfagas de 260 req/s exceden lo que el Sprint 7 llegó a
+probar. Los tres endpoints nuevos restantes no tienen equivalente previo.
+
+## 7. Relación con las pruebas de seguridad del Sprint 8
+
+Las pruebas de seguridad (`backend/securitytest/RESULTADOS.md`) tocan la carga en tres puntos:
+
+- **Login (S-01):** para cerrar la enumeración de cuentas por tiempo, ahora el login **siempre** ejecuta un `crypt()` de
+  costo 12 (~200 ms) también con un correo inexistente. Los intentos fallidos cuestan lo mismo que uno válido; el límite
+  de 20 fallos por IP y 10 por cuenta cada 15 min acota el gasto de CPU que puede provocar un atacante.
+- **Límites por IP:** los valores usados aquí (relajados) son **solo** para esta medición; los de producción están
+  verificados en la suite `09-ratelimit` (429 exacto en el intento 11 de `activar`, 61 de `heartbeat`, 1 001 general).
+- **Errores 400 en lugar de 500:** tras S-03 las entradas mal formadas responden 400, así que los 5xx de un tablero de
+  monitoreo vuelven a significar fallos reales del servidor.
+
+## 8. Limitaciones
+
+- **Una sola máquina y sin red:** cliente, backend y Postgres comparten CPU con la desktop de desarrollo, el dev server de
+  Vite y el propio muestreo. De ahí la variabilidad de la cola (sección 4e). No hay latencia de red entre backend y base.
+- **Producción usa otra configuración.** `docker-compose.prod.yml` fija `DB_POOL_MAX=10` (Cloud SQL micro admite 25
+  conexiones) y las consultas viajan por el Cloud SQL Auth Proxy: cada consulta tarda más y las conexiones se retienen
+  más tiempo. La corrida con pool 10 en local no lo cubre; **antes de dar por bueno el número de producción hay que
+  repetir el escenario de accesos contra un Cloud SQL de pruebas** (no contra el de producción).
+- **`sync/garita` con datos casi vacíos.** La respuesta pesa 283 bytes de media; con miles de residentes y
+  preautorizaciones el costo por petición será mucho mayor. Esta prueba demuestra que el endpoint no tiene un costo fijo
+  alto, no que escale a volumen real (misma advertencia que D3 en el Sprint 7: sin datos, el índice no importa).
+- **`registros_acceso` crece:** cada corrida de accesos añadió ~10 400 filas; la tabla no tiene aún los índices de D3
+  (`backlog/DEUDA_TECNICA.md`), y la corrida 3 partió con ~10 400 filas más que las demás (venía de la corrida 2 sin restaurar la base; la 4 sí
+  partió de una base limpia). No se observó un efecto claro, pero es un factor de confusión.
+- **CPU de Docker Desktop:** el porcentaje es relativo a un núcleo de la VM, no a la máquina física.
+- **Tamaño de la muestra:** 3–4 corridas por escenario; sin repeticiones suficientes para intervalos de confianza.
+
+## 9. Recomendaciones (priorizadas)
+
+1. **Repetir `POST /accesos` y `sync/garita` contra un Cloud SQL de pruebas** con `DB_POOL_MAX=10` y una sucursal
+   poblada (miles de residentes). Es lo que separa «funciona en local» de «funciona en producción».
+2. **Verificar que la cola offline de la app reintente con backoff y jitter** (la ráfaga de reconexión es el caso
+   realista más duro, sección 5) y, si no lo hace, añadirlo.
+3. **Hacer visible la saturación del pool:** registrar `pool.waitingCount` cuando sea > 0 (o exponerlo en `/api/status`).
+   Hoy solo se nota por la latencia.
+4. **Índices de `registros_acceso` y `pagos` (D3)** antes de que el histórico crezca: son la primera causa probable de
+   que el CPU de Postgres suba a 90 % con la carga de accesos.
+5. **Subir `DB_POOL_MAX` solo junto con `max_connections` de Postgres** (o de Cloud SQL); más conexiones sin más CPU de
+   base no bajan la cola, como muestra que el pool 10 rindió igual que el 20.
+6. **Documentar en el onboarding** los límites por IP (10 activaciones y ~60 garitas por IP cada 15 min).
+
+## 10. Archivos generados
+
+- `backend/loadtest/sprint8-{activar,heartbeat,sync-garita,accesos-idcliente}.yml` — los 4 escenarios;
+  `sprint8-processor.js`, `setup-sprint8.sh`, `run-sprint8.sh`, `muestreo-recursos.sh`, `sprint8-resumen.js`,
+  `docker-compose.loadtest.yml`.
+- `backend/loadtest/results/sprint8-*.json` y `.html` — salida cruda y reportes de la corrida 2;
+  `results/recursos-*.csv` — muestreo de CPU, memoria y conexiones por escenario.
+- `results/corrida-1-sin-muestreo/`, `results/corrida-3-accesos-sin-muestreo/`, `results/corrida-4-accesos-pool10/` —
+  las otras corridas, para la sección 4e.
+- Scripts de npm: `loadtest:activar`, `loadtest:heartbeat`, `loadtest:sync`, `loadtest:accesos-idcliente`.
+- `backend/loadtest/RESULTADOS-sprint7.md` — el reporte del Sprint 7, sin cambios.

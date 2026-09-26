@@ -1,0 +1,44 @@
+# POST /api/accesos como lo manda la app de escritorio (Sprint 8): con X-Licencia-Token (validación extra
+# de la licencia en cada request) e id_cliente (idempotencia de la cola offline).
+#   70 % altas nuevas → 201        30 % reintentos tras "perder la respuesta": mismo id_cliente dos veces
+#                                  → el 1.º 201 y el 2.º 200 {duplicado:true}, sin crear otro registro.
+config:
+  target: "http://localhost:3000"
+  processor: "./sprint8-processor.js"
+  phases:
+    - { duration: 20, arrivalRate: 20,  name: "20 req/s" }
+    - { duration: 20, arrivalRate: 60,  name: "60 req/s" }
+    - { duration: 20, arrivalRate: 100, name: "100 req/s" }
+    - { duration: 20, arrivalRate: 140, name: "140 req/s" }
+    - { duration: 20, arrivalRate: 200, name: "200 req/s" }
+scenarios:
+  - name: "Alta nueva (offline sync)"
+    weight: 7
+    flow:
+      - function: "nuevoIdCliente"
+      - function: "nuevoDpi"
+      - post:
+          url: "/api/accesos"
+          headers: { Authorization: "Bearer {{ $processEnvironment.LOADTEST_TOKEN }}", X-Licencia-Token: "{{ $processEnvironment.LOADTEST_LIC_TOKEN }}" }
+          json:
+            nombre_visitante: "Visitante Sprint8 {{ dpiSintetico }}"
+            numero_dpi: "{{ dpiSintetico }}"
+            residente_id: "{{ $processEnvironment.LOADTEST_RESIDENTE_ID }}"
+            id_cliente: "{{ idCliente }}"
+            registrado_en: "{{ $isoTimestamp }}"
+            capturado_manualmente: false
+  - name: "Reintento idempotente"
+    weight: 3
+    flow:
+      - function: "nuevoIdCliente"
+      - function: "nuevoDpi"
+      - loop:
+          - post:
+              url: "/api/accesos"
+              headers: { Authorization: "Bearer {{ $processEnvironment.LOADTEST_TOKEN }}", X-Licencia-Token: "{{ $processEnvironment.LOADTEST_LIC_TOKEN }}" }
+              json:
+                nombre_visitante: "Visitante Sprint8 {{ dpiSintetico }}"
+                numero_dpi: "{{ dpiSintetico }}"
+                residente_id: "{{ $processEnvironment.LOADTEST_RESIDENTE_ID }}"
+                id_cliente: "{{ idCliente }}"
+        count: 2
