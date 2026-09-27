@@ -430,7 +430,7 @@ export default function ConfigCargosPage() {
           <div className="bg-gray-800 rounded-2xl p-6 w-full max-w-sm space-y-4 shadow-2xl">
             <h3 className="text-white font-semibold">Confirmar aplicación</h3>
             <div className="bg-amber-900/30 border border-amber-700/50 rounded-xl px-4 py-3 space-y-1.5">
-              <p className="text-amber-200 text-sm font-medium">
+              <p className="text-warning-300 text-sm font-medium">
                 ¿Aplicar Q{parseFloat(confirmApply.monto).toFixed(2)} a todos los residentes activos?
               </p>
               <p className="text-amber-300/80 text-xs">
@@ -511,7 +511,7 @@ export default function ConfigCargosPage() {
         <div>
           <p className="sg-eyebrow">SecureGate · Reglas locales</p>
           <h1 className="mt-1 text-2xl font-bold tracking-tight text-white sm:text-3xl">{t('config.title')}</h1>
-          <p className="mt-1 text-sm text-[var(--sg-text-muted)]">Define cómo tu comunidad gestiona mora, cargos programados y accesos QR.</p>
+          <p className="mt-1 text-sm text-gray-400">Define cómo tu comunidad gestiona mora, cargos programados y accesos QR.</p>
         </div>
         <span className="sg-status bg-emerald-500/10 text-emerald-400">Configuración activa</span>
       </div>
@@ -521,7 +521,7 @@ export default function ConfigCargosPage() {
         <button
           onClick={() => handleTabChange('mora')}
           className={`flex-1 py-2.5 text-sm font-semibold transition-colors ${
-            activeTab === 'mora' ? 'sg-tab-active bg-[color-mix(in_srgb,var(--sg-primary)_12%,transparent)]' : 'sg-tab hover:bg-white/5'
+            activeTab === 'mora' ? 'sg-tab-active bg-brand-500/10' : 'sg-tab hover:bg-gray-500/10'
           }`}
         >
           Cargos por Mora
@@ -529,7 +529,7 @@ export default function ConfigCargosPage() {
         <button
           onClick={() => handleTabChange('programados')}
           className={`flex-1 py-2.5 text-sm font-semibold transition-colors ${
-            activeTab === 'programados' ? 'sg-tab-active bg-[color-mix(in_srgb,var(--sg-primary)_12%,transparent)]' : 'sg-tab hover:bg-white/5'
+            activeTab === 'programados' ? 'sg-tab-active bg-brand-500/10' : 'sg-tab hover:bg-gray-500/10'
           }`}
         >
           Cargos Programados
@@ -537,7 +537,7 @@ export default function ConfigCargosPage() {
         <button
           onClick={() => handleTabChange('qr')}
           className={`flex-1 py-2.5 text-sm font-semibold transition-colors ${
-            activeTab === 'qr' ? 'sg-tab-active bg-[color-mix(in_srgb,var(--sg-primary)_12%,transparent)]' : 'sg-tab hover:bg-white/5'
+            activeTab === 'qr' ? 'sg-tab-active bg-brand-500/10' : 'sg-tab hover:bg-gray-500/10'
           }`}
         >
           {t('qr.configTabLabel')}

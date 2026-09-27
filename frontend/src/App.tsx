@@ -1,17 +1,16 @@
-import { useEffect, useMemo, useState } from 'react';
-import GaritaPage             from './pages/GaritaPage';
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import ResidentesPage         from './pages/ResidentesPage';
 import LoginPage              from './pages/LoginPage';
-import SalidaPage             from './pages/SalidaPage';
 import PagosPage              from './pages/PagosPage';
 import PreautPage             from './pages/PreautPage';
 import DashboardPage          from './pages/DashboardPage';
 import ResidentePage          from './pages/ResidentePage';
-import ReportesPage           from './pages/ReportesPage';
 import ConfigCargosPage       from './pages/ConfigCargosPage';
 import VerificacionPage       from './pages/VerificacionPage';
 import AgentesPage            from './pages/AgentesPage';
+import LicenciasPage          from './pages/LicenciasPage';
 import NotFoundPage           from './pages/NotFoundPage';
+import AceptarInvitacionPage  from './pages/AceptarInvitacionPage';
 import OwnerDashboard         from './pages/owner/OwnerDashboard';
 import EmpresaDetail          from './pages/owner/EmpresaDetail';
 import OwnerEmpresas          from './pages/owner/OwnerEmpresas';
@@ -31,12 +30,16 @@ import { ThemeProvider, useTheme } from './context/ThemeContext';
 import { LanguageProvider, useLanguage } from './context/LanguageContext';
 import { useTranslation }     from './i18n/useTranslation';
 import { useRuta }            from './hooks/useRuta';
-import { RUTA_PORTAL, portalDeRol, portalDeRuta } from './routing/portales';
+import { RUTA_PORTAL, portalDeRol, portalDeRuta, tokenDeInvitacion } from './routing/portales';
 import type { PortalTab }     from './pages/ResidentePage';
+import { Spinner }            from './components/ui/Skeleton';
+
+// Carga diferida: los gráficos sólo los ve administración y no tienen por qué
+// engordar el bundle inicial de residentes y del resto de pantallas.
+const EstadisticasPage = lazy(() => import('./pages/EstadisticasPage'));
 
 type Page =
-  | 'dashboard' | 'residentes' | 'pagos' | 'preaut' | 'reportes' | 'config' | 'verificacion' | 'agentes' | 'blacklist' | 'anuncios' | 'tickets' | 'reservas'
-  | 'garita' | 'salida'
+  | 'dashboard' | 'residentes' | 'pagos' | 'preaut' | 'reportes' | 'config' | 'verificacion' | 'agentes' | 'garitas' | 'blacklist' | 'anuncios' | 'tickets' | 'reservas'
   | 'portal' | 'mis-reservas'
   | 'owner-dashboard' | 'owner-empresas' | 'owner-empresa-detail' | 'owner-audit'
   | 'ae-dashboard' | 'ae-sucursales';
@@ -50,7 +53,7 @@ const ICON = {
   staff:      'M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z',
   payments:   'M1 4h22v16H1zM1 10h22',
   shield:     'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z',
-  reports:    'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6M16 13H8M16 17H8M10 9H8',
+  reports:    'M18 20V10M12 20V4M6 20v-6M3 20h18',
   config:     'M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6',
   verify:     'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z',
   blacklist:  'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10zM9 12l2 2 4-4',
@@ -59,6 +62,7 @@ const ICON = {
   calendar:   'M8 2v4M16 2v4M3 10h18M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z',
   home:       'M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2zM9 22V12h6v10',
   exit:       'M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9',
+  gate:       'M2 4h20v12H2zM8 20h8M12 16v4',
   qr:         'M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3zM14 14h3v3h-3zM18 18h3v3h-3z',
   audit:      'M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M9 5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2M9 5h6M9 12h6M9 16h4',
 } as const;
@@ -81,6 +85,7 @@ const ADMIN_NAV: NavGroup[] = [
   { labelKey: 'nav.group.management', items: [
     { key: 'residentes', labelKey: 'nav.residents',    d: ICON.residents },
     { key: 'agentes',    labelKey: 'nav.staff',        d: ICON.staff },
+    { key: 'garitas',    labelKey: 'nav.gates',        d: ICON.gate },
     { key: 'pagos',      labelKey: 'nav.payments',     d: ICON.payments },
     { key: 'reservas',   labelKey: 'nav.reservations', d: ICON.calendar },
     { key: 'config',     labelKey: 'nav.config',       d: ICON.config },
@@ -94,12 +99,13 @@ const ADMIN_NAV: NavGroup[] = [
   ]},
 ];
 
-const AGENTE_NAV: NavGroup[] = [
-  { labelKey: 'nav.group.operation', items: [
-    { key: 'garita', labelKey: 'nav.gate', d: ICON.home },
-    { key: 'salida', labelKey: 'nav.exit', d: ICON.exit },
-  ]},
-];
+/**
+ * El rol agente ya no entra por la web: su terminal es la app de escritorio
+ * (desktop/). GaritaPage y SalidaPage siguen en el árbol como referencia
+ * (sin ruta) hasta que el equipo decida borrarlas; el login rechaza a ese
+ * rol con un aviso (ver LoginPage) y una sesión suya ya guardada se descarta.
+ */
+const ROL_SOLO_ESCRITORIO = 'agente';
 
 const RESIDENTE_NAV: NavGroup[] = [
   { labelKey: 'nav.group.portal', items: [
@@ -120,6 +126,7 @@ const ADMIN_EMPRESA_NAV: NavGroup[] = [
   { labelKey: 'nav.group.global', items: [
     { key: 'ae-dashboard',  labelKey: 'nav.aeDashboard', d: ICON.dashboard },
     { key: 'ae-sucursales', labelKey: 'nav.aeBranches',  d: ICON.home },
+    { key: 'garitas',       labelKey: 'nav.gates',       d: ICON.gate },
   ]},
 ];
 
@@ -154,7 +161,7 @@ function resolveDefaultPage(rol: string): Page {
   if (rol === 'admin_empresa') return 'ae-dashboard';
   if (rol === 'residente') return 'portal';
   if (rol === 'owner') return 'owner-dashboard';
-  return 'garita';
+  return 'dashboard';
 }
 
 function navForRole(rol: string): NavGroup[] {
@@ -162,7 +169,7 @@ function navForRole(rol: string): NavGroup[] {
   if (rol === 'admin_empresa') return ADMIN_EMPRESA_NAV;
   if (rol === 'residente') return RESIDENTE_NAV;
   if (rol === 'owner') return OWNER_NAV;
-  return AGENTE_NAV;
+  return [];
 }
 
 function AppShell() {
@@ -171,6 +178,12 @@ function AppShell() {
   const { t } = useTranslation();
   const { language, setLanguage } = useLanguage();
 
+  // Una sesión de agente guardada de antes del retiro de la garita web no
+  // debe abrir un dashboard vacío: se descarta como si no hubiera token.
+  const tokenInicial = localStorage.getItem('token');
+  if (tokenInicial && decodeTokenPayload(tokenInicial)?.rol === ROL_SOLO_ESCRITORIO) {
+    localStorage.removeItem('token');
+  }
   const [isAuthenticated, setIsAuthenticated] = useState(!!localStorage.getItem('token'));
   const [userRol, setUserRol] = useState<string>(() => {
     const token = localStorage.getItem('token');
@@ -184,7 +197,7 @@ function AppShell() {
   });
   const [page, setPage] = useState<Page>(() => {
     const token = localStorage.getItem('token');
-    if (!token) return 'garita';
+    if (!token) return 'dashboard';
     return resolveDefaultPage((decodeTokenPayload(token)?.rol as string) || '');
   });
   const [selectedEmpresaId, setSelectedEmpresaId] = useState<string | null>(null);
@@ -248,6 +261,8 @@ function AppShell() {
 
   const portalRuta = portalDeRuta(pathname);
   const portalSesion = isAuthenticated ? portalDeRol(userRol) : null;
+  // /invitacion/<token>: pantalla pública que vive fuera de los portales.
+  const tokenInvitacion = tokenDeInvitacion(pathname);
 
   /**
    * Corrige la dirección cuando no cuadra: un alias (/staff, /tenant), una ruta
@@ -256,10 +271,11 @@ function AppShell() {
    * que se volvería a corregir al pulsar atrás.
    */
   useEffect(() => {
+    if (tokenInvitacion) return;
     const destino = portalSesion ?? portalRuta ?? 'personal';
     const rutaDestino = RUTA_PORTAL[destino];
     if (pathname !== rutaDestino) ir(rutaDestino, { reemplazar: true });
-  }, [pathname, portalRuta, portalSesion, ir]);
+  }, [pathname, portalRuta, portalSesion, ir, tokenInvitacion]);
 
   // El portal que se pinta: el de la sesión manda sobre el de la barra de
   // direcciones, porque el efecto de arriba ya está corrigiendo la URL.
@@ -288,7 +304,7 @@ function AppShell() {
     setUserRol('');
     setUserNombre('');
     setSelectedEmpresaId(null);
-    setPage('garita');
+    setPage('dashboard');
   };
 
   const navigate = (p: string) => {
@@ -316,7 +332,7 @@ function AppShell() {
     ? 'Administrador'
     : userRol === 'residente'
     ? 'Residente'
-    : 'Agente';
+    : '';
 
   const goToEmpresaDetail = (id: string) => {
     setSelectedEmpresaId(id);
@@ -355,12 +371,18 @@ function AppShell() {
     }
 
     switch (page) {
-      case 'dashboard':    return <DashboardPage />;
+      case 'dashboard':    return <DashboardPage onNavigate={navigate} />;
       case 'residentes':   return <ResidentesPage />;
       case 'agentes':      return <AgentesPage />;
+      case 'garitas':      return <LicenciasPage />;
       case 'pagos':        return <PagosPage />;
       case 'preaut':       return <PreautPage />;
-      case 'reportes':     return <ReportesPage />;
+      case 'reportes':
+        return (
+          <Suspense fallback={<div className="flex justify-center py-24 text-gray-400"><Spinner size={24} /></div>}>
+            <EstadisticasPage onNavigate={navigate} />
+          </Suspense>
+        );
       case 'config':       return <ConfigCargosPage />;
       case 'verificacion': return <VerificacionPage />;
       case 'blacklist':    return <BlacklistPage />;
@@ -368,8 +390,6 @@ function AppShell() {
       case 'tickets':      return <TicketsPage />;
       case 'reservas':     return <ReservasAdminPage />;
       case 'mis-reservas': return <ReservasPage />;
-      case 'garita':       return <GaritaPage />;
-      case 'salida':       return <SalidaPage />;
       case 'portal':       return <ResidentePage requestedTab={portalTab} tabNonce={portalTabNonce} />;
       case 'ae-dashboard':   return <AdminEmpresaDashboard />;
       case 'ae-sucursales':  return <GestionSucursales />;
@@ -387,6 +407,18 @@ function AppShell() {
         return <NotFoundPage onNavigate={navigate} defaultPage={defaultPage} />;
     }
   };
+
+  // Aceptar una invitación abre sesión con la cuenta recién creada, aunque
+  // hubiera otra sesión en este navegador.
+  if (tokenInvitacion) {
+    return (
+      <AceptarInvitacionPage
+        token={tokenInvitacion}
+        onAceptada={r => { handleLogin(r.token, r.usuario.rol, r.usuario); }}
+        onIrALogin={() => ir(RUTA_PORTAL.personal, { reemplazar: true })}
+      />
+    );
+  }
 
   if (!isAuthenticated) {
     return <LoginPage portal={portalActivo} onLogin={handleLogin} onCambiarPortal={ir} />;

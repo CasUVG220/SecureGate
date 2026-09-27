@@ -67,3 +67,14 @@ export const ENLACE_PORTAL: Record<Portal, string> = {
   personal: 'portal.gotoStaff',
   residente: 'portal.gotoTenant',
 };
+
+/**
+ * Ruta pública de aceptación de invitaciones administrativas:
+ * /invitacion/<token>. No pertenece a ningún portal (quien la abre todavía no
+ * tiene cuenta), así que la corrección automática de rutas la deja en paz.
+ * Devuelve el token, o `null` si la ruta no es esa.
+ */
+export function tokenDeInvitacion(pathname: string): string | null {
+  const m = /^\/invitacion\/([A-Za-z0-9_-]{20,})\/?$/.exec(pathname);
+  return m ? m[1] : null;
+}

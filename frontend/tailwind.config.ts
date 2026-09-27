@@ -1,6 +1,6 @@
 import type { Config } from 'tailwindcss';
 import {
-  borderRadius, boxShadow, controlHeight, cssVarRamp, fontFamily, fontSize, zIndex,
+  borderRadius, boxShadow, controlHeight, cssVarRamp, fontFamily, fontSize, vizColors, zIndex,
 } from './src/styles/tokens';
 
 /**
@@ -59,6 +59,9 @@ export default {
           DEFAULT: 'rgb(var(--c-logo) / <alpha-value>)',
           ink: 'rgb(var(--c-logo-ink) / <alpha-value>)',
         },
+
+        // Paleta de gráficos (ver "Visualización de datos" en tokens.ts).
+        viz: vizColors,
 
         // Superficies del shell (header, sidebar, canvas).
         dark: {

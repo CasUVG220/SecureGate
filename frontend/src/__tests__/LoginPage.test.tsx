@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import LoginPage from '../pages/LoginPage';
-import { login, PortalIncorrectoError } from '../services/api';
+import { login, logout, PortalIncorrectoError, EmpresaBloqueadaError } from '../services/api';
 
 vi.mock('../services/api', async () => {
   class PortalIncorrectoError extends Error {
@@ -12,15 +12,77 @@ vi.mock('../services/api', async () => {
       this.portalCorrecto = portalCorrecto;
     }
   }
-  return { login: vi.fn(), PortalIncorrectoError };
+  class EmpresaBloqueadaError extends Error {
+    bloqueo: unknown;
+    constructor(b: { error: string }) { super(b.error); this.name = 'EmpresaBloqueadaError'; this.bloqueo = b; }
+  }
+  const guardado: { v: string | null } = { v: null };
+  return {
+    login: vi.fn(),
+    logout: vi.fn().mockResolvedValue(undefined),
+    PortalIncorrectoError,
+    EmpresaBloqueadaError,
+    tomarBloqueoGuardado: vi.fn(() => { const b = guardado.v ? JSON.parse(guardado.v) : null; guardado.v = null; return b; }),
+    __guardarBloqueo: (b: unknown) => { guardado.v = JSON.stringify(b); },
+  };
 });
 
 const mockLogin = login as unknown as ReturnType<typeof vi.fn>;
+const mockLogout = logout as unknown as ReturnType<typeof vi.fn>;
 
 describe('LoginPage', () => {
   beforeEach(() => {
     mockLogin.mockReset();
+    mockLogout.mockClear();
     localStorage.clear();
+  });
+
+  it('empresa suspendida (423): credenciales correctas pero ve el aviso con motivo y no entra', async () => {
+    mockLogin.mockRejectedValue(new EmpresaBloqueadaError({
+      codigo: 'empresa_suspendida', empresa: 'Condominio X', motivo: 'Factura de agosto pendiente',
+      desde: '2026-09-01T00:00:00Z', error: 'Las operaciones de Condominio X están suspendidas: Factura de agosto pendiente.',
+    }));
+    const onLogin = vi.fn();
+    const { container } = render(<LoginPage onLogin={onLogin} />);
+
+    fireEvent.change(screen.getByPlaceholderText('usuario@ejemplo.com'), { target: { value: 'ana@x.com' } });
+    fireEvent.change(container.querySelector('input[type="password"]')!, { target: { value: 'secret123' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Iniciar sesión' }));
+
+    expect(await screen.findByText('Las operaciones de Condominio X están suspendidas.')).toBeInTheDocument();
+    expect(screen.getByText('Factura de agosto pendiente')).toBeInTheDocument();
+    expect(screen.getByText(/garitas ni residentes/)).toBeInTheDocument();
+    expect(onLogin).not.toHaveBeenCalled();
+    expect(localStorage.getItem('token')).toBeNull();
+  });
+
+  it('si la sesión murió por una suspensión (refresh → 423), el aviso aparece al volver al login', async () => {
+    const api = await import('../services/api') as unknown as { __guardarBloqueo: (b: unknown) => void };
+    api.__guardarBloqueo({ codigo: 'empresa_inactiva', empresa: 'Condominio Y', motivo: null, desde: null, error: 'x' });
+    render(<LoginPage onLogin={vi.fn()} />);
+    expect(await screen.findByText('Condominio Y ya no opera en SecureGate.')).toBeInTheDocument();
+  });
+
+  it('rol agente: no entra al dashboard web, ve el aviso de la app de escritorio y se cierra la sesión', async () => {
+    mockLogin.mockResolvedValue({
+      token: 'tok-agente',
+      usuario: { id: 'u-ag', nombre: 'Agente Garita 1', email: 'agente1@securegate.com', rol: 'agente' },
+    });
+    const onLogin = vi.fn();
+    const { container } = render(<LoginPage onLogin={onLogin} />);
+
+    fireEvent.change(screen.getByPlaceholderText('usuario@ejemplo.com'), { target: { value: 'agente1@securegate.com' } });
+    fireEvent.change(container.querySelector('input[type="password"]')!, { target: { value: 'agente123' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Iniciar sesión' }));
+
+    expect(await screen.findByText(/requiere la aplicación de escritorio/)).toBeInTheDocument();
+    const enlace = screen.getByRole('link', { name: /Descargar la aplicación de escritorio/ });
+    expect(enlace).toHaveAttribute('href', expect.stringMatching(/^https?:\/\//));
+
+    expect(onLogin).not.toHaveBeenCalled();
+    expect(localStorage.getItem('token')).toBeNull();
+    // La sesión que abrió el backend (cookie de refresh) se cierra al instante.
+    expect(mockLogout).toHaveBeenCalledTimes(1);
   });
 
   it('renderiza el formulario con inputs de email y password', () => {
