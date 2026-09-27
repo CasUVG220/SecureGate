@@ -36,42 +36,42 @@
   --c-brand-500: 39 39 42;
   --c-brand-600: 24 24 27;
   --c-brand-700: 9 9 11;
-  --c-brand-800: 12 12 14;
-  --c-brand-900: 9 9 11;
-  --c-brand-950: 5 5 6;
+  --c-brand-800: 212 212 216;
+  --c-brand-900: 228 228 231;
+  --c-brand-950: 244 244 245;
   --c-success-50: 236 253 245;
   --c-success-100: 209 250 229;
   --c-success-200: 167 243 208;
-  --c-success-300: 16 185 129;
+  --c-success-300: 6 95 70;
   --c-success-400: 4 120 87;
   --c-success-500: 5 150 105;
   --c-success-600: 4 120 87;
   --c-success-700: 6 95 70;
-  --c-success-800: 6 78 59;
-  --c-success-900: 5 58 44;
-  --c-success-950: 2 44 34;
+  --c-success-800: 167 243 208;
+  --c-success-900: 209 250 229;
+  --c-success-950: 236 253 245;
   --c-warning-50: 255 251 235;
   --c-warning-100: 254 243 199;
   --c-warning-200: 253 230 138;
-  --c-warning-300: 217 119 6;
+  --c-warning-300: 146 64 14;
   --c-warning-400: 180 83 9;
   --c-warning-500: 194 118 10;
   --c-warning-600: 180 83 9;
   --c-warning-700: 146 64 14;
-  --c-warning-800: 120 53 15;
-  --c-warning-900: 96 48 16;
-  --c-warning-950: 69 26 3;
+  --c-warning-800: 253 230 138;
+  --c-warning-900: 254 243 199;
+  --c-warning-950: 255 251 235;
   --c-danger-50: 254 242 242;
   --c-danger-100: 254 226 226;
   --c-danger-200: 254 202 202;
-  --c-danger-300: 239 68 68;
+  --c-danger-300: 185 28 28;
   --c-danger-400: 220 38 38;
   --c-danger-500: 220 38 38;
   --c-danger-600: 185 28 28;
   --c-danger-700: 153 27 27;
-  --c-danger-800: 127 29 29;
-  --c-danger-900: 107 23 23;
-  --c-danger-950: 69 10 10;
+  --c-danger-800: 254 202 202;
+  --c-danger-900: 254 226 226;
+  --c-danger-950: 254 242 242;
   --c-neutral-50: 15 23 42;
   --c-neutral-100: 30 41 59;
   --c-neutral-200: 51 65 85;
@@ -94,6 +94,16 @@
   --c-border-800: 232 237 243;
   --c-border-900: 238 242 246;
   --c-border-950: 244 246 249;
+  /* Paleta de gráficos (tokens.ts → vizPalettes) */
+  --c-viz-series: 42 120 214;
+  --c-viz-seq-1: 205 226 251;
+  --c-viz-seq-2: 158 197 244;
+  --c-viz-seq-3: 85 152 231;
+  --c-viz-seq-4: 37 106 191;
+  --c-viz-seq-5: 16 66 129;
+  --c-viz-ord-1: 24 79 149;
+  --c-viz-ord-2: 57 135 229;
+  --c-viz-ord-3: 134 182 239;
   /* Semánticas del shell */
   --c-canvas: 244 246 249;
   --c-shell: 255 255 255;
@@ -105,6 +115,9 @@
   --c-brand-ink: 255 255 255;
   --c-focus: 39 39 42;
   --c-hairline: 226 232 240;
+  /* Reflejo del borde superior de las tarjetas elevadas: sólo se nota en
+     oscuro; en claro no hay luz que reflejar y se funde con la superficie. */
+  --c-sheen: 255 255 255;
 
   /* Lavado del lienzo. Los tramos van en porcentaje del alto de la ventana, no
      en rem: con una distancia fija el degradado se agotaba antes del pie y las
@@ -182,6 +195,16 @@ html.dark {
   --c-border-800: 31 43 62;
   --c-border-900: 24 34 52;
   --c-border-950: 15 23 38;
+  /* Paleta de gráficos (tokens.ts → vizPalettes) */
+  --c-viz-series: 57 135 229;
+  --c-viz-seq-1: 13 54 107;
+  --c-viz-seq-2: 24 79 149;
+  --c-viz-seq-3: 42 120 214;
+  --c-viz-seq-4: 109 167 236;
+  --c-viz-seq-5: 183 211 246;
+  --c-viz-ord-1: 158 197 244;
+  --c-viz-ord-2: 85 152 231;
+  --c-viz-ord-3: 37 106 191;
   --c-canvas: 11 18 32;
   --c-shell: 19 28 43;
   --c-surface: 19 28 43;
@@ -192,6 +215,7 @@ html.dark {
   --c-brand-ink: 24 24 27;
   --c-focus: 228 228 231;
   --c-hairline: 42 56 80;
+  --c-sheen: 255 255 255;
 
   --c-canvas-gradient: linear-gradient(180deg, #16243d 0%, #101a2c 45%, #0b1220 100%);
 
@@ -287,7 +311,7 @@ html.dark {
     border-radius: theme('borderRadius.xl');
     background: linear-gradient(175deg, rgb(var(--c-surface-raised) / 0.95) 0%, rgb(var(--c-surface)) 100%);
     border: 1px solid rgb(var(--c-border-700));
-    box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.28);
+    box-shadow: theme('boxShadow.card');
     transition: transform 220ms cubic-bezier(0.16, 1, 0.3, 1),
                 border-color 220ms cubic-bezier(0.16, 1, 0.3, 1),
                 box-shadow 220ms cubic-bezier(0.16, 1, 0.3, 1);
@@ -299,48 +323,14 @@ html.dark {
     left: 8%;
     right: 8%;
     height: 1px;
-    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.18), transparent);
+    background: linear-gradient(90deg, transparent, rgb(var(--c-sheen) / 0.18), transparent);
     content: '';
     pointer-events: none;
   }
 
   .sg-stat-card:hover {
     transform: translateY(-2px);
-    box-shadow: 0 14px 30px -4px rgba(0, 0, 0, 0.45);
-  }
-
-  /* ── HUD Telemetry Strip (Consola de Mando Unificada) ───────────────────── */
-  .sg-telemetry-strip {
-    position: relative;
-    overflow: hidden;
-    border-radius: theme('borderRadius.2xl');
-    border: 1px solid rgb(var(--c-border-700));
-    background: linear-gradient(175deg, rgb(var(--c-surface-raised) / 0.95) 0%, rgb(var(--c-surface)) 100%);
-    box-shadow: 0 4px 24px -2px rgba(0, 0, 0, 0.3);
-  }
-
-  .sg-telemetry-strip::before {
-    position: absolute;
-    top: 0;
-    left: 4%;
-    right: 4%;
-    height: 1px;
-    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.22), transparent);
-    content: '';
-    pointer-events: none;
-  }
-
-  .sg-telemetry-segment {
-    position: relative;
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between;
-    padding: 1.25rem 1.35rem;
-    transition: background-color 200ms ease;
-  }
-
-  .sg-telemetry-segment:hover {
-    background-color: rgba(255, 255, 255, 0.025);
+    box-shadow: theme('boxShadow.lg');
   }
 
   .sg-card-muted {
@@ -379,108 +369,6 @@ html.dark {
   }
 
   .sg-panel-heading p { color: rgb(var(--c-neutral-400)); font-size: theme('fontSize.sm[0]'); }
-
-  /* Shared operational dashboard surface for admin roles. */
-  .sg-hero {
-    position: relative;
-    isolation: isolate;
-    overflow: hidden;
-    border: 1px solid rgb(var(--c-border-700));
-    border-radius: theme('borderRadius.2xl');
-    padding: 1.25rem;
-    background:
-      radial-gradient(circle at 88% -28%, rgb(var(--c-brand-500) / 0.32), transparent 48%),
-      linear-gradient(128deg, rgb(var(--c-surface-raised)) 0%, rgb(var(--c-surface)) 64%, rgb(var(--c-brand-500) / 0.09) 100%);
-    box-shadow: theme('boxShadow.card');
-  }
-
-  .sg-hero::before {
-    position: absolute;
-    z-index: -1;
-    top: -7rem;
-    right: -5rem;
-    width: 17rem;
-    height: 17rem;
-    border: 1px solid rgb(var(--c-brand-400) / 0.17);
-    border-radius: 999px;
-    box-shadow: 0 0 0 2.5rem rgb(var(--c-brand-500) / 0.035), 0 0 0 5rem rgb(var(--c-brand-500) / 0.025);
-    content: '';
-  }
-
-  .sg-hero-grid {
-    display: grid;
-    align-items: end;
-    gap: 1.25rem;
-  }
-
-  .sg-hero-label {
-    color: rgb(var(--c-brand-400));
-    font-size: theme('fontSize.2xs[0]');
-    font-weight: 800;
-    letter-spacing: 0.14em;
-    text-transform: uppercase;
-  }
-
-  .sg-hero-title {
-    max-width: 40rem;
-    margin-top: 0.35rem;
-    color: rgb(var(--c-neutral-50));
-    font-size: clamp(1.4rem, 2.4vw, 2rem);
-    font-weight: 750;
-    letter-spacing: -0.035em;
-    line-height: 1.12;
-  }
-
-  .sg-hero-copy {
-    max-width: 38rem;
-    margin-top: 0.55rem;
-    color: rgb(var(--c-neutral-400));
-    font-size: theme('fontSize.sm[0]');
-    line-height: 1.55;
-  }
-
-  .sg-hero-grid > .grid {
-    position: relative;
-    width: 100%;
-  }
-
-  .sg-hero-stat {
-    display: flex;
-    min-width: 0;
-    min-height: 5.25rem;
-    flex-direction: column;
-    justify-content: center;
-    border: 1px solid rgb(var(--c-border-600) / 0.82);
-    border-radius: theme('borderRadius.xl');
-    padding: 0.875rem 1rem;
-    background: rgb(var(--c-surface-sunken) / 0.48);
-    box-shadow: inset 0 1px 0 rgb(var(--c-neutral-50) / 0.035);
-    backdrop-filter: blur(10px);
-  }
-
-  .sg-hero-stat-label {
-    color: rgb(var(--c-neutral-400));
-    font-size: theme('fontSize.2xs[0]');
-    font-weight: 700;
-    letter-spacing: 0.045em;
-    text-transform: uppercase;
-  }
-
-  .sg-hero-stat-value {
-    margin-top: 0.35rem;
-    color: rgb(var(--c-neutral-50));
-    font-size: clamp(1.45rem, 3vw, 2rem);
-    font-weight: 750;
-    letter-spacing: -0.045em;
-    line-height: 1;
-  }
-
-  @media (min-width: 640px) {
-    .sg-hero { padding: 1.5rem; }
-    .sg-hero-grid { grid-template-columns: minmax(0, 1fr) auto; gap: 2rem; }
-    .sg-hero-grid > .grid { width: auto; min-width: 20rem; }
-    .sg-hero-grid > .sg-hero-stat { min-width: 10rem; }
-  }
 
   /* ── Controles ─────────────────────────────────────────────────────────── */
 
@@ -605,38 +493,43 @@ html.dark {
 
   .sg-drawer-backdrop { background: rgb(var(--c-overlay) / 0.55); backdrop-filter: blur(4px); }
 
-  /* Placeholder de carga: líneas verticales que se desplazan sobre el bloque.
-     El paso de la animación es exactamente el periodo del patrón (14px), así
-     que el bucle no tiene costura, y el pseudo-elemento se dibuja un periodo
-     más ancho para que no aparezca un hueco al final del recorrido.
+  /* Placeholder de carga: un brillo diagonal recorre el bloque de un extremo
+     al otro. Es el lenguaje habitual de skeleton loader (LinkedIn, YouTube,
+     Facebook) porque lee como "aquí va a aparecer algo", sin competir con el
+     contenido real ni parecer una barra de progreso con avance medible.
+
+     El pseudo-elemento se dibuja mucho más ancho que el bloque para que el
+     gradiente entre y salga completo; sin ese margen el brillo se corta en
+     los bordes y el barrido se nota entrecortado.
 
      Los keyframes se declaran aquí y no en tailwind.config: Tailwind sólo emite
      los de las animaciones que se usan como clase `animate-*`, y esta se aplica
      desde CSS. Por eso la versión anterior se quedó sin animación en el bundle. */
-  @keyframes sg-skeleton-scan {
-    from { transform: translateX(-14px); }
-    to   { transform: translateX(0); }
+  @keyframes sg-skeleton-shimmer {
+    from { transform: translateX(-100%); }
+    to   { transform: translateX(100%); }
   }
 
   .sg-skeleton {
     position: relative;
     overflow: hidden;
     border-radius: theme('borderRadius.lg');
-    background: rgb(var(--c-neutral-500) / 0.16);
+    background: rgb(var(--c-neutral-500) / 0.14);
   }
 
   .sg-skeleton::after {
     position: absolute;
-    top: 0;
-    bottom: 0;
-    left: 0;
-    width: calc(100% + 14px);
-    background-image: repeating-linear-gradient(
-      90deg,
-      rgb(var(--c-neutral-500) / 0.30) 0 2px,
-      transparent 2px 14px
+    inset: 0;
+    width: 60%;
+    background-image: linear-gradient(
+      100deg,
+      transparent 0%,
+      rgb(var(--c-neutral-500) / 0.22) 35%,
+      rgb(var(--c-neutral-500) / 0.34) 50%,
+      rgb(var(--c-neutral-500) / 0.22) 65%,
+      transparent 100%
     );
-    animation: sg-skeleton-scan 900ms linear infinite;
+    animation: sg-skeleton-shimmer 1.6s ease-in-out infinite;
     content: '';
   }
 

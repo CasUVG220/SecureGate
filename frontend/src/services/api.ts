@@ -36,6 +36,47 @@ const authHeaders = (): HeadersInit => ({
   Authorization: `Bearer ${getToken()}`,
 });
 
+// ── Empresa suspendida / de baja ─────────────────────────────────────────
+// El backend responde 423 en login, refresh y licencias cuando la empresa del
+// usuario está suspendida (owner) o dada de baja. El aviso se muestra en la
+// pantalla de acceso; nadie de esa empresa entra hasta que se levante.
+
+export const HTTP_BLOQUEO = 423;
+export const BLOQUEO_KEY = 'sg_bloqueo';
+
+export interface BloqueoEmpresa {
+  codigo: 'empresa_suspendida' | 'empresa_inactiva';
+  empresa: string;
+  motivo: string | null;
+  desde: string | null;
+  error: string;
+}
+
+export class EmpresaBloqueadaError extends Error {
+  bloqueo: BloqueoEmpresa;
+  constructor(b: BloqueoEmpresa) {
+    super(b.error);
+    this.name = 'EmpresaBloqueadaError';
+    this.bloqueo = b;
+  }
+}
+
+const guardarBloqueo = (b: Partial<BloqueoEmpresa>): void => {
+  try { localStorage.setItem(BLOQUEO_KEY, JSON.stringify(b)); } catch { /* sin storage no se recuerda */ }
+};
+
+/** Lee y borra el aviso guardado por un refresh rechazado (una sola vez). */
+export const tomarBloqueoGuardado = (): BloqueoEmpresa | null => {
+  try {
+    const raw = localStorage.getItem(BLOQUEO_KEY);
+    if (!raw) return null;
+    localStorage.removeItem(BLOQUEO_KEY);
+    return JSON.parse(raw) as BloqueoEmpresa;
+  } catch {
+    return null;
+  }
+};
+
 // ── Auth helpers ──────────────────────────────────────────────────────────
 
 export const refreshToken = async (): Promise<string | null> => {
@@ -44,6 +85,13 @@ export const refreshToken = async (): Promise<string | null> => {
       method: 'POST',
       credentials: 'include',
     });
+    if (res.status === HTTP_BLOQUEO) {
+      // La empresa fue suspendida con la sesión abierta: se guarda el aviso
+      // para que la pantalla de acceso lo muestre al volver.
+      const body = await res.json().catch(() => ({})) as Partial<BloqueoEmpresa>;
+      guardarBloqueo(body);
+      return null;
+    }
     if (!res.ok) return null;
     const data = await res.json() as { token: string };
     localStorage.setItem('token', data.token);
@@ -242,6 +290,9 @@ export const login = async (
   if (!res.ok) {
     if (res.status === 403 && body.portalCorrecto) {
       throw new PortalIncorrectoError(body.error, body.portalCorrecto);
+    }
+    if (res.status === HTTP_BLOQUEO) {
+      throw new EmpresaBloqueadaError(body as BloqueoEmpresa);
     }
     throw new Error(body.error || 'Credenciales incorrectas');
   }
@@ -689,6 +740,12 @@ export interface DashboardData {
     timestamp_entrada: string;
     timestamp_salida: string | null;
   }>;
+  /** Accesos de hoy por hora (24 posiciones, 0 = medianoche). */
+  accesos_por_hora: number[];
+  /** Accesos de ayer hasta esta misma hora: la referencia justa para "hoy". */
+  accesos_ayer_misma_hora: number;
+  /** Entradas sin salida de las últimas 24 h. */
+  dentro_ahora: number;
 }
 
 export const getDashboard = async (): Promise<DashboardData> => {
@@ -728,9 +785,16 @@ export const scanPlaca = async (
   return res.json();
 };
 
+/**
+ * Descarga un CSV autenticado. Rechaza si el backend responde con error: antes
+ * el fallo se tragaba en silencio y la pantalla decía "descargado" sin archivo.
+ */
 const downloadCSV = async (url: string, filename: string): Promise<void> => {
   const res = await apiFetch(url, { headers: authHeaders() });
-  if (!res.ok) return;
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({})) as { error?: string };
+    throw new Error(body.error || 'No se pudo generar el reporte');
+  }
   const blob = await res.blob();
   const href = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -740,18 +804,77 @@ const downloadCSV = async (url: string, filename: string): Promise<void> => {
   URL.revokeObjectURL(href);
 };
 
-export const downloadReporteAccesos = (desde: string, hasta: string): void => {
-  void downloadCSV(
+export const downloadReporteAccesos = (desde: string, hasta: string): Promise<void> =>
+  downloadCSV(
     `${BASE_URL}/api/reportes/accesos?desde=${encodeURIComponent(desde)}&hasta=${encodeURIComponent(hasta)}`,
     `accesos_${desde}_${hasta}.csv`
   );
-};
 
-export const downloadReportePagos = (desde: string, hasta: string): void => {
-  void downloadCSV(
+export const downloadReportePagos = (desde: string, hasta: string): Promise<void> =>
+  downloadCSV(
     `${BASE_URL}/api/reportes/pagos?desde=${encodeURIComponent(desde)}&hasta=${encodeURIComponent(hasta)}`,
     `pagos_${desde}_${hasta}.csv`
   );
+
+// ── Estadísticas (Análisis) ───────────────────────────────────────────────
+
+export interface MontoConteo { cantidad: number; monto: number }
+
+export interface Estadisticas {
+  periodo: {
+    desde: string;
+    hasta: string;
+    dias: number;
+    anterior: { desde: string; hasta: string };
+  };
+  accesos: {
+    total: number;
+    total_anterior: number;
+    visitantes_unicos: number;
+    con_vehiculo: number;
+    sin_salida: number;
+    no_autorizados: number;
+    /** Mediana de la duración de las visitas con salida, en minutos. */
+    duracion_mediana_min: number | null;
+    por_dia: Array<{ fecha: string; total: number }>;
+    /** Alineada por posición con `por_dia`. */
+    por_dia_anterior: number[];
+    /** 7 filas (lunes→domingo) × 24 horas. */
+    por_franja: number[][];
+    top_casas: Array<{ numero_casa: string; total: number }>;
+  };
+  pagos: {
+    recaudado: number;
+    recaudado_anterior: number;
+    por_estado: Record<'aprobado' | 'pendiente' | 'rechazado', MontoConteo>;
+    por_metodo: Array<{ metodo: string } & MontoConteo>;
+    por_dia: Array<{ fecha: string; monto: number }>;
+    por_dia_anterior: number[];
+  };
+  cartera: { residentes: number; al_dia: number; pendiente: number; mora: number; saldo_pendiente: number };
+  solicitudes: {
+    total: number;
+    por_estado: Record<'abierto' | 'en_proceso' | 'cerrado', number>;
+    por_tipo: Array<{ tipo: string; total: number }>;
+  };
+  reservas: {
+    total: number;
+    por_estado: Record<'pendiente_aprobacion' | 'confirmada' | 'completada' | 'cancelada' | 'rechazada', number>;
+    cargos: number;
+    top_areas: Array<{ area: string; total: number }>;
+  };
+}
+
+export const getEstadisticas = async (desde: string, hasta: string, signal?: AbortSignal): Promise<Estadisticas> => {
+  const res = await apiFetch(
+    `${BASE_URL}/api/reportes/estadisticas?desde=${encodeURIComponent(desde)}&hasta=${encodeURIComponent(hasta)}`,
+    { headers: authHeaders(), signal }
+  );
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({})) as { error?: string };
+    throw new Error(body.error || 'Error al cargar estadísticas');
+  }
+  return res.json();
 };
 
 export interface ConfigCargo {
@@ -824,9 +947,46 @@ export interface Empresa {
   nit: string | null;
   logo_url: string | null;
   activo: boolean;
+  /** Pausa reversible decidida por el owner (impago, incumplimiento). */
+  suspendida: boolean;
+  suspension_motivo: string | null;
+  suspendida_en: string | null;
   created_at: string;
   total_sucursales: number;
 }
+
+export const suspenderEmpresa = async (id: string, motivo: string): Promise<Empresa> => {
+  const res = await apiFetch(`${BASE_URL}/api/empresas/${id}/suspender`, {
+    method: 'PATCH',
+    headers: authHeaders(),
+    body: JSON.stringify({ motivo }),
+  });
+  const body = await res.json();
+  if (!res.ok) throw new Error((body as { error?: string }).error || 'Error al suspender la empresa');
+  return body as Empresa;
+};
+
+/**
+ * Borrado físico e irreversible de la empresa y todo lo que cuelga de ella.
+ * Exige la contraseña del owner; el backend la comprueba y limita intentos.
+ */
+export const eliminarEmpresaDefinitivo = async (id: string, password: string): Promise<{ nombre: string; eliminado: Record<string, number> }> => {
+  const res = await apiFetch(`${BASE_URL}/api/empresas/${id}/eliminar-definitivo`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify({ password }),
+  });
+  const body = await res.json();
+  if (!res.ok) throw new Error((body as { error?: string }).error || 'Error al eliminar la empresa');
+  return body as { nombre: string; eliminado: Record<string, number> };
+};
+
+export const reactivarEmpresa = async (id: string): Promise<Empresa> => {
+  const res = await apiFetch(`${BASE_URL}/api/empresas/${id}/reactivar`, { method: 'PATCH', headers: authHeaders() });
+  const body = await res.json();
+  if (!res.ok) throw new Error((body as { error?: string }).error || 'Error al reactivar la empresa');
+  return body as Empresa;
+};
 
 export interface EmpresaInput {
   nombre: string;
@@ -1768,4 +1928,170 @@ export const getMiResumenMes = async (): Promise<ResumenMes> => {
   const res = await apiFetch(`${BASE_URL}/api/pagos/mi-resumen`, { headers: authHeaders() });
   if (!res.ok) throw new Error('Error al cargar el resumen del mes');
   return res.json() as Promise<ResumenMes>;
+};
+
+// ── Invitaciones administrativas (owner → admin_empresa → admin_sucursal) ──
+// Nada que ver con las invitaciones QR de visitantes ni con las licencias de
+// la app de garita: esto crea cuentas administrativas por correo.
+
+export type InvitacionRol = 'admin_empresa' | 'admin_sucursal';
+export type InvitacionEstado = 'pendiente' | 'aceptada' | 'expirada' | 'revocada';
+
+export interface Invitacion {
+  id: string;
+  email: string;
+  rol_invitado: InvitacionRol;
+  empresa_id: string | null;
+  empresa_nombre: string | null;
+  /** La invitación crea la empresa al aceptarse (owner → admin de empresa nueva). */
+  crea_empresa: boolean;
+  sucursal_id: string | null;
+  sucursal_nombre: string | null;
+  invitado_por: string;
+  invitado_por_nombre: string | null;
+  estado: InvitacionEstado;
+  expira_en: string;
+  created_at: string;
+  aceptada_en: string | null;
+  revocada_en: string | null;
+  /** Sólo al crear o reenviar: enlace para compartir por otro canal. */
+  enlace?: string;
+}
+
+export interface InvitacionInput {
+  email: string;
+  rol_invitado: InvitacionRol;
+  empresa_id?: string;
+  empresa_nombre?: string;
+  sucursal_id?: string;
+}
+
+/** Vista pública de una invitación (lo que ve quien abre el enlace). */
+export interface InvitacionPublica {
+  email: string;
+  rol_invitado: InvitacionRol;
+  rol_nombre: string;
+  empresa_nombre: string | null;
+  crea_empresa: boolean;
+  sucursal_nombre: string | null;
+  expira_en: string;
+}
+
+/** Error con el status HTTP: 410 (expirada) y 409 (usada/revocada) se muestran distinto. */
+export class InvitacionError extends Error {
+  status: number;
+  estado?: InvitacionEstado;
+  constructor(mensaje: string, status: number, estado?: InvitacionEstado) {
+    super(mensaje);
+    this.name = 'InvitacionError';
+    this.status = status;
+    this.estado = estado;
+  }
+}
+
+export const getInvitaciones = async (): Promise<Invitacion[]> => {
+  const res = await apiFetch(`${BASE_URL}/api/invitaciones`, { headers: authHeaders() });
+  if (!res.ok) throw new Error('Error al cargar invitaciones');
+  return res.json() as Promise<Invitacion[]>;
+};
+
+export const crearInvitacion = async (data: InvitacionInput): Promise<Invitacion> => {
+  const res = await apiFetch(`${BASE_URL}/api/invitaciones`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify(data),
+  });
+  const body = await res.json();
+  if (!res.ok) throw new Error((body as { error?: string }).error || 'Error al crear la invitación');
+  return body as Invitacion;
+};
+
+export const revocarInvitacion = async (id: string): Promise<Invitacion> => {
+  const res = await apiFetch(`${BASE_URL}/api/invitaciones/${id}/revocar`, { method: 'PATCH', headers: authHeaders() });
+  const body = await res.json();
+  if (!res.ok) throw new Error((body as { error?: string }).error || 'Error al revocar la invitación');
+  return body as Invitacion;
+};
+
+export const reenviarInvitacion = async (id: string): Promise<Invitacion> => {
+  const res = await apiFetch(`${BASE_URL}/api/invitaciones/${id}/reenviar`, { method: 'POST', headers: authHeaders() });
+  const body = await res.json();
+  if (!res.ok) throw new Error((body as { error?: string }).error || 'Error al reenviar la invitación');
+  return body as Invitacion;
+};
+
+// Públicos: sin token de sesión (quien acepta todavía no tiene cuenta).
+export const getInvitacionPublica = async (token: string): Promise<InvitacionPublica> => {
+  const res = await fetch(`${BASE_URL}/api/invitaciones/${encodeURIComponent(token)}`);
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new InvitacionError((body as { error?: string }).error || 'Invitación no válida', res.status, (body as { estado?: InvitacionEstado }).estado);
+  }
+  return body as InvitacionPublica;
+};
+
+export const aceptarInvitacion = async (token: string, data: { nombre: string; password: string }): Promise<LoginResult> => {
+  const res = await fetch(`${BASE_URL}/api/invitaciones/${encodeURIComponent(token)}/aceptar`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify(data),
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new InvitacionError((body as { error?: string }).error || 'No se pudo aceptar la invitación', res.status, (body as { estado?: InvitacionEstado }).estado);
+  }
+  return body as LoginResult;
+};
+
+// ── Licencias de la app de garita (Sprint 8) ───────────────────────────────
+// Códigos de activación que vinculan un equipo de garita (por huella de
+// hardware) a una sucursal. Nada que ver con las invitaciones por correo.
+
+export type LicenciaEstado = 'activa' | 'revocada';
+
+export interface Licencia {
+  id: string;
+  sucursal_id: string;
+  sucursal_nombre: string;
+  codigo_activacion: string;
+  etiqueta: string | null;
+  estado: LicenciaEstado;
+  /** true cuando un equipo ya canjeó el código (tiene fingerprint). */
+  activada: boolean;
+  activado_en: string | null;
+  ultimo_heartbeat: string | null;
+  revocado_en: string | null;
+  created_at: string;
+}
+
+export interface LicenciaInput {
+  etiqueta?: string;
+  /** Sólo owner / admin_empresa: el admin de sucursal la toma del JWT. */
+  sucursal_id?: string;
+}
+
+export const getLicencias = async (): Promise<Licencia[]> => {
+  const res = await apiFetch(`${BASE_URL}/api/licencias`, { headers: authHeaders() });
+  if (!res.ok) throw new Error('Error al cargar licencias');
+  return res.json() as Promise<Licencia[]>;
+};
+
+export const crearLicencia = async (data: LicenciaInput): Promise<Licencia> => {
+  const res = await apiFetch(`${BASE_URL}/api/licencias`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify(data),
+  });
+  const body = await res.json();
+  if (!res.ok) throw new Error((body as { error?: string }).error || 'Error al generar el código');
+  return body as Licencia;
+};
+
+export const revocarLicencia = async (id: string): Promise<void> => {
+  const res = await apiFetch(`${BASE_URL}/api/licencias/${id}/revocar`, { method: 'PATCH', headers: authHeaders() });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error((body as { error?: string }).error || 'Error al revocar la licencia');
+  }
 };

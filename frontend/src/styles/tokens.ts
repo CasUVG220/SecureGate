@@ -51,20 +51,33 @@ const BRAND_DARK = ramp({
 });
 
 // Claro: el relleno (500) es carbón y el hover oscurece; 400 es el acento sobre
-// superficies blancas, con contraste de sobra para texto pequeño.
+// superficies blancas, con contraste de sobra para texto pequeño. 800-950 son
+// tintes (ver "Tintes 800-950" más abajo).
 const BRAND_LIGHT = ramp({
   50: '#fafafa', 100: '#f4f4f5', 200: '#e4e4e7', 300: '#52525b', 400: '#3f3f46',
-  500: '#27272a', 600: '#18181b', 700: '#09090b', 800: '#0c0c0e', 900: '#09090b', 950: '#050506',
+  500: '#27272a', 600: '#18181b', 700: '#09090b', 800: '#d4d4d8', 900: '#e4e4e7', 950: '#f4f4f5',
 });
 
+/*
+ * Tintes 800-950 y texto 300 en claro
+ * -----------------------------------
+ * Las pantallas pintan avisos con el patrón `bg-red-900/40 border-red-700
+ * text-red-300`: en oscuro es "tinte profundo + texto claro". Con la rampa
+ * mecánica, en claro ese mismo 900 era un granate al 40 % sobre blanco (un rosa
+ * grisáceo) y el 300 un rojo medio encima: ~1.9:1, ilegible. Por eso en claro
+ * los tonos 800-950 se pliegan a tintes pálidos (sólo se usan como fondo con
+ * alfa o como borde suave) y el 300 es un tono de texto AA, más oscuro que el
+ * 400, igual que en oscuro es más claro: `hover:text-danger-300` sigue
+ * significando "más énfasis" en los dos temas.
+ */
 const SUCCESS_DARK = ramp({
   50: '#ecfdf5', 100: '#d1fae5', 200: '#a7f3d0', 300: '#6ee7b7', 400: '#34d399',
   500: '#10b981', 600: '#059669', 700: '#047857', 800: '#065f46', 900: '#064e3b', 950: '#022c22',
 });
 
 const SUCCESS_LIGHT = ramp({
-  50: '#ecfdf5', 100: '#d1fae5', 200: '#a7f3d0', 300: '#10b981', 400: '#047857',
-  500: '#059669', 600: '#047857', 700: '#065f46', 800: '#064e3b', 900: '#053a2c', 950: '#022c22',
+  50: '#ecfdf5', 100: '#d1fae5', 200: '#a7f3d0', 300: '#065f46', 400: '#047857',
+  500: '#059669', 600: '#047857', 700: '#065f46', 800: '#a7f3d0', 900: '#d1fae5', 950: '#ecfdf5',
 });
 
 const WARNING_DARK = ramp({
@@ -73,8 +86,8 @@ const WARNING_DARK = ramp({
 });
 
 const WARNING_LIGHT = ramp({
-  50: '#fffbeb', 100: '#fef3c7', 200: '#fde68a', 300: '#d97706', 400: '#b45309',
-  500: '#c2760a', 600: '#b45309', 700: '#92400e', 800: '#78350f', 900: '#603010', 950: '#451a03',
+  50: '#fffbeb', 100: '#fef3c7', 200: '#fde68a', 300: '#92400e', 400: '#b45309',
+  500: '#c2760a', 600: '#b45309', 700: '#92400e', 800: '#fde68a', 900: '#fef3c7', 950: '#fffbeb',
 });
 
 const DANGER_DARK = ramp({
@@ -83,8 +96,8 @@ const DANGER_DARK = ramp({
 });
 
 const DANGER_LIGHT = ramp({
-  50: '#fef2f2', 100: '#fee2e2', 200: '#fecaca', 300: '#ef4444', 400: '#dc2626',
-  500: '#dc2626', 600: '#b91c1c', 700: '#991b1b', 800: '#7f1d1d', 900: '#6b1717', 950: '#450a0a',
+  50: '#fef2f2', 100: '#fee2e2', 200: '#fecaca', 300: '#b91c1c', 400: '#dc2626',
+  500: '#dc2626', 600: '#b91c1c', 700: '#991b1b', 800: '#fecaca', 900: '#fee2e2', 950: '#fef2f2',
 });
 
 /**
@@ -126,6 +139,51 @@ export const themePalettes: Record<'light' | 'dark', Record<ScaleName, Ramp>> = 
     danger: DANGER_DARK, neutral: NEUTRAL_DARK, border: BORDER_DARK,
   },
 };
+
+/**
+ * Visualización de datos
+ * ----------------------
+ * La marca es carbón y el color de la interfaz está reservado para estados, así
+ * que los gráficos llevan su propio azul: no compite con verde/ámbar/rojo (que
+ * en un gráfico siguen significando "bien/atención/problema") y no se confunde
+ * con un botón. Cada tema tiene sus pasos, elegidos para su superficie, no una
+ * inversión automática. Validado con el validador de paletas del skill de
+ * dataviz contra `#ffffff` (claro) y `#131c2b` (oscuro):
+ *
+ *   - `series`: la marca de datos (línea, barra). 4.4:1 en claro, 4.7:1 en oscuro.
+ *   - `seq-1…5`: magnitud (mapa de calor). Un solo tono, monótono en luminosidad;
+ *     el paso 1 se funde con la superficie a propósito ("casi nada").
+ *   - `ord-1…3`: etapas ordenadas (abierta → en proceso → cerrada). El paso 1
+ *     es el más prominente; el 3 sigue por encima de 2:1 sobre la superficie.
+ */
+const VIZ_LIGHT = {
+  series: '#2a78d6',
+  seq: ['#cde2fb', '#9ec5f4', '#5598e7', '#256abf', '#104281'],
+  ord: ['#184f95', '#3987e5', '#86b6ef'],
+} as const;
+
+const VIZ_DARK = {
+  series: '#3987e5',
+  seq: ['#0d366b', '#184f95', '#2a78d6', '#6da7ec', '#b7d3f6'],
+  ord: ['#9ec5f4', '#5598e7', '#256abf'],
+} as const;
+
+export const vizPalettes = { light: VIZ_LIGHT, dark: VIZ_DARK } as const;
+
+/** Nombre de cada custom property de la paleta de datos → su valor "R G B" por tema. */
+export const vizVars = (theme: 'light' | 'dark'): Record<string, string> => {
+  const v = vizPalettes[theme];
+  return {
+    'viz-series': rgb(v.series),
+    ...Object.fromEntries(v.seq.map((hex, i) => [`viz-seq-${i + 1}`, rgb(hex)])),
+    ...Object.fromEntries(v.ord.map((hex, i) => [`viz-ord-${i + 1}`, rgb(hex)])),
+  };
+};
+
+/** Utilidades `viz-*` para Tailwind (`bg-viz-series`, `fill-viz-seq-3`…). */
+export const vizColors: Record<string, string> = Object.fromEntries(
+  Object.keys(vizVars('light')).map(k => [k.replace(/^viz-/, ''), `rgb(var(--c-${k}) / <alpha-value>)`])
+);
 
 /** Referencia `rgb(var(--c-brand-500) / <alpha-value>)` para el config de Tailwind. */
 export const cssVarRamp = (scale: ScaleName): Record<string, string> =>
