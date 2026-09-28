@@ -1,0 +1,541 @@
+{
+  "id": "04-invitaciones",
+  "titulo": "Invitaciones: reuso, expiración, revocación, carrera y fuerza bruta del token",
+  "fecha": "2026-09-29T23:04:24.327Z",
+  "base": "http://localhost:3000",
+  "items": [
+    {
+      "id": "INV-consulta-valida",
+      "titulo": "GET /invitaciones/:token de una invitación pendiente",
+      "request": {
+        "method": "GET",
+        "path": "/api/invitaciones/14qbrIp1-7Q6s-si4cD_fMchZ3nTFWvVkN5FyocWNBY",
+        "actor": "anónimo con el token"
+      },
+      "esperado": "200 (solo email, rol, nombre de empresa)",
+      "real": {
+        "status": 200,
+        "body": "{\"email\":\"st.inv.muna9zig.reuso@sectest.local\",\"rol_invitado\":\"admin_empresa\",\"rol_nombre\":\"Administrador de empresa\",\"empresa_nombre\":\"ST Empresa A\",\"crea_empresa\":false,\"sucursal_nombre\":null,\"expira_en\":\"2026-10-03T05:04:32.013Z\"}",
+        "ms": 3
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "INV-aceptar-1",
+      "titulo": "Primera aceptación",
+      "request": {
+        "method": "POST",
+        "path": "/api/invitaciones/14qbrIp1-7Q6s-si4cD_fMchZ3nTFWvVkN5FyocWNBY/aceptar",
+        "actor": "anónimo con el token",
+        "body": "{\"nombre\":\"ST Invitado Uno\",\"password\":\"Invitado2026x\"}"
+      },
+      "esperado": "200 + sesión",
+      "real": {
+        "status": 200,
+        "body": "{\"token\":\"<jwt-redactado>…(+339)",
+        "ms": 194
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "INV-reuso-aceptar",
+      "titulo": "Segunda aceptación del mismo token (reuso)",
+      "request": {
+        "method": "POST",
+        "path": "/api/invitaciones/14qbrIp1-7Q6s-si4cD_fMchZ3nTFWvVkN5FyocWNBY/aceptar",
+        "actor": "anónimo con el token ya usado",
+        "body": "{\"nombre\":\"ST Invitado Dos\",\"password\":\"Invitado2026y\"}"
+      },
+      "esperado": "409",
+      "real": {
+        "status": 409,
+        "body": "{\"error\":\"La invitación ya fue aceptada\",\"estado\":\"aceptada\"}",
+        "ms": 3
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "INV-reuso-consulta",
+      "titulo": "GET del token ya usado",
+      "request": {
+        "method": "GET",
+        "path": "/api/invitaciones/14qbrIp1-7Q6s-si4cD_fMchZ3nTFWvVkN5FyocWNBY",
+        "actor": "anónimo"
+      },
+      "esperado": "409",
+      "real": {
+        "status": 409,
+        "body": "{\"error\":\"La invitación ya fue aceptada\",\"estado\":\"aceptada\"}",
+        "ms": 3
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "INV-mass-assignment",
+      "titulo": "Aceptar con {rol:\"owner\", empresa_id: B} en el body",
+      "request": {
+        "method": "POST",
+        "path": "/api/invitaciones/j5tUAarULtNDqiGFb0G2yyrhtZf2uVUX8FA97-Biku0/aceptar",
+        "actor": "anónimo con el token",
+        "body": "{\"nombre\":\"ST Mass\",\"password\":\"Invitado2026z\",\"rol\":\"owner\",\"empresa_id\":\"839b6dc8-d437-4a77-816e-729f0f0e881e\",\"rol_invitado\":\"owner\",\"sucursal_id\":\"4237f03d-de34-4657-927a-61e1b7249231\"}"
+      },
+      "esperado": "usuario admin_empresa de la empresa A (lo invitado)",
+      "real": {
+        "status": 200,
+        "body": "{\"token\":\"<jwt-redactado>…(+318)",
+        "ms": 189
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "INV-expirada-consulta",
+      "titulo": "GET de una invitación vencida",
+      "request": {
+        "method": "GET",
+        "path": "/api/invitaciones/jaw1-wk4K__6uoj8z6MaDcVjlHoPrCpwE-bqSxGtQdo",
+        "actor": "anónimo"
+      },
+      "esperado": "410",
+      "real": {
+        "status": 200,
+        "body": "{\"email\":\"st.inv.muna9zig.expirada@sectest.local\",\"rol_invitado\":\"admin_empresa\",\"rol_nombre\":\"Administrador de empresa\",\"empresa_nombre\":\"ST Empresa A\",\"crea_empresa\":false,\"sucursal_nombre\":null,\"expira_en\":\"2026-09-30T05:03:32.503Z\"}",
+        "ms": 2
+      },
+      "resultado": "FALLA",
+      "severidad": "media"
+    },
+    {
+      "id": "INV-expirada-aceptar",
+      "titulo": "Aceptar una invitación vencida",
+      "request": {
+        "method": "POST",
+        "path": "/api/invitaciones/jaw1-wk4K__6uoj8z6MaDcVjlHoPrCpwE-bqSxGtQdo/aceptar",
+        "actor": "anónimo",
+        "body": "{\"nombre\":\"ST Tarde\",\"password\":\"Invitado2026t\"}"
+      },
+      "esperado": "410 y no se crea el usuario",
+      "real": {
+        "status": 200,
+        "body": "{\"token\":\"<jwt-redactado>…(+330)",
+        "ms": 186
+      },
+      "resultado": "FALLA",
+      "severidad": "alta"
+    },
+    {
+      "id": "INV-expirada-7h-consulta",
+      "titulo": "GET de una invitación vencida hace 7 horas",
+      "request": {
+        "method": "GET",
+        "path": "/api/invitaciones/V_97S5BsXK6RHuHwpO9US1JK-17t5-e1ax-dNEQRlhk",
+        "actor": "anónimo"
+      },
+      "esperado": "410",
+      "real": {
+        "status": 410,
+        "body": "{\"error\":\"La invitación expiró\",\"estado\":\"expirada\"}",
+        "ms": 2
+      },
+      "resultado": "OK",
+      "nota": "Control del desfase de zona horaria: con >6 h de vencimiento sí responde 410; entre 0 y 6 h sigue aceptándose."
+    },
+    {
+      "id": "INV-revocar",
+      "titulo": "El owner revoca la invitación",
+      "request": {
+        "method": "PATCH",
+        "path": "/api/invitaciones/716f55a0-dd25-4e87-970e-54d858736f17/revocar",
+        "actor": "owner",
+        "body": "{}"
+      },
+      "esperado": "200",
+      "real": {
+        "status": 200,
+        "body": "{\"id\":\"716f55a0-dd25-4e87-970e-54d858736f17\",\"email\":\"st.inv.muna9zig.revocada@sectest.local\",\"rol_invitado\":\"admin_empresa\",\"empresa_id\":\"c1da0ff8-4c5c-41df-ab83-c9767cd5f692\",\"empresa_nombre\":\"ST Empresa A\",\"crea_empresa\":false,\"sucursal_id\":null,\"sucursal_n…(+258)",
+        "ms": 2
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "INV-revocada-consulta",
+      "titulo": "GET de una invitación revocada",
+      "request": {
+        "method": "GET",
+        "path": "/api/invitaciones/l-rLaZ4oA3eXkI25Ta695oei7JywDSkX3DSWMM7xhAU",
+        "actor": "anónimo"
+      },
+      "esperado": "409",
+      "real": {
+        "status": 409,
+        "body": "{\"error\":\"La invitación ya fue revocada\",\"estado\":\"revocada\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "INV-revocada-aceptar",
+      "titulo": "Aceptar una invitación revocada",
+      "request": {
+        "method": "POST",
+        "path": "/api/invitaciones/l-rLaZ4oA3eXkI25Ta695oei7JywDSkX3DSWMM7xhAU/aceptar",
+        "actor": "anónimo",
+        "body": "{\"nombre\":\"ST Revocada\",\"password\":\"Invitado2026r\"}"
+      },
+      "esperado": "409 y no se crea el usuario",
+      "real": {
+        "status": 409,
+        "body": "{\"error\":\"La invitación ya fue revocada\",\"estado\":\"revocada\"}",
+        "ms": 2
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "INV-revocar-dos-veces",
+      "titulo": "Revocar una ya revocada",
+      "request": {
+        "method": "PATCH",
+        "path": "/api/invitaciones/716f55a0-dd25-4e87-970e-54d858736f17/revocar",
+        "actor": "owner",
+        "body": "{}"
+      },
+      "esperado": "409",
+      "real": {
+        "status": 409,
+        "body": "{\"error\":\"Sólo se revocan invitaciones pendientes (estado: revocada)\"}",
+        "ms": 3
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "INV-reenviar-invalida-viejo",
+      "titulo": "Tras reenviar, el token anterior deja de servir",
+      "request": {
+        "method": "GET",
+        "path": "/api/invitaciones/cvlnvRsVw5yXwyvwHmay-1xhvju4D2J2E5onA1alf3Y",
+        "actor": "anónimo con el token viejo"
+      },
+      "esperado": "404",
+      "real": {
+        "status": 404,
+        "body": "{\"error\":\"Invitación no encontrada\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "INV-reenviar-nuevo-sirve",
+      "titulo": "El token nuevo sí sirve",
+      "request": {
+        "method": "GET",
+        "path": "/api/invitaciones/IjKk4CX5TeK3gqajLdkhelK8E17fSXyRwx93XKbZsW4",
+        "actor": "anónimo con el token nuevo"
+      },
+      "esperado": "200",
+      "real": {
+        "status": 200,
+        "body": "{\"email\":\"st.inv.muna9zig.reenviar@sectest.local\",\"rol_invitado\":\"admin_empresa\",\"rol_nombre\":\"Administrador de empresa\",\"empresa_nombre\":\"ST Empresa A\",\"crea_empresa\":false,\"sucursal_nombre\":null,\"expira_en\":\"2026-10-03T05:04:32.813Z\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "INV-carrera",
+      "titulo": "Tres aceptaciones simultáneas del mismo token",
+      "esperado": "exactamente un 200 y un solo usuario",
+      "request": {
+        "method": "POST",
+        "path": "/api/invitaciones/:token/aceptar (x3 en paralelo)",
+        "actor": "anónimo"
+      },
+      "real": {
+        "status": 0,
+        "body": "estados=200,409,409; usuarios creados=1"
+      },
+      "resultado": "OK",
+      "severidad": "alta"
+    },
+    {
+      "id": "INV-password-muy-corta",
+      "titulo": "Aceptar con contraseña muy corta",
+      "request": {
+        "method": "POST",
+        "path": "/api/invitaciones/HI7Ot9wpa09KsHUL7rZaIY6tkMsIQDEj0VZG2RlmnCo/aceptar",
+        "actor": "anónimo",
+        "body": "{\"nombre\":\"ST Pass\",\"password\":\"abc\"}"
+      },
+      "esperado": "400/422",
+      "real": {
+        "status": 422,
+        "body": "{\"errors\":[{\"type\":\"field\",\"value\":\"abc\",\"msg\":\"Invalid value\",\"path\":\"password\",\"location\":\"body\"}]}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "INV-password-com-n",
+      "titulo": "Aceptar con contraseña común",
+      "request": {
+        "method": "POST",
+        "path": "/api/invitaciones/HI7Ot9wpa09KsHUL7rZaIY6tkMsIQDEj0VZG2RlmnCo/aceptar",
+        "actor": "anónimo",
+        "body": "{\"nombre\":\"ST Pass\",\"password\":\"12345678\"}"
+      },
+      "esperado": "400/422",
+      "real": {
+        "status": 400,
+        "body": "{\"error\":\"La contraseña es demasiado común\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "INV-password-sin-n-meros",
+      "titulo": "Aceptar con contraseña sin números",
+      "request": {
+        "method": "POST",
+        "path": "/api/invitaciones/HI7Ot9wpa09KsHUL7rZaIY6tkMsIQDEj0VZG2RlmnCo/aceptar",
+        "actor": "anónimo",
+        "body": "{\"nombre\":\"ST Pass\",\"password\":\"soloLetrasAqui\"}"
+      },
+      "esperado": "400/422",
+      "real": {
+        "status": 400,
+        "body": "{\"error\":\"La contraseña debe combinar letras y números\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "INV-password-m-s-de-72-bytes",
+      "titulo": "Aceptar con contraseña más de 72 bytes",
+      "request": {
+        "method": "POST",
+        "path": "/api/invitaciones/HI7Ot9wpa09KsHUL7rZaIY6tkMsIQDEj0VZG2RlmnCo/aceptar",
+        "actor": "anónimo",
+        "body": "{\"nombre\":\"ST Pass\",\"password\":\"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx1\"}"
+      },
+      "esperado": "400/422",
+      "real": {
+        "status": 422,
+        "body": "{\"errors\":[{\"type\":\"field\",\"value\":\"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx1\",\"msg\":\"Invalid value\",\"path\":\"password\",\"location\":\"body\"}]}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "INV-adminEmp-invita-adminEmp",
+      "titulo": "admin_empresa intenta invitar a otro admin_empresa",
+      "request": {
+        "method": "POST",
+        "path": "/api/invitaciones",
+        "actor": "adminEmpA",
+        "body": "{\"email\":\"st.inv.muna9zig.esc1@sectest.local\",\"rol_invitado\":\"admin_empresa\",\"empresa_id\":\"c1da0ff8-4c5c-41df-ab83-c9767cd5f692\"}"
+      },
+      "esperado": "403",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Sólo el owner puede invitar administradores de empresa\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "INV-adminEmp-invita-sucursal-B",
+      "titulo": "admin_empresa A invita a admin_sucursal de una sucursal de la empresa B",
+      "request": {
+        "method": "POST",
+        "path": "/api/invitaciones",
+        "actor": "adminEmpA",
+        "body": "{\"email\":\"st.inv.muna9zig.esc2@sectest.local\",\"rol_invitado\":\"admin_sucursal\",\"sucursal_id\":\"4237f03d-de34-4657-927a-61e1b7249231\"}"
+      },
+      "esperado": "403",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"La sucursal no pertenece a tu empresa\"}",
+        "ms": 2
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "INV-owner-invita-adminSuc",
+      "titulo": "owner intenta invitar directamente a admin_sucursal",
+      "request": {
+        "method": "POST",
+        "path": "/api/invitaciones",
+        "actor": "owner",
+        "body": "{\"email\":\"st.inv.muna9zig.esc3@sectest.local\",\"rol_invitado\":\"admin_sucursal\",\"sucursal_id\":\"bc94f428-2a9b-4d8c-8470-7f83b9cecb35\"}"
+      },
+      "esperado": "403 (solo admin_empresa)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Sólo el administrador de la empresa puede invitar administradores de sucursal\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "INV-agente-invita",
+      "titulo": "agente intenta invitar",
+      "request": {
+        "method": "POST",
+        "path": "/api/invitaciones",
+        "actor": "agenteA1",
+        "body": "{\"email\":\"st.inv.muna9zig.esc4@sectest.local\",\"rol_invitado\":\"admin_sucursal\",\"sucursal_id\":\"bc94f428-2a9b-4d8c-8470-7f83b9cecb35\"}"
+      },
+      "esperado": "403",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a admin de empresa\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "INV-rol-owner",
+      "titulo": "Invitar con rol_invitado = owner",
+      "request": {
+        "method": "POST",
+        "path": "/api/invitaciones",
+        "actor": "owner",
+        "body": "{\"email\":\"st.inv.muna9zig.esc5@sectest.local\",\"rol_invitado\":\"owner\",\"empresa_id\":\"c1da0ff8-4c5c-41df-ab83-c9767cd5f692\"}"
+      },
+      "esperado": "400/422",
+      "real": {
+        "status": 422,
+        "body": "{\"errors\":[{\"type\":\"field\",\"value\":\"owner\",\"msg\":\"Invalid value\",\"path\":\"rol_invitado\",\"location\":\"body\"}]}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "INV-email-existente",
+      "titulo": "Invitar a un correo que ya es usuario",
+      "request": {
+        "method": "POST",
+        "path": "/api/invitaciones",
+        "actor": "owner",
+        "body": "{\"email\":\"st.res.a1@sectest.local\",\"rol_invitado\":\"admin_empresa\",\"empresa_id\":\"c1da0ff8-4c5c-41df-ab83-c9767cd5f692\"}"
+      },
+      "esperado": "409",
+      "real": {
+        "status": 409,
+        "body": "{\"error\":\"Ya existe un usuario con ese correo\"}",
+        "ms": 2
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "INV-token-hostil-sqli",
+      "titulo": "GET /invitaciones/<token sqli>",
+      "request": {
+        "method": "GET",
+        "path": "/api/invitaciones/'%20OR%201=1--",
+        "actor": "anónimo"
+      },
+      "esperado": "404 (o 4xx), nunca 5xx",
+      "real": {
+        "status": 404,
+        "body": "{\"error\":\"Invitación no encontrada\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "INV-token-hostil-traversal",
+      "titulo": "GET /invitaciones/<token traversal>",
+      "request": {
+        "method": "GET",
+        "path": "/api/invitaciones/..%2F..%2Fetc%2Fpasswd",
+        "actor": "anónimo"
+      },
+      "esperado": "404 (o 4xx), nunca 5xx",
+      "real": {
+        "status": 404,
+        "body": "{\"error\":\"Invitación no encontrada\"}",
+        "ms": 0
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "INV-token-hostil-largo",
+      "titulo": "GET /invitaciones/<token largo>",
+      "request": {
+        "method": "GET",
+        "path": "/api/invitaciones/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+        "actor": "anónimo"
+      },
+      "esperado": "404 (o 4xx), nunca 5xx",
+      "real": {
+        "status": 404,
+        "body": "{\"error\":\"Invitación no encontrada\"}",
+        "ms": 2
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "INV-token-hostil-nulo",
+      "titulo": "GET /invitaciones/<token nulo>",
+      "request": {
+        "method": "GET",
+        "path": "/api/invitaciones/%00%00%00%00%00%00%00%00%00%00%00",
+        "actor": "anónimo"
+      },
+      "esperado": "404 (o 4xx), nunca 5xx",
+      "real": {
+        "status": 404,
+        "body": "{\"error\":\"Invitación no encontrada\"}",
+        "ms": 0
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "INV-token-hostil-xss",
+      "titulo": "GET /invitaciones/<token xss>",
+      "request": {
+        "method": "GET",
+        "path": "/api/invitaciones/<script>alert(1)</script>x",
+        "actor": "anónimo"
+      },
+      "esperado": "404 (o 4xx), nunca 5xx",
+      "real": {
+        "status": 404,
+        "body": "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\">\n<title>Error</title>\n</head>\n<body>\n<pre>Cannot GET /api/invitaciones/%3Cscript%3Ealert(1)%3C/script%3Ex</pre>\n</body>\n</html>\n",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "INV-fuerza-bruta",
+      "titulo": "40 tokens aleatorios de 256 bits contra GET /invitaciones/:token",
+      "esperado": "404 hasta el intento 30 y 429 desde el 31 (30/15 min por IP)",
+      "request": {
+        "method": "GET",
+        "path": "/api/invitaciones/<random 43 chars> (x40)",
+        "actor": "anónimo"
+      },
+      "real": {
+        "status": 429,
+        "body": "404 x30, 429 x10; primer 429 en el intento 31; 162 ms"
+      },
+      "resultado": "OK",
+      "severidad": "media",
+      "nota": "Espacio de búsqueda 2^256; a 30 intentos/15 min por IP, adivinar un token es inviable. El límite sirve contra abuso, no como única defensa."
+    },
+    {
+      "id": "INV-fuerza-bruta-aceptar-comparte-cupo",
+      "titulo": "El cupo de fuerza bruta se comparte con POST /aceptar",
+      "esperado": "429",
+      "request": {
+        "method": "POST",
+        "path": "/api/invitaciones/<random>/aceptar",
+        "actor": "anónimo"
+      },
+      "real": {
+        "status": 429,
+        "body": "{\"error\":\"Demasiados intentos\"}"
+      },
+      "resultado": "OK",
+      "severidad": "baja"
+    }
+  ]
+}

@@ -1,0 +1,3893 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "SecureGate API (generado de las rutas reales)",
+    "version": "1.0.0"
+  },
+  "servers": [
+    {
+      "url": "http://host.docker.internal:3000"
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    }
+  },
+  "paths": {
+    "/api/auth/login": {
+      "post": {
+        "operationId": "POST_api_auth_login",
+        "tags": [
+          "auth"
+        ],
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        },
+        "parameters": [],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              },
+              "example": {
+                "email": "st.res.a1@sectest.local",
+                "password": "Sec#Test2026a"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/refresh": {
+      "post": {
+        "operationId": "POST_api_auth_refresh",
+        "tags": [
+          "auth"
+        ],
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        },
+        "parameters": [],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              },
+              "example": {}
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/logout": {
+      "post": {
+        "operationId": "POST_api_auth_logout",
+        "tags": [
+          "auth"
+        ],
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        },
+        "parameters": [],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              },
+              "example": {}
+            }
+          }
+        }
+      }
+    },
+    "/api/empresas": {
+      "get": {
+        "operationId": "GET_api_empresas",
+        "tags": [
+          "empresas"
+        ],
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        },
+        "parameters": [],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "post": {
+        "operationId": "POST_api_empresas",
+        "tags": [
+          "empresas"
+        ],
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        },
+        "parameters": [],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              },
+              "example": {
+                "nombre": "ST zap",
+                "nit": "1"
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/empresas/{id}/stats": {
+      "get": {
+        "operationId": "GET_api_empresas_id_stats",
+        "tags": [
+          "empresas"
+        ],
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "d4f8a133-e2e2-4d8d-a2be-9207a75f3e73"
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/empresas/{id}": {
+      "put": {
+        "operationId": "PUT_api_empresas_id_",
+        "tags": [
+          "empresas"
+        ],
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "d4f8a133-e2e2-4d8d-a2be-9207a75f3e73"
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              },
+              "example": {
+                "nombre": "ST Empresa Z (ZAP)",
+                "nit": "1"
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "delete": {
+        "operationId": "DELETE_api_empresas_id_",
+        "tags": [
+          "empresas"
+        ],
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "d4f8a133-e2e2-4d8d-a2be-9207a75f3e73"
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/empresas/{id}/admin": {
+      "post": {
+        "operationId": "POST_api_empresas_id_admin",
+        "tags": [
+          "empresas"
+        ],
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "d4f8a133-e2e2-4d8d-a2be-9207a75f3e73"
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              },
+              "example": {
+                "usuario_id": "58fd4003-977a-471c-a5aa-3cb57e958f0a"
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/empresas/{id}/suspender": {
+      "patch": {
+        "operationId": "PATCH_api_empresas_id_suspender",
+        "tags": [
+          "empresas"
+        ],
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "d4f8a133-e2e2-4d8d-a2be-9207a75f3e73"
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              },
+              "example": {
+                "motivo": "ST zap"
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/empresas/{id}/eliminar-definitivo": {
+      "post": {
+        "operationId": "POST_api_empresas_id_eliminar_definitivo",
+        "tags": [
+          "empresas"
+        ],
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "d4f8a133-e2e2-4d8d-a2be-9207a75f3e73"
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              },
+              "example": {
+                "password": "no-la-conoce"
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/empresas/{id}/reactivar": {
+      "patch": {
+        "operationId": "PATCH_api_empresas_id_reactivar",
+        "tags": [
+          "empresas"
+        ],
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "d4f8a133-e2e2-4d8d-a2be-9207a75f3e73"
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              },
+              "example": {}
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/sucursales": {
+      "get": {
+        "operationId": "GET_api_sucursales",
+        "tags": [
+          "sucursales"
+        ],
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        },
+        "parameters": [],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "post": {
+        "operationId": "POST_api_sucursales",
+        "tags": [
+          "sucursales"
+        ],
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        },
+        "parameters": [],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              },
+              "example": {
+                "empresa_id": "d4f8a133-e2e2-4d8d-a2be-9207a75f3e73",
+                "nombre": "ST zap",
+                "direccion": "x",
+                "tipo": "x"
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/sucursales/{id}": {
+      "put": {
+        "operationId": "PUT_api_sucursales_id_",
+        "tags": [
+          "sucursales"
+        ],
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "fc5dbda5-f891-46e0-b58e-c9d534d21df2"
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              },
+              "example": {
+                "nombre": "ST zap"
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "delete": {
+        "operationId": "DELETE_api_sucursales_id_",
+        "tags": [
+          "sucursales"
+        ],
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "fc5dbda5-f891-46e0-b58e-c9d534d21df2"
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/sucursales/{id}/admin": {
+      "post": {
+        "operationId": "POST_api_sucursales_id_admin",
+        "tags": [
+          "sucursales"
+        ],
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "fc5dbda5-f891-46e0-b58e-c9d534d21df2"
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              },
+              "example": {
+                "usuario_id": "58fd4003-977a-471c-a5aa-3cb57e958f0a"
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/usuarios/me/preferencias": {
+      "put": {
+        "operationId": "PUT_api_usuarios_me_preferencias",
+        "tags": [
+          "usuarios"
+        ],
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        },
+        "parameters": [],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              },
+              "example": {
+                "idioma": "es",
+                "tema": "dark"
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/usuarios": {
+      "get": {
+        "operationId": "GET_api_usuarios",
+        "tags": [
+          "usuarios"
+        ],
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        },
+        "parameters": [],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "post": {
+        "operationId": "POST_api_usuarios",
+        "tags": [
+          "usuarios"
+        ],
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        },
+        "parameters": [],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              },
+              "example": {
+                "nombre": "ST zap",
+                "email": "st.zap.usr@sectest.local",
+                "password": "Zap12345a",
+                "rol": "agente"
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/usuarios/sucursal": {
+      "get": {
+        "operationId": "GET_api_usuarios_sucursal",
+        "tags": [
+          "usuarios"
+        ],
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        },
+        "parameters": [],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/usuarios/{id}": {
+      "delete": {
+        "operationId": "DELETE_api_usuarios_id_",
+        "tags": [
+          "usuarios"
+        ],
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "58fd4003-977a-471c-a5aa-3cb57e958f0a"
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/residentes": {
+      "get": {
+        "operationId": "GET_api_residentes",
+        "tags": [
+          "residentes"
+        ],
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        },
+        "parameters": [],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "post": {
+        "operationId": "POST_api_residentes",
+        "tags": [
+          "residentes"
+        ],
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        },
+        "parameters": [],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              },
+              "example": {
+                "nombre": "ST zap",
+                "email": "st.zap.res@sectest.local",
+                "password": "Zap12345a",
+                "numero_casa": "ZAP-1",
+                "telefono": "50255550009"
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/residentes/me": {
+      "get": {
+        "operationId": "GET_api_residentes_me",
+        "tags": [
+          "residentes"
+        ],
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        },
+        "parameters": [],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/residentes/{id}/pago": {
+      "get": {
+        "operationId": "GET_api_residentes_id_pago",
+        "tags": [
+          "residentes"
+        ],
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "22c2723c-1af3-42b1-b2e8-b77656c6dde0"
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/residentes/{id}": {
+      "get": {
+        "operationId": "GET_api_residentes_id_",
+        "tags": [
+          "residentes"
+        ],
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "22c2723c-1af3-42b1-b2e8-b77656c6dde0"
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "put": {
+        "operationId": "PUT_api_residentes_id_",
+        "tags": [
+          "residentes"
+        ],
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "22c2723c-1af3-42b1-b2e8-b77656c6dde0"
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              },
+              "example": {
+                "numero_casa": "ST-A1-01",
+                "estado_pago": "pendiente",
+                "telefono": "50255550000",
+                "saldo_pendiente": 250
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "delete": {
+        "operationId": "DELETE_api_residentes_id_",
+        "tags": [
+          "residentes"
+        ],
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "22c2723c-1af3-42b1-b2e8-b77656c6dde0"
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/accesos/activos": {
+      "get": {
+        "operationId": "GET_api_accesos_activos",
+        "tags": [
+          "accesos"
+        ],
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        },
+        "parameters": [],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/accesos/activo": {
+      "get": {
+        "operationId": "GET_api_accesos_activo",
+        "tags": [
+          "accesos"
+        ],
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        },
+        "parameters": [
+          {
+            "name": "placa",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "example": "P123ABC"
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/accesos/mis": {
+      "get": {
+        "operationId": "GET_api_accesos_mis",
+        "tags": [
+          "accesos"
+        ],
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        },
+        "parameters": [],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/accesos": {
+      "post": {
+        "operationId": "POST_api_accesos",
+        "tags": [
+          "accesos"
+        ],
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        },
+        "parameters": [],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              },
+              "example": {
+                "nombre_visitante": "ST zap",
+                "numero_dpi": "1234567890123",
+                "residente_id": "22c2723c-1af3-42b1-b2e8-b77656c6dde0",
+                "placa": "P123ABC"
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/accesos/{id}/salida": {
+      "patch": {
+        "operationId": "PATCH_api_accesos_id_salida",
+        "tags": [
+          "accesos"
+        ],
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "6b11516a-e432-4b61-9fe0-427019d812cf"
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              },
+              "example": {}
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "put": {
+        "operationId": "PUT_api_accesos_id_salida",
+        "tags": [
+          "accesos"
+        ],
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "6b11516a-e432-4b61-9fe0-427019d812cf"
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              },
+              "example": {}
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/cargos/configuracion": {
+      "get": {
+        "operationId": "GET_api_cargos_configuracion",
+        "tags": [
+          "cargos"
+        ],
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        },
+        "parameters": [],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "post": {
+        "operationId": "POST_api_cargos_configuracion",
+        "tags": [
+          "cargos"
+        ],
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        },
+        "parameters": [],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              },
+              "example": {
+                "nombre": "ST zap",
+                "monto": 1,
+                "frecuencia": "mensual"
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/cargos/configuracion/{id}": {
+      "put": {
+        "operationId": "PUT_api_cargos_configuracion_id_",
+        "tags": [
+          "cargos"
+        ],
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "f5acd812-9c8c-4a7b-9022-10effae3f76a"
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              },
+              "example": {
+                "nombre": "ST zap",
+                "monto": 1
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/cargos/{id}/aplicar": {
+      "patch": {
+        "operationId": "PATCH_api_cargos_id_aplicar",
+        "tags": [
+          "cargos"
+        ],
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "f5acd812-9c8c-4a7b-9022-10effae3f76a"
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              },
+              "example": {}
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/pagos/pendientes-verificacion": {
+      "get": {
+        "operationId": "GET_api_pagos_pendientes_verificacion",
+        "tags": [
+          "pagos"
+        ],
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        },
+        "parameters": [],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/pagos/mis": {
+      "get": {
+        "operationId": "GET_api_pagos_mis",
+        "tags": [
+          "pagos"
+        ],
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        },
+        "parameters": [],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/pagos/mi-resumen": {
+      "get": {
+        "operationId": "GET_api_pagos_mi_resumen",
+        "tags": [
+          "pagos"
+        ],
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        },
+        "parameters": [],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/pagos/transferencia": {
+      "post": {
+        "operationId": "POST_api_pagos_transferencia",
+        "tags": [
+          "pagos"
+        ],
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        },
+        "parameters": [],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              },
+              "example": {
+                "monto": 10,
+                "referencia": "ST-ZAP",
+                "banco": "x",
+                "fecha_transferencia": "2030-01-01",
+                "comprobante": "x"
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/pagos/tarjeta": {
+      "post": {
+        "operationId": "POST_api_pagos_tarjeta",
+        "tags": [
+          "pagos"
+        ],
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        },
+        "parameters": [],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              },
+              "example": {
+                "monto": 10,
+                "ultimos4": "4242",
+                "titular": "ST zap"
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/pagos": {
+      "get": {
+        "operationId": "GET_api_pagos",
+        "tags": [
+          "pagos"
+        ],
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        },
+        "parameters": [],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "post": {
+        "operationId": "POST_api_pagos",
+        "tags": [
+          "pagos"
+        ],
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        },
+        "parameters": [],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              },
+              "example": {
+                "residente_id": "22c2723c-1af3-42b1-b2e8-b77656c6dde0",
+                "monto": 10,
+                "comprobante": "x"
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/pagos/{id}/aprobar": {
+      "put": {
+        "operationId": "PUT_api_pagos_id_aprobar",
+        "tags": [
+          "pagos"
+        ],
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "1e7484e1-0201-422e-83df-acccec1f5dec"
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              },
+              "example": {}
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/pagos/{id}/rechazar": {
+      "put": {
+        "operationId": "PUT_api_pagos_id_rechazar",
+        "tags": [
+          "pagos"
+        ],
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "1e7484e1-0201-422e-83df-acccec1f5dec"
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              },
+              "example": {
+                "comentario_rechazo": "zap"
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/preautorizaciones/buscar": {
+      "get": {
+        "operationId": "GET_api_preautorizaciones_buscar",
+        "tags": [
+          "preautorizaciones"
+        ],
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        },
+        "parameters": [
+          {
+            "name": "dpi",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "example": "1234567890123"
+          },
+          {
+            "name": "placa",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "example": "P123ABC"
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/preautorizaciones/mis": {
+      "get": {
+        "operationId": "GET_api_preautorizaciones_mis",
+        "tags": [
+          "preautorizaciones"
+        ],
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        },
+        "parameters": [],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "post": {
+        "operationId": "POST_api_preautorizaciones_mis",
+        "tags": [
+          "preautorizaciones"
+        ],
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        },
+        "parameters": [],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              },
+              "example": {
+                "nombre_visitante": "ST zap",
+                "numero_dpi": "1234567890123",
+                "placa": "P123ABC",
+                "fecha_inicio": "2030-01-01"
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/preautorizaciones/mis/{id}": {
+      "delete": {
+        "operationId": "DELETE_api_preautorizaciones_mis_id_",
+        "tags": [
+          "preautorizaciones"
+        ],
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "00294a08-bd99-47af-a644-61e79f930556"
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/preautorizaciones": {
+      "get": {
+        "operationId": "GET_api_preautorizaciones",
+        "tags": [
+          "preautorizaciones"
+        ],
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        },
+        "parameters": [],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "post": {
+        "operationId": "POST_api_preautorizaciones",
+        "tags": [
+          "preautorizaciones"
+        ],
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        },
+        "parameters": [],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              },
+              "example": {
+                "residente_id": "22c2723c-1af3-42b1-b2e8-b77656c6dde0",
+                "nombre_visitante": "ST zap",
+                "fecha_inicio": "2030-01-01"
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/preautorizaciones/{id}": {
+      "delete": {
+        "operationId": "DELETE_api_preautorizaciones_id_",
+        "tags": [
+          "preautorizaciones"
+        ],
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "00294a08-bd99-47af-a644-61e79f930556"
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/ocr/dpi": {
+      "post": {
+        "operationId": "POST_api_ocr_dpi",
+        "tags": [
+          "ocr"
+        ],
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        },
+        "parameters": [],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              },
+              "example": {
+                "imagen": "eA=="
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/ocr/placa": {
+      "post": {
+        "operationId": "POST_api_ocr_placa",
+        "tags": [
+          "ocr"
+        ],
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        },
+        "parameters": [],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              },
+              "example": {
+                "imagen": "eA=="
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/reportes/accesos": {
+      "get": {
+        "operationId": "GET_api_reportes_accesos",
+        "tags": [
+          "reportes"
+        ],
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        },
+        "parameters": [
+          {
+            "name": "desde",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "example": "2020-01-01"
+          },
+          {
+            "name": "hasta",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "example": "2030-01-01"
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/reportes/pagos": {
+      "get": {
+        "operationId": "GET_api_reportes_pagos",
+        "tags": [
+          "reportes"
+        ],
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        },
+        "parameters": [
+          {
+            "name": "desde",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "example": "2020-01-01"
+          },
+          {
+            "name": "hasta",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "example": "2030-01-01"
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/reportes/estadisticas": {
+      "get": {
+        "operationId": "GET_api_reportes_estadisticas",
+        "tags": [
+          "reportes"
+        ],
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        },
+        "parameters": [
+          {
+            "name": "desde",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "example": "2020-01-01"
+          },
+          {
+            "name": "hasta",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "example": "2030-01-01"
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/configuracion-cargos": {
+      "get": {
+        "operationId": "GET_api_configuracion_cargos",
+        "tags": [
+          "configuracion-cargos"
+        ],
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        },
+        "parameters": [],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "post": {
+        "operationId": "POST_api_configuracion_cargos",
+        "tags": [
+          "configuracion-cargos"
+        ],
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        },
+        "parameters": [],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              },
+              "example": {
+                "nombre": "ST zap",
+                "monto": 1,
+                "frecuencia": "mensual"
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/configuracion-cargos/{id}": {
+      "put": {
+        "operationId": "PUT_api_configuracion_cargos_id_",
+        "tags": [
+          "configuracion-cargos"
+        ],
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "f5acd812-9c8c-4a7b-9022-10effae3f76a"
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              },
+              "example": {
+                "nombre": "ST zap",
+                "monto": 1
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "delete": {
+        "operationId": "DELETE_api_configuracion_cargos_id_",
+        "tags": [
+          "configuracion-cargos"
+        ],
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "f5acd812-9c8c-4a7b-9022-10effae3f76a"
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/blacklist": {
+      "get": {
+        "operationId": "GET_api_blacklist",
+        "tags": [
+          "blacklist"
+        ],
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        },
+        "parameters": [],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "post": {
+        "operationId": "POST_api_blacklist",
+        "tags": [
+          "blacklist"
+        ],
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        },
+        "parameters": [],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              },
+              "example": {
+                "numero_dpi": "9999999999999",
+                "nombre": "ST zap",
+                "razon": "zap"
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/blacklist/{id}": {
+      "delete": {
+        "operationId": "DELETE_api_blacklist_id_",
+        "tags": [
+          "blacklist"
+        ],
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "57beb6d6-4cac-41cd-b94a-c9d8320f3fb9"
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/visitantes": {
+      "get": {
+        "operationId": "GET_api_visitantes",
+        "tags": [
+          "visitantes"
+        ],
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        },
+        "parameters": [
+          {
+            "name": "dpi",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "example": "1234567890123"
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/visitantes/buscar": {
+      "get": {
+        "operationId": "GET_api_visitantes_buscar",
+        "tags": [
+          "visitantes"
+        ],
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        },
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "example": "ST Visitante"
+          },
+          {
+            "name": "residente_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "example": "22c2723c-1af3-42b1-b2e8-b77656c6dde0"
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/cargos-programados": {
+      "get": {
+        "operationId": "GET_api_cargos_programados",
+        "tags": [
+          "cargos-programados"
+        ],
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        },
+        "parameters": [],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "post": {
+        "operationId": "POST_api_cargos_programados",
+        "tags": [
+          "cargos-programados"
+        ],
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        },
+        "parameters": [],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              },
+              "example": {
+                "nombre": "ST zap",
+                "monto": 1,
+                "frecuencia": "mensual",
+                "aplica_a": "todos"
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/cargos-programados/{id}": {
+      "put": {
+        "operationId": "PUT_api_cargos_programados_id_",
+        "tags": [
+          "cargos-programados"
+        ],
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "c2a8eca3-ee2d-4920-a4a9-04d26623ccc4"
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              },
+              "example": {
+                "nombre": "ST zap",
+                "monto": 1
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "delete": {
+        "operationId": "DELETE_api_cargos_programados_id_",
+        "tags": [
+          "cargos-programados"
+        ],
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "c2a8eca3-ee2d-4920-a4a9-04d26623ccc4"
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/cargos-programados/{id}/aplicar": {
+      "post": {
+        "operationId": "POST_api_cargos_programados_id_aplicar",
+        "tags": [
+          "cargos-programados"
+        ],
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "c2a8eca3-ee2d-4920-a4a9-04d26623ccc4"
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              },
+              "example": {}
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/cargos-programados/{id}/historial": {
+      "get": {
+        "operationId": "GET_api_cargos_programados_id_historial",
+        "tags": [
+          "cargos-programados"
+        ],
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "c2a8eca3-ee2d-4920-a4a9-04d26623ccc4"
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/anuncios/mis": {
+      "get": {
+        "operationId": "GET_api_anuncios_mis",
+        "tags": [
+          "anuncios"
+        ],
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        },
+        "parameters": [],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/anuncios/{id}/leer": {
+      "post": {
+        "operationId": "POST_api_anuncios_id_leer",
+        "tags": [
+          "anuncios"
+        ],
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "0a07f020-2759-4e4e-ab5c-dbc8d9136e3d"
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              },
+              "example": {}
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/anuncios": {
+      "get": {
+        "operationId": "GET_api_anuncios",
+        "tags": [
+          "anuncios"
+        ],
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        },
+        "parameters": [],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "post": {
+        "operationId": "POST_api_anuncios",
+        "tags": [
+          "anuncios"
+        ],
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        },
+        "parameters": [],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              },
+              "example": {
+                "titulo": "ST zap",
+                "contenido": "x",
+                "prioridad": "normal"
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/anuncios/{id}": {
+      "put": {
+        "operationId": "PUT_api_anuncios_id_",
+        "tags": [
+          "anuncios"
+        ],
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "0a07f020-2759-4e4e-ab5c-dbc8d9136e3d"
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              },
+              "example": {
+                "titulo": "ST zap",
+                "contenido": "x"
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "delete": {
+        "operationId": "DELETE_api_anuncios_id_",
+        "tags": [
+          "anuncios"
+        ],
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "0a07f020-2759-4e4e-ab5c-dbc8d9136e3d"
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/tickets": {
+      "post": {
+        "operationId": "POST_api_tickets",
+        "tags": [
+          "tickets"
+        ],
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        },
+        "parameters": [],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              },
+              "example": {
+                "tipo": "otro",
+                "titulo": "ST zap",
+                "mensaje": "x"
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "get": {
+        "operationId": "GET_api_tickets",
+        "tags": [
+          "tickets"
+        ],
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        },
+        "parameters": [],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/tickets/mis": {
+      "get": {
+        "operationId": "GET_api_tickets_mis",
+        "tags": [
+          "tickets"
+        ],
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        },
+        "parameters": [],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/tickets/{id}/cerrar": {
+      "put": {
+        "operationId": "PUT_api_tickets_id_cerrar",
+        "tags": [
+          "tickets"
+        ],
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "cbf7dd3d-8aa2-4b0d-a7ce-52bf9afc8a10"
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              },
+              "example": {}
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/tickets/{id}/mensajes": {
+      "get": {
+        "operationId": "GET_api_tickets_id_mensajes",
+        "tags": [
+          "tickets"
+        ],
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "cbf7dd3d-8aa2-4b0d-a7ce-52bf9afc8a10"
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "post": {
+        "operationId": "POST_api_tickets_id_mensajes",
+        "tags": [
+          "tickets"
+        ],
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "cbf7dd3d-8aa2-4b0d-a7ce-52bf9afc8a10"
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              },
+              "example": {
+                "mensaje": "ST zap"
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/areas": {
+      "get": {
+        "operationId": "GET_api_areas",
+        "tags": [
+          "areas"
+        ],
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        },
+        "parameters": [
+          {
+            "name": "activa",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "example": "true"
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "post": {
+        "operationId": "POST_api_areas",
+        "tags": [
+          "areas"
+        ],
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        },
+        "parameters": [],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              },
+              "example": {
+                "nombre": "ST zap",
+                "descripcion": "x"
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/areas/{id}": {
+      "put": {
+        "operationId": "PUT_api_areas_id_",
+        "tags": [
+          "areas"
+        ],
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "0046be13-8dc6-4015-bc13-370a01b4f928"
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              },
+              "example": {
+                "nombre": "ST zap"
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "delete": {
+        "operationId": "DELETE_api_areas_id_",
+        "tags": [
+          "areas"
+        ],
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "0046be13-8dc6-4015-bc13-370a01b4f928"
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/reservas/disponibilidad": {
+      "get": {
+        "operationId": "GET_api_reservas_disponibilidad",
+        "tags": [
+          "reservas"
+        ],
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        },
+        "parameters": [
+          {
+            "name": "area_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "example": "0046be13-8dc6-4015-bc13-370a01b4f928"
+          },
+          {
+            "name": "fecha",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "example": "2030-01-01"
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/reservas/mis-reservas": {
+      "get": {
+        "operationId": "GET_api_reservas_mis_reservas",
+        "tags": [
+          "reservas"
+        ],
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        },
+        "parameters": [],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/reservas": {
+      "post": {
+        "operationId": "POST_api_reservas",
+        "tags": [
+          "reservas"
+        ],
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        },
+        "parameters": [],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              },
+              "example": {
+                "area_id": "0046be13-8dc6-4015-bc13-370a01b4f928",
+                "fecha": "2030-04-01",
+                "hora_inicio": "10:00",
+                "hora_fin": "11:00"
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "get": {
+        "operationId": "GET_api_reservas",
+        "tags": [
+          "reservas"
+        ],
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        },
+        "parameters": [
+          {
+            "name": "area_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "example": "0046be13-8dc6-4015-bc13-370a01b4f928"
+          },
+          {
+            "name": "estado",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "example": "confirmada"
+          },
+          {
+            "name": "fecha_desde",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "example": "2020-01-01"
+          },
+          {
+            "name": "fecha_hasta",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "example": "2030-01-01"
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/reservas/{id}/preview-cancelacion": {
+      "get": {
+        "operationId": "GET_api_reservas_id_preview_cancelacion",
+        "tags": [
+          "reservas"
+        ],
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "5b1fab9b-d2fe-474c-8990-61f5fdda8974"
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/reservas/{id}/cancelar": {
+      "patch": {
+        "operationId": "PATCH_api_reservas_id_cancelar",
+        "tags": [
+          "reservas"
+        ],
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "5b1fab9b-d2fe-474c-8990-61f5fdda8974"
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              },
+              "example": {
+                "motivo": "zap"
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/reservas/{id}/aprobar": {
+      "patch": {
+        "operationId": "PATCH_api_reservas_id_aprobar",
+        "tags": [
+          "reservas"
+        ],
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "5b1fab9b-d2fe-474c-8990-61f5fdda8974"
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              },
+              "example": {}
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/reservas/{id}/rechazar": {
+      "patch": {
+        "operationId": "PATCH_api_reservas_id_rechazar",
+        "tags": [
+          "reservas"
+        ],
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "5b1fab9b-d2fe-474c-8990-61f5fdda8974"
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              },
+              "example": {
+                "motivo": "zap"
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/config-reservas": {
+      "get": {
+        "operationId": "GET_api_config_reservas",
+        "tags": [
+          "config-reservas"
+        ],
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        },
+        "parameters": [
+          {
+            "name": "sucursal_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "example": "bc94f428-2a9b-4d8c-8470-7f83b9cecb35"
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "put": {
+        "operationId": "PUT_api_config_reservas",
+        "tags": [
+          "config-reservas"
+        ],
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        },
+        "parameters": [],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              },
+              "example": {
+                "permite_cancelacion": true
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/invitaciones-qr/mis": {
+      "get": {
+        "operationId": "GET_api_invitaciones_qr_mis",
+        "tags": [
+          "invitaciones-qr"
+        ],
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        },
+        "parameters": [],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "post": {
+        "operationId": "POST_api_invitaciones_qr_mis",
+        "tags": [
+          "invitaciones-qr"
+        ],
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        },
+        "parameters": [],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              },
+              "example": {
+                "tipo": "individual",
+                "etiqueta": "ST zap",
+                "nombre_visitante": "x",
+                "numero_dpi": "1234567890123",
+                "fecha_inicio": "2030-01-01",
+                "usos_maximos": 1
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/invitaciones-qr/mis/{id}": {
+      "delete": {
+        "operationId": "DELETE_api_invitaciones_qr_mis_id_",
+        "tags": [
+          "invitaciones-qr"
+        ],
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "6e70baab-f6fa-4449-ab68-ca37557ccbd1"
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/invitaciones-qr/verificar/{id}": {
+      "get": {
+        "operationId": "GET_api_invitaciones_qr_verificar_id_",
+        "tags": [
+          "invitaciones-qr"
+        ],
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "6e70baab-f6fa-4449-ab68-ca37557ccbd1"
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/config-qr": {
+      "get": {
+        "operationId": "GET_api_config_qr",
+        "tags": [
+          "config-qr"
+        ],
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        },
+        "parameters": [
+          {
+            "name": "sucursal_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "example": "bc94f428-2a9b-4d8c-8470-7f83b9cecb35"
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "put": {
+        "operationId": "PUT_api_config_qr",
+        "tags": [
+          "config-qr"
+        ],
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        },
+        "parameters": [],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              },
+              "example": {
+                "max_intentos_fallidos": 5
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/licencias/activar": {
+      "post": {
+        "operationId": "POST_api_licencias_activar",
+        "tags": [
+          "licencias"
+        ],
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        },
+        "parameters": [],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              },
+              "example": {
+                "codigo": "SG-AAAA-BBBB-CCCC-DDDD",
+                "fingerprint": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+                "nombre_dispositivo": "zap"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/licencias/heartbeat": {
+      "post": {
+        "operationId": "POST_api_licencias_heartbeat",
+        "tags": [
+          "licencias"
+        ],
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        },
+        "parameters": [],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              },
+              "example": {
+                "fingerprint": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/licencias": {
+      "get": {
+        "operationId": "GET_api_licencias",
+        "tags": [
+          "licencias"
+        ],
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        },
+        "parameters": [],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "post": {
+        "operationId": "POST_api_licencias",
+        "tags": [
+          "licencias"
+        ],
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        },
+        "parameters": [],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              },
+              "example": {
+                "etiqueta": "ST zap"
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/licencias/{id}/revocar": {
+      "patch": {
+        "operationId": "PATCH_api_licencias_id_revocar",
+        "tags": [
+          "licencias"
+        ],
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "eed7a832-e555-485c-a9b9-30396b16717a"
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              },
+              "example": {}
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/sync/garita": {
+      "get": {
+        "operationId": "GET_api_sync_garita",
+        "tags": [
+          "sync"
+        ],
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        },
+        "parameters": [],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/invitaciones": {
+      "get": {
+        "operationId": "GET_api_invitaciones",
+        "tags": [
+          "invitaciones"
+        ],
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        },
+        "parameters": [],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "post": {
+        "operationId": "POST_api_invitaciones",
+        "tags": [
+          "invitaciones"
+        ],
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        },
+        "parameters": [],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              },
+              "example": {
+                "email": "st.zap.inv@sectest.local",
+                "rol_invitado": "admin_empresa",
+                "empresa_nombre": "ST zap"
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/invitaciones/{id}/revocar": {
+      "patch": {
+        "operationId": "PATCH_api_invitaciones_id_revocar",
+        "tags": [
+          "invitaciones"
+        ],
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "86d201a8-a563-43f4-88f6-13e60968dd70"
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              },
+              "example": {}
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/invitaciones/{id}/reenviar": {
+      "post": {
+        "operationId": "POST_api_invitaciones_id_reenviar",
+        "tags": [
+          "invitaciones"
+        ],
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "86d201a8-a563-43f4-88f6-13e60968dd70"
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              },
+              "example": {}
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/invitaciones/{token}": {
+      "get": {
+        "operationId": "GET_api_invitaciones_token_",
+        "tags": [
+          "invitaciones"
+        ],
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        },
+        "parameters": [
+          {
+            "name": "token",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+          }
+        ]
+      }
+    },
+    "/api/invitaciones/{token}/aceptar": {
+      "post": {
+        "operationId": "POST_api_invitaciones_token_aceptar",
+        "tags": [
+          "invitaciones"
+        ],
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        },
+        "parameters": [
+          {
+            "name": "token",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              },
+              "example": {
+                "nombre": "ST zap",
+                "password": "Zap12345a"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/dashboard": {
+      "get": {
+        "operationId": "GET_api_dashboard",
+        "tags": [
+          "dashboard"
+        ],
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        },
+        "parameters": [],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/audit-logs": {
+      "get": {
+        "operationId": "GET_api_audit_logs",
+        "tags": [
+          "audit-logs"
+        ],
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        },
+        "parameters": [
+          {
+            "name": "accion",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "example": "LOGIN"
+          },
+          {
+            "name": "usuario_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "example": "247eef6e-285f-4e9a-b5ba-382958655328"
+          },
+          {
+            "name": "desde",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "example": "2020-01-01"
+          },
+          {
+            "name": "hasta",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "example": "2030-01-01"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "example": "20"
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "example": "0"
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/admin/ejecutar-revision-mora": {
+      "post": {
+        "operationId": "POST_api_admin_ejecutar_revision_mora",
+        "tags": [
+          "admin"
+        ],
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        },
+        "parameters": [],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              },
+              "example": {}
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/admin/ejecutar-recordatorios-reservas": {
+      "post": {
+        "operationId": "POST_api_admin_ejecutar_recordatorios_reservas",
+        "tags": [
+          "admin"
+        ],
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        },
+        "parameters": [],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              },
+              "example": {}
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/admin/ejecutar-expiracion-invitaciones": {
+      "post": {
+        "operationId": "POST_api_admin_ejecutar_expiracion_invitaciones",
+        "tags": [
+          "admin"
+        ],
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        },
+        "parameters": [],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              },
+              "example": {}
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/status": {
+      "get": {
+        "operationId": "GET_api_status",
+        "tags": [
+          "status"
+        ],
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        },
+        "parameters": []
+      }
+    }
+  }
+}

@@ -165,12 +165,22 @@ cd SecureGate/securegate
 cp .env.example .env
 ```
 
-Editar `.env` con las claves de APIs externas:
+Editar `.env` (no se sube a git):
 
 ```env
-GOOGLE_CLOUD_API_KEY=tu_api_key_aqui
-JWT_SECRET=tu_jwt_secret_aqui
+# Mínimo 32 caracteres. Genera uno con:  openssl rand -hex 48
+JWT_SECRET=
+# Opcional (OCR de respaldo con Google Vision)
+GOOGLE_CLOUD_API_KEY=
 ```
+
+> **`JWT_SECRET` ya no tiene un valor por defecto.** El que estaba escrito en el
+> compose era público (vivía en el repositorio) y con él cualquiera fabricaba un
+> token de `owner`. Si no lo defines, el backend genera uno aleatorio en cada
+> arranque (las sesiones y las licencias de garita se invalidan al reiniciar), y
+> `scripts/deploy.sh` crea uno persistente en `.env` la primera vez. En
+> producción el backend **se niega a arrancar** si falta, es corto o es uno de
+> los valores públicos.
 
 ### 3. Levantar el entorno completo
 
@@ -181,6 +191,15 @@ docker compose up --build -d
 El mismo comando sirve en local y en cualquier VM nueva: no hay que editar el
 compose ni definir variables extra por servidor. La primera vez descarga las
 imagenes base y construye los contenedores; toma entre 3 y 5 minutos.
+
+### 3.1 Cuentas de demostración (sólo desarrollo)
+
+El compose de desarrollo define `SEED_DEMO=true`, así que al arrancar el backend
+crea una empresa demo y una cuenta por rol (`admin@securegate.com`,
+`empresa@…`, `sucursal@…`, `agente1@…`, `r1@…`; las contraseñas están en
+`database/seed-dev.sql`). **Son públicas: sólo existen en desarrollo.** En
+producción (`NODE_ENV=production`) el backend no las siembra y **desactiva
+automáticamente** las que sigan con la contraseña original.
 
 ### 4. Verificar que todo funciona
 
@@ -236,12 +255,35 @@ reverse proxy con HTTPS. Requisitos previos:
 
 ```bash
 export POSTGRES_PASSWORD=...          # password de la BD
-export JWT_SECRET=...                 # secreto de firma de tokens
+export JWT_SECRET=$(openssl rand -hex 48)   # >= 32 caracteres, no público
 export PUBLIC_URL=https://midominio.com
 export ALLOWED_ORIGINS=https://midominio.com
 
 docker compose -f docker-compose.prod.yml up --build -d
 ```
+
+5. **Crear el primer owner** (en producción no hay cuentas demo):
+
+```bash
+OWNER_EMAIL=ana@empresa.com OWNER_PASSWORD='una-clave-larga-1' OWNER_NOMBRE='Ana Pérez' \
+  docker compose -f docker-compose.prod.yml run --rm \
+  -e OWNER_EMAIL -e OWNER_PASSWORD -e OWNER_NOMBRE backend node dist/scripts/crear-owner.js
+```
+
+Lo que cambia respecto a desarrollo: el backend corre compilado y como usuario
+sin privilegios, el frontend son archivos estáticos (no el servidor de Vite),
+`TRUST_PROXY=1` hace que el rate limit y la auditoría vean la IP real del
+cliente, y el **pago con tarjeta simulado responde 501** (sólo se habilita con
+`PAGOS_TARJETA_SIMULADA=true`, que únicamente define el compose de desarrollo:
+esa pasarela es un mock que liquida deudas). Para desplegar con este compose:
+`COMPOSE_FILE=docker-compose.prod.yml ./scripts/deploy.sh`.
+
+**Backups:** en producción la base vive en Cloud SQL; `scripts/backup-postgres.sh`
+sólo aplica al Postgres en contenedor (perfil `local-db`). Activa los backups
+automáticos y la recuperación a un punto en el tiempo de la instancia
+(`gcloud sql instances patch securegate-pg --backup-start-time=03:00
+--enable-point-in-time-recovery`) y **prueba una restauración** antes de
+necesitarla.
 
 > No levantes `docker-compose.prod.yml` en local ni en una VM sin dominio: si
 > los certificados no existen en `/etc/letsencrypt`, nginx entra en

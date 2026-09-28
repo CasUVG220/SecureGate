@@ -1,0 +1,296 @@
+{
+  "id": "09-ratelimit",
+  "titulo": "Rate limit real: /licencias/activar, /auth/login y demás límites de producción",
+  "fecha": "2026-09-29T23:15:10.621Z",
+  "base": "http://localhost:3000",
+  "items": [
+    {
+      "id": "RL-activar-limite",
+      "titulo": "13 activaciones con códigos inválidos desde una IP",
+      "esperado": "404 ×10 y 429 desde el intento 11",
+      "request": {
+        "method": "POST",
+        "path": "/api/licencias/activar",
+        "actor": "anónimo (13 intentos)"
+      },
+      "real": {
+        "status": 429,
+        "body": "404×10, 429×3; primer 429 en el intento 11"
+      },
+      "resultado": "OK",
+      "severidad": "alta"
+    },
+    {
+      "id": "RL-activar-cabeceras",
+      "titulo": "El 429 informa el límite y el tiempo de espera",
+      "esperado": "ratelimit-limit=10 y retry-after / ratelimit-reset",
+      "request": {
+        "method": "POST",
+        "path": "/api/licencias/activar",
+        "actor": "anónimo"
+      },
+      "real": {
+        "status": 429,
+        "body": "ratelimit-limit=10; ratelimit-remaining=0; retry-after=900; ratelimit-reset=900"
+      },
+      "resultado": "OK",
+      "severidad": "baja"
+    },
+    {
+      "id": "RL-activar-xff",
+      "titulo": "Rotar X-Forwarded-For en cada intento no reinicia el contador",
+      "esperado": "429 en los 5",
+      "request": {
+        "method": "POST",
+        "path": "/api/licencias/activar",
+        "actor": "anónimo + XFF aleatorio"
+      },
+      "real": {
+        "status": 429,
+        "body": "429×5"
+      },
+      "resultado": "OK",
+      "severidad": "alta"
+    },
+    {
+      "id": "RL-activar-valido-bloqueado",
+      "titulo": "Un código válido tampoco pasa cuando se agotó el cupo de la IP",
+      "esperado": "429 (informativo: el límite cuenta también los intentos correctos)",
+      "request": {
+        "method": "POST",
+        "path": "/api/licencias/activar",
+        "actor": "anónimo, código válido"
+      },
+      "real": {
+        "status": 429,
+        "body": "{\"error\":\"Demasiados intentos de activación\"}"
+      },
+      "resultado": "INFO",
+      "nota": "Una garita detrás del mismo NAT que un atacante no puede activarse durante 15 min. Aceptable frente a la fuerza bruta, a costa de disponibilidad."
+    },
+    {
+      "id": "RL-login-cuenta",
+      "titulo": "12 contraseñas erróneas contra UNA cuenta (desde una IP)",
+      "esperado": "401 ×10 y 429 desde el 11 (límite por cuenta)",
+      "request": {
+        "method": "POST",
+        "path": "/api/auth/login",
+        "actor": "anónimo"
+      },
+      "real": {
+        "status": 429,
+        "body": "401×10, 429×2; primer 429 en el intento 11; mensaje: {\"error\":\"Demasiados intentos para esta cuenta; espera 15 minutos\"}"
+      },
+      "resultado": "OK",
+      "severidad": "alta"
+    },
+    {
+      "id": "RL-login-cuenta-bloquea-titular",
+      "titulo": "Con la cuenta bloqueada, el titular con la contraseña CORRECTA también recibe 429",
+      "esperado": "informativo",
+      "request": {
+        "method": "POST",
+        "path": "/api/auth/login",
+        "actor": "titular legítimo"
+      },
+      "real": {
+        "status": 429,
+        "body": "{\"error\":\"Demasiados intentos para esta cuenta; espera 15 minutos\"}"
+      },
+      "resultado": "INFO",
+      "nota": "Cualquiera que conozca el correo de una cuenta (incluida la del owner) puede dejarla sin acceso 15 min con 10 peticiones. Trade-off documentado en auth.routes.ts; conviene añadir aviso al titular y no bloquear a quien llega con un dispositivo/IP ya conocido."
+    },
+    {
+      "id": "RL-login-mayusculas",
+      "titulo": "Cambiar mayúsculas del correo no evade el límite por cuenta",
+      "esperado": "429",
+      "request": {
+        "method": "POST",
+        "path": "/api/auth/login",
+        "actor": "anónimo (email en MAYÚSCULAS)"
+      },
+      "real": {
+        "status": 429,
+        "body": "{\"error\":\"Demasiados intentos para esta cuenta; espera 15 minutos\"}"
+      },
+      "resultado": "OK",
+      "severidad": "alta"
+    },
+    {
+      "id": "RL-login-espacios",
+      "titulo": "Espacios alrededor del correo no evaden el límite por cuenta",
+      "esperado": "429 (o 4xx por validación)",
+      "request": {
+        "method": "POST",
+        "path": "/api/auth/login",
+        "actor": "anónimo (email con espacios)"
+      },
+      "real": {
+        "status": 422,
+        "body": "{\"errors\":[{\"type\":\"field\",\"value\":\" st.res.a1@sectest.local \",\"msg\":\"Invalid va"
+      },
+      "resultado": "OK",
+      "severidad": "alta"
+    },
+    {
+      "id": "RL-login-ip",
+      "titulo": "22 intentos fallidos contra 22 cuentas distintas (password spraying) desde una IP",
+      "esperado": "401 ×20 y 429 desde el 21",
+      "request": {
+        "method": "POST",
+        "path": "/api/auth/login",
+        "actor": "anónimo"
+      },
+      "real": {
+        "status": 429,
+        "body": "401×20, 429×2; primer 429 en el intento 21; mensaje: {\"error\":\"Demasiados intentos de login\"}"
+      },
+      "resultado": "OK",
+      "severidad": "alta"
+    },
+    {
+      "id": "RL-login-xff",
+      "titulo": "Rotar X-Forwarded-For no evade el límite por IP de login",
+      "esperado": "429 ×3",
+      "request": {
+        "method": "POST",
+        "path": "/api/auth/login",
+        "actor": "anónimo + XFF aleatorio"
+      },
+      "real": {
+        "status": 429,
+        "body": "429×3"
+      },
+      "resultado": "OK",
+      "severidad": "alta"
+    },
+    {
+      "id": "RL-login-ip-bloquea-legitimos",
+      "titulo": "Con el cupo de IP agotado, un usuario legítimo de la misma IP con la contraseña correcta también recibe 429",
+      "esperado": "informativo",
+      "request": {
+        "method": "POST",
+        "path": "/api/auth/login",
+        "actor": "residente B1 (misma IP)"
+      },
+      "real": {
+        "status": 429,
+        "body": "{\"error\":\"Demasiados intentos de login\"}"
+      },
+      "resultado": "INFO",
+      "nota": "Varias personas detrás del mismo NAT (una administración) comparten los 20 intentos fallidos de la IP."
+    },
+    {
+      "id": "RL-login-exitosos-no-cuentan",
+      "titulo": "25 inicios de sesión correctos seguidos",
+      "esperado": "200 ×25 (skipSuccessfulRequests)",
+      "request": {
+        "method": "POST",
+        "path": "/api/auth/login",
+        "actor": "residente A2"
+      },
+      "real": {
+        "status": 200,
+        "body": "200×25"
+      },
+      "resultado": "OK",
+      "severidad": "media"
+    },
+    {
+      "id": "RL-heartbeat",
+      "titulo": "62 heartbeats con token basura",
+      "esperado": "403 ×60 y 429 desde el 61",
+      "request": {
+        "method": "POST",
+        "path": "/api/licencias/heartbeat",
+        "actor": "anónimo"
+      },
+      "real": {
+        "status": 429,
+        "body": "403×60, 429×2; primer 429 en el intento 61"
+      },
+      "resultado": "OK",
+      "severidad": "media"
+    },
+    {
+      "id": "RL-refresh",
+      "titulo": "122 refresh sin cookie",
+      "esperado": "401 ×120 y 429 desde el 121",
+      "request": {
+        "method": "POST",
+        "path": "/api/auth/refresh",
+        "actor": "anónimo"
+      },
+      "real": {
+        "status": 429,
+        "body": "401×120, 429×2; primer 429 en el intento 121"
+      },
+      "resultado": "OK",
+      "severidad": "baja"
+    },
+    {
+      "id": "RL-ocr",
+      "titulo": "32 llamadas al proxy OCR (Google Vision) con un agente",
+      "esperado": "429 desde la 31",
+      "request": {
+        "method": "POST",
+        "path": "/api/ocr/dpi",
+        "actor": "agenteA1"
+      },
+      "real": {
+        "status": 429,
+        "body": "400×30, 429×2; primer 429 en el intento 31"
+      },
+      "resultado": "OK",
+      "severidad": "media"
+    },
+    {
+      "id": "RL-general",
+      "titulo": "Ráfaga de peticiones a /api/status desde una IP",
+      "esperado": "200 ×1000 y 429 desde la 1001",
+      "request": {
+        "method": "GET",
+        "path": "/api/status",
+        "actor": "anónimo (~1000 peticiones)"
+      },
+      "real": {
+        "status": 429,
+        "body": "200×1000, 429×2; primer 429 en la petición 1001"
+      },
+      "resultado": "OK",
+      "severidad": "media"
+    },
+    {
+      "id": "RL-general-health-exento",
+      "titulo": "/health sigue respondiendo con el cupo agotado (lo consulta Docker)",
+      "esperado": "200",
+      "request": {
+        "method": "GET",
+        "path": "/health",
+        "actor": "anónimo"
+      },
+      "real": {
+        "status": 200,
+        "body": "{\"status\":\"ok\",\"service\":\"SecureGate Backend\",\"version\":\"1.0.0\"}"
+      },
+      "resultado": "OK",
+      "severidad": "baja"
+    },
+    {
+      "id": "RL-general-tokens-no-evaden",
+      "titulo": "El límite general es por IP: un token válido no lo evita",
+      "esperado": "429",
+      "request": {
+        "method": "GET",
+        "path": "/api/residentes/me",
+        "actor": "resA1 con token válido"
+      },
+      "real": {
+        "status": 429,
+        "body": "{\"error\":\"Demasiadas solicitudes, intenta mas tarde\"}"
+      },
+      "resultado": "OK",
+      "severidad": "baja"
+    }
+  ]
+}

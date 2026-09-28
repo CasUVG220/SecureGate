@@ -1,0 +1,511 @@
+{
+	"@programName": "ZAP",
+	"@version": "2.17.0",
+	"@generated": "Tue, 29 Sept 2026 23:40:47",
+	"created": "2026-09-29T23:40:47.266942637Z",
+	"insights":[
+		{
+			"level": "Info",
+			"reason": "Informational",
+			"site": "http://host.docker.internal:3000",
+			"key": "insight.code.2xx",
+			"description": "Percentage of responses with status code 2xx",
+			"statistic": "50"
+		},
+		{
+			"level": "Info",
+			"reason": "Informational",
+			"site": "http://host.docker.internal:3000",
+			"key": "insight.code.4xx",
+			"description": "Percentage of responses with status code 4xx",
+			"statistic": "48"
+		},
+		{
+			"level": "Info",
+			"reason": "Informational",
+			"site": "http://host.docker.internal:3000",
+			"key": "insight.code.5xx",
+			"description": "Percentage of responses with status code 5xx",
+			"statistic": "1"
+		},
+		{
+			"level": "Info",
+			"reason": "Informational",
+			"site": "http://host.docker.internal:3000",
+			"key": "insight.endpoint.ctype.application/json",
+			"description": "Percentage of endpoints with content type application/json",
+			"statistic": "100"
+		},
+		{
+			"level": "Info",
+			"reason": "Informational",
+			"site": "http://host.docker.internal:3000",
+			"key": "insight.endpoint.method.DELETE",
+			"description": "Percentage of endpoints with method DELETE",
+			"statistic": "9"
+		},
+		{
+			"level": "Info",
+			"reason": "Informational",
+			"site": "http://host.docker.internal:3000",
+			"key": "insight.endpoint.method.GET",
+			"description": "Percentage of endpoints with method GET",
+			"statistic": "40"
+		},
+		{
+			"level": "Info",
+			"reason": "Informational",
+			"site": "http://host.docker.internal:3000",
+			"key": "insight.endpoint.method.PATCH",
+			"description": "Percentage of endpoints with method PATCH",
+			"statistic": "7"
+		},
+		{
+			"level": "Info",
+			"reason": "Informational",
+			"site": "http://host.docker.internal:3000",
+			"key": "insight.endpoint.method.POST",
+			"description": "Percentage of endpoints with method POST",
+			"statistic": "31"
+		},
+		{
+			"level": "Info",
+			"reason": "Informational",
+			"site": "http://host.docker.internal:3000",
+			"key": "insight.endpoint.method.PUT",
+			"description": "Percentage of endpoints with method PUT",
+			"statistic": "12"
+		},
+		{
+			"level": "Info",
+			"reason": "Informational",
+			"site": "http://host.docker.internal:3000",
+			"key": "insight.endpoint.total",
+			"description": "Count of total endpoints",
+			"statistic": "125"
+		}
+	],
+	"site":[ 
+		{
+			"@name": "http://host.docker.internal:3000",
+			"@host": "host.docker.internal",
+			"@port": "3000",
+			"@ssl": "false",
+			"alerts": [ 
+				{
+					"pluginid": "6",
+					"alertRef": "6-5",
+					"alert": "Path Traversal",
+					"name": "Path Traversal",
+					"riskcode": "3",
+					"confidence": "1",
+					"riskdesc": "High (Low)",
+					"desc": "<p>The Path Traversal attack technique allows an attacker access to files, directories, and commands that potentially reside outside the web document root directory. An attacker may manipulate a URL in such a way that the web site will execute or reveal the contents of arbitrary files anywhere on the web server. Any device that exposes an HTTP-based interface is potentially vulnerable to Path Traversal.</p><p></p><p>Most web sites restrict user access to a specific portion of the file-system, typically called the \"web document root\" or \"CGI root\" directory. These directories contain the files intended for user access and the executable necessary to drive web application functionality. To access files or execute commands anywhere on the file-system, Path Traversal attacks will utilize the ability of special-characters sequences.</p><p></p><p>The most basic Path Traversal attack uses the \"../\" special-character sequence to alter the resource location requested in the URL. Although most popular web servers will prevent this technique from escaping the web document root, alternate encodings of the \"../\" sequence may help bypass the security filters. These method variations include valid and invalid Unicode-encoding (\"..%u2216\" or \"..%c0%af\") of the forward slash character, backslash characters (\"..\\\") on Windows-based servers, URL encoded characters \"%2e%2e%2f\"), and double URL encoding (\"..%255c\") of the backslash character.</p><p></p><p>Even if the web server properly restricts Path Traversal attempts in the URL path, a web application itself may still be vulnerable due to improper handling of user-supplied input. This is a common problem of web applications that use template mechanisms or load static text from files. In variations of the attack, the original URL parameter value is substituted with the file name of one of the web application's dynamic scripts. Consequently, the results can reveal source code because the file is interpreted as text instead of an executable script. These techniques often employ additional special characters such as the dot (\".\") to reveal the listing of the current working directory, or \"%00\" NULL characters in order to bypass rudimentary file extension checks.</p>",
+					"instances":[ 
+						{
+							"id": "4",
+							"uri": "http://host.docker.internal:3000/api/invitaciones-qr/mis",
+							"nodeName": "http:\/\/host.docker.internal:3000\/api\/invitaciones-qr\/mis ()({tipo,etiqueta,nombre_visitante,numero_dpi,fecha_inicio,usos_maximos})",
+							"method": "POST",
+							"param": "numero_dpi",
+							"attack": "mis",
+							"evidence": "",
+							"otherinfo": ""
+						},
+						{
+							"id": "5",
+							"uri": "http://host.docker.internal:3000/api/preautorizaciones/mis",
+							"nodeName": "http:\/\/host.docker.internal:3000\/api\/preautorizaciones\/mis ()({nombre_visitante,numero_dpi,placa,fecha_inicio})",
+							"method": "POST",
+							"param": "numero_dpi",
+							"attack": "mis",
+							"evidence": "",
+							"otherinfo": ""
+						},
+						{
+							"id": "6",
+							"uri": "http://host.docker.internal:3000/api/preautorizaciones/mis",
+							"nodeName": "http:\/\/host.docker.internal:3000\/api\/preautorizaciones\/mis ()({nombre_visitante,numero_dpi,placa,fecha_inicio})",
+							"method": "POST",
+							"param": "placa",
+							"attack": "mis",
+							"evidence": "",
+							"otherinfo": ""
+						}
+					],
+					"count": "3",
+					"systemic": false,
+					"solution": "<p>Assume all input is malicious. Use an \"accept known good\" input validation strategy, i.e., use an allow list of acceptable inputs that strictly conform to specifications. Reject any input that does not strictly conform to specifications, or transform it into something that does. Do not rely exclusively on looking for malicious or malformed inputs (i.e., do not rely on a deny list). However, deny lists can be useful for detecting potential attacks or determining which inputs are so malformed that they should be rejected outright.</p><p></p><p>When performing input validation, consider all potentially relevant properties, including length, type of input, the full range of acceptable values, missing or extra inputs, syntax, consistency across related fields, and conformance to business rules. As an example of business rule logic, \"boat\" may be syntactically valid because it only contains alphanumeric characters, but it is not valid if you are expecting colors such as \"red\" or \"blue.\"</p><p></p><p>For filenames, use stringent allow lists that limit the character set to be used. If feasible, only allow a single \".\" character in the filename to avoid weaknesses, and exclude directory separators such as \"/\". Use an allow list of allowable file extensions.</p><p></p><p>Warning: if you attempt to cleanse your data, then do so that the end result is not in the form that can be dangerous. A sanitizing mechanism can remove characters such as '.' and ';' which may be required for some exploits. An attacker can try to fool the sanitizing mechanism into \"cleaning\" data into a dangerous form. Suppose the attacker injects a '.' inside a filename (e.g. \"sensi.tiveFile\") and the sanitizing mechanism removes the character resulting in the valid filename, \"sensitiveFile\". If the input data are now assumed to be safe, then the file may be compromised. </p><p></p><p>Inputs should be decoded and canonicalized to the application's current internal representation before being validated. Make sure that your application does not decode the same input twice. Such errors could be used to bypass allow list schemes by introducing dangerous inputs after they have been checked.</p><p></p><p>Use a built-in path canonicalization function (such as realpath() in C) that produces the canonical version of the pathname, which effectively removes \"..\" sequences and symbolic links.</p><p></p><p>Run your code using the lowest privileges that are required to accomplish the necessary tasks. If possible, create isolated accounts with limited privileges that are only used for a single task. That way, a successful attack will not immediately give the attacker access to the rest of the software or its environment. For example, database applications rarely need to run as the database administrator, especially in day-to-day operations.</p><p></p><p>When the set of acceptable objects, such as filenames or URLs, is limited or known, create a mapping from a set of fixed input values (such as numeric IDs) to the actual filenames or URLs, and reject all other inputs.</p><p></p><p>Run your code in a \"jail\" or similar sandbox environment that enforces strict boundaries between the process and the operating system. This may effectively restrict which files can be accessed in a particular directory or which commands can be executed by your software.</p><p></p><p>OS-level examples include the Unix chroot jail, AppArmor, and SELinux. In general, managed code may provide some protection. For example, java.io.FilePermission in the Java SecurityManager allows you to specify restrictions on file operations.</p><p></p><p>This may not be a feasible solution, and it only limits the impact to the operating system; the rest of your application may still be subject to compromise.</p><p></p>",
+					"otherinfo": "",
+					"reference": "<p>https://owasp.org/www-community/attacks/Path_Traversal</p><p>https://cwe.mitre.org/data/definitions/22.html</p>",
+					"cweid": "22",
+					"wascid": "33",
+					"sourceid": "214"
+				},
+				{
+					"pluginid": "30002",
+					"alertRef": "30002",
+					"alert": "Format String Error",
+					"name": "Format String Error",
+					"riskcode": "2",
+					"confidence": "2",
+					"riskdesc": "Medium (Medium)",
+					"desc": "<p>A Format String error occurs when the submitted data of an input string is evaluated as a command by the application.</p>",
+					"instances":[ 
+						{
+							"id": "20",
+							"uri": "http://host.docker.internal:3000/api/invitaciones-qr/mis",
+							"nodeName": "http:\/\/host.docker.internal:3000\/api\/invitaciones-qr\/mis ()({tipo,etiqueta,nombre_visitante,numero_dpi,fecha_inicio,usos_maximos})",
+							"method": "POST",
+							"param": "etiqueta",
+							"attack": "ZAP %1!s%2!s%3!s%4!s%5!s%6!s%7!s%8!s%9!s%10!s%11!s%12!s%13!s%14!s%15!s%16!s%17!s%18!s%19!s%20!s%21!n%22!n%23!n%24!n%25!n%26!n%27!n%28!n%29!n%30!n%31!n%32!n%33!n%34!n%35!n%36!n%37!n%38!n%39!n%40!n\n",
+							"evidence": "",
+							"otherinfo": "Potential Format String Error. The script closed the connection on a Microsoft format string error."
+						},
+						{
+							"id": "21",
+							"uri": "http://host.docker.internal:3000/api/invitaciones-qr/mis",
+							"nodeName": "http:\/\/host.docker.internal:3000\/api\/invitaciones-qr\/mis ()({tipo,etiqueta,nombre_visitante,numero_dpi,fecha_inicio,usos_maximos})",
+							"method": "POST",
+							"param": "nombre_visitante",
+							"attack": "ZAP %1!s%2!s%3!s%4!s%5!s%6!s%7!s%8!s%9!s%10!s%11!s%12!s%13!s%14!s%15!s%16!s%17!s%18!s%19!s%20!s%21!n%22!n%23!n%24!n%25!n%26!n%27!n%28!n%29!n%30!n%31!n%32!n%33!n%34!n%35!n%36!n%37!n%38!n%39!n%40!n\n",
+							"evidence": "",
+							"otherinfo": "Potential Format String Error. The script closed the connection on a Microsoft format string error."
+						},
+						{
+							"id": "22",
+							"uri": "http://host.docker.internal:3000/api/invitaciones-qr/mis",
+							"nodeName": "http:\/\/host.docker.internal:3000\/api\/invitaciones-qr\/mis ()({tipo,etiqueta,nombre_visitante,numero_dpi,fecha_inicio,usos_maximos})",
+							"method": "POST",
+							"param": "numero_dpi",
+							"attack": "ZAP%n%s%n%s%n%s%n%s%n%s%n%s%n%s%n%s%n%s%n%s%n%s%n%s%n%s%n%s%n%s%n%s%n%s%n%s%n%s%n%s\n",
+							"evidence": "",
+							"otherinfo": "Potential Format String Error. The script closed the connection on a /%s."
+						},
+						{
+							"id": "23",
+							"uri": "http://host.docker.internal:3000/api/preautorizaciones/mis",
+							"nodeName": "http:\/\/host.docker.internal:3000\/api\/preautorizaciones\/mis ()({nombre_visitante,numero_dpi,placa,fecha_inicio})",
+							"method": "POST",
+							"param": "nombre_visitante",
+							"attack": "ZAP %1!s%2!s%3!s%4!s%5!s%6!s%7!s%8!s%9!s%10!s%11!s%12!s%13!s%14!s%15!s%16!s%17!s%18!s%19!s%20!s%21!n%22!n%23!n%24!n%25!n%26!n%27!n%28!n%29!n%30!n%31!n%32!n%33!n%34!n%35!n%36!n%37!n%38!n%39!n%40!n\n",
+							"evidence": "",
+							"otherinfo": "Potential Format String Error. The script closed the connection on a Microsoft format string error."
+						},
+						{
+							"id": "24",
+							"uri": "http://host.docker.internal:3000/api/preautorizaciones/mis",
+							"nodeName": "http:\/\/host.docker.internal:3000\/api\/preautorizaciones\/mis ()({nombre_visitante,numero_dpi,placa,fecha_inicio})",
+							"method": "POST",
+							"param": "numero_dpi",
+							"attack": "ZAP%n%s%n%s%n%s%n%s%n%s%n%s%n%s%n%s%n%s%n%s%n%s%n%s%n%s%n%s%n%s%n%s%n%s%n%s%n%s%n%s\n",
+							"evidence": "",
+							"otherinfo": "Potential Format String Error. The script closed the connection on a /%s."
+						},
+						{
+							"id": "25",
+							"uri": "http://host.docker.internal:3000/api/preautorizaciones/mis",
+							"nodeName": "http:\/\/host.docker.internal:3000\/api\/preautorizaciones\/mis ()({nombre_visitante,numero_dpi,placa,fecha_inicio})",
+							"method": "POST",
+							"param": "placa",
+							"attack": "ZAP%n%s%n%s%n%s%n%s%n%s%n%s%n%s%n%s%n%s%n%s%n%s%n%s%n%s%n%s%n%s%n%s%n%s%n%s%n%s%n%s\n",
+							"evidence": "",
+							"otherinfo": "Potential Format String Error. The script closed the connection on a /%s."
+						}
+					],
+					"count": "6",
+					"systemic": false,
+					"solution": "<p>Rewrite the background program using proper deletion of bad character strings. This will require a recompile of the background executable.</p>",
+					"otherinfo": "<p>Potential Format String Error. The script closed the connection on a Microsoft format string error.</p>",
+					"reference": "<p>https://owasp.org/www-community/attacks/Format_string_attack</p>",
+					"cweid": "134",
+					"wascid": "6",
+					"sourceid": "243"
+				},
+				{
+					"pluginid": "40014",
+					"alertRef": "40014-2",
+					"alert": "Cross Site Scripting Weakness (Persistent in JSON Response)",
+					"name": "Cross Site Scripting Weakness (Persistent in JSON Response)",
+					"riskcode": "1",
+					"confidence": "1",
+					"riskdesc": "Low (Low)",
+					"desc": "<p>A XSS attack was found in a JSON response, this might leave content consumers vulnerable to attack if they don't appropriately handle the data (response).</p>",
+					"instances":[ 
+						{
+							"id": "9",
+							"uri": "http://host.docker.internal:3000/api/invitaciones-qr/mis",
+							"nodeName": "http:\/\/host.docker.internal:3000\/api\/invitaciones-qr\/mis",
+							"method": "GET",
+							"param": "etiqueta",
+							"attack": "<script>alert(1);</script>",
+							"evidence": "",
+							"otherinfo": "Raised with LOW confidence as the Content-Type is not HTML."
+						},
+						{
+							"id": "11",
+							"uri": "http://host.docker.internal:3000/api/invitaciones-qr/mis",
+							"nodeName": "http:\/\/host.docker.internal:3000\/api\/invitaciones-qr\/mis",
+							"method": "GET",
+							"param": "nombre_visitante",
+							"attack": "<script>alert(1);</script>",
+							"evidence": "",
+							"otherinfo": "Raised with LOW confidence as the Content-Type is not HTML."
+						},
+						{
+							"id": "13",
+							"uri": "http://host.docker.internal:3000/api/invitaciones-qr/mis",
+							"nodeName": "http:\/\/host.docker.internal:3000\/api\/invitaciones-qr\/mis",
+							"method": "GET",
+							"param": "numero_dpi",
+							"attack": "<script>alert(1);</script>",
+							"evidence": "",
+							"otherinfo": "Raised with LOW confidence as the Content-Type is not HTML."
+						},
+						{
+							"id": "10",
+							"uri": "http://host.docker.internal:3000/api/pagos/mis",
+							"nodeName": "http:\/\/host.docker.internal:3000\/api\/pagos\/mis",
+							"method": "GET",
+							"param": "banco",
+							"attack": "<script>alert(1);</script>",
+							"evidence": "",
+							"otherinfo": "Raised with LOW confidence as the Content-Type is not HTML."
+						},
+						{
+							"id": "12",
+							"uri": "http://host.docker.internal:3000/api/pagos/mis",
+							"nodeName": "http:\/\/host.docker.internal:3000\/api\/pagos\/mis",
+							"method": "GET",
+							"param": "comprobante",
+							"attack": "<script>alert(1);</script>",
+							"evidence": "",
+							"otherinfo": "Raised with LOW confidence as the Content-Type is not HTML."
+						},
+						{
+							"id": "7",
+							"uri": "http://host.docker.internal:3000/api/pagos/mis",
+							"nodeName": "http:\/\/host.docker.internal:3000\/api\/pagos\/mis",
+							"method": "GET",
+							"param": "referencia",
+							"attack": "<script>alert(1);</script>",
+							"evidence": "",
+							"otherinfo": "Raised with LOW confidence as the Content-Type is not HTML."
+						},
+						{
+							"id": "8",
+							"uri": "http://host.docker.internal:3000/api/pagos/mis",
+							"nodeName": "http:\/\/host.docker.internal:3000\/api\/pagos\/mis",
+							"method": "GET",
+							"param": "titular",
+							"attack": "<script>alert(1);</script>",
+							"evidence": "",
+							"otherinfo": "Raised with LOW confidence as the Content-Type is not HTML."
+						},
+						{
+							"id": "14",
+							"uri": "http://host.docker.internal:3000/api/preautorizaciones/mis",
+							"nodeName": "http:\/\/host.docker.internal:3000\/api\/preautorizaciones\/mis",
+							"method": "GET",
+							"param": "nombre_visitante",
+							"attack": "<script>alert(1);</script>",
+							"evidence": "",
+							"otherinfo": "Raised with LOW confidence as the Content-Type is not HTML."
+						},
+						{
+							"id": "16",
+							"uri": "http://host.docker.internal:3000/api/preautorizaciones/mis",
+							"nodeName": "http:\/\/host.docker.internal:3000\/api\/preautorizaciones\/mis",
+							"method": "GET",
+							"param": "numero_dpi",
+							"attack": "<script>alert(1);</script>",
+							"evidence": "",
+							"otherinfo": "Raised with LOW confidence as the Content-Type is not HTML."
+						},
+						{
+							"id": "18",
+							"uri": "http://host.docker.internal:3000/api/preautorizaciones/mis",
+							"nodeName": "http:\/\/host.docker.internal:3000\/api\/preautorizaciones\/mis",
+							"method": "GET",
+							"param": "placa",
+							"attack": "<script>alert(1);</script>",
+							"evidence": "",
+							"otherinfo": "Raised with LOW confidence as the Content-Type is not HTML."
+						},
+						{
+							"id": "17",
+							"uri": "http://host.docker.internal:3000/api/tickets/cbf7dd3d-8aa2-4b0d-a7ce-52bf9afc8a10/mensajes",
+							"nodeName": "http:\/\/host.docker.internal:3000\/api\/tickets\/cbf7dd3d-8aa2-4b0d-a7ce-52bf9afc8a10\/mensajes",
+							"method": "GET",
+							"param": "mensaje",
+							"attack": "<script>alert(1);</script>",
+							"evidence": "",
+							"otherinfo": "Raised with LOW confidence as the Content-Type is not HTML."
+						},
+						{
+							"id": "19",
+							"uri": "http://host.docker.internal:3000/api/tickets/mis",
+							"nodeName": "http:\/\/host.docker.internal:3000\/api\/tickets\/mis",
+							"method": "GET",
+							"param": "mensaje",
+							"attack": "<script>alert(1);</script>",
+							"evidence": "",
+							"otherinfo": "Raised with LOW confidence as the Content-Type is not HTML."
+						},
+						{
+							"id": "15",
+							"uri": "http://host.docker.internal:3000/api/tickets/mis",
+							"nodeName": "http:\/\/host.docker.internal:3000\/api\/tickets\/mis",
+							"method": "GET",
+							"param": "titulo",
+							"attack": "<script>alert(1);</script>",
+							"evidence": "",
+							"otherinfo": "Raised with LOW confidence as the Content-Type is not HTML."
+						}
+					],
+					"count": "13",
+					"systemic": false,
+					"solution": "<p>Phase: Architecture and Design</p><p>Use a vetted library or framework that does not allow this weakness to occur or provides constructs that make this weakness easier to avoid.</p><p>Examples of libraries and frameworks that make it easier to generate properly encoded output include Microsoft's Anti-XSS library, the OWASP ESAPI Encoding module, and Apache Wicket.</p><p></p><p>Phases: Implementation; Architecture and Design</p><p>Understand the context in which your data will be used and the encoding that will be expected. This is especially important when transmitting data between different components, or when generating outputs that can contain multiple encodings at the same time, such as web pages or multi-part mail messages. Study all expected communication protocols and data representations to determine the required encoding strategies.</p><p>For any data that will be output to another web page, especially any data that was received from external inputs, use the appropriate encoding on all non-alphanumeric characters.</p><p>Consult the XSS Prevention Cheat Sheet for more details on the types of encoding and escaping that are needed.</p><p></p><p>Phase: Architecture and Design</p><p>For any security checks that are performed on the client side, ensure that these checks are duplicated on the server side, in order to avoid CWE-602. Attackers can bypass the client-side checks by modifying values after the checks have been performed, or by changing the client to remove the client-side checks entirely. Then, these modified values would be submitted to the server.</p><p></p><p>If available, use structured mechanisms that automatically enforce the separation between data and code. These mechanisms may be able to provide the relevant quoting, encoding, and validation automatically, instead of relying on the developer to provide this capability at every point where output is generated.</p><p></p><p>Phase: Implementation</p><p>For every web page that is generated, use and specify a character encoding such as ISO-8859-1 or UTF-8. When an encoding is not specified, the web browser may choose a different encoding by guessing which encoding is actually being used by the web page. This can cause the web browser to treat certain sequences as special, opening up the client to subtle XSS attacks. See CWE-116 for more mitigations related to encoding/escaping.</p><p></p><p>To help mitigate XSS attacks against the user's session cookie, set the session cookie to be HttpOnly. In browsers that support the HttpOnly feature (such as more recent versions of Internet Explorer and Firefox), this attribute can prevent the user's session cookie from being accessible to malicious client-side scripts that use document.cookie. This is not a complete solution, since HttpOnly is not supported by all browsers. More importantly, XMLHTTPRequest and other powerful browser technologies provide read access to HTTP headers, including the Set-Cookie header in which the HttpOnly flag is set.</p><p></p><p>Assume all input is malicious. Use an \"accept known good\" input validation strategy, i.e., use an allow list of acceptable inputs that strictly conform to specifications. Reject any input that does not strictly conform to specifications, or transform it into something that does. Do not rely exclusively on looking for malicious or malformed inputs (i.e., do not rely on a deny list). However, deny lists can be useful for detecting potential attacks or determining which inputs are so malformed that they should be rejected outright.</p><p></p><p>When performing input validation, consider all potentially relevant properties, including length, type of input, the full range of acceptable values, missing or extra inputs, syntax, consistency across related fields, and conformance to business rules. As an example of business rule logic, \"boat\" may be syntactically valid because it only contains alphanumeric characters, but it is not valid if you are expecting colors such as \"red\" or \"blue.\"</p><p></p><p>Ensure that you perform input validation at well-defined interfaces within the application. This will help protect the application even if a component is reused or moved elsewhere.</p><p>\t</p>",
+					"otherinfo": "<p>Raised with LOW confidence as the Content-Type is not HTML.</p>",
+					"reference": "<p>https://owasp.org/www-community/attacks/xss/</p><p>https://cwe.mitre.org/data/definitions/79.html</p>",
+					"cweid": "79",
+					"wascid": "8",
+					"sourceid": "232"
+				},
+				{
+					"pluginid": "10111",
+					"alertRef": "10111",
+					"alert": "Authentication Request Identified",
+					"name": "Authentication Request Identified",
+					"riskcode": "0",
+					"confidence": "1",
+					"riskdesc": "Informational (Low)",
+					"desc": "<p>The given request has been identified as an authentication request. The 'Other Info' field contains a set of key=value lines which identify any relevant fields. If the request is in a context which has an Authentication Method set to \"Auto-Detect\" then this rule will change the authentication to match the request identified.</p>",
+					"instances":[ 
+						{
+							"id": "3",
+							"uri": "http://host.docker.internal:3000/api/residentes",
+							"nodeName": "http:\/\/host.docker.internal:3000\/api\/residentes ()({nombre,email,password,numero_casa,telefono})",
+							"method": "POST",
+							"param": "email",
+							"attack": "",
+							"evidence": "password",
+							"otherinfo": "userParam=email\nuserValue=st.zap.res@sectest.local\npasswordParam=password"
+						},
+						{
+							"id": "2",
+							"uri": "http://host.docker.internal:3000/api/usuarios",
+							"nodeName": "http:\/\/host.docker.internal:3000\/api\/usuarios ()({nombre,email,password,rol})",
+							"method": "POST",
+							"param": "email",
+							"attack": "",
+							"evidence": "password",
+							"otherinfo": "userParam=email\nuserValue=st.zap.usr@sectest.local\npasswordParam=password"
+						},
+						{
+							"id": "0",
+							"uri": "http://host.docker.internal:3000/api/auth/login",
+							"nodeName": "http:\/\/host.docker.internal:3000\/api\/auth\/login ()({email,password})",
+							"method": "POST",
+							"param": "email",
+							"attack": "",
+							"evidence": "password",
+							"otherinfo": "userParam=email\nuserValue=st.res.a1@sectest.local\npasswordParam=password"
+						}
+					],
+					"count": "3",
+					"systemic": false,
+					"solution": "<p>This is an informational alert rather than a vulnerability and so there is nothing to fix.</p>",
+					"otherinfo": "<p>userParam=email</p><p>userValue=st.zap.res@sectest.local</p><p>passwordParam=password</p>",
+					"reference": "<p>https://www.zaproxy.org/docs/desktop/addons/authentication-helper/auth-req-id/</p>",
+					"cweid": "-1",
+					"wascid": "-1",
+					"sourceid": "33"
+				},
+				{
+					"pluginid": "10112",
+					"alertRef": "10112",
+					"alert": "Session Management Response Identified",
+					"name": "Session Management Response Identified",
+					"riskcode": "0",
+					"confidence": "2",
+					"riskdesc": "Informational (Medium)",
+					"desc": "<p>The given response has been identified as containing a session management token. The 'Other Info' field contains a set of header tokens that can be used in the Header Based Session Management Method. If the request is in a context which has a Session Management Method set to \"Auto-Detect\" then this rule will change the session management to use the tokens identified.</p>",
+					"instances":[ 
+						{
+							"id": "1",
+							"uri": "http://host.docker.internal:3000/api/auth/login",
+							"nodeName": "http:\/\/host.docker.internal:3000\/api\/auth\/login ()({email,password})",
+							"method": "POST",
+							"param": "token",
+							"attack": "",
+							"evidence": "token",
+							"otherinfo": "json:token\ncookie:refresh_token"
+						}
+					],
+					"count": "1",
+					"systemic": false,
+					"solution": "<p>This is an informational alert rather than a vulnerability and so there is nothing to fix.</p>",
+					"otherinfo": "<p>json:token</p><p>cookie:refresh_token</p>",
+					"reference": "<p>https://www.zaproxy.org/docs/desktop/addons/authentication-helper/session-mgmt-id/</p>",
+					"cweid": "-1",
+					"wascid": "-1",
+					"sourceid": "1"
+				},
+				{
+					"pluginid": "10104",
+					"alertRef": "10104",
+					"alert": "User Agent Fuzzer",
+					"name": "User Agent Fuzzer",
+					"riskcode": "0",
+					"confidence": "2",
+					"riskdesc": "Informational (Medium)",
+					"desc": "<p>Check for differences in response based on fuzzed User Agent (eg. mobile sites, access as a Search Engine Crawler). Compares the response statuscode and the hashcode of the response body with the original response.</p>",
+					"instances":[ 
+						{
+							"id": "28",
+							"uri": "http://host.docker.internal:3000/api/auth/login",
+							"nodeName": "http:\/\/host.docker.internal:3000\/api\/auth\/login ()({email,password})",
+							"method": "POST",
+							"param": "Header User-Agent",
+							"attack": "Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.1)",
+							"evidence": "",
+							"otherinfo": ""
+						},
+						{
+							"id": "27",
+							"uri": "http://host.docker.internal:3000/api/auth/login",
+							"nodeName": "http:\/\/host.docker.internal:3000\/api\/auth\/login ()({email,password})",
+							"method": "POST",
+							"param": "Header User-Agent",
+							"attack": "Mozilla/4.0 (compatible; MSIE 7.0; Windows NT 6.0)",
+							"evidence": "",
+							"otherinfo": ""
+						},
+						{
+							"id": "26",
+							"uri": "http://host.docker.internal:3000/api/auth/login",
+							"nodeName": "http:\/\/host.docker.internal:3000\/api\/auth\/login ()({email,password})",
+							"method": "POST",
+							"param": "Header User-Agent",
+							"attack": "Mozilla/4.0 (compatible; MSIE 8.0; Windows NT 6.1)",
+							"evidence": "",
+							"otherinfo": ""
+						}
+					],
+					"count": "3",
+					"systemic": true,
+					"solution": "",
+					"otherinfo": "",
+					"reference": "<p>https://owasp.org/wstg</p>",
+					"cweid": "0",
+					"wascid": "0",
+					"sourceid": "251"
+				}
+			]
+		}
+	],
+	"sequences":[
+	]
+
+}

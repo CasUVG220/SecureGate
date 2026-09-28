@@ -1,0 +1,343 @@
+{
+  "id": "05-eliminar",
+  "titulo": "eliminar-definitivo: contraseña incorrecta repetida y audit_logs",
+  "fecha": "2026-09-29T23:06:14.304Z",
+  "base": "http://localhost:3000",
+  "items": [
+    {
+      "id": "ELIM-mala-1",
+      "titulo": "Intento 1 con contraseña incorrecta",
+      "request": {
+        "method": "POST",
+        "path": "/api/empresas/e13bdb76-b94d-4986-9102-307728e29404/eliminar-definitivo",
+        "actor": "owner (contraseña mala)",
+        "body": "{\"password\":\"incorrecta-1\"}"
+      },
+      "esperado": "403 Contraseña incorrecta",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Contraseña incorrecta\"}",
+        "ms": 199
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ELIM-mala-2",
+      "titulo": "Intento 2 con contraseña incorrecta",
+      "request": {
+        "method": "POST",
+        "path": "/api/empresas/e13bdb76-b94d-4986-9102-307728e29404/eliminar-definitivo",
+        "actor": "owner (contraseña mala)",
+        "body": "{\"password\":\"incorrecta-2\"}"
+      },
+      "esperado": "403 Contraseña incorrecta",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Contraseña incorrecta\"}",
+        "ms": 187
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ELIM-mala-3",
+      "titulo": "Intento 3 con contraseña incorrecta",
+      "request": {
+        "method": "POST",
+        "path": "/api/empresas/e13bdb76-b94d-4986-9102-307728e29404/eliminar-definitivo",
+        "actor": "owner (contraseña mala)",
+        "body": "{\"password\":\"incorrecta-3\"}"
+      },
+      "esperado": "403 Contraseña incorrecta",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Contraseña incorrecta\"}",
+        "ms": 186
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ELIM-mala-4",
+      "titulo": "Intento 4 con contraseña incorrecta",
+      "request": {
+        "method": "POST",
+        "path": "/api/empresas/e13bdb76-b94d-4986-9102-307728e29404/eliminar-definitivo",
+        "actor": "owner (contraseña mala)",
+        "body": "{\"password\":\"incorrecta-4\"}"
+      },
+      "esperado": "403 Contraseña incorrecta",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Contraseña incorrecta\"}",
+        "ms": 194
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ELIM-mala-5",
+      "titulo": "Intento 5 con contraseña incorrecta",
+      "request": {
+        "method": "POST",
+        "path": "/api/empresas/e13bdb76-b94d-4986-9102-307728e29404/eliminar-definitivo",
+        "actor": "owner (contraseña mala)",
+        "body": "{\"password\":\"incorrecta-5\"}"
+      },
+      "esperado": "403 Contraseña incorrecta",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Contraseña incorrecta\"}",
+        "ms": 192
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ELIM-mala-6",
+      "titulo": "Intento 6 con contraseña incorrecta",
+      "request": {
+        "method": "POST",
+        "path": "/api/empresas/e13bdb76-b94d-4986-9102-307728e29404/eliminar-definitivo",
+        "actor": "owner (contraseña mala)",
+        "body": "{\"password\":\"incorrecta-6\"}"
+      },
+      "esperado": "429 (límite 5 / 15 min)",
+      "real": {
+        "status": 429,
+        "body": "{\"error\":\"Demasiados intentos; espera 15 minutos\"}",
+        "ms": 2
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ELIM-mala-7",
+      "titulo": "Intento 7 con contraseña incorrecta",
+      "request": {
+        "method": "POST",
+        "path": "/api/empresas/e13bdb76-b94d-4986-9102-307728e29404/eliminar-definitivo",
+        "actor": "owner (contraseña mala)",
+        "body": "{\"password\":\"incorrecta-7\"}"
+      },
+      "esperado": "429 (límite 5 / 15 min)",
+      "real": {
+        "status": 429,
+        "body": "{\"error\":\"Demasiados intentos; espera 15 minutos\"}",
+        "ms": 2
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ELIM-empresa-intacta",
+      "titulo": "Tras 7 intentos fallidos la empresa sigue existiendo y activa",
+      "esperado": "1",
+      "request": {
+        "method": "SQL",
+        "path": "SELECT count(*) FROM empresas WHERE id='e13bdb76-b94d-4986-9102-307728e29404'",
+        "actor": "psql"
+      },
+      "real": {
+        "status": 0,
+        "body": "1"
+      },
+      "resultado": "OK",
+      "severidad": "crítica"
+    },
+    {
+      "id": "ELIM-audit-intentos-fallidos",
+      "titulo": "Cada intento fallido que llega al controlador deja fila en audit_logs (usuario, IP, empresa, status 403)",
+      "esperado": "5 filas con status_code 403, usuario = owner, ip_address y registro_id = empresa",
+      "request": {
+        "method": "SQL",
+        "path": "audit_logs WHERE accion='EMPRESA_ELIMINADA_DEFINITIVO' AND registro_id=<C>",
+        "actor": "psql"
+      },
+      "real": {
+        "status": 0,
+        "body": "filas=5 (403: 5, 429: 0); ejemplo: 403|2f659ec0-7b9f-4b3d-83df-d00058769fb2|::ffff:192.168.65.1|e13bdb76-b94d-4986-9102-307728e29404|NULL"
+      },
+      "resultado": "OK",
+      "severidad": "media"
+    },
+    {
+      "id": "ELIM-audit-bloqueados-por-limitador",
+      "titulo": "Los intentos bloqueados por el limitador (429) también quedan en la bitácora",
+      "esperado": "los 2 intentos con 429 aparecen en audit_logs",
+      "request": {
+        "method": "SQL",
+        "path": "audit_logs (status_code = 429)",
+        "actor": "psql"
+      },
+      "real": {
+        "status": 0,
+        "body": "filas 429 = 0 de 2 intentos bloqueados. El limitador se ejecuta ANTES que auditLog, así que el atacante que insiste tras el bloqueo no deja rastro."
+      },
+      "resultado": "FALLA",
+      "severidad": "baja",
+      "nota": "Hueco de auditoría menor: solo los primeros 5 intentos quedan registrados por ventana de 15 min."
+    },
+    {
+      "id": "ELIM-audit-sin-password",
+      "titulo": "La contraseña intentada no se guarda en audit_logs",
+      "esperado": "ninguna fila contiene \"incorrecta-\"",
+      "request": {
+        "method": "SQL",
+        "path": "SELECT ... FROM audit_logs WHERE datos_nuevos::text LIKE '%incorrecta-%'",
+        "actor": "psql"
+      },
+      "real": {
+        "status": 0,
+        "body": "0"
+      },
+      "resultado": "OK",
+      "severidad": "alta"
+    },
+    {
+      "id": "ELIM-limite-por-ip",
+      "titulo": "El límite es por IP, no por usuario: un segundo owner desde la misma IP también recibe 429",
+      "esperado": "informativo",
+      "request": {
+        "method": "POST",
+        "path": "/api/empresas/e13bdb76-b94d-4986-9102-307728e29404/eliminar-definitivo",
+        "actor": "segundo owner (misma IP)"
+      },
+      "real": {
+        "status": 429,
+        "body": "{\"error\":\"Demasiados intentos; espera 15 minutos\"}"
+      },
+      "resultado": "INFO",
+      "nota": "Sin límite por cuenta: un JWT de owner robado permite 5 intentos de contraseña / 15 min POR CADA IP distinta (botnet), y el owner legítimo queda bloqueado si comparte IP con quien insiste."
+    },
+    {
+      "id": "ELIM-xff-no-evade",
+      "titulo": "Falsificar X-Forwarded-For no evade el límite",
+      "esperado": "429",
+      "request": {
+        "method": "POST",
+        "path": "/api/empresas/e13bdb76-b94d-4986-9102-307728e29404/eliminar-definitivo",
+        "actor": "owner + XFF falso"
+      },
+      "real": {
+        "status": 429,
+        "body": "{\"error\":\"Demasiados intentos; espera 15 minutos\"}"
+      },
+      "resultado": "OK",
+      "severidad": "alta"
+    },
+    {
+      "id": "ELIM-sin-password",
+      "titulo": "Sin contraseña en el body",
+      "request": {
+        "method": "POST",
+        "path": "/api/empresas/e13bdb76-b94d-4986-9102-307728e29404/eliminar-definitivo",
+        "actor": "owner",
+        "body": "{}"
+      },
+      "esperado": "400",
+      "real": {
+        "status": 400,
+        "body": "{\"error\":\"Se requiere la contraseña del owner\"}",
+        "ms": 26
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ELIM-password-de-otro",
+      "titulo": "Contraseña de OTRO owner (admin123) con el token de st.owner",
+      "request": {
+        "method": "POST",
+        "path": "/api/empresas/e13bdb76-b94d-4986-9102-307728e29404/eliminar-definitivo",
+        "actor": "owner",
+        "body": "{\"password\":\"admin123\"}"
+      },
+      "esperado": "403",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Contraseña incorrecta\"}",
+        "ms": 209
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ELIM-password-tipo-objeto",
+      "titulo": "password como objeto/array (NoSQL-style)",
+      "request": {
+        "method": "POST",
+        "path": "/api/empresas/e13bdb76-b94d-4986-9102-307728e29404/eliminar-definitivo",
+        "actor": "owner",
+        "body": "{\"password\":{\"$ne\":null}}"
+      },
+      "esperado": "4xx, nunca 5xx ni borrado",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Contraseña incorrecta\"}",
+        "ms": 184
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ELIM-id-no-uuid",
+      "titulo": "id de empresa no UUID",
+      "request": {
+        "method": "POST",
+        "path": "/api/empresas/no-es-uuid/eliminar-definitivo",
+        "actor": "owner",
+        "body": "{\"password\":\"Sec#Test2026a\"}"
+      },
+      "esperado": "4xx (400/404), nunca 500",
+      "real": {
+        "status": 500,
+        "body": "{\"error\":\"Error al eliminar la empresa definitivamente\"}",
+        "ms": 186
+      },
+      "resultado": "FALLA",
+      "severidad": "baja"
+    },
+    {
+      "id": "ELIM-empresa-inexistente",
+      "titulo": "Empresa inexistente con contraseña correcta",
+      "request": {
+        "method": "POST",
+        "path": "/api/empresas/00000000-0000-0000-0000-000000000000/eliminar-definitivo",
+        "actor": "owner",
+        "body": "{\"password\":\"Sec#Test2026a\"}"
+      },
+      "esperado": "404",
+      "real": {
+        "status": 404,
+        "body": "{\"error\":\"Empresa no encontrada\"}",
+        "ms": 184
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ELIM-contrasena-correcta",
+      "titulo": "Contraseña correcta elimina la empresa desechable",
+      "request": {
+        "method": "POST",
+        "path": "/api/empresas/e1f6ec1f-b0e6-4c93-a45c-fbe05bf4b662/eliminar-definitivo",
+        "actor": "owner",
+        "body": "{\"password\":\"Sec#Test2026a\"}"
+      },
+      "esperado": "200 y la empresa ya no existe",
+      "real": {
+        "status": 200,
+        "body": "{\"message\":\"Empresa eliminada definitivamente\",\"id\":\"e1f6ec1f-b0e6-4c93-a45c-fbe05bf4b662\",\"nombre\":\"ST Empresa Desechable2 munacryn\",\"eliminado\":{\"cargos_automaticos\":0,\"registros_acceso\":0,\"reservas_areas\":0,\"areas_comunes\":0,\"pagos\":0,\"cargos_programados_hi…(+323)",
+        "ms": 224
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ELIM-audit-exito",
+      "titulo": "El borrado exitoso deja rastro en audit_logs con status 200",
+      "esperado": "una fila con status_code 200",
+      "request": {
+        "method": "SQL",
+        "path": "audit_logs WHERE registro_id=<D>",
+        "actor": "psql"
+      },
+      "real": {
+        "status": 0,
+        "body": "200|2f659ec0-7b9f-4b3d-83df-d00058769fb2|::ffff:192.168.65.1|e1f6ec1f-b0e6-4c93-a45c-fbe05bf4b662|NULL"
+      },
+      "resultado": "OK",
+      "severidad": "media"
+    }
+  ]
+}
