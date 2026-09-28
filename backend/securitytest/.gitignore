@@ -1,0 +1,10 @@
+results/fixtures.json
+results/*.tmp
+results/zap-work/
+results/snap/
+zap/plan-run.yaml
+results/sqlmap/*/
+# Regenerables / ruido de cada corrida (los JSON y los reportes sí se versionan)
+results/*.log
+results/*.err
+results/antes/*.log

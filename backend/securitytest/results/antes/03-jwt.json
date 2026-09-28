@@ -1,0 +1,685 @@
+{
+  "id": "03-jwt",
+  "titulo": "JWT: licencia vs usuario, vencido, firma alterada, alg:none, revocación, refresh",
+  "fecha": "2026-09-29T23:02:17.409Z",
+  "base": "http://localhost:3000",
+  "items": [
+    {
+      "id": "JWT-lic-como-usuario-residentes-me",
+      "titulo": "Token de LICENCIA en Authorization sobre residentes/me",
+      "request": {
+        "method": "GET",
+        "path": "/api/residentes/me",
+        "actor": "token de licencia A1"
+      },
+      "esperado": "403 (typ: licencia no vale como sesión)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Token inválido o expirado\"}",
+        "ms": 3
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "JWT-lic-como-usuario-dashboard",
+      "titulo": "Token de LICENCIA en Authorization sobre dashboard (staff)",
+      "request": {
+        "method": "GET",
+        "path": "/api/dashboard",
+        "actor": "token de licencia A1"
+      },
+      "esperado": "403 (typ: licencia no vale como sesión)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Token inválido o expirado\"}",
+        "ms": 2
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "JWT-lic-como-usuario-accesos-activos",
+      "titulo": "Token de LICENCIA en Authorization sobre accesos/activos (staff)",
+      "request": {
+        "method": "GET",
+        "path": "/api/accesos/activos",
+        "actor": "token de licencia A1"
+      },
+      "esperado": "403 (typ: licencia no vale como sesión)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Token inválido o expirado\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "JWT-lic-como-usuario-reservas-mis-reservas",
+      "titulo": "Token de LICENCIA en Authorization sobre reservas/mis-reservas",
+      "request": {
+        "method": "GET",
+        "path": "/api/reservas/mis-reservas",
+        "actor": "token de licencia A1"
+      },
+      "esperado": "403 (typ: licencia no vale como sesión)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Token inválido o expirado\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "JWT-lic-como-usuario-sync-garita",
+      "titulo": "Token de LICENCIA en Authorization sobre sync/garita (staff+licencia)",
+      "request": {
+        "method": "GET",
+        "path": "/api/sync/garita",
+        "actor": "token de licencia A1"
+      },
+      "esperado": "403 (typ: licencia no vale como sesión)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Token inválido o expirado\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "JWT-usuario-como-licencia-heartbeat",
+      "titulo": "JWT de agente en X-Licencia-Token sobre /licencias/heartbeat",
+      "request": {
+        "method": "POST",
+        "path": "/api/licencias/heartbeat",
+        "actor": "JWT de agenteA1 como licencia",
+        "body": "{}"
+      },
+      "esperado": "403",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Token de licencia inválido\",\"estado\":\"invalida\"}",
+        "ms": 2
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "JWT-usuario-como-licencia-sync",
+      "titulo": "JWT de agente en X-Licencia-Token sobre /sync/garita",
+      "request": {
+        "method": "GET",
+        "path": "/api/sync/garita",
+        "actor": "agenteA1 + JWT de usuario como licencia"
+      },
+      "esperado": "403",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Token de licencia inválido\",\"estado\":\"invalida\"}",
+        "ms": 2
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "JWT-usuario-como-licencia-accesos",
+      "titulo": "POST /accesos con JWT de agente en X-Licencia-Token",
+      "request": {
+        "method": "POST",
+        "path": "/api/accesos",
+        "actor": "agenteA1 + JWT de usuario como licencia",
+        "body": "{\"nombre_visitante\":\"ST jwt\",\"numero_dpi\":\"ST-JWT-1\",\"residente_id\":\"22c2723c-1af3-42b1-b2e8-b77656c6dde0\"}"
+      },
+      "esperado": "403",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Token de licencia inválido\",\"estado\":\"invalida\"}",
+        "ms": 2
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "JWT-licencia-otra-sucursal-sync",
+      "titulo": "Agente de A1 + licencia de B1 en /sync/garita",
+      "request": {
+        "method": "GET",
+        "path": "/api/sync/garita",
+        "actor": "agenteA1 + licencia B1"
+      },
+      "esperado": "403 (sesión y licencia de sucursales distintas)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"La sesión del agente no corresponde a la sucursal de esta licencia\"}",
+        "ms": 3
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "JWT-licencia-otra-sucursal-accesos",
+      "titulo": "Agente de A1 + licencia de B1 en POST /accesos",
+      "request": {
+        "method": "POST",
+        "path": "/api/accesos",
+        "actor": "agenteA1 + licencia B1",
+        "body": "{\"nombre_visitante\":\"ST jwt\",\"numero_dpi\":\"ST-JWT-2\",\"residente_id\":\"22c2723c-1af3-42b1-b2e8-b77656c6dde0\"}"
+      },
+      "esperado": "403",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"La sesión del agente no corresponde a la sucursal de esta licencia\"}",
+        "ms": 3
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "CTRL-licencia-propia-sync",
+      "titulo": "Control: agente de A1 + licencia de A1 sincroniza",
+      "request": {
+        "method": "GET",
+        "path": "/api/sync/garita",
+        "actor": "agenteA1 + licencia A1"
+      },
+      "esperado": "200",
+      "real": {
+        "status": 200,
+        "body": "{\"sucursal_id\":\"bc94f428-2a9b-4d8c-8470-7f83b9cecb35\",\"servidor_ahora\":\"2026-09-29T23:02:25.200Z\",\"residentes\":[{\"id\":\"22c2723c-1af3-42b1-b2e8-b77656c6dde0\",\"numero_casa\":\"ST-A1-01\",\"estado_pago\":\"al_dia\",\"telefono\":\"50255550000\",\"nombre\":\"ST Residente A1\"}],\"…(+453)",
+        "ms": 14
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "JWT-vencido",
+      "titulo": "Token de usuario vencido hace 60 s",
+      "request": {
+        "method": "GET",
+        "path": "/api/residentes/me",
+        "actor": "JWT exp<now"
+      },
+      "esperado": "403 (o 401)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Token inválido o expirado\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "JWT-vencido-owner",
+      "titulo": "Token de owner vencido hace 1 s",
+      "request": {
+        "method": "GET",
+        "path": "/api/empresas",
+        "actor": "JWT owner exp<now"
+      },
+      "esperado": "403 (o 401)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Token inválido o expirado\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "JWT-nbf-futuro",
+      "titulo": "Token con nbf 1 h en el futuro",
+      "request": {
+        "method": "GET",
+        "path": "/api/residentes/me",
+        "actor": "JWT nbf>now"
+      },
+      "esperado": "403 (o 401)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Token inválido o expirado\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "JWT-licencia-vencida-heartbeat",
+      "titulo": "Token de licencia vencido en /licencias/heartbeat",
+      "request": {
+        "method": "POST",
+        "path": "/api/licencias/heartbeat",
+        "actor": "licencia exp<now",
+        "body": "{}"
+      },
+      "esperado": "403",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Token de licencia inválido o expirado\",\"estado\":\"invalida\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "JWT-payload-alterado",
+      "titulo": "Payload cambiado a rol owner con la firma original",
+      "request": {
+        "method": "GET",
+        "path": "/api/empresas",
+        "actor": "JWT con payload manipulado"
+      },
+      "esperado": "403",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Token inválido o expirado\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "JWT-firma-alterada",
+      "titulo": "Primer carácter de la firma modificado",
+      "request": {
+        "method": "GET",
+        "path": "/api/residentes/me",
+        "actor": "JWT firma alterada"
+      },
+      "esperado": "403",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Token inválido o expirado\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "JWT-firma-vacia",
+      "titulo": "Firma vacía con alg HS256",
+      "request": {
+        "method": "GET",
+        "path": "/api/empresas",
+        "actor": "JWT sin firma"
+      },
+      "esperado": "403",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Token inválido o expirado\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "JWT-firma-otro-secreto",
+      "titulo": "Token de owner firmado con un secreto distinto",
+      "request": {
+        "method": "GET",
+        "path": "/api/empresas",
+        "actor": "JWT firmado con secreto ajeno"
+      },
+      "esperado": "403",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Token inválido o expirado\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "JWT-secretos-conocidos",
+      "titulo": "Token de owner firmado con los secretos públicos históricos del repo",
+      "request": {
+        "method": "GET",
+        "path": "/api/empresas",
+        "actor": "JWT con secretos: securegate_jwt_secret_dev / change_me_in_production"
+      },
+      "esperado": "403 (ninguno vale)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Token inválido o expirado\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "JWT-secretos-conocidos-2",
+      "titulo": "Ídem con change_me_in_production",
+      "request": {
+        "method": "GET",
+        "path": "/api/empresas",
+        "actor": "JWT con secreto change_me_in_production"
+      },
+      "esperado": "403",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Token inválido o expirado\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "JWT-alg-none",
+      "titulo": "alg:\"none\" sin firma, rol owner",
+      "request": {
+        "method": "GET",
+        "path": "/api/empresas",
+        "actor": "JWT alg=none"
+      },
+      "esperado": "403",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Token inválido o expirado\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "JWT-alg-None",
+      "titulo": "alg:\"None\" sin firma, rol owner",
+      "request": {
+        "method": "GET",
+        "path": "/api/empresas",
+        "actor": "JWT alg=None"
+      },
+      "esperado": "403",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Token inválido o expirado\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "JWT-alg-NONE",
+      "titulo": "alg:\"NONE\" sin firma, rol owner",
+      "request": {
+        "method": "GET",
+        "path": "/api/empresas",
+        "actor": "JWT alg=NONE"
+      },
+      "esperado": "403",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Token inválido o expirado\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "JWT-alg-nOnE",
+      "titulo": "alg:\"nOnE\" sin firma, rol owner",
+      "request": {
+        "method": "GET",
+        "path": "/api/empresas",
+        "actor": "JWT alg=nOnE"
+      },
+      "esperado": "403",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Token inválido o expirado\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "JWT-alg-none-firma-original",
+      "titulo": "alg:none conservando la firma original",
+      "request": {
+        "method": "GET",
+        "path": "/api/empresas",
+        "actor": "JWT alg=none + firma"
+      },
+      "esperado": "403",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Token inválido o expirado\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "JWT-alg-HS512",
+      "titulo": "Firmado con HS512 usando el secreto real (algoritmo fijado a HS256)",
+      "request": {
+        "method": "GET",
+        "path": "/api/residentes/me",
+        "actor": "JWT alg=HS512 válido"
+      },
+      "esperado": "403 (solo HS256)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Token inválido o expirado\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "JWT-alg-RS256-confusion",
+      "titulo": "Cabecera alg:RS256 con firma HMAC (confusión de algoritmo)",
+      "request": {
+        "method": "GET",
+        "path": "/api/empresas",
+        "actor": "JWT alg=RS256"
+      },
+      "esperado": "403",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Token inválido o expirado\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "JWT-jwk-embebido",
+      "titulo": "Cabecera con jwk/jku embebido",
+      "request": {
+        "method": "GET",
+        "path": "/api/empresas",
+        "actor": "JWT con jwk"
+      },
+      "esperado": "403",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Token inválido o expirado\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "JWT-sin-bearer",
+      "titulo": "Authorization sin prefijo Bearer",
+      "request": {
+        "method": "GET",
+        "path": "/api/residentes/me",
+        "actor": "token crudo"
+      },
+      "esperado": "401",
+      "real": {
+        "status": 401,
+        "body": "{\"error\":\"Token no proporcionado\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "JWT-token-en-query",
+      "titulo": "Token en la query string (?token=)",
+      "request": {
+        "method": "GET",
+        "path": "/api/residentes/me?token=<jwt-redactado>&access_token=<jwt-redactado>",
+        "actor": "token en URL"
+      },
+      "esperado": "401 (los tokens no viajan en URLs)",
+      "real": {
+        "status": 401,
+        "body": "{\"error\":\"Token no proporcionado\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "JWT-cabecera-enorme",
+      "titulo": "Authorization de 20 KB",
+      "request": {
+        "method": "GET",
+        "path": "/api/residentes/me",
+        "actor": "token gigante"
+      },
+      "esperado": "4xx (431/401/403), nunca 5xx",
+      "real": {
+        "status": 431,
+        "body": "",
+        "ms": 2
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "JWT-rol-desconocido",
+      "titulo": "Token con firma válida pero rol \"superadmin\"",
+      "request": {
+        "method": "GET",
+        "path": "/api/empresas",
+        "actor": "JWT rol inexistente"
+      },
+      "esperado": "403",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Token inválido o expirado\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "JWT-sin-rol",
+      "titulo": "Token con firma válida pero sin rol",
+      "request": {
+        "method": "GET",
+        "path": "/api/residentes/me",
+        "actor": "JWT sin rol"
+      },
+      "esperado": "403",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Token inválido o expirado\"}",
+        "ms": 2
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "JWT-ttl-acceso",
+      "titulo": "Duración del access token",
+      "esperado": "≤ 1 h",
+      "request": {
+        "method": "POST",
+        "path": "/api/auth/login",
+        "actor": "owner"
+      },
+      "real": {
+        "status": 200,
+        "body": "exp - iat = 3600 s; claims: id, nombre, email, rol, sucursal_id, empresa_id, iat, exp"
+      },
+      "resultado": "OK",
+      "severidad": "baja"
+    },
+    {
+      "id": "JWT-claims-sensibles",
+      "titulo": "El JWT no lleva password_hash ni datos sensibles",
+      "esperado": "solo id, nombre, email, rol, sucursal_id, empresa_id",
+      "request": {
+        "method": "POST",
+        "path": "/api/auth/login",
+        "actor": "owner"
+      },
+      "real": {
+        "status": 200,
+        "body": "id, nombre, email, rol, sucursal_id, empresa_id, iat, exp"
+      },
+      "resultado": "OK",
+      "severidad": "media"
+    },
+    {
+      "id": "JWT-revocacion-usuario",
+      "titulo": "Un usuario dado de baja pierde el access token, el refresh y el login al instante",
+      "esperado": "antes 200/403 (según rol); baja 200; después 401; refresh 401; login 401",
+      "request": {
+        "method": "DELETE",
+        "path": "/api/usuarios/:id (cobaya)",
+        "actor": "adminSucA1"
+      },
+      "real": {
+        "status": 401,
+        "body": "baja=200, token tras baja=401 ({\"error\":\"Sesión revocada\"}), refresh=401, login=401"
+      },
+      "resultado": "OK",
+      "severidad": "alta"
+    },
+    {
+      "id": "JWT-refresh-rotacion",
+      "titulo": "El refresh token rota y el anterior queda inválido",
+      "esperado": "reuso del anterior → 401",
+      "request": {
+        "method": "POST",
+        "path": "/api/auth/refresh",
+        "actor": "residente A1 (cookie)"
+      },
+      "real": {
+        "status": 401,
+        "body": "1er refresh=200; reuso del viejo=401"
+      },
+      "resultado": "OK",
+      "severidad": "alta"
+    },
+    {
+      "id": "JWT-refresh-deteccion-reuso",
+      "titulo": "Detección de reutilización: al reusar un refresh robado se revoca toda la familia",
+      "esperado": "tras el reuso del viejo, el refresh nuevo también deja de valer (401)",
+      "request": {
+        "method": "POST",
+        "path": "/api/auth/refresh",
+        "actor": "residente A1 (cookie nueva tras el reuso)"
+      },
+      "real": {
+        "status": 200,
+        "body": "refresh nuevo tras reuso del viejo=200"
+      },
+      "resultado": "FALLA",
+      "severidad": "baja",
+      "nota": "Conocido y aceptado en SECURITY_REVIEW.md (M6 «pendiente»). Un refresh robado y usado ANTES que el legítimo deja al atacante con sesión; el legítimo recibe 401 pero nadie se entera."
+    },
+    {
+      "id": "JWT-cookie-flags",
+      "titulo": "Flags de la cookie de refresh en este entorno (desarrollo)",
+      "esperado": "HttpOnly; SameSite=Strict; Path=/; (Secure solo en producción)",
+      "request": {
+        "method": "POST",
+        "path": "/api/auth/login",
+        "actor": "residente A1"
+      },
+      "real": {
+        "status": 200,
+        "body": "refresh_token=<oculto>; Max-Age=604800; Path=/; Expires=Tue, 06 Oct 2026 23:02:25 GMT; HttpOnly; SameSite=Strict"
+      },
+      "resultado": "OK",
+      "severidad": "media"
+    },
+    {
+      "id": "JWT-refresh-sin-cookie",
+      "titulo": "Refresh sin cookie",
+      "request": {
+        "method": "POST",
+        "path": "/api/auth/refresh",
+        "actor": "anónimo"
+      },
+      "esperado": "401",
+      "real": {
+        "status": 401,
+        "body": "{\"error\":\"Refresh token no encontrado\"}",
+        "ms": 2
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "JWT-refresh-cookie-basura",
+      "titulo": "Refresh con cookie inventada",
+      "request": {
+        "method": "POST",
+        "path": "/api/auth/refresh",
+        "actor": "anónimo"
+      },
+      "esperado": "401",
+      "real": {
+        "status": 401,
+        "body": "{\"error\":\"Refresh token inválido o expirado\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    }
+  ]
+}

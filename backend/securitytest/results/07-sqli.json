@@ -1,0 +1,75 @@
+{
+  "id": "07-sqli",
+  "titulo": "Inyección SQL: payloads manuales en parámetros de búsqueda, ruta y cuerpo",
+  "fecha": "2026-09-29T23:54:07.180Z",
+  "base": "http://localhost:3000",
+  "items": [
+    {
+      "id": "SQLI-login-bypass-password-11",
+      "titulo": "Login con password = ' OR '1'='1",
+      "request": {
+        "method": "POST",
+        "path": "/api/auth/login",
+        "actor": "anónimo",
+        "body": "{\"email\":\"st.owner@sectest.local\",\"password\":\"' OR '1'='1\"}"
+      },
+      "esperado": "4xx (nunca 200)",
+      "real": {
+        "status": 401,
+        "body": "{\"error\":\"Credenciales incorrectas\"}",
+        "ms": 200
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "SQLI-login-bypass-password-15",
+      "titulo": "Login con password = ' OR '1'='1' --",
+      "request": {
+        "method": "POST",
+        "path": "/api/auth/login",
+        "actor": "anónimo",
+        "body": "{\"email\":\"st.owner@sectest.local\",\"password\":\"' OR '1'='1' --\"}"
+      },
+      "esperado": "4xx (nunca 200)",
+      "real": {
+        "status": 401,
+        "body": "{\"error\":\"Credenciales incorrectas\"}",
+        "ms": 203
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "SQLI-login-bypass-email-25",
+      "titulo": "Login con email = st.owner@sectest.local'--",
+      "request": {
+        "method": "POST",
+        "path": "/api/auth/login",
+        "actor": "anónimo",
+        "body": "{\"email\":\"st.owner@sectest.local'--\",\"password\":\"xxxxxxxx\"}"
+      },
+      "esperado": "4xx (nunca 200)",
+      "real": {
+        "status": 422,
+        "body": "{\"errors\":[{\"type\":\"field\",\"value\":\"st.owner@sectest.local'--\",\"msg\":\"Invalid value\",\"path\":\"email\",\"location\":\"body\"}]}",
+        "ms": 3
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "SQLI-resumen",
+      "titulo": "67 puntos de inyección, 1814 peticiones con payloads",
+      "esperado": "0 anomalías",
+      "request": {
+        "method": "-",
+        "path": "-",
+        "actor": "-"
+      },
+      "real": {
+        "status": 0,
+        "body": "1814 peticiones; anomalías: 0"
+      },
+      "resultado": "OK",
+      "nota": "Las clases: error (5xx / texto SQL), tiempo (pg_sleep), booleana, apilada (canario)."
+    }
+  ]
+}

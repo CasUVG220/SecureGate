@@ -1,0 +1,513 @@
+{
+  "id": "06-suspension",
+  "titulo": "Empresa suspendida: 423 en login, refresh y heartbeat",
+  "fecha": "2026-09-29T23:53:43.554Z",
+  "base": "http://localhost:3000",
+  "items": [
+    {
+      "id": "SUSP-ctrl-login",
+      "titulo": "Control: antes de suspender, el agente de D inicia sesión",
+      "request": {
+        "method": "POST",
+        "path": "/api/auth/login",
+        "actor": "agente D",
+        "body": "{\"email\":\"st.d.munc1kxn.agente@sectest.local\",\"password\":\"Sec#Test2026a\"}"
+      },
+      "esperado": "200",
+      "real": {
+        "status": 200,
+        "body": "{\"token\":\"<jwt-redactado>…(+356)",
+        "ms": 199
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "SUSP-ctrl-heartbeat",
+      "titulo": "Control: antes de suspender, el heartbeat responde 200",
+      "request": {
+        "method": "POST",
+        "path": "/api/licencias/heartbeat",
+        "actor": "licencia D",
+        "body": "{\"fingerprint\":\"9dad79678deaecc629e2bb6583e65807371d8f16a16cce7403cee3e5d008c3c0\"}"
+      },
+      "esperado": "200",
+      "real": {
+        "status": 200,
+        "body": "{\"estado\":\"activa\",\"licencia_id\":\"e7f8ffd3-5293-4b44-b9c4-baf17b0b1f2c\",\"sucursal_id\":\"eadec03f-689f-40f4-8a0b-ffcf59b532f1\",\"servidor_ahora\":\"2026-09-29T23:53:53.362Z\",\"heartbeat_intervalo_min\":15,\"gracia_offline_horas\":72}",
+        "ms": 4
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "SUSP-ctrl-sync",
+      "titulo": "Control: antes de suspender, sync/garita responde 200",
+      "request": {
+        "method": "GET",
+        "path": "/api/sync/garita",
+        "actor": "agente D + licencia D"
+      },
+      "esperado": "200",
+      "real": {
+        "status": 200,
+        "body": "{\"sucursal_id\":\"eadec03f-689f-40f4-8a0b-ffcf59b532f1\",\"servidor_ahora\":\"2026-09-29T23:53:53.377Z\",\"residentes\":[{\"id\":\"8831e361-f6cd-407c-bb53-1a3a20a83dad\",\"numero_casa\":\"ST-D1-01\",\"estado_pago\":\"al_dia\",\"telefono\":null,\"nombre\":\"ST D residente\"}],\"blacklist\"…(+27)",
+        "ms": 15
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "SUSP-suspender",
+      "titulo": "El owner suspende la empresa D",
+      "request": {
+        "method": "PATCH",
+        "path": "/api/empresas/d40e8555-1f26-4113-ab8c-1630c488aae0/suspender",
+        "actor": "owner",
+        "body": "{\"motivo\":\"ST prueba: impago simulado\"}"
+      },
+      "esperado": "200",
+      "real": {
+        "status": 200,
+        "body": "{\"id\":\"d40e8555-1f26-4113-ab8c-1630c488aae0\",\"nombre\":\"ST Empresa D suspendible munc1kxn\",\"nit\":null,\"logo_url\":null,\"activo\":true,\"created_at\":\"2026-09-30T05:53:51.426Z\",\"suspendida\":true,\"suspension_motivo\":\"ST prueba: impago simulado\",\"suspendida_en\":\"2026-…(+21)",
+        "ms": 5
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "SUSP-login-adminemp",
+      "titulo": "Login de adminemp con la empresa suspendida",
+      "request": {
+        "method": "POST",
+        "path": "/api/auth/login",
+        "actor": "adminemp",
+        "body": "{\"email\":\"st.d.munc1kxn.adminemp@sectest.local\",\"password\":\"Sec#Test2026a\"}"
+      },
+      "esperado": "423 + codigo + motivo",
+      "real": {
+        "status": 423,
+        "body": "{\"error\":\"Las operaciones de ST Empresa D suspendible munc1kxn están suspendidas: ST prueba: impago simulado. Contacta al administrador de SecureGate.\",\"estado\":\"suspendida\",\"codigo\":\"empresa_suspendida\",\"empresa\":\"ST Empresa D suspendible munc1kxn\",\"motivo\":\"…(+63)",
+        "ms": 198
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "SUSP-login-adminsuc",
+      "titulo": "Login de adminsuc con la empresa suspendida",
+      "request": {
+        "method": "POST",
+        "path": "/api/auth/login",
+        "actor": "adminsuc",
+        "body": "{\"email\":\"st.d.munc1kxn.adminsuc@sectest.local\",\"password\":\"Sec#Test2026a\"}"
+      },
+      "esperado": "423 + codigo + motivo",
+      "real": {
+        "status": 423,
+        "body": "{\"error\":\"Las operaciones de ST Empresa D suspendible munc1kxn están suspendidas: ST prueba: impago simulado. Contacta al administrador de SecureGate.\",\"estado\":\"suspendida\",\"codigo\":\"empresa_suspendida\",\"empresa\":\"ST Empresa D suspendible munc1kxn\",\"motivo\":\"…(+63)",
+        "ms": 199
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "SUSP-login-agente",
+      "titulo": "Login de agente con la empresa suspendida",
+      "request": {
+        "method": "POST",
+        "path": "/api/auth/login",
+        "actor": "agente",
+        "body": "{\"email\":\"st.d.munc1kxn.agente@sectest.local\",\"password\":\"Sec#Test2026a\"}"
+      },
+      "esperado": "423 + codigo + motivo",
+      "real": {
+        "status": 423,
+        "body": "{\"error\":\"Las operaciones de ST Empresa D suspendible munc1kxn están suspendidas: ST prueba: impago simulado. Contacta al administrador de SecureGate.\",\"estado\":\"suspendida\",\"codigo\":\"empresa_suspendida\",\"empresa\":\"ST Empresa D suspendible munc1kxn\",\"motivo\":\"…(+63)",
+        "ms": 202
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "SUSP-login-res",
+      "titulo": "Login de res con la empresa suspendida",
+      "request": {
+        "method": "POST",
+        "path": "/api/auth/login",
+        "actor": "res",
+        "body": "{\"email\":\"st.d.munc1kxn.res@sectest.local\",\"password\":\"Sec#Test2026a\"}"
+      },
+      "esperado": "423 + codigo + motivo",
+      "real": {
+        "status": 423,
+        "body": "{\"error\":\"Las operaciones de ST Empresa D suspendible munc1kxn están suspendidas: ST prueba: impago simulado. Contacta al administrador de SecureGate.\",\"estado\":\"suspendida\",\"codigo\":\"empresa_suspendida\",\"empresa\":\"ST Empresa D suspendible munc1kxn\",\"motivo\":\"…(+63)",
+        "ms": 202
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "SUSP-login-password-mala",
+      "titulo": "Contraseña INCORRECTA en una empresa suspendida no revela su estado",
+      "request": {
+        "method": "POST",
+        "path": "/api/auth/login",
+        "actor": "atacante",
+        "body": "{\"email\":\"st.d.munc1kxn.agente@sectest.local\",\"password\":\"contraseña-equivocada1\"}"
+      },
+      "esperado": "401 (no 423)",
+      "real": {
+        "status": 401,
+        "body": "{\"error\":\"Credenciales incorrectas\"}",
+        "ms": 198
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "SUSP-refresh-adminemp",
+      "titulo": "Refresh de adminemp (cookie emitida antes de suspender)",
+      "request": {
+        "method": "POST",
+        "path": "/api/auth/refresh",
+        "actor": "adminemp"
+      },
+      "esperado": "423 (contrato documentado en suspension.ts / suspenderEmpresa)",
+      "real": {
+        "status": 401,
+        "body": "{\"error\":\"Refresh token inválido o expirado\"}",
+        "ms": 3
+      },
+      "resultado": "FALLA",
+      "severidad": "baja",
+      "nota": "Suspender revoca los refresh tokens (revocarSesionesDeEmpresa), así que el refresh responde 401 y el cliente no puede distinguir «suspendida» de «sesión vencida» hasta que intenta el login (423). El acceso SÍ se corta."
+    },
+    {
+      "id": "SUSP-refresh-adminsuc",
+      "titulo": "Refresh de adminsuc (cookie emitida antes de suspender)",
+      "request": {
+        "method": "POST",
+        "path": "/api/auth/refresh",
+        "actor": "adminsuc"
+      },
+      "esperado": "423 (contrato documentado en suspension.ts / suspenderEmpresa)",
+      "real": {
+        "status": 401,
+        "body": "{\"error\":\"Refresh token inválido o expirado\"}",
+        "ms": 2
+      },
+      "resultado": "FALLA",
+      "severidad": "baja",
+      "nota": "Suspender revoca los refresh tokens (revocarSesionesDeEmpresa), así que el refresh responde 401 y el cliente no puede distinguir «suspendida» de «sesión vencida» hasta que intenta el login (423). El acceso SÍ se corta."
+    },
+    {
+      "id": "SUSP-refresh-agente",
+      "titulo": "Refresh de agente (cookie emitida antes de suspender)",
+      "request": {
+        "method": "POST",
+        "path": "/api/auth/refresh",
+        "actor": "agente"
+      },
+      "esperado": "423 (contrato documentado en suspension.ts / suspenderEmpresa)",
+      "real": {
+        "status": 401,
+        "body": "{\"error\":\"Refresh token inválido o expirado\"}",
+        "ms": 2
+      },
+      "resultado": "FALLA",
+      "severidad": "baja",
+      "nota": "Suspender revoca los refresh tokens (revocarSesionesDeEmpresa), así que el refresh responde 401 y el cliente no puede distinguir «suspendida» de «sesión vencida» hasta que intenta el login (423). El acceso SÍ se corta."
+    },
+    {
+      "id": "SUSP-refresh-res",
+      "titulo": "Refresh de res (cookie emitida antes de suspender)",
+      "request": {
+        "method": "POST",
+        "path": "/api/auth/refresh",
+        "actor": "res"
+      },
+      "esperado": "423 (contrato documentado en suspension.ts / suspenderEmpresa)",
+      "real": {
+        "status": 401,
+        "body": "{\"error\":\"Refresh token inválido o expirado\"}",
+        "ms": 2
+      },
+      "resultado": "FALLA",
+      "severidad": "baja",
+      "nota": "Suspender revoca los refresh tokens (revocarSesionesDeEmpresa), así que el refresh responde 401 y el cliente no puede distinguir «suspendida» de «sesión vencida» hasta que intenta el login (423). El acceso SÍ se corta."
+    },
+    {
+      "id": "SUSP-heartbeat",
+      "titulo": "Heartbeat de la licencia de una empresa suspendida",
+      "request": {
+        "method": "POST",
+        "path": "/api/licencias/heartbeat",
+        "actor": "licencia D",
+        "body": "{\"fingerprint\":\"9dad79678deaecc629e2bb6583e65807371d8f16a16cce7403cee3e5d008c3c0\"}"
+      },
+      "esperado": "423 (estado suspendida)",
+      "real": {
+        "status": 423,
+        "body": "{\"error\":\"Las operaciones de ST Empresa D suspendible munc1kxn están suspendidas: ST prueba: impago simulado. Contacta al administrador de SecureGate.\",\"estado\":\"suspendida\"}",
+        "ms": 3
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "SUSP-activar",
+      "titulo": "Activar un código nuevo de una empresa suspendida",
+      "request": {
+        "method": "POST",
+        "path": "/api/licencias/activar",
+        "actor": "anónimo",
+        "body": "{\"codigo\":\"SG-63EB-STRD-8U3X-CKZW\",\"fingerprint\":\"ba7b5a81cca69ed35ce9e6e6bde625aae19c9737883596f724cc07647edcc8bf\"}"
+      },
+      "esperado": "423",
+      "real": {
+        "status": 423,
+        "body": "{\"error\":\"Las operaciones de ST Empresa D suspendible munc1kxn están suspendidas: ST prueba: impago simulado. Contacta al administrador de SecureGate.\",\"estado\":\"suspendida\"}",
+        "ms": 3
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "SUSP-sync",
+      "titulo": "sync/garita con licencia y sesión de una empresa suspendida",
+      "request": {
+        "method": "GET",
+        "path": "/api/sync/garita",
+        "actor": "agente D + licencia D"
+      },
+      "esperado": "401/403/423",
+      "real": {
+        "status": 401,
+        "body": "{\"error\":\"Sesión revocada\"}",
+        "ms": 2
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "SUSP-accesos",
+      "titulo": "POST /accesos con licencia de una empresa suspendida",
+      "request": {
+        "method": "POST",
+        "path": "/api/accesos",
+        "actor": "agente D + licencia D",
+        "body": "{\"nombre_visitante\":\"ST susp\",\"numero_dpi\":\"ST-SUSP-1\",\"residente_id\":\"8831e361-f6cd-407c-bb53-1a3a20a83dad\"}"
+      },
+      "esperado": "401/403/423",
+      "real": {
+        "status": 401,
+        "body": "{\"error\":\"Sesión revocada\"}",
+        "ms": 2
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "SUSP-token-vivo-adminemp",
+      "titulo": "El access token de adminemp emitido antes de suspender deja de valer",
+      "request": {
+        "method": "GET",
+        "path": "/api/reservas/mis-reservas",
+        "actor": "adminemp"
+      },
+      "esperado": "401 (Sesión revocada)",
+      "real": {
+        "status": 401,
+        "body": "{\"error\":\"Sesión revocada\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "SUSP-token-vivo-adminsuc",
+      "titulo": "El access token de adminsuc emitido antes de suspender deja de valer",
+      "request": {
+        "method": "GET",
+        "path": "/api/reservas/mis-reservas",
+        "actor": "adminsuc"
+      },
+      "esperado": "401 (Sesión revocada)",
+      "real": {
+        "status": 401,
+        "body": "{\"error\":\"Sesión revocada\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "SUSP-token-vivo-agente",
+      "titulo": "El access token de agente emitido antes de suspender deja de valer",
+      "request": {
+        "method": "GET",
+        "path": "/api/reservas/mis-reservas",
+        "actor": "agente"
+      },
+      "esperado": "401 (Sesión revocada)",
+      "real": {
+        "status": 401,
+        "body": "{\"error\":\"Sesión revocada\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "SUSP-token-vivo-res",
+      "titulo": "El access token de res emitido antes de suspender deja de valer",
+      "request": {
+        "method": "GET",
+        "path": "/api/reservas/mis-reservas",
+        "actor": "res"
+      },
+      "esperado": "401 (Sesión revocada)",
+      "real": {
+        "status": 401,
+        "body": "{\"error\":\"Sesión revocada\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "SUSP-owner-libre",
+      "titulo": "El owner no se ve afectado",
+      "request": {
+        "method": "GET",
+        "path": "/api/empresas",
+        "actor": "owner"
+      },
+      "esperado": "200",
+      "real": {
+        "status": 200,
+        "body": "[{\"id\":\"d4f8a133-e2e2-4d8d-a2be-9207a75f3e73\",\"nombre\":\"ST Empresa Z (ZAP)\",\"nit\":\"ST-NIT\",\"logo_url\":null,\"activo\":true,\"created_at\":\"2026-09-30T05:17:18.129Z\",\"suspendida\":false,\"suspension_motivo\":null,\"suspendida_en\":null,\"total_sucursales\":1},{\"id\":\"839b6…(+1019)",
+        "ms": 3
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "SUSP-otra-empresa-libre",
+      "titulo": "Las empresas A y B no se ven afectadas",
+      "request": {
+        "method": "POST",
+        "path": "/api/auth/login",
+        "actor": "agente A1",
+        "body": "{\"email\":\"st.agente.a1@sectest.local\",\"password\":\"Sec#Test2026a\"}"
+      },
+      "esperado": "200",
+      "real": {
+        "status": 200,
+        "body": "{\"token\":\"<jwt-redactado>…(+340)",
+        "ms": 205
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "SUSP-reactivar",
+      "titulo": "El owner reactiva la empresa D",
+      "request": {
+        "method": "PATCH",
+        "path": "/api/empresas/d40e8555-1f26-4113-ab8c-1630c488aae0/reactivar",
+        "actor": "owner",
+        "body": "{}"
+      },
+      "esperado": "200",
+      "real": {
+        "status": 200,
+        "body": "{\"id\":\"d40e8555-1f26-4113-ab8c-1630c488aae0\",\"nombre\":\"ST Empresa D suspendible munc1kxn\",\"nit\":null,\"logo_url\":null,\"activo\":true,\"created_at\":\"2026-09-30T05:53:51.426Z\",\"suspendida\":false,\"suspension_motivo\":null,\"suspendida_en\":null}",
+        "ms": 3
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "SUSP-tras-reactivar-login",
+      "titulo": "Tras reactivar, el login vuelve a funcionar",
+      "request": {
+        "method": "POST",
+        "path": "/api/auth/login",
+        "actor": "agente D",
+        "body": "{\"email\":\"st.d.munc1kxn.agente@sectest.local\",\"password\":\"Sec#Test2026a\"}"
+      },
+      "esperado": "200",
+      "real": {
+        "status": 200,
+        "body": "{\"token\":\"<jwt-redactado>…(+356)",
+        "ms": 198
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "SUSP-tras-reactivar-heartbeat",
+      "titulo": "Tras reactivar, la misma licencia vuelve a validar",
+      "request": {
+        "method": "POST",
+        "path": "/api/licencias/heartbeat",
+        "actor": "licencia D",
+        "body": "{\"fingerprint\":\"9dad79678deaecc629e2bb6583e65807371d8f16a16cce7403cee3e5d008c3c0\"}"
+      },
+      "esperado": "200 (la licencia no se revoca)",
+      "real": {
+        "status": 200,
+        "body": "{\"estado\":\"activa\",\"licencia_id\":\"e7f8ffd3-5293-4b44-b9c4-baf17b0b1f2c\",\"sucursal_id\":\"eadec03f-689f-40f4-8a0b-ffcf59b532f1\",\"servidor_ahora\":\"2026-09-29T23:53:54.878Z\",\"heartbeat_intervalo_min\":15,\"gracia_offline_horas\":72}",
+        "ms": 4
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "SUSP-refresh-rama-423",
+      "titulo": "Refresh con token vigente y empresa suspendida directamente en BD",
+      "request": {
+        "method": "POST",
+        "path": "/api/auth/refresh",
+        "actor": "agente D"
+      },
+      "esperado": "423",
+      "real": {
+        "status": 423,
+        "body": "{\"error\":\"Las operaciones de ST Empresa D suspendible munc1kxn están suspendidas: ST directo en BD. Contacta al administrador de SecureGate.\",\"estado\":\"suspendida\",\"codigo\":\"empresa_suspendida\",\"empresa\":\"ST Empresa D suspendible munc1kxn\",\"motivo\":\"ST directo…(+43)",
+        "ms": 3
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "BAJA-eliminar",
+      "titulo": "El owner da de baja la empresa D (DELETE)",
+      "request": {
+        "method": "DELETE",
+        "path": "/api/empresas/d40e8555-1f26-4113-ab8c-1630c488aae0",
+        "actor": "owner"
+      },
+      "esperado": "200",
+      "real": {
+        "status": 200,
+        "body": "{\"message\":\"Empresa y todos sus recursos desactivados\",\"id\":\"d40e8555-1f26-4113-ab8c-1630c488aae0\"}",
+        "ms": 8
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "BAJA-login",
+      "titulo": "Login de una empresa dada de baja",
+      "request": {
+        "method": "POST",
+        "path": "/api/auth/login",
+        "actor": "agente D",
+        "body": "{\"email\":\"st.d.munc1kxn.agente@sectest.local\",\"password\":\"Sec#Test2026a\"}"
+      },
+      "esperado": "401 o 423 (nunca 200)",
+      "real": {
+        "status": 401,
+        "body": "{\"error\":\"Credenciales incorrectas\"}",
+        "ms": 210
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "BAJA-heartbeat",
+      "titulo": "Heartbeat de una licencia de empresa dada de baja",
+      "request": {
+        "method": "POST",
+        "path": "/api/licencias/heartbeat",
+        "actor": "licencia D",
+        "body": "{\"fingerprint\":\"9dad79678deaecc629e2bb6583e65807371d8f16a16cce7403cee3e5d008c3c0\"}"
+      },
+      "esperado": "403/423 (nunca 200)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Licencia revocada\",\"estado\":\"revocada\"}",
+        "ms": 3
+      },
+      "resultado": "OK"
+    }
+  ]
+}

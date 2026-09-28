@@ -1,0 +1,3191 @@
+{
+  "id": "02-roles",
+  "titulo": "Escalación de roles y mass assignment",
+  "fecha": "2026-09-29T23:55:38.117Z",
+  "base": "http://localhost:3000",
+  "items": [
+    {
+      "id": "ROL-residente-GET-empresas-GET",
+      "titulo": "residente llama a GET empresas-GET (exige owner)",
+      "request": {
+        "method": "GET",
+        "path": "/api/empresas",
+        "actor": "residente (resA1)"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a owner\"}",
+        "ms": 3
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-agente-GET-empresas-GET",
+      "titulo": "agente llama a GET empresas-GET (exige owner)",
+      "request": {
+        "method": "GET",
+        "path": "/api/empresas",
+        "actor": "agente (agenteA1)"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a owner\"}",
+        "ms": 2
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-admin_sucursal-GET-empresas-GET",
+      "titulo": "admin_sucursal llama a GET empresas-GET (exige owner)",
+      "request": {
+        "method": "GET",
+        "path": "/api/empresas",
+        "actor": "admin_sucursal (adminSucA1)"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a owner\"}",
+        "ms": 2
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-admin_empresa-GET-empresas-GET",
+      "titulo": "admin_empresa llama a GET empresas-GET (exige owner)",
+      "request": {
+        "method": "GET",
+        "path": "/api/empresas",
+        "actor": "admin_empresa (adminEmpA)"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a owner\"}",
+        "ms": 2
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-residente-POST-empresas-POST",
+      "titulo": "residente llama a POST empresas-POST (exige owner)",
+      "request": {
+        "method": "POST",
+        "path": "/api/empresas",
+        "actor": "residente (resA1)",
+        "body": "{\"nombre\":\"ST-hack-empresa\"}"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a owner\"}",
+        "ms": 2
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-agente-POST-empresas-POST",
+      "titulo": "agente llama a POST empresas-POST (exige owner)",
+      "request": {
+        "method": "POST",
+        "path": "/api/empresas",
+        "actor": "agente (agenteA1)",
+        "body": "{\"nombre\":\"ST-hack-empresa\"}"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a owner\"}",
+        "ms": 2
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-admin_sucursal-POST-empresas-POST",
+      "titulo": "admin_sucursal llama a POST empresas-POST (exige owner)",
+      "request": {
+        "method": "POST",
+        "path": "/api/empresas",
+        "actor": "admin_sucursal (adminSucA1)",
+        "body": "{\"nombre\":\"ST-hack-empresa\"}"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a owner\"}",
+        "ms": 2
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-admin_empresa-POST-empresas-POST",
+      "titulo": "admin_empresa llama a POST empresas-POST (exige owner)",
+      "request": {
+        "method": "POST",
+        "path": "/api/empresas",
+        "actor": "admin_empresa (adminEmpA)",
+        "body": "{\"nombre\":\"ST-hack-empresa\"}"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a owner\"}",
+        "ms": 2
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-residente-PUT-empresas-PUT",
+      "titulo": "residente llama a PUT empresas-PUT (exige owner)",
+      "request": {
+        "method": "PUT",
+        "path": "/api/empresas/c1da0ff8-4c5c-41df-ab83-c9767cd5f692",
+        "actor": "residente (resA1)",
+        "body": "{\"nombre\":\"HACK\"}"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a owner\"}",
+        "ms": 3
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-agente-PUT-empresas-PUT",
+      "titulo": "agente llama a PUT empresas-PUT (exige owner)",
+      "request": {
+        "method": "PUT",
+        "path": "/api/empresas/c1da0ff8-4c5c-41df-ab83-c9767cd5f692",
+        "actor": "agente (agenteA1)",
+        "body": "{\"nombre\":\"HACK\"}"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a owner\"}",
+        "ms": 2
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-admin_sucursal-PUT-empresas-PUT",
+      "titulo": "admin_sucursal llama a PUT empresas-PUT (exige owner)",
+      "request": {
+        "method": "PUT",
+        "path": "/api/empresas/c1da0ff8-4c5c-41df-ab83-c9767cd5f692",
+        "actor": "admin_sucursal (adminSucA1)",
+        "body": "{\"nombre\":\"HACK\"}"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a owner\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-admin_empresa-PUT-empresas-PUT",
+      "titulo": "admin_empresa llama a PUT empresas-PUT (exige owner)",
+      "request": {
+        "method": "PUT",
+        "path": "/api/empresas/c1da0ff8-4c5c-41df-ab83-c9767cd5f692",
+        "actor": "admin_empresa (adminEmpA)",
+        "body": "{\"nombre\":\"HACK\"}"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a owner\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-residente-DELETE-empresas-DELETE",
+      "titulo": "residente llama a DELETE empresas-DELETE (exige owner)",
+      "request": {
+        "method": "DELETE",
+        "path": "/api/empresas/c1da0ff8-4c5c-41df-ab83-c9767cd5f692",
+        "actor": "residente (resA1)"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a owner\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-agente-DELETE-empresas-DELETE",
+      "titulo": "agente llama a DELETE empresas-DELETE (exige owner)",
+      "request": {
+        "method": "DELETE",
+        "path": "/api/empresas/c1da0ff8-4c5c-41df-ab83-c9767cd5f692",
+        "actor": "agente (agenteA1)"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a owner\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-admin_sucursal-DELETE-empresas-DELETE",
+      "titulo": "admin_sucursal llama a DELETE empresas-DELETE (exige owner)",
+      "request": {
+        "method": "DELETE",
+        "path": "/api/empresas/c1da0ff8-4c5c-41df-ab83-c9767cd5f692",
+        "actor": "admin_sucursal (adminSucA1)"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a owner\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-admin_empresa-DELETE-empresas-DELETE",
+      "titulo": "admin_empresa llama a DELETE empresas-DELETE (exige owner)",
+      "request": {
+        "method": "DELETE",
+        "path": "/api/empresas/c1da0ff8-4c5c-41df-ab83-c9767cd5f692",
+        "actor": "admin_empresa (adminEmpA)"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a owner\"}",
+        "ms": 2
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-residente-POST-empresas-admin",
+      "titulo": "residente llama a POST empresas-admin (exige owner)",
+      "request": {
+        "method": "POST",
+        "path": "/api/empresas/c1da0ff8-4c5c-41df-ab83-c9767cd5f692/admin",
+        "actor": "residente (resA1)",
+        "body": "{\"usuario_id\":\"58fd4003-977a-471c-a5aa-3cb57e958f0a\"}"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a owner\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-agente-POST-empresas-admin",
+      "titulo": "agente llama a POST empresas-admin (exige owner)",
+      "request": {
+        "method": "POST",
+        "path": "/api/empresas/c1da0ff8-4c5c-41df-ab83-c9767cd5f692/admin",
+        "actor": "agente (agenteA1)",
+        "body": "{\"usuario_id\":\"58fd4003-977a-471c-a5aa-3cb57e958f0a\"}"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a owner\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-admin_sucursal-POST-empresas-admin",
+      "titulo": "admin_sucursal llama a POST empresas-admin (exige owner)",
+      "request": {
+        "method": "POST",
+        "path": "/api/empresas/c1da0ff8-4c5c-41df-ab83-c9767cd5f692/admin",
+        "actor": "admin_sucursal (adminSucA1)",
+        "body": "{\"usuario_id\":\"58fd4003-977a-471c-a5aa-3cb57e958f0a\"}"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a owner\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-admin_empresa-POST-empresas-admin",
+      "titulo": "admin_empresa llama a POST empresas-admin (exige owner)",
+      "request": {
+        "method": "POST",
+        "path": "/api/empresas/c1da0ff8-4c5c-41df-ab83-c9767cd5f692/admin",
+        "actor": "admin_empresa (adminEmpA)",
+        "body": "{\"usuario_id\":\"58fd4003-977a-471c-a5aa-3cb57e958f0a\"}"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a owner\"}",
+        "ms": 2
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-residente-PATCH-empresas-suspender",
+      "titulo": "residente llama a PATCH empresas-suspender (exige owner)",
+      "request": {
+        "method": "PATCH",
+        "path": "/api/empresas/c1da0ff8-4c5c-41df-ab83-c9767cd5f692/suspender",
+        "actor": "residente (resA1)",
+        "body": "{\"suspendida\":true,\"motivo\":\"HACK\"}"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a owner\"}",
+        "ms": 2
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-agente-PATCH-empresas-suspender",
+      "titulo": "agente llama a PATCH empresas-suspender (exige owner)",
+      "request": {
+        "method": "PATCH",
+        "path": "/api/empresas/c1da0ff8-4c5c-41df-ab83-c9767cd5f692/suspender",
+        "actor": "agente (agenteA1)",
+        "body": "{\"suspendida\":true,\"motivo\":\"HACK\"}"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a owner\"}",
+        "ms": 2
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-admin_sucursal-PATCH-empresas-suspender",
+      "titulo": "admin_sucursal llama a PATCH empresas-suspender (exige owner)",
+      "request": {
+        "method": "PATCH",
+        "path": "/api/empresas/c1da0ff8-4c5c-41df-ab83-c9767cd5f692/suspender",
+        "actor": "admin_sucursal (adminSucA1)",
+        "body": "{\"suspendida\":true,\"motivo\":\"HACK\"}"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a owner\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-admin_empresa-PATCH-empresas-suspender",
+      "titulo": "admin_empresa llama a PATCH empresas-suspender (exige owner)",
+      "request": {
+        "method": "PATCH",
+        "path": "/api/empresas/c1da0ff8-4c5c-41df-ab83-c9767cd5f692/suspender",
+        "actor": "admin_empresa (adminEmpA)",
+        "body": "{\"suspendida\":true,\"motivo\":\"HACK\"}"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a owner\"}",
+        "ms": 3
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-residente-PATCH-empresas-reactivar",
+      "titulo": "residente llama a PATCH empresas-reactivar (exige owner)",
+      "request": {
+        "method": "PATCH",
+        "path": "/api/empresas/c1da0ff8-4c5c-41df-ab83-c9767cd5f692/reactivar",
+        "actor": "residente (resA1)",
+        "body": "{}"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a owner\"}",
+        "ms": 2
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-agente-PATCH-empresas-reactivar",
+      "titulo": "agente llama a PATCH empresas-reactivar (exige owner)",
+      "request": {
+        "method": "PATCH",
+        "path": "/api/empresas/c1da0ff8-4c5c-41df-ab83-c9767cd5f692/reactivar",
+        "actor": "agente (agenteA1)",
+        "body": "{}"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a owner\"}",
+        "ms": 2
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-admin_sucursal-PATCH-empresas-reactivar",
+      "titulo": "admin_sucursal llama a PATCH empresas-reactivar (exige owner)",
+      "request": {
+        "method": "PATCH",
+        "path": "/api/empresas/c1da0ff8-4c5c-41df-ab83-c9767cd5f692/reactivar",
+        "actor": "admin_sucursal (adminSucA1)",
+        "body": "{}"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a owner\"}",
+        "ms": 2
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-admin_empresa-PATCH-empresas-reactivar",
+      "titulo": "admin_empresa llama a PATCH empresas-reactivar (exige owner)",
+      "request": {
+        "method": "PATCH",
+        "path": "/api/empresas/c1da0ff8-4c5c-41df-ab83-c9767cd5f692/reactivar",
+        "actor": "admin_empresa (adminEmpA)",
+        "body": "{}"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a owner\"}",
+        "ms": 2
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-residente-POST-empresas-eliminar-def",
+      "titulo": "residente llama a POST empresas-eliminar-def (exige owner)",
+      "request": {
+        "method": "POST",
+        "path": "/api/empresas/c1da0ff8-4c5c-41df-ab83-c9767cd5f692/eliminar-definitivo",
+        "actor": "residente (resA1)",
+        "body": "{\"password\":\"x\"}"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a owner\"}",
+        "ms": 2
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-agente-POST-empresas-eliminar-def",
+      "titulo": "agente llama a POST empresas-eliminar-def (exige owner)",
+      "request": {
+        "method": "POST",
+        "path": "/api/empresas/c1da0ff8-4c5c-41df-ab83-c9767cd5f692/eliminar-definitivo",
+        "actor": "agente (agenteA1)",
+        "body": "{\"password\":\"x\"}"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a owner\"}",
+        "ms": 3
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-admin_sucursal-POST-empresas-eliminar-def",
+      "titulo": "admin_sucursal llama a POST empresas-eliminar-def (exige owner)",
+      "request": {
+        "method": "POST",
+        "path": "/api/empresas/c1da0ff8-4c5c-41df-ab83-c9767cd5f692/eliminar-definitivo",
+        "actor": "admin_sucursal (adminSucA1)",
+        "body": "{\"password\":\"x\"}"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a owner\"}",
+        "ms": 2
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-admin_empresa-POST-empresas-eliminar-def",
+      "titulo": "admin_empresa llama a POST empresas-eliminar-def (exige owner)",
+      "request": {
+        "method": "POST",
+        "path": "/api/empresas/c1da0ff8-4c5c-41df-ab83-c9767cd5f692/eliminar-definitivo",
+        "actor": "admin_empresa (adminEmpA)",
+        "body": "{\"password\":\"x\"}"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a owner\"}",
+        "ms": 4
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-residente-GET-audit-logs",
+      "titulo": "residente llama a GET audit-logs (exige owner)",
+      "request": {
+        "method": "GET",
+        "path": "/api/audit-logs",
+        "actor": "residente (resA1)"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a owner\"}",
+        "ms": 2
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-agente-GET-audit-logs",
+      "titulo": "agente llama a GET audit-logs (exige owner)",
+      "request": {
+        "method": "GET",
+        "path": "/api/audit-logs",
+        "actor": "agente (agenteA1)"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a owner\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-admin_sucursal-GET-audit-logs",
+      "titulo": "admin_sucursal llama a GET audit-logs (exige owner)",
+      "request": {
+        "method": "GET",
+        "path": "/api/audit-logs",
+        "actor": "admin_sucursal (adminSucA1)"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a owner\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-admin_empresa-GET-audit-logs",
+      "titulo": "admin_empresa llama a GET audit-logs (exige owner)",
+      "request": {
+        "method": "GET",
+        "path": "/api/audit-logs",
+        "actor": "admin_empresa (adminEmpA)"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a owner\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-residente-POST-admin-mora",
+      "titulo": "residente llama a POST admin-mora (exige owner)",
+      "request": {
+        "method": "POST",
+        "path": "/api/admin/ejecutar-revision-mora",
+        "actor": "residente (resA1)",
+        "body": "{}"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a owner\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-agente-POST-admin-mora",
+      "titulo": "agente llama a POST admin-mora (exige owner)",
+      "request": {
+        "method": "POST",
+        "path": "/api/admin/ejecutar-revision-mora",
+        "actor": "agente (agenteA1)",
+        "body": "{}"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a owner\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-admin_sucursal-POST-admin-mora",
+      "titulo": "admin_sucursal llama a POST admin-mora (exige owner)",
+      "request": {
+        "method": "POST",
+        "path": "/api/admin/ejecutar-revision-mora",
+        "actor": "admin_sucursal (adminSucA1)",
+        "body": "{}"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a owner\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-admin_empresa-POST-admin-mora",
+      "titulo": "admin_empresa llama a POST admin-mora (exige owner)",
+      "request": {
+        "method": "POST",
+        "path": "/api/admin/ejecutar-revision-mora",
+        "actor": "admin_empresa (adminEmpA)",
+        "body": "{}"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a owner\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-residente-POST-admin-recordatorios",
+      "titulo": "residente llama a POST admin-recordatorios (exige owner)",
+      "request": {
+        "method": "POST",
+        "path": "/api/admin/ejecutar-recordatorios-reservas",
+        "actor": "residente (resA1)",
+        "body": "{}"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a owner\"}",
+        "ms": 2
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-agente-POST-admin-recordatorios",
+      "titulo": "agente llama a POST admin-recordatorios (exige owner)",
+      "request": {
+        "method": "POST",
+        "path": "/api/admin/ejecutar-recordatorios-reservas",
+        "actor": "agente (agenteA1)",
+        "body": "{}"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a owner\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-admin_sucursal-POST-admin-recordatorios",
+      "titulo": "admin_sucursal llama a POST admin-recordatorios (exige owner)",
+      "request": {
+        "method": "POST",
+        "path": "/api/admin/ejecutar-recordatorios-reservas",
+        "actor": "admin_sucursal (adminSucA1)",
+        "body": "{}"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a owner\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-admin_empresa-POST-admin-recordatorios",
+      "titulo": "admin_empresa llama a POST admin-recordatorios (exige owner)",
+      "request": {
+        "method": "POST",
+        "path": "/api/admin/ejecutar-recordatorios-reservas",
+        "actor": "admin_empresa (adminEmpA)",
+        "body": "{}"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a owner\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-residente-POST-admin-exp-invitaciones",
+      "titulo": "residente llama a POST admin-exp-invitaciones (exige owner)",
+      "request": {
+        "method": "POST",
+        "path": "/api/admin/ejecutar-expiracion-invitaciones",
+        "actor": "residente (resA1)",
+        "body": "{}"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a owner\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-agente-POST-admin-exp-invitaciones",
+      "titulo": "agente llama a POST admin-exp-invitaciones (exige owner)",
+      "request": {
+        "method": "POST",
+        "path": "/api/admin/ejecutar-expiracion-invitaciones",
+        "actor": "agente (agenteA1)",
+        "body": "{}"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a owner\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-admin_sucursal-POST-admin-exp-invitaciones",
+      "titulo": "admin_sucursal llama a POST admin-exp-invitaciones (exige owner)",
+      "request": {
+        "method": "POST",
+        "path": "/api/admin/ejecutar-expiracion-invitaciones",
+        "actor": "admin_sucursal (adminSucA1)",
+        "body": "{}"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a owner\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-admin_empresa-POST-admin-exp-invitaciones",
+      "titulo": "admin_empresa llama a POST admin-exp-invitaciones (exige owner)",
+      "request": {
+        "method": "POST",
+        "path": "/api/admin/ejecutar-expiracion-invitaciones",
+        "actor": "admin_empresa (adminEmpA)",
+        "body": "{}"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a owner\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-residente-GET-empresas-stats",
+      "titulo": "residente llama a GET empresas-stats (exige admin_empresa)",
+      "request": {
+        "method": "GET",
+        "path": "/api/empresas/c1da0ff8-4c5c-41df-ab83-c9767cd5f692/stats",
+        "actor": "residente (resA1)"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a admin de empresa\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-agente-GET-empresas-stats",
+      "titulo": "agente llama a GET empresas-stats (exige admin_empresa)",
+      "request": {
+        "method": "GET",
+        "path": "/api/empresas/c1da0ff8-4c5c-41df-ab83-c9767cd5f692/stats",
+        "actor": "agente (agenteA1)"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a admin de empresa\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-admin_sucursal-GET-empresas-stats",
+      "titulo": "admin_sucursal llama a GET empresas-stats (exige admin_empresa)",
+      "request": {
+        "method": "GET",
+        "path": "/api/empresas/c1da0ff8-4c5c-41df-ab83-c9767cd5f692/stats",
+        "actor": "admin_sucursal (adminSucA1)"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a admin de empresa\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-residente-GET-sucursales-GET",
+      "titulo": "residente llama a GET sucursales-GET (exige admin_empresa)",
+      "request": {
+        "method": "GET",
+        "path": "/api/sucursales",
+        "actor": "residente (resA1)"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a admin de empresa\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-agente-GET-sucursales-GET",
+      "titulo": "agente llama a GET sucursales-GET (exige admin_empresa)",
+      "request": {
+        "method": "GET",
+        "path": "/api/sucursales",
+        "actor": "agente (agenteA1)"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a admin de empresa\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-admin_sucursal-GET-sucursales-GET",
+      "titulo": "admin_sucursal llama a GET sucursales-GET (exige admin_empresa)",
+      "request": {
+        "method": "GET",
+        "path": "/api/sucursales",
+        "actor": "admin_sucursal (adminSucA1)"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a admin de empresa\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-residente-POST-sucursales-POST",
+      "titulo": "residente llama a POST sucursales-POST (exige admin_empresa)",
+      "request": {
+        "method": "POST",
+        "path": "/api/sucursales",
+        "actor": "residente (resA1)",
+        "body": "{\"empresa_id\":\"c1da0ff8-4c5c-41df-ab83-c9767cd5f692\",\"nombre\":\"ST-hack-suc\"}"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a admin de empresa\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-agente-POST-sucursales-POST",
+      "titulo": "agente llama a POST sucursales-POST (exige admin_empresa)",
+      "request": {
+        "method": "POST",
+        "path": "/api/sucursales",
+        "actor": "agente (agenteA1)",
+        "body": "{\"empresa_id\":\"c1da0ff8-4c5c-41df-ab83-c9767cd5f692\",\"nombre\":\"ST-hack-suc\"}"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a admin de empresa\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-admin_sucursal-POST-sucursales-POST",
+      "titulo": "admin_sucursal llama a POST sucursales-POST (exige admin_empresa)",
+      "request": {
+        "method": "POST",
+        "path": "/api/sucursales",
+        "actor": "admin_sucursal (adminSucA1)",
+        "body": "{\"empresa_id\":\"c1da0ff8-4c5c-41df-ab83-c9767cd5f692\",\"nombre\":\"ST-hack-suc\"}"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a admin de empresa\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-residente-PUT-sucursales-PUT",
+      "titulo": "residente llama a PUT sucursales-PUT (exige admin_empresa)",
+      "request": {
+        "method": "PUT",
+        "path": "/api/sucursales/bc94f428-2a9b-4d8c-8470-7f83b9cecb35",
+        "actor": "residente (resA1)",
+        "body": "{\"nombre\":\"HACK\"}"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a admin de empresa\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-agente-PUT-sucursales-PUT",
+      "titulo": "agente llama a PUT sucursales-PUT (exige admin_empresa)",
+      "request": {
+        "method": "PUT",
+        "path": "/api/sucursales/bc94f428-2a9b-4d8c-8470-7f83b9cecb35",
+        "actor": "agente (agenteA1)",
+        "body": "{\"nombre\":\"HACK\"}"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a admin de empresa\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-admin_sucursal-PUT-sucursales-PUT",
+      "titulo": "admin_sucursal llama a PUT sucursales-PUT (exige admin_empresa)",
+      "request": {
+        "method": "PUT",
+        "path": "/api/sucursales/bc94f428-2a9b-4d8c-8470-7f83b9cecb35",
+        "actor": "admin_sucursal (adminSucA1)",
+        "body": "{\"nombre\":\"HACK\"}"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a admin de empresa\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-residente-DELETE-sucursales-DELETE",
+      "titulo": "residente llama a DELETE sucursales-DELETE (exige admin_empresa)",
+      "request": {
+        "method": "DELETE",
+        "path": "/api/sucursales/bc94f428-2a9b-4d8c-8470-7f83b9cecb35",
+        "actor": "residente (resA1)"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a admin de empresa\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-agente-DELETE-sucursales-DELETE",
+      "titulo": "agente llama a DELETE sucursales-DELETE (exige admin_empresa)",
+      "request": {
+        "method": "DELETE",
+        "path": "/api/sucursales/bc94f428-2a9b-4d8c-8470-7f83b9cecb35",
+        "actor": "agente (agenteA1)"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a admin de empresa\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-admin_sucursal-DELETE-sucursales-DELETE",
+      "titulo": "admin_sucursal llama a DELETE sucursales-DELETE (exige admin_empresa)",
+      "request": {
+        "method": "DELETE",
+        "path": "/api/sucursales/bc94f428-2a9b-4d8c-8470-7f83b9cecb35",
+        "actor": "admin_sucursal (adminSucA1)"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a admin de empresa\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-residente-POST-sucursales-admin",
+      "titulo": "residente llama a POST sucursales-admin (exige admin_empresa)",
+      "request": {
+        "method": "POST",
+        "path": "/api/sucursales/bc94f428-2a9b-4d8c-8470-7f83b9cecb35/admin",
+        "actor": "residente (resA1)",
+        "body": "{\"usuario_id\":\"58fd4003-977a-471c-a5aa-3cb57e958f0a\"}"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a admin de empresa\"}",
+        "ms": 2
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-agente-POST-sucursales-admin",
+      "titulo": "agente llama a POST sucursales-admin (exige admin_empresa)",
+      "request": {
+        "method": "POST",
+        "path": "/api/sucursales/bc94f428-2a9b-4d8c-8470-7f83b9cecb35/admin",
+        "actor": "agente (agenteA1)",
+        "body": "{\"usuario_id\":\"58fd4003-977a-471c-a5aa-3cb57e958f0a\"}"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a admin de empresa\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-admin_sucursal-POST-sucursales-admin",
+      "titulo": "admin_sucursal llama a POST sucursales-admin (exige admin_empresa)",
+      "request": {
+        "method": "POST",
+        "path": "/api/sucursales/bc94f428-2a9b-4d8c-8470-7f83b9cecb35/admin",
+        "actor": "admin_sucursal (adminSucA1)",
+        "body": "{\"usuario_id\":\"58fd4003-977a-471c-a5aa-3cb57e958f0a\"}"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a admin de empresa\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-residente-GET-invitaciones-GET",
+      "titulo": "residente llama a GET invitaciones-GET (exige admin_empresa)",
+      "request": {
+        "method": "GET",
+        "path": "/api/invitaciones",
+        "actor": "residente (resA1)"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a admin de empresa\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-agente-GET-invitaciones-GET",
+      "titulo": "agente llama a GET invitaciones-GET (exige admin_empresa)",
+      "request": {
+        "method": "GET",
+        "path": "/api/invitaciones",
+        "actor": "agente (agenteA1)"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a admin de empresa\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-admin_sucursal-GET-invitaciones-GET",
+      "titulo": "admin_sucursal llama a GET invitaciones-GET (exige admin_empresa)",
+      "request": {
+        "method": "GET",
+        "path": "/api/invitaciones",
+        "actor": "admin_sucursal (adminSucA1)"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a admin de empresa\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-residente-POST-invitaciones-POST",
+      "titulo": "residente llama a POST invitaciones-POST (exige admin_empresa)",
+      "request": {
+        "method": "POST",
+        "path": "/api/invitaciones",
+        "actor": "residente (resA1)",
+        "body": "{\"email\":\"st.hack.role@sectest.local\",\"rol_invitado\":\"admin_sucursal\",\"sucursal_id\":\"bc94f428-2a9b-4d8c-8470-7f83b9cecb35\"}"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a admin de empresa\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-agente-POST-invitaciones-POST",
+      "titulo": "agente llama a POST invitaciones-POST (exige admin_empresa)",
+      "request": {
+        "method": "POST",
+        "path": "/api/invitaciones",
+        "actor": "agente (agenteA1)",
+        "body": "{\"email\":\"st.hack.role@sectest.local\",\"rol_invitado\":\"admin_sucursal\",\"sucursal_id\":\"bc94f428-2a9b-4d8c-8470-7f83b9cecb35\"}"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a admin de empresa\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-admin_sucursal-POST-invitaciones-POST",
+      "titulo": "admin_sucursal llama a POST invitaciones-POST (exige admin_empresa)",
+      "request": {
+        "method": "POST",
+        "path": "/api/invitaciones",
+        "actor": "admin_sucursal (adminSucA1)",
+        "body": "{\"email\":\"st.hack.role@sectest.local\",\"rol_invitado\":\"admin_sucursal\",\"sucursal_id\":\"bc94f428-2a9b-4d8c-8470-7f83b9cecb35\"}"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a admin de empresa\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-residente-PATCH-invitaciones-revocar",
+      "titulo": "residente llama a PATCH invitaciones-revocar (exige admin_empresa)",
+      "request": {
+        "method": "PATCH",
+        "path": "/api/invitaciones/86d201a8-a563-43f4-88f6-13e60968dd70/revocar",
+        "actor": "residente (resA1)",
+        "body": "{}"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a admin de empresa\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-agente-PATCH-invitaciones-revocar",
+      "titulo": "agente llama a PATCH invitaciones-revocar (exige admin_empresa)",
+      "request": {
+        "method": "PATCH",
+        "path": "/api/invitaciones/86d201a8-a563-43f4-88f6-13e60968dd70/revocar",
+        "actor": "agente (agenteA1)",
+        "body": "{}"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a admin de empresa\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-admin_sucursal-PATCH-invitaciones-revocar",
+      "titulo": "admin_sucursal llama a PATCH invitaciones-revocar (exige admin_empresa)",
+      "request": {
+        "method": "PATCH",
+        "path": "/api/invitaciones/86d201a8-a563-43f4-88f6-13e60968dd70/revocar",
+        "actor": "admin_sucursal (adminSucA1)",
+        "body": "{}"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a admin de empresa\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-residente-POST-invitaciones-reenviar",
+      "titulo": "residente llama a POST invitaciones-reenviar (exige admin_empresa)",
+      "request": {
+        "method": "POST",
+        "path": "/api/invitaciones/86d201a8-a563-43f4-88f6-13e60968dd70/reenviar",
+        "actor": "residente (resA1)",
+        "body": "{}"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a admin de empresa\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-agente-POST-invitaciones-reenviar",
+      "titulo": "agente llama a POST invitaciones-reenviar (exige admin_empresa)",
+      "request": {
+        "method": "POST",
+        "path": "/api/invitaciones/86d201a8-a563-43f4-88f6-13e60968dd70/reenviar",
+        "actor": "agente (agenteA1)",
+        "body": "{}"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a admin de empresa\"}",
+        "ms": 2
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-admin_sucursal-POST-invitaciones-reenviar",
+      "titulo": "admin_sucursal llama a POST invitaciones-reenviar (exige admin_empresa)",
+      "request": {
+        "method": "POST",
+        "path": "/api/invitaciones/86d201a8-a563-43f4-88f6-13e60968dd70/reenviar",
+        "actor": "admin_sucursal (adminSucA1)",
+        "body": "{}"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a admin de empresa\"}",
+        "ms": 2
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-residente-GET-licencias-GET",
+      "titulo": "residente llama a GET licencias-GET (exige admin_sucursal)",
+      "request": {
+        "method": "GET",
+        "path": "/api/licencias",
+        "actor": "residente (resA1)"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a admin de sucursal\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-agente-GET-licencias-GET",
+      "titulo": "agente llama a GET licencias-GET (exige admin_sucursal)",
+      "request": {
+        "method": "GET",
+        "path": "/api/licencias",
+        "actor": "agente (agenteA1)"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a admin de sucursal\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-residente-POST-licencias-POST",
+      "titulo": "residente llama a POST licencias-POST (exige admin_sucursal)",
+      "request": {
+        "method": "POST",
+        "path": "/api/licencias",
+        "actor": "residente (resA1)",
+        "body": "{\"etiqueta\":\"ST-hack\"}"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a admin de sucursal\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-agente-POST-licencias-POST",
+      "titulo": "agente llama a POST licencias-POST (exige admin_sucursal)",
+      "request": {
+        "method": "POST",
+        "path": "/api/licencias",
+        "actor": "agente (agenteA1)",
+        "body": "{\"etiqueta\":\"ST-hack\"}"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a admin de sucursal\"}",
+        "ms": 2
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-residente-PATCH-licencias-revocar",
+      "titulo": "residente llama a PATCH licencias-revocar (exige admin_sucursal)",
+      "request": {
+        "method": "PATCH",
+        "path": "/api/licencias/eed7a832-e555-485c-a9b9-30396b16717a/revocar",
+        "actor": "residente (resA1)",
+        "body": "{}"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a admin de sucursal\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-agente-PATCH-licencias-revocar",
+      "titulo": "agente llama a PATCH licencias-revocar (exige admin_sucursal)",
+      "request": {
+        "method": "PATCH",
+        "path": "/api/licencias/eed7a832-e555-485c-a9b9-30396b16717a/revocar",
+        "actor": "agente (agenteA1)",
+        "body": "{}"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a admin de sucursal\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-residente-GET-pagos-GET",
+      "titulo": "residente llama a GET pagos-GET (exige admin_sucursal)",
+      "request": {
+        "method": "GET",
+        "path": "/api/pagos",
+        "actor": "residente (resA1)"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a admin de sucursal\"}",
+        "ms": 2
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-agente-GET-pagos-GET",
+      "titulo": "agente llama a GET pagos-GET (exige admin_sucursal)",
+      "request": {
+        "method": "GET",
+        "path": "/api/pagos",
+        "actor": "agente (agenteA1)"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a admin de sucursal\"}",
+        "ms": 5
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-residente-GET-pagos-pendientes",
+      "titulo": "residente llama a GET pagos-pendientes (exige admin_sucursal)",
+      "request": {
+        "method": "GET",
+        "path": "/api/pagos/pendientes-verificacion",
+        "actor": "residente (resA1)"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a admin de sucursal\"}",
+        "ms": 2
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-agente-GET-pagos-pendientes",
+      "titulo": "agente llama a GET pagos-pendientes (exige admin_sucursal)",
+      "request": {
+        "method": "GET",
+        "path": "/api/pagos/pendientes-verificacion",
+        "actor": "agente (agenteA1)"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a admin de sucursal\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-residente-POST-pagos-POST",
+      "titulo": "residente llama a POST pagos-POST (exige admin_sucursal)",
+      "request": {
+        "method": "POST",
+        "path": "/api/pagos",
+        "actor": "residente (resA1)",
+        "body": "{\"residente_id\":\"22c2723c-1af3-42b1-b2e8-b77656c6dde0\",\"monto\":1,\"comprobante\":\"x\"}"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a admin de sucursal\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-agente-POST-pagos-POST",
+      "titulo": "agente llama a POST pagos-POST (exige admin_sucursal)",
+      "request": {
+        "method": "POST",
+        "path": "/api/pagos",
+        "actor": "agente (agenteA1)",
+        "body": "{\"residente_id\":\"22c2723c-1af3-42b1-b2e8-b77656c6dde0\",\"monto\":1,\"comprobante\":\"x\"}"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a admin de sucursal\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-residente-PUT-pagos-aprobar",
+      "titulo": "residente llama a PUT pagos-aprobar (exige admin_sucursal)",
+      "request": {
+        "method": "PUT",
+        "path": "/api/pagos/1e7484e1-0201-422e-83df-acccec1f5dec/aprobar",
+        "actor": "residente (resA1)",
+        "body": "{}"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a admin de sucursal\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-agente-PUT-pagos-aprobar",
+      "titulo": "agente llama a PUT pagos-aprobar (exige admin_sucursal)",
+      "request": {
+        "method": "PUT",
+        "path": "/api/pagos/1e7484e1-0201-422e-83df-acccec1f5dec/aprobar",
+        "actor": "agente (agenteA1)",
+        "body": "{}"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a admin de sucursal\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-residente-PUT-pagos-rechazar",
+      "titulo": "residente llama a PUT pagos-rechazar (exige admin_sucursal)",
+      "request": {
+        "method": "PUT",
+        "path": "/api/pagos/1e7484e1-0201-422e-83df-acccec1f5dec/rechazar",
+        "actor": "residente (resA1)",
+        "body": "{\"comentario_rechazo\":\"x\"}"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a admin de sucursal\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-agente-PUT-pagos-rechazar",
+      "titulo": "agente llama a PUT pagos-rechazar (exige admin_sucursal)",
+      "request": {
+        "method": "PUT",
+        "path": "/api/pagos/1e7484e1-0201-422e-83df-acccec1f5dec/rechazar",
+        "actor": "agente (agenteA1)",
+        "body": "{\"comentario_rechazo\":\"x\"}"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a admin de sucursal\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-residente-POST-residentes-POST",
+      "titulo": "residente llama a POST residentes-POST (exige admin_sucursal)",
+      "request": {
+        "method": "POST",
+        "path": "/api/residentes",
+        "actor": "residente (resA1)",
+        "body": "{\"nombre\":\"ST hack\",\"email\":\"st.hack.role.res@sectest.local\",\"password\":\"Hack12345a\",\"numero_casa\":\"HACK-R\"}"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a admin de sucursal\"}",
+        "ms": 2
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-agente-POST-residentes-POST",
+      "titulo": "agente llama a POST residentes-POST (exige admin_sucursal)",
+      "request": {
+        "method": "POST",
+        "path": "/api/residentes",
+        "actor": "agente (agenteA1)",
+        "body": "{\"nombre\":\"ST hack\",\"email\":\"st.hack.role.res@sectest.local\",\"password\":\"Hack12345a\",\"numero_casa\":\"HACK-R\"}"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a admin de sucursal\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-residente-PUT-residentes-PUT",
+      "titulo": "residente llama a PUT residentes-PUT (exige admin_sucursal)",
+      "request": {
+        "method": "PUT",
+        "path": "/api/residentes/22c2723c-1af3-42b1-b2e8-b77656c6dde0",
+        "actor": "residente (resA1)",
+        "body": "{\"numero_casa\":\"HACK-R\"}"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a admin de sucursal\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-agente-PUT-residentes-PUT",
+      "titulo": "agente llama a PUT residentes-PUT (exige admin_sucursal)",
+      "request": {
+        "method": "PUT",
+        "path": "/api/residentes/22c2723c-1af3-42b1-b2e8-b77656c6dde0",
+        "actor": "agente (agenteA1)",
+        "body": "{\"numero_casa\":\"HACK-R\"}"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a admin de sucursal\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-residente-DELETE-residentes-DELETE",
+      "titulo": "residente llama a DELETE residentes-DELETE (exige admin_sucursal)",
+      "request": {
+        "method": "DELETE",
+        "path": "/api/residentes/22c2723c-1af3-42b1-b2e8-b77656c6dde0",
+        "actor": "residente (resA1)"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a admin de sucursal\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-agente-DELETE-residentes-DELETE",
+      "titulo": "agente llama a DELETE residentes-DELETE (exige admin_sucursal)",
+      "request": {
+        "method": "DELETE",
+        "path": "/api/residentes/22c2723c-1af3-42b1-b2e8-b77656c6dde0",
+        "actor": "agente (agenteA1)"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a admin de sucursal\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-residente-GET-usuarios-GET",
+      "titulo": "residente llama a GET usuarios-GET (exige admin_sucursal)",
+      "request": {
+        "method": "GET",
+        "path": "/api/usuarios",
+        "actor": "residente (resA1)"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a admin de sucursal\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-agente-GET-usuarios-GET",
+      "titulo": "agente llama a GET usuarios-GET (exige admin_sucursal)",
+      "request": {
+        "method": "GET",
+        "path": "/api/usuarios",
+        "actor": "agente (agenteA1)"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a admin de sucursal\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-residente-GET-usuarios-sucursal",
+      "titulo": "residente llama a GET usuarios-sucursal (exige admin_sucursal)",
+      "request": {
+        "method": "GET",
+        "path": "/api/usuarios/sucursal",
+        "actor": "residente (resA1)"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a admin de sucursal\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-agente-GET-usuarios-sucursal",
+      "titulo": "agente llama a GET usuarios-sucursal (exige admin_sucursal)",
+      "request": {
+        "method": "GET",
+        "path": "/api/usuarios/sucursal",
+        "actor": "agente (agenteA1)"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a admin de sucursal\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-residente-POST-usuarios-POST",
+      "titulo": "residente llama a POST usuarios-POST (exige admin_sucursal)",
+      "request": {
+        "method": "POST",
+        "path": "/api/usuarios",
+        "actor": "residente (resA1)",
+        "body": "{\"nombre\":\"ST hack\",\"email\":\"st.hack.role.u@sectest.local\",\"password\":\"Hack12345a\",\"rol\":\"agente\"}"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a admin de sucursal\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-agente-POST-usuarios-POST",
+      "titulo": "agente llama a POST usuarios-POST (exige admin_sucursal)",
+      "request": {
+        "method": "POST",
+        "path": "/api/usuarios",
+        "actor": "agente (agenteA1)",
+        "body": "{\"nombre\":\"ST hack\",\"email\":\"st.hack.role.u@sectest.local\",\"password\":\"Hack12345a\",\"rol\":\"agente\"}"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a admin de sucursal\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-residente-DELETE-usuarios-DELETE",
+      "titulo": "residente llama a DELETE usuarios-DELETE (exige admin_sucursal)",
+      "request": {
+        "method": "DELETE",
+        "path": "/api/usuarios/58fd4003-977a-471c-a5aa-3cb57e958f0a",
+        "actor": "residente (resA1)"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a admin de sucursal\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-agente-DELETE-usuarios-DELETE",
+      "titulo": "agente llama a DELETE usuarios-DELETE (exige admin_sucursal)",
+      "request": {
+        "method": "DELETE",
+        "path": "/api/usuarios/58fd4003-977a-471c-a5aa-3cb57e958f0a",
+        "actor": "agente (agenteA1)"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a admin de sucursal\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-residente-GET-anuncios-GET",
+      "titulo": "residente llama a GET anuncios-GET (exige admin_sucursal)",
+      "request": {
+        "method": "GET",
+        "path": "/api/anuncios",
+        "actor": "residente (resA1)"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a admin de sucursal\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-agente-GET-anuncios-GET",
+      "titulo": "agente llama a GET anuncios-GET (exige admin_sucursal)",
+      "request": {
+        "method": "GET",
+        "path": "/api/anuncios",
+        "actor": "agente (agenteA1)"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a admin de sucursal\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-residente-POST-anuncios-POST",
+      "titulo": "residente llama a POST anuncios-POST (exige admin_sucursal)",
+      "request": {
+        "method": "POST",
+        "path": "/api/anuncios",
+        "actor": "residente (resA1)",
+        "body": "{\"titulo\":\"ST-hack\",\"contenido\":\"x\"}"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a admin de sucursal\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-agente-POST-anuncios-POST",
+      "titulo": "agente llama a POST anuncios-POST (exige admin_sucursal)",
+      "request": {
+        "method": "POST",
+        "path": "/api/anuncios",
+        "actor": "agente (agenteA1)",
+        "body": "{\"titulo\":\"ST-hack\",\"contenido\":\"x\"}"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a admin de sucursal\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-residente-PUT-anuncios-PUT",
+      "titulo": "residente llama a PUT anuncios-PUT (exige admin_sucursal)",
+      "request": {
+        "method": "PUT",
+        "path": "/api/anuncios/0a07f020-2759-4e4e-ab5c-dbc8d9136e3d",
+        "actor": "residente (resA1)",
+        "body": "{\"titulo\":\"HACK\",\"contenido\":\"x\"}"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a admin de sucursal\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-agente-PUT-anuncios-PUT",
+      "titulo": "agente llama a PUT anuncios-PUT (exige admin_sucursal)",
+      "request": {
+        "method": "PUT",
+        "path": "/api/anuncios/0a07f020-2759-4e4e-ab5c-dbc8d9136e3d",
+        "actor": "agente (agenteA1)",
+        "body": "{\"titulo\":\"HACK\",\"contenido\":\"x\"}"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a admin de sucursal\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-residente-DELETE-anuncios-DELETE",
+      "titulo": "residente llama a DELETE anuncios-DELETE (exige admin_sucursal)",
+      "request": {
+        "method": "DELETE",
+        "path": "/api/anuncios/0a07f020-2759-4e4e-ab5c-dbc8d9136e3d",
+        "actor": "residente (resA1)"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a admin de sucursal\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-agente-DELETE-anuncios-DELETE",
+      "titulo": "agente llama a DELETE anuncios-DELETE (exige admin_sucursal)",
+      "request": {
+        "method": "DELETE",
+        "path": "/api/anuncios/0a07f020-2759-4e4e-ab5c-dbc8d9136e3d",
+        "actor": "agente (agenteA1)"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a admin de sucursal\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-residente-POST-areas-POST",
+      "titulo": "residente llama a POST areas-POST (exige admin_sucursal)",
+      "request": {
+        "method": "POST",
+        "path": "/api/areas",
+        "actor": "residente (resA1)",
+        "body": "{\"nombre\":\"ST-hack-area\"}"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a admin de sucursal\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-agente-POST-areas-POST",
+      "titulo": "agente llama a POST areas-POST (exige admin_sucursal)",
+      "request": {
+        "method": "POST",
+        "path": "/api/areas",
+        "actor": "agente (agenteA1)",
+        "body": "{\"nombre\":\"ST-hack-area\"}"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a admin de sucursal\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-residente-PUT-areas-PUT",
+      "titulo": "residente llama a PUT areas-PUT (exige admin_sucursal)",
+      "request": {
+        "method": "PUT",
+        "path": "/api/areas/0046be13-8dc6-4015-bc13-370a01b4f928",
+        "actor": "residente (resA1)",
+        "body": "{\"nombre\":\"HACK\"}"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a admin de sucursal\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-agente-PUT-areas-PUT",
+      "titulo": "agente llama a PUT areas-PUT (exige admin_sucursal)",
+      "request": {
+        "method": "PUT",
+        "path": "/api/areas/0046be13-8dc6-4015-bc13-370a01b4f928",
+        "actor": "agente (agenteA1)",
+        "body": "{\"nombre\":\"HACK\"}"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a admin de sucursal\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-residente-DELETE-areas-DELETE",
+      "titulo": "residente llama a DELETE areas-DELETE (exige admin_sucursal)",
+      "request": {
+        "method": "DELETE",
+        "path": "/api/areas/0046be13-8dc6-4015-bc13-370a01b4f928",
+        "actor": "residente (resA1)"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a admin de sucursal\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-agente-DELETE-areas-DELETE",
+      "titulo": "agente llama a DELETE areas-DELETE (exige admin_sucursal)",
+      "request": {
+        "method": "DELETE",
+        "path": "/api/areas/0046be13-8dc6-4015-bc13-370a01b4f928",
+        "actor": "agente (agenteA1)"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a admin de sucursal\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-residente-PUT-config-qr-PUT",
+      "titulo": "residente llama a PUT config-qr-PUT (exige admin_sucursal)",
+      "request": {
+        "method": "PUT",
+        "path": "/api/config-qr",
+        "actor": "residente (resA1)",
+        "body": "{\"requiere_placa\":true}"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a admin de sucursal\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-agente-PUT-config-qr-PUT",
+      "titulo": "agente llama a PUT config-qr-PUT (exige admin_sucursal)",
+      "request": {
+        "method": "PUT",
+        "path": "/api/config-qr",
+        "actor": "agente (agenteA1)",
+        "body": "{\"requiere_placa\":true}"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a admin de sucursal\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-residente-GET-config-reservas-GET",
+      "titulo": "residente llama a GET config-reservas-GET (exige admin_sucursal)",
+      "request": {
+        "method": "GET",
+        "path": "/api/config-reservas",
+        "actor": "residente (resA1)"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a admin de sucursal\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-agente-GET-config-reservas-GET",
+      "titulo": "agente llama a GET config-reservas-GET (exige admin_sucursal)",
+      "request": {
+        "method": "GET",
+        "path": "/api/config-reservas",
+        "actor": "agente (agenteA1)"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a admin de sucursal\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-residente-PUT-config-reservas-PUT",
+      "titulo": "residente llama a PUT config-reservas-PUT (exige admin_sucursal)",
+      "request": {
+        "method": "PUT",
+        "path": "/api/config-reservas",
+        "actor": "residente (resA1)",
+        "body": "{\"permite_cancelacion\":false}"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a admin de sucursal\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-agente-PUT-config-reservas-PUT",
+      "titulo": "agente llama a PUT config-reservas-PUT (exige admin_sucursal)",
+      "request": {
+        "method": "PUT",
+        "path": "/api/config-reservas",
+        "actor": "agente (agenteA1)",
+        "body": "{\"permite_cancelacion\":false}"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a admin de sucursal\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-residente-GET-cargos-config-GET",
+      "titulo": "residente llama a GET cargos-config-GET (exige admin_sucursal)",
+      "request": {
+        "method": "GET",
+        "path": "/api/cargos/configuracion",
+        "actor": "residente (resA1)"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a admin de sucursal\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-agente-GET-cargos-config-GET",
+      "titulo": "agente llama a GET cargos-config-GET (exige admin_sucursal)",
+      "request": {
+        "method": "GET",
+        "path": "/api/cargos/configuracion",
+        "actor": "agente (agenteA1)"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a admin de sucursal\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-residente-PUT-cargos-config-PUT",
+      "titulo": "residente llama a PUT cargos-config-PUT (exige admin_sucursal)",
+      "request": {
+        "method": "PUT",
+        "path": "/api/cargos/configuracion/f5acd812-9c8c-4a7b-9022-10effae3f76a",
+        "actor": "residente (resA1)",
+        "body": "{\"nombre\":\"HACK\",\"monto\":1}"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a admin de sucursal\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-agente-PUT-cargos-config-PUT",
+      "titulo": "agente llama a PUT cargos-config-PUT (exige admin_sucursal)",
+      "request": {
+        "method": "PUT",
+        "path": "/api/cargos/configuracion/f5acd812-9c8c-4a7b-9022-10effae3f76a",
+        "actor": "agente (agenteA1)",
+        "body": "{\"nombre\":\"HACK\",\"monto\":1}"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a admin de sucursal\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-residente-PATCH-cargos-aplicar",
+      "titulo": "residente llama a PATCH cargos-aplicar (exige admin_sucursal)",
+      "request": {
+        "method": "PATCH",
+        "path": "/api/cargos/f5acd812-9c8c-4a7b-9022-10effae3f76a/aplicar",
+        "actor": "residente (resA1)",
+        "body": "{}"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a admin de sucursal\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-agente-PATCH-cargos-aplicar",
+      "titulo": "agente llama a PATCH cargos-aplicar (exige admin_sucursal)",
+      "request": {
+        "method": "PATCH",
+        "path": "/api/cargos/f5acd812-9c8c-4a7b-9022-10effae3f76a/aplicar",
+        "actor": "agente (agenteA1)",
+        "body": "{}"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a admin de sucursal\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-residente-GET-configuracion-cargos-GET",
+      "titulo": "residente llama a GET configuracion-cargos-GET (exige admin_sucursal)",
+      "request": {
+        "method": "GET",
+        "path": "/api/configuracion-cargos",
+        "actor": "residente (resA1)"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a admin de sucursal\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-agente-GET-configuracion-cargos-GET",
+      "titulo": "agente llama a GET configuracion-cargos-GET (exige admin_sucursal)",
+      "request": {
+        "method": "GET",
+        "path": "/api/configuracion-cargos",
+        "actor": "agente (agenteA1)"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a admin de sucursal\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-residente-PUT-configuracion-cargos-PUT",
+      "titulo": "residente llama a PUT configuracion-cargos-PUT (exige admin_sucursal)",
+      "request": {
+        "method": "PUT",
+        "path": "/api/configuracion-cargos/f5acd812-9c8c-4a7b-9022-10effae3f76a",
+        "actor": "residente (resA1)",
+        "body": "{\"nombre\":\"HACK\",\"monto\":1}"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a admin de sucursal\"}",
+        "ms": 2
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-agente-PUT-configuracion-cargos-PUT",
+      "titulo": "agente llama a PUT configuracion-cargos-PUT (exige admin_sucursal)",
+      "request": {
+        "method": "PUT",
+        "path": "/api/configuracion-cargos/f5acd812-9c8c-4a7b-9022-10effae3f76a",
+        "actor": "agente (agenteA1)",
+        "body": "{\"nombre\":\"HACK\",\"monto\":1}"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a admin de sucursal\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-residente-DELETE-configuracion-cargos-DEL",
+      "titulo": "residente llama a DELETE configuracion-cargos-DEL (exige admin_sucursal)",
+      "request": {
+        "method": "DELETE",
+        "path": "/api/configuracion-cargos/f5acd812-9c8c-4a7b-9022-10effae3f76a",
+        "actor": "residente (resA1)"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a admin de sucursal\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-agente-DELETE-configuracion-cargos-DEL",
+      "titulo": "agente llama a DELETE configuracion-cargos-DEL (exige admin_sucursal)",
+      "request": {
+        "method": "DELETE",
+        "path": "/api/configuracion-cargos/f5acd812-9c8c-4a7b-9022-10effae3f76a",
+        "actor": "agente (agenteA1)"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a admin de sucursal\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-residente-GET-cargos-prog-GET",
+      "titulo": "residente llama a GET cargos-prog-GET (exige admin_sucursal)",
+      "request": {
+        "method": "GET",
+        "path": "/api/cargos-programados",
+        "actor": "residente (resA1)"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a admin de sucursal\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-agente-GET-cargos-prog-GET",
+      "titulo": "agente llama a GET cargos-prog-GET (exige admin_sucursal)",
+      "request": {
+        "method": "GET",
+        "path": "/api/cargos-programados",
+        "actor": "agente (agenteA1)"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a admin de sucursal\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-residente-POST-cargos-prog-POST",
+      "titulo": "residente llama a POST cargos-prog-POST (exige admin_sucursal)",
+      "request": {
+        "method": "POST",
+        "path": "/api/cargos-programados",
+        "actor": "residente (resA1)",
+        "body": "{\"nombre\":\"ST-hack\",\"monto\":1,\"aplica_a\":\"todos\"}"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a admin de sucursal\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-agente-POST-cargos-prog-POST",
+      "titulo": "agente llama a POST cargos-prog-POST (exige admin_sucursal)",
+      "request": {
+        "method": "POST",
+        "path": "/api/cargos-programados",
+        "actor": "agente (agenteA1)",
+        "body": "{\"nombre\":\"ST-hack\",\"monto\":1,\"aplica_a\":\"todos\"}"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a admin de sucursal\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-residente-POST-cargos-prog-aplicar",
+      "titulo": "residente llama a POST cargos-prog-aplicar (exige admin_sucursal)",
+      "request": {
+        "method": "POST",
+        "path": "/api/cargos-programados/c2a8eca3-ee2d-4920-a4a9-04d26623ccc4/aplicar",
+        "actor": "residente (resA1)",
+        "body": "{}"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a admin de sucursal\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-agente-POST-cargos-prog-aplicar",
+      "titulo": "agente llama a POST cargos-prog-aplicar (exige admin_sucursal)",
+      "request": {
+        "method": "POST",
+        "path": "/api/cargos-programados/c2a8eca3-ee2d-4920-a4a9-04d26623ccc4/aplicar",
+        "actor": "agente (agenteA1)",
+        "body": "{}"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a admin de sucursal\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-residente-GET-cargos-prog-historial",
+      "titulo": "residente llama a GET cargos-prog-historial (exige admin_sucursal)",
+      "request": {
+        "method": "GET",
+        "path": "/api/cargos-programados/c2a8eca3-ee2d-4920-a4a9-04d26623ccc4/historial",
+        "actor": "residente (resA1)"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a admin de sucursal\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-agente-GET-cargos-prog-historial",
+      "titulo": "agente llama a GET cargos-prog-historial (exige admin_sucursal)",
+      "request": {
+        "method": "GET",
+        "path": "/api/cargos-programados/c2a8eca3-ee2d-4920-a4a9-04d26623ccc4/historial",
+        "actor": "agente (agenteA1)"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a admin de sucursal\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-residente-GET-reportes-accesos",
+      "titulo": "residente llama a GET reportes-accesos (exige admin_sucursal)",
+      "request": {
+        "method": "GET",
+        "path": "/api/reportes/accesos",
+        "actor": "residente (resA1)"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a admin de sucursal\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-agente-GET-reportes-accesos",
+      "titulo": "agente llama a GET reportes-accesos (exige admin_sucursal)",
+      "request": {
+        "method": "GET",
+        "path": "/api/reportes/accesos",
+        "actor": "agente (agenteA1)"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a admin de sucursal\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-residente-GET-reportes-pagos",
+      "titulo": "residente llama a GET reportes-pagos (exige admin_sucursal)",
+      "request": {
+        "method": "GET",
+        "path": "/api/reportes/pagos",
+        "actor": "residente (resA1)"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a admin de sucursal\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-agente-GET-reportes-pagos",
+      "titulo": "agente llama a GET reportes-pagos (exige admin_sucursal)",
+      "request": {
+        "method": "GET",
+        "path": "/api/reportes/pagos",
+        "actor": "agente (agenteA1)"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a admin de sucursal\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-residente-GET-reportes-estadisticas",
+      "titulo": "residente llama a GET reportes-estadisticas (exige admin_sucursal)",
+      "request": {
+        "method": "GET",
+        "path": "/api/reportes/estadisticas",
+        "actor": "residente (resA1)"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a admin de sucursal\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-agente-GET-reportes-estadisticas",
+      "titulo": "agente llama a GET reportes-estadisticas (exige admin_sucursal)",
+      "request": {
+        "method": "GET",
+        "path": "/api/reportes/estadisticas",
+        "actor": "agente (agenteA1)"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a admin de sucursal\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-residente-POST-blacklist-POST",
+      "titulo": "residente llama a POST blacklist-POST (exige admin_sucursal)",
+      "request": {
+        "method": "POST",
+        "path": "/api/blacklist",
+        "actor": "residente (resA1)",
+        "body": "{\"numero_dpi\":\"ST-HACK\",\"nombre\":\"x\",\"razon\":\"HACK\"}"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a admin de sucursal\"}",
+        "ms": 2
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-agente-POST-blacklist-POST",
+      "titulo": "agente llama a POST blacklist-POST (exige admin_sucursal)",
+      "request": {
+        "method": "POST",
+        "path": "/api/blacklist",
+        "actor": "agente (agenteA1)",
+        "body": "{\"numero_dpi\":\"ST-HACK\",\"nombre\":\"x\",\"razon\":\"HACK\"}"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a admin de sucursal\"}",
+        "ms": 2
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-residente-DELETE-blacklist-DELETE",
+      "titulo": "residente llama a DELETE blacklist-DELETE (exige admin_sucursal)",
+      "request": {
+        "method": "DELETE",
+        "path": "/api/blacklist/57beb6d6-4cac-41cd-b94a-c9d8320f3fb9",
+        "actor": "residente (resA1)"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a admin de sucursal\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-agente-DELETE-blacklist-DELETE",
+      "titulo": "agente llama a DELETE blacklist-DELETE (exige admin_sucursal)",
+      "request": {
+        "method": "DELETE",
+        "path": "/api/blacklist/57beb6d6-4cac-41cd-b94a-c9d8320f3fb9",
+        "actor": "agente (agenteA1)"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a admin de sucursal\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-residente-POST-preauto-POST",
+      "titulo": "residente llama a POST preauto-POST (exige admin_sucursal)",
+      "request": {
+        "method": "POST",
+        "path": "/api/preautorizaciones",
+        "actor": "residente (resA1)",
+        "body": "{\"residente_id\":\"22c2723c-1af3-42b1-b2e8-b77656c6dde0\",\"nombre_visitante\":\"ST-hack\",\"fecha_inicio\":\"2030-01-01\"}"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a admin de sucursal\"}",
+        "ms": 2
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-agente-POST-preauto-POST",
+      "titulo": "agente llama a POST preauto-POST (exige admin_sucursal)",
+      "request": {
+        "method": "POST",
+        "path": "/api/preautorizaciones",
+        "actor": "agente (agenteA1)",
+        "body": "{\"residente_id\":\"22c2723c-1af3-42b1-b2e8-b77656c6dde0\",\"nombre_visitante\":\"ST-hack\",\"fecha_inicio\":\"2030-01-01\"}"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a admin de sucursal\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-residente-DELETE-preauto-DELETE",
+      "titulo": "residente llama a DELETE preauto-DELETE (exige admin_sucursal)",
+      "request": {
+        "method": "DELETE",
+        "path": "/api/preautorizaciones/00294a08-bd99-47af-a644-61e79f930556",
+        "actor": "residente (resA1)"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a admin de sucursal\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-agente-DELETE-preauto-DELETE",
+      "titulo": "agente llama a DELETE preauto-DELETE (exige admin_sucursal)",
+      "request": {
+        "method": "DELETE",
+        "path": "/api/preautorizaciones/00294a08-bd99-47af-a644-61e79f930556",
+        "actor": "agente (agenteA1)"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a admin de sucursal\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-residente-GET-reservas-GET",
+      "titulo": "residente llama a GET reservas-GET (exige admin_sucursal)",
+      "request": {
+        "method": "GET",
+        "path": "/api/reservas",
+        "actor": "residente (resA1)"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a admin de sucursal\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-agente-GET-reservas-GET",
+      "titulo": "agente llama a GET reservas-GET (exige admin_sucursal)",
+      "request": {
+        "method": "GET",
+        "path": "/api/reservas",
+        "actor": "agente (agenteA1)"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a admin de sucursal\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-residente-PATCH-reservas-aprobar",
+      "titulo": "residente llama a PATCH reservas-aprobar (exige admin_sucursal)",
+      "request": {
+        "method": "PATCH",
+        "path": "/api/reservas/5b1fab9b-d2fe-474c-8990-61f5fdda8974/aprobar",
+        "actor": "residente (resA1)",
+        "body": "{}"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a admin de sucursal\"}",
+        "ms": 2
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-agente-PATCH-reservas-aprobar",
+      "titulo": "agente llama a PATCH reservas-aprobar (exige admin_sucursal)",
+      "request": {
+        "method": "PATCH",
+        "path": "/api/reservas/5b1fab9b-d2fe-474c-8990-61f5fdda8974/aprobar",
+        "actor": "agente (agenteA1)",
+        "body": "{}"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a admin de sucursal\"}",
+        "ms": 2
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-residente-PATCH-reservas-rechazar",
+      "titulo": "residente llama a PATCH reservas-rechazar (exige admin_sucursal)",
+      "request": {
+        "method": "PATCH",
+        "path": "/api/reservas/5b1fab9b-d2fe-474c-8990-61f5fdda8974/rechazar",
+        "actor": "residente (resA1)",
+        "body": "{\"motivo\":\"x\"}"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a admin de sucursal\"}",
+        "ms": 2
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-agente-PATCH-reservas-rechazar",
+      "titulo": "agente llama a PATCH reservas-rechazar (exige admin_sucursal)",
+      "request": {
+        "method": "PATCH",
+        "path": "/api/reservas/5b1fab9b-d2fe-474c-8990-61f5fdda8974/rechazar",
+        "actor": "agente (agenteA1)",
+        "body": "{\"motivo\":\"x\"}"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a admin de sucursal\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-residente-GET-accesos-activos",
+      "titulo": "residente llama a GET accesos-activos (exige agente)",
+      "request": {
+        "method": "GET",
+        "path": "/api/accesos/activos",
+        "actor": "residente (resA1)"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a personal\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-residente-POST-accesos-POST",
+      "titulo": "residente llama a POST accesos-POST (exige agente)",
+      "request": {
+        "method": "POST",
+        "path": "/api/accesos",
+        "actor": "residente (resA1)",
+        "body": "{\"nombre_visitante\":\"ST hack\",\"numero_dpi\":\"ST-HACK-DPI\",\"residente_id\":\"22c2723c-1af3-42b1-b2e8-b77656c6dde0\"}"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a personal\"}",
+        "ms": 2
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-residente-PATCH-accesos-salida",
+      "titulo": "residente llama a PATCH accesos-salida (exige agente)",
+      "request": {
+        "method": "PATCH",
+        "path": "/api/accesos/6b11516a-e432-4b61-9fe0-427019d812cf/salida",
+        "actor": "residente (resA1)",
+        "body": "{}"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a personal\"}",
+        "ms": 2
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-residente-GET-dashboard",
+      "titulo": "residente llama a GET dashboard (exige agente)",
+      "request": {
+        "method": "GET",
+        "path": "/api/dashboard",
+        "actor": "residente (resA1)"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a personal\"}",
+        "ms": 2
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-residente-GET-blacklist-GET",
+      "titulo": "residente llama a GET blacklist-GET (exige agente)",
+      "request": {
+        "method": "GET",
+        "path": "/api/blacklist",
+        "actor": "residente (resA1)"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a personal\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-residente-GET-preauto-GET",
+      "titulo": "residente llama a GET preauto-GET (exige agente)",
+      "request": {
+        "method": "GET",
+        "path": "/api/preautorizaciones",
+        "actor": "residente (resA1)"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a personal\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-residente-GET-preauto-buscar",
+      "titulo": "residente llama a GET preauto-buscar (exige agente)",
+      "request": {
+        "method": "GET",
+        "path": "/api/preautorizaciones/buscar?dpi=ST",
+        "actor": "residente (resA1)"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a personal\"}",
+        "ms": 2
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-residente-GET-visitantes",
+      "titulo": "residente llama a GET visitantes (exige agente)",
+      "request": {
+        "method": "GET",
+        "path": "/api/visitantes?dpi=ST-DPI",
+        "actor": "residente (resA1)"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a personal\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-residente-GET-visitantes-buscar",
+      "titulo": "residente llama a GET visitantes-buscar (exige agente)",
+      "request": {
+        "method": "GET",
+        "path": "/api/visitantes/buscar?q=Visitante",
+        "actor": "residente (resA1)"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a personal\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-residente-GET-qr-verificar",
+      "titulo": "residente llama a GET qr-verificar (exige agente)",
+      "request": {
+        "method": "GET",
+        "path": "/api/invitaciones-qr/verificar/6e70baab-f6fa-4449-ab68-ca37557ccbd1",
+        "actor": "residente (resA1)"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a personal\"}",
+        "ms": 2
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-residente-GET-residentes-GET",
+      "titulo": "residente llama a GET residentes-GET (exige agente)",
+      "request": {
+        "method": "GET",
+        "path": "/api/residentes",
+        "actor": "residente (resA1)"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a personal\"}",
+        "ms": 2
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-residente-GET-residentes-id",
+      "titulo": "residente llama a GET residentes-id (exige agente)",
+      "request": {
+        "method": "GET",
+        "path": "/api/residentes/22c2723c-1af3-42b1-b2e8-b77656c6dde0",
+        "actor": "residente (resA1)"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a personal\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-residente-GET-tickets-GET",
+      "titulo": "residente llama a GET tickets-GET (exige agente)",
+      "request": {
+        "method": "GET",
+        "path": "/api/tickets",
+        "actor": "residente (resA1)"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a personal\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-residente-PUT-tickets-cerrar",
+      "titulo": "residente llama a PUT tickets-cerrar (exige agente)",
+      "request": {
+        "method": "PUT",
+        "path": "/api/tickets/cbf7dd3d-8aa2-4b0d-a7ce-52bf9afc8a10/cerrar",
+        "actor": "residente (resA1)",
+        "body": "{}"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a personal\"}",
+        "ms": 2
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-residente-POST-ocr-dpi",
+      "titulo": "residente llama a POST ocr-dpi (exige agente)",
+      "request": {
+        "method": "POST",
+        "path": "/api/ocr/dpi",
+        "actor": "residente (resA1)",
+        "body": "{\"imagen\":\"x\"}"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a personal\"}",
+        "ms": 2
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "ROL-residente-GET-sync-garita",
+      "titulo": "residente llama a GET sync-garita (exige agente)",
+      "request": {
+        "method": "GET",
+        "path": "/api/sync/garita",
+        "actor": "residente (resA1)"
+      },
+      "esperado": "403 (guard de rol antes del controlador)",
+      "real": {
+        "status": 403,
+        "body": "{\"error\":\"Acceso restringido a personal\"}",
+        "ms": 1
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "MASS-adminSucA1-crea-owner",
+      "titulo": "adminSucA1 intenta crear un usuario con rol owner vía POST /usuarios",
+      "request": {
+        "method": "POST",
+        "path": "/api/usuarios",
+        "actor": "adminSucA1",
+        "body": "{\"nombre\":\"ST mass\",\"email\":\"st.hack.mass.adminsuca1.owner@sectest.local\",\"password\":\"Hack12345a\",\"rol\":\"owner\",\"sucursal_id\":\"bc94f428-2a9b-4d8c-8470-7f83b9cecb35\"}"
+      },
+      "esperado": "4xx y ningún usuario nuevo con ese rol",
+      "real": {
+        "status": 400,
+        "body": "{\"error\":\"Rol no permitido: owner\"}",
+        "ms": 3
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "MASS-adminSucA1-crea-admin_empresa",
+      "titulo": "adminSucA1 intenta crear un usuario con rol admin_empresa vía POST /usuarios",
+      "request": {
+        "method": "POST",
+        "path": "/api/usuarios",
+        "actor": "adminSucA1",
+        "body": "{\"nombre\":\"ST mass\",\"email\":\"st.hack.mass.adminsuca1.admin_empresa@sectest.local\",\"password\":\"Hack12345a\",\"rol\":\"admin_empresa\",\"sucursal_id\":\"bc94f428-2a9b-4d8c-8470-7f83b9cecb35\"}"
+      },
+      "esperado": "4xx y ningún usuario nuevo con ese rol",
+      "real": {
+        "status": 400,
+        "body": "{\"error\":\"Rol no permitido: admin_empresa\"}",
+        "ms": 2
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "MASS-adminEmpA-crea-owner",
+      "titulo": "adminEmpA intenta crear un usuario con rol owner vía POST /usuarios",
+      "request": {
+        "method": "POST",
+        "path": "/api/usuarios",
+        "actor": "adminEmpA",
+        "body": "{\"nombre\":\"ST mass\",\"email\":\"st.hack.mass.adminempa.owner@sectest.local\",\"password\":\"Hack12345a\",\"rol\":\"owner\",\"sucursal_id\":\"bc94f428-2a9b-4d8c-8470-7f83b9cecb35\"}"
+      },
+      "esperado": "4xx y ningún usuario nuevo con ese rol",
+      "real": {
+        "status": 400,
+        "body": "{\"error\":\"Rol no permitido: owner\"}",
+        "ms": 3
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "MASS-adminEmpA-crea-admin_empresa",
+      "titulo": "adminEmpA intenta crear un usuario con rol admin_empresa vía POST /usuarios",
+      "request": {
+        "method": "POST",
+        "path": "/api/usuarios",
+        "actor": "adminEmpA",
+        "body": "{\"nombre\":\"ST mass\",\"email\":\"st.hack.mass.adminempa.admin_empresa@sectest.local\",\"password\":\"Hack12345a\",\"rol\":\"admin_empresa\",\"sucursal_id\":\"bc94f428-2a9b-4d8c-8470-7f83b9cecb35\"}"
+      },
+      "esperado": "4xx y ningún usuario nuevo con ese rol",
+      "real": {
+        "status": 400,
+        "body": "{\"error\":\"Rol no permitido: admin_empresa\"}",
+        "ms": 3
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "MASS-preferencias-rol",
+      "titulo": "PUT /usuarios/me/preferencias con {rol:\"owner\"} no cambia el rol",
+      "request": {
+        "method": "PUT",
+        "path": "/api/usuarios/me/preferencias",
+        "actor": "resA1",
+        "body": "{\"tema\":\"light\",\"idioma\":\"es\",\"rol\":\"owner\",\"sucursal_id\":\"4237f03d-de34-4657-927a-61e1b7249231\",\"empresa_id\":\"839b6dc8-d437-4a77-816e-729f0f0e881e\",\"activo\":true}"
+      },
+      "esperado": "el rol y el tenant del usuario no cambian",
+      "real": {
+        "status": 200,
+        "body": "{\"message\":\"Preferencias actualizadas\"}",
+        "ms": 4
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "MASS-residente-PUT-mueve-tenant",
+      "titulo": "PUT /residentes/:id con {sucursal_id: B1, usuario_id} no traslada al residente a otra empresa",
+      "request": {
+        "method": "PUT",
+        "path": "/api/residentes/22c2723c-1af3-42b1-b2e8-b77656c6dde0",
+        "actor": "adminSucA1",
+        "body": "{\"numero_casa\":\"ST-A1-01\",\"sucursal_id\":\"4237f03d-de34-4657-927a-61e1b7249231\",\"usuario_id\":\"300d1c89-6b00-418c-96dc-832ce5acf3e3\",\"estado_pago\":\"al_dia\"}"
+      },
+      "esperado": "sucursal_id y usuario_id del residente no cambian",
+      "real": {
+        "status": 200,
+        "body": "{\"id\":\"22c2723c-1af3-42b1-b2e8-b77656c6dde0\",\"usuario_id\":\"247eef6e-285f-4e9a-b5ba-382958655328\",\"sucursal_id\":\"bc94f428-2a9b-4d8c-8470-7f83b9cecb35\",\"numero_casa\":\"ST-A1-01\",\"estado_pago\":\"al_dia\",\"telefono\":\"50255550000\",\"saldo_pendiente\":\"250.00\",\"fecha_ult…(+15)",
+        "ms": 4
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "MASS-login-rol-en-body",
+      "titulo": "POST /auth/login ignora un {rol:\"owner\"} en el body",
+      "request": {
+        "method": "POST",
+        "path": "/api/auth/login",
+        "actor": "anónimo (cuenta de residente)",
+        "body": "{\"email\":\"st.res.a1@sectest.local\",\"password\":\"Sec#Test2026a\",\"rol\":\"owner\",\"empresa_id\":\"839b6dc8-d437-4a77-816e-729f0f0e881e\",\"sucursal_id\":\"4237f03d-de34-4657-927a-61e1b7249231\"}"
+      },
+      "esperado": "token con rol residente y tenant A",
+      "real": {
+        "status": 200,
+        "body": "{\"token\":\"<jwt-redactado>…(+348)",
+        "ms": 201
+      },
+      "resultado": "OK"
+    },
+    {
+      "id": "MASS-invariante-owners",
+      "titulo": "Invariante: el número de owners en la BD no cambió durante las pruebas",
+      "esperado": "2 owners antes y después",
+      "real": {
+        "status": 0,
+        "body": "antes=2, después=2"
+      },
+      "request": {
+        "method": "SQL",
+        "path": "SELECT count(*) FROM usuarios WHERE rol='owner'",
+        "actor": "psql"
+      },
+      "resultado": "OK",
+      "severidad": "crítica"
+    }
+  ]
+}

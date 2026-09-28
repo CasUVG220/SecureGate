@@ -1,0 +1,55 @@
+# Plan de Automation Framework de ZAP: escaneo ACTIVO autenticado del API.
+# Variables (las inyecta run-zap.sh): ST_TOKEN (JWT del rol), ST_ROLE, ST_MINUTOS, ST_TARGET.
+env:
+  contexts:
+    - name: securegate-api
+      urls: ["${ST_TARGET}"]
+      includePaths: ["${ST_TARGET}/api.*", "${ST_TARGET}/health"]
+  parameters:
+    failOnError: false
+    failOnWarning: false
+    progressToStdout: true
+jobs:
+  - type: passiveScan-config
+    parameters:
+      maxAlertsPerRule: 15
+      scanOnlyInScope: true
+  # Authorization del rol en TODAS las peticiones (importadas y de ataque).
+  - type: replacer
+    parameters:
+      deleteAllRules: true
+    rules:
+      - description: "JWT del rol ${ST_ROLE}"
+        matchType: req_header
+        matchString: Authorization
+        matchRegex: false
+        replacementString: "Bearer ${ST_TOKEN}"
+  - type: openapi
+    parameters:
+      apiFile: /zap/wrk/zap/openapi.json
+      targetUrl: "${ST_TARGET}"
+      context: securegate-api
+  - type: passiveScan-wait
+    parameters:
+      maxDuration: 3
+  - type: activeScan
+    parameters:
+      context: securegate-api
+      maxScanDurationInMins: ${ST_MINUTOS}
+      maxRuleDurationInMins: 3
+      threadPerHost: 4
+    policyDefinition:
+      defaultStrength: Medium
+      defaultThreshold: Medium
+  - type: report
+    parameters:
+      template: traditional-json
+      reportDir: /zap/wrk/results
+      reportFile: zap-active-${ST_ROLE}
+      reportTitle: "SecureGate — ZAP activo autenticado (${ST_ROLE})"
+  - type: report
+    parameters:
+      template: traditional-html
+      reportDir: /zap/wrk/results
+      reportFile: zap-active-${ST_ROLE}
+      reportTitle: "SecureGate — ZAP activo autenticado (${ST_ROLE})"
