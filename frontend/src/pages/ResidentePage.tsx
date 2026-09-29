@@ -658,7 +658,7 @@ export default function ResidentePage({ requestedTab, tabNonce = 0 }: ResidenteP
                       <p className="text-xs text-gray-400">Guarda los datos para preautorizar con un clic en cualquier momento.</p>
 
                       {formError && (
-                        <div className="bg-red-50 border border-red-300 rounded-lg px-3 py-2 text-red-700 text-sm">
+                        <div role="alert" className="rounded-lg border border-danger-500/30 bg-danger-500/10 px-3 py-2 text-sm text-danger-400">
                           {formError}
                         </div>
                       )}

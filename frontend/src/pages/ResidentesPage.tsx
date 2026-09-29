@@ -266,7 +266,7 @@ export default function ResidentesPage() {
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Input name="nombre"      label={t('residents.fullName')} required value={createForm.nombre}       onChange={handleCreateChange} />
             <Input name="email"       label={t('common.email')} type="email" required value={createForm.email} onChange={handleCreateChange} />
-            <Input name="password"    label={t('common.password')} type="password" required value={createForm.password} onChange={handleCreateChange} />
+            <Input name="password"    label={t('common.password')} type="password" required minLength={8} autoComplete="new-password" hint={t('inv.accept.passwordHint')} value={createForm.password} onChange={handleCreateChange} />
             <Input name="numero_casa" label={t('residents.house')} required value={createForm.numero_casa}     onChange={handleCreateChange} />
             <Input name="telefono"    label={t('common.phone')} value={createForm.telefono ?? ''}              onChange={handleCreateChange} wrapperClassName="sm:col-span-2" />
           </div>
