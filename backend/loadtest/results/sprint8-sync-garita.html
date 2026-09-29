@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Reporte de carga — sprint8-sync-garita</title>
+<style>
+  :root {
+    --bg: #F6F8FA; --panel: #FFFFFF; --text: #1F2937; --muted: #6B7280;
+    --border: #E2E8F0; --accent: #0F766E; --accent-bg: #CCFBF1; --bad: #B91C1C;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font-family: -apple-system, "Segoe UI", Roboto, sans-serif; padding: 32px; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  .subtitle { color: var(--muted); font-size: 13px; margin-bottom: 24px; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 24px; }
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; }
+  .card .label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+  .card .value { font-size: 22px; font-weight: 600; margin-top: 4px; }
+  .card .value.bad { color: var(--bad); }
+  .card .value.ok { color: var(--accent); }
+  section { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 20px; margin-bottom: 20px; }
+  section h2 { font-size: 14px; margin: 0 0 12px; }
+  table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border); }
+  th { color: var(--muted); font-weight: 500; }
+  tr.row-bad td { color: var(--bad); }
+  svg { width: 100%; height: auto; }
+  code { background: var(--accent-bg); padding: 1px 5px; border-radius: 4px; font-size: 12px; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#0B1220; --panel:#111827; --text:#E5E7EB; --muted:#94A3B8; --border:#1F2A3C; --accent-bg:#134E4A; }
+  }
+</style>
+</head>
+<body>
+  <h1>Reporte de carga — sprint8-sync-garita</h1>
+  <div class="subtitle">SecureGate · Sprint 7 · generado 29/9/2026, 7:45:28 p. m.</div>
+
+  <div class="cards">
+    <div class="card"><div class="label">Requests totales</div><div class="value">3100</div></div>
+    <div class="card"><div class="label">Exitosos</div><div class="value ok">3100</div></div>
+    <div class="card"><div class="label">Fallidos</div><div class="value ">0</div></div>
+    <div class="card"><div class="label">p95 (ms)</div><div class="value">10.9</div></div>
+    <div class="card"><div class="label">p99 (ms)</div><div class="value">13.9</div></div>
+  </div>
+
+  <section>
+    <h2>Códigos de respuesta / errores de red</h2>
+    <table>
+      <thead><tr><th>Tipo</th><th>Cantidad</th></tr></thead>
+      <tbody>
+        <tr><td>http.codes.200</td><td>3100</td></tr>
+        
+      </tbody>
+    </table>
+  </section>
+
+  
+  <section>
+    <h2>Tasa de error por ventana de ~10s (detecta el punto de quiebre)</h2>
+    
+    <svg viewBox="0 0 760 220" role="img" aria-label="Tasa de error por ventana de tiempo">
+      <line x1="30" y1="190" x2="730" y2="190" stroke="var(--border)" />
+      <rect x="30.0" y="189.0" width="57.6" height="1.0" fill="#0F766E" rx="2"/><rect x="93.6" y="189.0" width="57.6" height="1.0" fill="#0F766E" rx="2"/><rect x="157.3" y="189.0" width="57.6" height="1.0" fill="#0F766E" rx="2"/><rect x="220.9" y="189.0" width="57.6" height="1.0" fill="#0F766E" rx="2"/><rect x="284.5" y="189.0" width="57.6" height="1.0" fill="#0F766E" rx="2"/><rect x="348.2" y="189.0" width="57.6" height="1.0" fill="#0F766E" rx="2"/><rect x="411.8" y="189.0" width="57.6" height="1.0" fill="#0F766E" rx="2"/><rect x="475.5" y="189.0" width="57.6" height="1.0" fill="#0F766E" rx="2"/><rect x="539.1" y="189.0" width="57.6" height="1.0" fill="#0F766E" rx="2"/><rect x="602.7" y="189.0" width="57.6" height="1.0" fill="#0F766E" rx="2"/><rect x="666.4" y="189.0" width="57.6" height="1.0" fill="#0F766E" rx="2"/>
+    </svg>
+  </section>
+  <section>
+    <h2>Detalle por ventana de tiempo</h2>
+    
+    <table>
+      <thead><tr><th>Hora</th><th>Requests</th><th>Fallidos</th><th>Tasa de error</th><th>p95 (ms)</th><th>p99 (ms)</th></tr></thead>
+      <tbody>
+        
+          <tr class="">
+            <td>7:36:09 p. m.</td>
+            <td>22</td>
+            <td>0</td>
+            <td>0%</td>
+            <td>10.1</td>
+            <td>10.1</td>
+          </tr>
+          <tr class="">
+            <td>7:36:19 p. m.</td>
+            <td>50</td>
+            <td>0</td>
+            <td>0%</td>
+            <td>13.1</td>
+            <td>16</td>
+          </tr>
+          <tr class="">
+            <td>7:36:29 p. m.</td>
+            <td>73</td>
+            <td>0</td>
+            <td>0%</td>
+            <td>13.1</td>
+            <td>13.9</td>
+          </tr>
+          <tr class="">
+            <td>7:36:39 p. m.</td>
+            <td>100</td>
+            <td>0</td>
+            <td>0%</td>
+            <td>13.1</td>
+            <td>15</td>
+          </tr>
+          <tr class="">
+            <td>7:36:49 p. m.</td>
+            <td>150</td>
+            <td>0</td>
+            <td>0%</td>
+            <td>16</td>
+            <td>22</td>
+          </tr>
+          <tr class="">
+            <td>7:36:59 p. m.</td>
+            <td>200</td>
+            <td>0</td>
+            <td>0%</td>
+            <td>12.1</td>
+            <td>16.9</td>
+          </tr>
+          <tr class="">
+            <td>7:37:09 p. m.</td>
+            <td>299</td>
+            <td>0</td>
+            <td>0%</td>
+            <td>10.9</td>
+            <td>13.9</td>
+          </tr>
+          <tr class="">
+            <td>7:37:19 p. m.</td>
+            <td>400</td>
+            <td>0</td>
+            <td>0%</td>
+            <td>10.1</td>
+            <td>13.1</td>
+          </tr>
+          <tr class="">
+            <td>7:37:29 p. m.</td>
+            <td>598</td>
+            <td>0</td>
+            <td>0%</td>
+            <td>7.9</td>
+            <td>10.1</td>
+          </tr>
+          <tr class="">
+            <td>7:37:39 p. m.</td>
+            <td>800</td>
+            <td>0</td>
+            <td>0%</td>
+            <td>7</td>
+            <td>8.9</td>
+          </tr>
+          <tr class="">
+            <td>7:37:45 p. m.</td>
+            <td>408</td>
+            <td>0</td>
+            <td>0%</td>
+            <td>7</td>
+            <td>7.9</td>
+          </tr>
+      </tbody>
+    </table>
+  </section>
+</body>
+</html>
