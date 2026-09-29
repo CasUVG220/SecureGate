@@ -133,7 +133,7 @@ export default function VerificacionPage() {
           <h1 className="text-xl font-bold text-white">{t('verification.title')}</h1>
           <p className="text-sm text-gray-400 mt-0.5">{t('verification.subtitle')}</p>
         </div>
-        <span className="flex items-center gap-2 bg-amber-500/20 border border-amber-500/40 text-amber-400 text-sm font-semibold px-4 py-1.5 rounded-full">
+        <span className="flex items-center gap-2 rounded-full border border-warning-500/30 bg-warning-500/12 px-4 py-1.5 text-sm font-semibold text-warning-400">
           ⏱ {cola.length} {cola.length !== 1 ? t('verification.pendingPlural') : t('verification.pending')}
         </span>
       </div>

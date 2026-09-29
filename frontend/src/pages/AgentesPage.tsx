@@ -3,6 +3,7 @@ import { getUsuarios, createUsuario, type Usuario } from '../services/api';
 import { TableSkeleton, Spinner } from '../components/Skeleton';
 import { useToast } from '../components/Toast';
 import { useTranslation } from '../i18n/useTranslation';
+import { StatusText } from '../components/ui';
 
 const EMPTY_AGENT = { nombre: '', email: '', password: '' };
 
@@ -77,7 +78,7 @@ export default function AgentesPage() {
         <div>
           <p className="sg-eyebrow">SecureGate · Personal operativo</p>
           <h1 className="mt-1 text-2xl font-bold tracking-tight text-white sm:text-3xl">Personal y agentes</h1>
-          <p className="mt-1 text-sm text-[var(--sg-text-muted)]">Gestiona quién está listo para proteger la operación de tu comunidad.</p>
+          <p className="mt-1 text-sm text-gray-400">Gestiona quién está listo para proteger la operación de tu comunidad.</p>
         </div>
         {!loading && <span className="sg-status bg-emerald-500/10 text-emerald-400">{filtered.length} registrados</span>}
       </div>
@@ -95,7 +96,12 @@ export default function AgentesPage() {
               <div key={name}>
                 <label className="block text-sm text-gray-300 mb-1">{label}{req && ' *'}</label>
                 <input name={name} type={type} value={agentForm[name]} onChange={handleAgentChange} required={req}
+                  minLength={name === 'password' ? 8 : undefined}
+                  autoComplete={name === 'password' ? 'new-password' : undefined}
                   className="sg-input" />
+                {name === 'password' && (
+                  <p className="mt-1 text-xs text-gray-400">{t('inv.accept.passwordHint')}</p>
+                )}
               </div>
             ))}
           </div>
@@ -157,9 +163,9 @@ export default function AgentesPage() {
                     <td className="px-5 py-3 text-gray-400">{a.email}</td>
                     <td className="px-5 py-3 text-gray-200 capitalize">{a.rol.replace('_', ' ')}</td>
                     <td className="px-5 py-3">
-                      <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${a.activo ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                      <StatusText kind={a.activo ? 'on' : 'off'}>
                         {a.activo ? 'Activo' : 'Inactivo'}
-                      </span>
+                      </StatusText>
                     </td>
                   </tr>
                 ))

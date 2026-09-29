@@ -7,8 +7,10 @@ import {
 import { Spinner, TableSkeleton } from '../../components/Skeleton';
 import { ROW_ICON, RowActions, StatusText } from '../../components/ui';
 import { useToast } from '../../components/Toast';
+import InvitacionesPanel from '../../components/InvitacionesPanel';
 import { decodeTokenPayload } from '../../services/api';
 import { useTranslation } from '../../i18n/useTranslation';
+import { rellenar } from '../../components/charts/format';
 
 type Modal = 'none' | 'sucursal' | 'admin' | 'usuario';
 
@@ -229,7 +231,12 @@ export default function GestionSucursales() {
   return (
     <div className="sg-page text-gray-100">
       <div className="flex items-center justify-between flex-wrap gap-3">
-        <h1 className="text-xl font-bold text-white">{t('ae.managementTitle')}</h1>
+        <div>
+          <h1 className="text-xl font-bold text-gray-50">{t('ae.managementTitle')}</h1>
+          <p className="mt-1 text-sm text-gray-400">
+            {rellenar(t('ae.managementCounts'), { sucursales: sucursales.length, personal: usuarios.length })}
+          </p>
+        </div>
         <div className="flex gap-2">
           <button
             onClick={openUserModal}
@@ -245,20 +252,6 @@ export default function GestionSucursales() {
           </button>
         </div>
       </div>
-
-      <section className="sg-hero" aria-label="Resumen de la organización">
-        <div className="sg-hero-grid">
-          <div>
-            <p className="sg-hero-label">Administración de comunidades</p>
-            <h2 className="sg-hero-title">Personas y sucursales, bajo control.</h2>
-            <p className="sg-hero-copy">Asigna responsables, organiza el personal y mantén cada comunidad lista para operar.</p>
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="sg-hero-stat"><p className="sg-hero-stat-label">Comunidades</p><p className="sg-hero-stat-value">{sucursales.length}</p></div>
-            <div className="sg-hero-stat"><p className="sg-hero-stat-label">Personal</p><p className="sg-hero-stat-value">{usuarios.length}</p></div>
-          </div>
-        </div>
-      </section>
 
       {error && (
         <div className="bg-red-900/40 border border-red-700 rounded-lg px-4 py-3 text-red-300 text-sm">{error}</div>
@@ -442,6 +435,9 @@ export default function GestionSucursales() {
           </table>
         </div>
       </div>
+
+      {/* Aprovisionamiento en cascada: el admin de empresa invita al admin de cada sucursal. */}
+      <InvitacionesPanel modo="admin_empresa" sucursales={sucursales} />
 
       {/* ── Modal: create / edit sucursal ── */}
       {modal === 'sucursal' && (
