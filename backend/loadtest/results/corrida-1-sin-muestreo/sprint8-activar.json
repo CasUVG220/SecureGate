@@ -1,0 +1,1587 @@
+{
+  "aggregate": {
+    "period": 1790726840000,
+    "counters": {
+      "vusers.created_by_name.Activar licencia": 6700,
+      "vusers.created": 6700,
+      "http.requests": 6700,
+      "http.codes.200": 6700,
+      "http.responses": 6700,
+      "http.downloaded_bytes": 4850800,
+      "plugins.metrics-by-endpoint./api/licencias/activar.codes.200": 6700,
+      "vusers.failed": 0,
+      "vusers.completed": 6700
+    },
+    "rates": {
+      "http.request_rate": 66
+    },
+    "firstCounterAt": 1790726747533,
+    "firstHistogramAt": 1790726747568,
+    "lastCounterAt": 1790726847351,
+    "lastHistogramAt": 1790726847351,
+    "firstMetricAt": 1790726747533,
+    "lastMetricAt": 1790726847351,
+    "summaries": {
+      "http.response_time": {
+        "min": 1,
+        "max": 142,
+        "count": 6700,
+        "mean": 4.4,
+        "p50": 3,
+        "median": 3,
+        "p75": 5,
+        "p90": 7.9,
+        "p95": 10.1,
+        "p99": 16.9,
+        "p999": 71.5
+      },
+      "http.response_time.2xx": {
+        "min": 1,
+        "max": 142,
+        "count": 6700,
+        "mean": 4.4,
+        "p50": 3,
+        "median": 3,
+        "p75": 5,
+        "p90": 7.9,
+        "p95": 10.1,
+        "p99": 16.9,
+        "p999": 71.5
+      },
+      "plugins.metrics-by-endpoint.response_time./api/licencias/activar": {
+        "min": 1,
+        "max": 142,
+        "count": 6700,
+        "mean": 4.4,
+        "p50": 3,
+        "median": 3,
+        "p75": 5,
+        "p90": 7.9,
+        "p95": 10.1,
+        "p99": 16.9,
+        "p999": 71.5
+      },
+      "vusers.session_length": {
+        "min": 2.1,
+        "max": 144.2,
+        "count": 6700,
+        "mean": 5.9,
+        "p50": 4.5,
+        "median": 4.5,
+        "p75": 6.8,
+        "p90": 10.1,
+        "p95": 13.1,
+        "p99": 24.3,
+        "p999": 77.5
+      }
+    },
+    "histograms": {
+      "http.response_time": {
+        "min": 1,
+        "max": 142,
+        "count": 6700,
+        "mean": 4.4,
+        "p50": 3,
+        "median": 3,
+        "p75": 5,
+        "p90": 7.9,
+        "p95": 10.1,
+        "p99": 16.9,
+        "p999": 71.5
+      },
+      "http.response_time.2xx": {
+        "min": 1,
+        "max": 142,
+        "count": 6700,
+        "mean": 4.4,
+        "p50": 3,
+        "median": 3,
+        "p75": 5,
+        "p90": 7.9,
+        "p95": 10.1,
+        "p99": 16.9,
+        "p999": 71.5
+      },
+      "plugins.metrics-by-endpoint.response_time./api/licencias/activar": {
+        "min": 1,
+        "max": 142,
+        "count": 6700,
+        "mean": 4.4,
+        "p50": 3,
+        "median": 3,
+        "p75": 5,
+        "p90": 7.9,
+        "p95": 10.1,
+        "p99": 16.9,
+        "p999": 71.5
+      },
+      "vusers.session_length": {
+        "min": 2.1,
+        "max": 144.2,
+        "count": 6700,
+        "mean": 5.9,
+        "p50": 4.5,
+        "median": 4.5,
+        "p75": 6.8,
+        "p90": 10.1,
+        "p95": 13.1,
+        "p99": 24.3,
+        "p999": 77.5
+      }
+    }
+  },
+  "intermediate": [
+    {
+      "period": "1790726740000",
+      "counters": {
+        "vusers.created_by_name.Activar licencia": 23,
+        "vusers.created": 23,
+        "http.requests": 23,
+        "http.codes.200": 23,
+        "http.responses": 23,
+        "http.downloaded_bytes": 16652,
+        "plugins.metrics-by-endpoint./api/licencias/activar.codes.200": 23,
+        "vusers.failed": 0,
+        "vusers.completed": 23
+      },
+      "rates": {
+        "http.request_rate": 17
+      },
+      "http.request_rate": null,
+      "firstCounterAt": 1790726747533,
+      "firstHistogramAt": 1790726747568,
+      "lastCounterAt": 1790726749648,
+      "lastHistogramAt": 1790726749648,
+      "firstMetricAt": 1790726747533,
+      "lastMetricAt": 1790726749648,
+      "summaries": {
+        "http.response_time": {
+          "min": 8,
+          "max": 22,
+          "count": 23,
+          "mean": 11.9,
+          "p50": 10.9,
+          "median": 10.9,
+          "p75": 13.9,
+          "p90": 15,
+          "p95": 16,
+          "p99": 19.9,
+          "p999": 19.9
+        },
+        "http.response_time.2xx": {
+          "min": 8,
+          "max": 22,
+          "count": 23,
+          "mean": 11.9,
+          "p50": 10.9,
+          "median": 10.9,
+          "p75": 13.9,
+          "p90": 15,
+          "p95": 16,
+          "p99": 19.9,
+          "p999": 19.9
+        },
+        "plugins.metrics-by-endpoint.response_time./api/licencias/activar": {
+          "min": 8,
+          "max": 22,
+          "count": 23,
+          "mean": 11.9,
+          "p50": 10.9,
+          "median": 10.9,
+          "p75": 13.9,
+          "p90": 15,
+          "p95": 16,
+          "p99": 19.9,
+          "p999": 19.9
+        },
+        "vusers.session_length": {
+          "min": 9.4,
+          "max": 36.7,
+          "count": 23,
+          "mean": 19.9,
+          "p50": 19.1,
+          "median": 19.1,
+          "p75": 24.3,
+          "p90": 26.8,
+          "p95": 27.9,
+          "p99": 31.5,
+          "p999": 31.5
+        }
+      },
+      "histograms": {
+        "http.response_time": {
+          "min": 8,
+          "max": 22,
+          "count": 23,
+          "mean": 11.9,
+          "p50": 10.9,
+          "median": 10.9,
+          "p75": 13.9,
+          "p90": 15,
+          "p95": 16,
+          "p99": 19.9,
+          "p999": 19.9
+        },
+        "http.response_time.2xx": {
+          "min": 8,
+          "max": 22,
+          "count": 23,
+          "mean": 11.9,
+          "p50": 10.9,
+          "median": 10.9,
+          "p75": 13.9,
+          "p90": 15,
+          "p95": 16,
+          "p99": 19.9,
+          "p999": 19.9
+        },
+        "plugins.metrics-by-endpoint.response_time./api/licencias/activar": {
+          "min": 8,
+          "max": 22,
+          "count": 23,
+          "mean": 11.9,
+          "p50": 10.9,
+          "median": 10.9,
+          "p75": 13.9,
+          "p90": 15,
+          "p95": 16,
+          "p99": 19.9,
+          "p999": 19.9
+        },
+        "vusers.session_length": {
+          "min": 9.4,
+          "max": 36.7,
+          "count": 23,
+          "mean": 19.9,
+          "p50": 19.1,
+          "median": 19.1,
+          "p75": 24.3,
+          "p90": 26.8,
+          "p95": 27.9,
+          "p99": 31.5,
+          "p999": 31.5
+        }
+      }
+    },
+    {
+      "period": "1790726750000",
+      "counters": {
+        "vusers.created_by_name.Activar licencia": 100,
+        "vusers.created": 100,
+        "http.requests": 100,
+        "http.codes.200": 100,
+        "http.responses": 100,
+        "http.downloaded_bytes": 72400,
+        "plugins.metrics-by-endpoint./api/licencias/activar.codes.200": 100,
+        "vusers.failed": 0,
+        "vusers.completed": 100
+      },
+      "rates": {
+        "http.request_rate": 10
+      },
+      "http.request_rate": null,
+      "firstCounterAt": 1790726750032,
+      "firstHistogramAt": 1790726750051,
+      "lastCounterAt": 1790726759648,
+      "lastHistogramAt": 1790726759648,
+      "firstMetricAt": 1790726750032,
+      "lastMetricAt": 1790726759648,
+      "summaries": {
+        "http.response_time": {
+          "min": 4,
+          "max": 85,
+          "count": 100,
+          "mean": 13.7,
+          "p50": 10.9,
+          "median": 10.9,
+          "p75": 13.1,
+          "p90": 19.1,
+          "p95": 25.8,
+          "p99": 71.5,
+          "p999": 71.5
+        },
+        "http.response_time.2xx": {
+          "min": 4,
+          "max": 85,
+          "count": 100,
+          "mean": 13.7,
+          "p50": 10.9,
+          "median": 10.9,
+          "p75": 13.1,
+          "p90": 19.1,
+          "p95": 25.8,
+          "p99": 71.5,
+          "p999": 71.5
+        },
+        "plugins.metrics-by-endpoint.response_time./api/licencias/activar": {
+          "min": 4,
+          "max": 85,
+          "count": 100,
+          "mean": 13.7,
+          "p50": 10.9,
+          "median": 10.9,
+          "p75": 13.1,
+          "p90": 19.1,
+          "p95": 25.8,
+          "p99": 71.5,
+          "p999": 71.5
+        },
+        "vusers.session_length": {
+          "min": 5.9,
+          "max": 89.1,
+          "count": 100,
+          "mean": 17.6,
+          "p50": 14.4,
+          "median": 14.4,
+          "p75": 18.4,
+          "p90": 23.8,
+          "p95": 30.9,
+          "p99": 79.1,
+          "p999": 79.1
+        }
+      },
+      "histograms": {
+        "http.response_time": {
+          "min": 4,
+          "max": 85,
+          "count": 100,
+          "mean": 13.7,
+          "p50": 10.9,
+          "median": 10.9,
+          "p75": 13.1,
+          "p90": 19.1,
+          "p95": 25.8,
+          "p99": 71.5,
+          "p999": 71.5
+        },
+        "http.response_time.2xx": {
+          "min": 4,
+          "max": 85,
+          "count": 100,
+          "mean": 13.7,
+          "p50": 10.9,
+          "median": 10.9,
+          "p75": 13.1,
+          "p90": 19.1,
+          "p95": 25.8,
+          "p99": 71.5,
+          "p999": 71.5
+        },
+        "plugins.metrics-by-endpoint.response_time./api/licencias/activar": {
+          "min": 4,
+          "max": 85,
+          "count": 100,
+          "mean": 13.7,
+          "p50": 10.9,
+          "median": 10.9,
+          "p75": 13.1,
+          "p90": 19.1,
+          "p95": 25.8,
+          "p99": 71.5,
+          "p999": 71.5
+        },
+        "vusers.session_length": {
+          "min": 5.9,
+          "max": 89.1,
+          "count": 100,
+          "mean": 17.6,
+          "p50": 14.4,
+          "median": 14.4,
+          "p75": 18.4,
+          "p90": 23.8,
+          "p95": 30.9,
+          "p99": 79.1,
+          "p999": 79.1
+        }
+      }
+    },
+    {
+      "period": "1790726760000",
+      "counters": {
+        "vusers.created_by_name.Activar licencia": 144,
+        "vusers.created": 144,
+        "http.requests": 144,
+        "http.codes.200": 144,
+        "http.responses": 144,
+        "http.downloaded_bytes": 104256,
+        "plugins.metrics-by-endpoint./api/licencias/activar.codes.200": 144,
+        "vusers.failed": 0,
+        "vusers.completed": 144
+      },
+      "rates": {
+        "http.request_rate": 17
+      },
+      "http.request_rate": null,
+      "firstCounterAt": 1790726760032,
+      "firstHistogramAt": 1790726760047,
+      "lastCounterAt": 1790726769967,
+      "lastHistogramAt": 1790726769967,
+      "firstMetricAt": 1790726760032,
+      "lastMetricAt": 1790726769967,
+      "summaries": {
+        "http.response_time": {
+          "min": 4,
+          "max": 21,
+          "count": 144,
+          "mean": 10.3,
+          "p50": 8.9,
+          "median": 8.9,
+          "p75": 12.1,
+          "p90": 15,
+          "p95": 16.9,
+          "p99": 19.1,
+          "p999": 19.1
+        },
+        "http.response_time.2xx": {
+          "min": 4,
+          "max": 21,
+          "count": 144,
+          "mean": 10.3,
+          "p50": 8.9,
+          "median": 8.9,
+          "p75": 12.1,
+          "p90": 15,
+          "p95": 16.9,
+          "p99": 19.1,
+          "p999": 19.1
+        },
+        "plugins.metrics-by-endpoint.response_time./api/licencias/activar": {
+          "min": 4,
+          "max": 21,
+          "count": 144,
+          "mean": 10.3,
+          "p50": 8.9,
+          "median": 8.9,
+          "p75": 12.1,
+          "p90": 15,
+          "p95": 16.9,
+          "p99": 19.1,
+          "p999": 19.1
+        },
+        "vusers.session_length": {
+          "min": 5.2,
+          "max": 30.4,
+          "count": 144,
+          "mean": 13.3,
+          "p50": 12.8,
+          "median": 12.8,
+          "p75": 15.6,
+          "p90": 18.7,
+          "p95": 21.1,
+          "p99": 26.3,
+          "p999": 26.8
+        }
+      },
+      "histograms": {
+        "http.response_time": {
+          "min": 4,
+          "max": 21,
+          "count": 144,
+          "mean": 10.3,
+          "p50": 8.9,
+          "median": 8.9,
+          "p75": 12.1,
+          "p90": 15,
+          "p95": 16.9,
+          "p99": 19.1,
+          "p999": 19.1
+        },
+        "http.response_time.2xx": {
+          "min": 4,
+          "max": 21,
+          "count": 144,
+          "mean": 10.3,
+          "p50": 8.9,
+          "median": 8.9,
+          "p75": 12.1,
+          "p90": 15,
+          "p95": 16.9,
+          "p99": 19.1,
+          "p999": 19.1
+        },
+        "plugins.metrics-by-endpoint.response_time./api/licencias/activar": {
+          "min": 4,
+          "max": 21,
+          "count": 144,
+          "mean": 10.3,
+          "p50": 8.9,
+          "median": 8.9,
+          "p75": 12.1,
+          "p90": 15,
+          "p95": 16.9,
+          "p99": 19.1,
+          "p999": 19.1
+        },
+        "vusers.session_length": {
+          "min": 5.2,
+          "max": 30.4,
+          "count": 144,
+          "mean": 13.3,
+          "p50": 12.8,
+          "median": 12.8,
+          "p75": 15.6,
+          "p90": 18.7,
+          "p95": 21.1,
+          "p99": 26.3,
+          "p999": 26.8
+        }
+      }
+    },
+    {
+      "period": "1790726770000",
+      "counters": {
+        "vusers.created_by_name.Activar licencia": 250,
+        "vusers.created": 250,
+        "http.requests": 250,
+        "http.codes.200": 250,
+        "http.responses": 250,
+        "http.downloaded_bytes": 181000,
+        "plugins.metrics-by-endpoint./api/licencias/activar.codes.200": 250,
+        "vusers.failed": 0,
+        "vusers.completed": 250
+      },
+      "rates": {
+        "http.request_rate": 25
+      },
+      "http.request_rate": null,
+      "firstCounterAt": 1790726770011,
+      "firstHistogramAt": 1790726770024,
+      "lastCounterAt": 1790726779976,
+      "lastHistogramAt": 1790726779976,
+      "firstMetricAt": 1790726770011,
+      "lastMetricAt": 1790726779976,
+      "summaries": {
+        "http.response_time": {
+          "min": 2,
+          "max": 20,
+          "count": 250,
+          "mean": 8.7,
+          "p50": 8.9,
+          "median": 8.9,
+          "p75": 10.1,
+          "p90": 10.9,
+          "p95": 12.1,
+          "p99": 15,
+          "p999": 19.1
+        },
+        "http.response_time.2xx": {
+          "min": 2,
+          "max": 20,
+          "count": 250,
+          "mean": 8.7,
+          "p50": 8.9,
+          "median": 8.9,
+          "p75": 10.1,
+          "p90": 10.9,
+          "p95": 12.1,
+          "p99": 15,
+          "p999": 19.1
+        },
+        "plugins.metrics-by-endpoint.response_time./api/licencias/activar": {
+          "min": 2,
+          "max": 20,
+          "count": 250,
+          "mean": 8.7,
+          "p50": 8.9,
+          "median": 8.9,
+          "p75": 10.1,
+          "p90": 10.9,
+          "p95": 12.1,
+          "p99": 15,
+          "p999": 19.1
+        },
+        "vusers.session_length": {
+          "min": 3.6,
+          "max": 34.6,
+          "count": 250,
+          "mean": 11.4,
+          "p50": 10.9,
+          "median": 10.9,
+          "p75": 13.3,
+          "p90": 15.6,
+          "p95": 16.9,
+          "p99": 19.1,
+          "p999": 25.8
+        }
+      },
+      "histograms": {
+        "http.response_time": {
+          "min": 2,
+          "max": 20,
+          "count": 250,
+          "mean": 8.7,
+          "p50": 8.9,
+          "median": 8.9,
+          "p75": 10.1,
+          "p90": 10.9,
+          "p95": 12.1,
+          "p99": 15,
+          "p999": 19.1
+        },
+        "http.response_time.2xx": {
+          "min": 2,
+          "max": 20,
+          "count": 250,
+          "mean": 8.7,
+          "p50": 8.9,
+          "median": 8.9,
+          "p75": 10.1,
+          "p90": 10.9,
+          "p95": 12.1,
+          "p99": 15,
+          "p999": 19.1
+        },
+        "plugins.metrics-by-endpoint.response_time./api/licencias/activar": {
+          "min": 2,
+          "max": 20,
+          "count": 250,
+          "mean": 8.7,
+          "p50": 8.9,
+          "median": 8.9,
+          "p75": 10.1,
+          "p90": 10.9,
+          "p95": 12.1,
+          "p99": 15,
+          "p999": 19.1
+        },
+        "vusers.session_length": {
+          "min": 3.6,
+          "max": 34.6,
+          "count": 250,
+          "mean": 11.4,
+          "p50": 10.9,
+          "median": 10.9,
+          "p75": 13.3,
+          "p90": 15.6,
+          "p95": 16.9,
+          "p99": 19.1,
+          "p999": 25.8
+        }
+      }
+    },
+    {
+      "period": "1790726780000",
+      "counters": {
+        "vusers.created_by_name.Activar licencia": 320,
+        "vusers.created": 320,
+        "http.requests": 320,
+        "http.codes.200": 319,
+        "http.responses": 319,
+        "http.downloaded_bytes": 230956,
+        "plugins.metrics-by-endpoint./api/licencias/activar.codes.200": 319,
+        "vusers.failed": 0,
+        "vusers.completed": 319
+      },
+      "rates": {
+        "http.request_rate": 32
+      },
+      "http.request_rate": null,
+      "firstCounterAt": 1790726780011,
+      "firstHistogramAt": 1790726780017,
+      "lastCounterAt": 1790726789995,
+      "lastHistogramAt": 1790726789970,
+      "firstMetricAt": 1790726780011,
+      "lastMetricAt": 1790726789995,
+      "summaries": {
+        "http.response_time": {
+          "min": 3,
+          "max": 18,
+          "count": 319,
+          "mean": 7.3,
+          "p50": 7,
+          "median": 7,
+          "p75": 7.9,
+          "p90": 10.1,
+          "p95": 10.9,
+          "p99": 13.9,
+          "p999": 16.9
+        },
+        "http.response_time.2xx": {
+          "min": 3,
+          "max": 18,
+          "count": 319,
+          "mean": 7.3,
+          "p50": 7,
+          "median": 7,
+          "p75": 7.9,
+          "p90": 10.1,
+          "p95": 10.9,
+          "p99": 13.9,
+          "p999": 16.9
+        },
+        "plugins.metrics-by-endpoint.response_time./api/licencias/activar": {
+          "min": 3,
+          "max": 18,
+          "count": 319,
+          "mean": 7.3,
+          "p50": 7,
+          "median": 7,
+          "p75": 7.9,
+          "p90": 10.1,
+          "p95": 10.9,
+          "p99": 13.9,
+          "p999": 16.9
+        },
+        "vusers.session_length": {
+          "min": 3.8,
+          "max": 20.2,
+          "count": 319,
+          "mean": 9.2,
+          "p50": 8.8,
+          "median": 8.8,
+          "p75": 10.5,
+          "p90": 12.3,
+          "p95": 14.4,
+          "p99": 18,
+          "p999": 19.9
+        }
+      },
+      "histograms": {
+        "http.response_time": {
+          "min": 3,
+          "max": 18,
+          "count": 319,
+          "mean": 7.3,
+          "p50": 7,
+          "median": 7,
+          "p75": 7.9,
+          "p90": 10.1,
+          "p95": 10.9,
+          "p99": 13.9,
+          "p999": 16.9
+        },
+        "http.response_time.2xx": {
+          "min": 3,
+          "max": 18,
+          "count": 319,
+          "mean": 7.3,
+          "p50": 7,
+          "median": 7,
+          "p75": 7.9,
+          "p90": 10.1,
+          "p95": 10.9,
+          "p99": 13.9,
+          "p999": 16.9
+        },
+        "plugins.metrics-by-endpoint.response_time./api/licencias/activar": {
+          "min": 3,
+          "max": 18,
+          "count": 319,
+          "mean": 7.3,
+          "p50": 7,
+          "median": 7,
+          "p75": 7.9,
+          "p90": 10.1,
+          "p95": 10.9,
+          "p99": 13.9,
+          "p999": 16.9
+        },
+        "vusers.session_length": {
+          "min": 3.8,
+          "max": 20.2,
+          "count": 319,
+          "mean": 9.2,
+          "p50": 8.8,
+          "median": 8.8,
+          "p75": 10.5,
+          "p90": 12.3,
+          "p95": 14.4,
+          "p99": 18,
+          "p999": 19.9
+        }
+      }
+    },
+    {
+      "period": "1790726790000",
+      "counters": {
+        "vusers.created_by_name.Activar licencia": 500,
+        "vusers.created": 500,
+        "http.requests": 500,
+        "http.codes.200": 500,
+        "http.responses": 500,
+        "http.downloaded_bytes": 362000,
+        "plugins.metrics-by-endpoint./api/licencias/activar.codes.200": 500,
+        "vusers.failed": 0,
+        "vusers.completed": 500
+      },
+      "rates": {
+        "http.request_rate": 50
+      },
+      "http.request_rate": null,
+      "firstCounterAt": 1790726790006,
+      "firstHistogramAt": 1790726790006,
+      "lastCounterAt": 1790726799995,
+      "lastHistogramAt": 1790726799969,
+      "firstMetricAt": 1790726790006,
+      "lastMetricAt": 1790726799995,
+      "summaries": {
+        "http.response_time": {
+          "min": 1,
+          "max": 19,
+          "count": 500,
+          "mean": 5.9,
+          "p50": 6,
+          "median": 6,
+          "p75": 7,
+          "p90": 7.9,
+          "p95": 8.9,
+          "p99": 10.1,
+          "p999": 16.9
+        },
+        "http.response_time.2xx": {
+          "min": 1,
+          "max": 19,
+          "count": 500,
+          "mean": 5.9,
+          "p50": 6,
+          "median": 6,
+          "p75": 7,
+          "p90": 7.9,
+          "p95": 8.9,
+          "p99": 10.1,
+          "p999": 16.9
+        },
+        "plugins.metrics-by-endpoint.response_time./api/licencias/activar": {
+          "min": 1,
+          "max": 19,
+          "count": 500,
+          "mean": 5.9,
+          "p50": 6,
+          "median": 6,
+          "p75": 7,
+          "p90": 7.9,
+          "p95": 8.9,
+          "p99": 10.1,
+          "p999": 16.9
+        },
+        "vusers.session_length": {
+          "min": 2.7,
+          "max": 41.3,
+          "count": 500,
+          "mean": 7.4,
+          "p50": 7.2,
+          "median": 7.2,
+          "p75": 8.4,
+          "p90": 10.1,
+          "p95": 10.9,
+          "p99": 12.8,
+          "p999": 19.9
+        }
+      },
+      "histograms": {
+        "http.response_time": {
+          "min": 1,
+          "max": 19,
+          "count": 500,
+          "mean": 5.9,
+          "p50": 6,
+          "median": 6,
+          "p75": 7,
+          "p90": 7.9,
+          "p95": 8.9,
+          "p99": 10.1,
+          "p999": 16.9
+        },
+        "http.response_time.2xx": {
+          "min": 1,
+          "max": 19,
+          "count": 500,
+          "mean": 5.9,
+          "p50": 6,
+          "median": 6,
+          "p75": 7,
+          "p90": 7.9,
+          "p95": 8.9,
+          "p99": 10.1,
+          "p999": 16.9
+        },
+        "plugins.metrics-by-endpoint.response_time./api/licencias/activar": {
+          "min": 1,
+          "max": 19,
+          "count": 500,
+          "mean": 5.9,
+          "p50": 6,
+          "median": 6,
+          "p75": 7,
+          "p90": 7.9,
+          "p95": 8.9,
+          "p99": 10.1,
+          "p999": 16.9
+        },
+        "vusers.session_length": {
+          "min": 2.7,
+          "max": 41.3,
+          "count": 500,
+          "mean": 7.4,
+          "p50": 7.2,
+          "median": 7.2,
+          "p75": 8.4,
+          "p90": 10.1,
+          "p95": 10.9,
+          "p99": 12.8,
+          "p999": 19.9
+        }
+      }
+    },
+    {
+      "period": "1790726800000",
+      "counters": {
+        "vusers.created_by_name.Activar licencia": 641,
+        "vusers.created": 641,
+        "http.requests": 641,
+        "http.codes.200": 641,
+        "http.responses": 641,
+        "http.downloaded_bytes": 464084,
+        "plugins.metrics-by-endpoint./api/licencias/activar.codes.200": 641,
+        "vusers.failed": 0,
+        "vusers.completed": 641
+      },
+      "rates": {
+        "http.request_rate": 64
+      },
+      "http.request_rate": null,
+      "firstCounterAt": 1790726800003,
+      "firstHistogramAt": 1790726800003,
+      "lastCounterAt": 1790726809995,
+      "lastHistogramAt": 1790726809991,
+      "firstMetricAt": 1790726800003,
+      "lastMetricAt": 1790726809995,
+      "summaries": {
+        "http.response_time": {
+          "min": 1,
+          "max": 142,
+          "count": 641,
+          "mean": 5.9,
+          "p50": 5,
+          "median": 5,
+          "p75": 6,
+          "p90": 7.9,
+          "p95": 8.9,
+          "p99": 13.9,
+          "p999": 102.5
+        },
+        "http.response_time.2xx": {
+          "min": 1,
+          "max": 142,
+          "count": 641,
+          "mean": 5.9,
+          "p50": 5,
+          "median": 5,
+          "p75": 6,
+          "p90": 7.9,
+          "p95": 8.9,
+          "p99": 13.9,
+          "p999": 102.5
+        },
+        "plugins.metrics-by-endpoint.response_time./api/licencias/activar": {
+          "min": 1,
+          "max": 142,
+          "count": 641,
+          "mean": 5.9,
+          "p50": 5,
+          "median": 5,
+          "p75": 6,
+          "p90": 7.9,
+          "p95": 8.9,
+          "p99": 13.9,
+          "p999": 102.5
+        },
+        "vusers.session_length": {
+          "min": 2.3,
+          "max": 144.2,
+          "count": 641,
+          "mean": 7.2,
+          "p50": 6.5,
+          "median": 6.5,
+          "p75": 7.8,
+          "p90": 9.5,
+          "p95": 10.5,
+          "p99": 15.6,
+          "p999": 104.6
+        }
+      },
+      "histograms": {
+        "http.response_time": {
+          "min": 1,
+          "max": 142,
+          "count": 641,
+          "mean": 5.9,
+          "p50": 5,
+          "median": 5,
+          "p75": 6,
+          "p90": 7.9,
+          "p95": 8.9,
+          "p99": 13.9,
+          "p999": 102.5
+        },
+        "http.response_time.2xx": {
+          "min": 1,
+          "max": 142,
+          "count": 641,
+          "mean": 5.9,
+          "p50": 5,
+          "median": 5,
+          "p75": 6,
+          "p90": 7.9,
+          "p95": 8.9,
+          "p99": 13.9,
+          "p999": 102.5
+        },
+        "plugins.metrics-by-endpoint.response_time./api/licencias/activar": {
+          "min": 1,
+          "max": 142,
+          "count": 641,
+          "mean": 5.9,
+          "p50": 5,
+          "median": 5,
+          "p75": 6,
+          "p90": 7.9,
+          "p95": 8.9,
+          "p99": 13.9,
+          "p999": 102.5
+        },
+        "vusers.session_length": {
+          "min": 2.3,
+          "max": 144.2,
+          "count": 641,
+          "mean": 7.2,
+          "p50": 6.5,
+          "median": 6.5,
+          "p75": 7.8,
+          "p90": 9.5,
+          "p95": 10.5,
+          "p99": 15.6,
+          "p999": 104.6
+        }
+      }
+    },
+    {
+      "period": "1790726810000",
+      "counters": {
+        "vusers.created_by_name.Activar licencia": 1000,
+        "vusers.created": 1000,
+        "http.requests": 1000,
+        "http.codes.200": 1001,
+        "http.responses": 1001,
+        "http.downloaded_bytes": 724724,
+        "plugins.metrics-by-endpoint./api/licencias/activar.codes.200": 1001,
+        "vusers.failed": 0,
+        "vusers.completed": 1001
+      },
+      "rates": {
+        "http.request_rate": 100
+      },
+      "http.request_rate": null,
+      "firstCounterAt": 1790726810000,
+      "firstHistogramAt": 1790726810000,
+      "lastCounterAt": 1790726819999,
+      "lastHistogramAt": 1790726819999,
+      "firstMetricAt": 1790726810000,
+      "lastMetricAt": 1790726819999,
+      "summaries": {
+        "http.response_time": {
+          "min": 1,
+          "max": 8,
+          "count": 1001,
+          "mean": 3.4,
+          "p50": 3,
+          "median": 3,
+          "p75": 4,
+          "p90": 5,
+          "p95": 6,
+          "p99": 7,
+          "p999": 7.9
+        },
+        "http.response_time.2xx": {
+          "min": 1,
+          "max": 8,
+          "count": 1001,
+          "mean": 3.4,
+          "p50": 3,
+          "median": 3,
+          "p75": 4,
+          "p90": 5,
+          "p95": 6,
+          "p99": 7,
+          "p999": 7.9
+        },
+        "plugins.metrics-by-endpoint.response_time./api/licencias/activar": {
+          "min": 1,
+          "max": 8,
+          "count": 1001,
+          "mean": 3.4,
+          "p50": 3,
+          "median": 3,
+          "p75": 4,
+          "p90": 5,
+          "p95": 6,
+          "p99": 7,
+          "p999": 7.9
+        },
+        "vusers.session_length": {
+          "min": 2.2,
+          "max": 12.3,
+          "count": 1001,
+          "mean": 4.6,
+          "p50": 4.3,
+          "median": 4.3,
+          "p75": 5.6,
+          "p90": 6.6,
+          "p95": 7.5,
+          "p99": 8.9,
+          "p999": 10.7
+        }
+      },
+      "histograms": {
+        "http.response_time": {
+          "min": 1,
+          "max": 8,
+          "count": 1001,
+          "mean": 3.4,
+          "p50": 3,
+          "median": 3,
+          "p75": 4,
+          "p90": 5,
+          "p95": 6,
+          "p99": 7,
+          "p999": 7.9
+        },
+        "http.response_time.2xx": {
+          "min": 1,
+          "max": 8,
+          "count": 1001,
+          "mean": 3.4,
+          "p50": 3,
+          "median": 3,
+          "p75": 4,
+          "p90": 5,
+          "p95": 6,
+          "p99": 7,
+          "p999": 7.9
+        },
+        "plugins.metrics-by-endpoint.response_time./api/licencias/activar": {
+          "min": 1,
+          "max": 8,
+          "count": 1001,
+          "mean": 3.4,
+          "p50": 3,
+          "median": 3,
+          "p75": 4,
+          "p90": 5,
+          "p95": 6,
+          "p99": 7,
+          "p999": 7.9
+        },
+        "vusers.session_length": {
+          "min": 2.2,
+          "max": 12.3,
+          "count": 1001,
+          "mean": 4.6,
+          "p50": 4.3,
+          "median": 4.3,
+          "p75": 5.6,
+          "p90": 6.6,
+          "p95": 7.5,
+          "p99": 8.9,
+          "p999": 10.7
+        }
+      }
+    },
+    {
+      "period": "1790726820000",
+      "counters": {
+        "vusers.created_by_name.Activar licencia": 1139,
+        "vusers.created": 1139,
+        "http.requests": 1139,
+        "http.codes.200": 1130,
+        "http.responses": 1130,
+        "http.downloaded_bytes": 818120,
+        "plugins.metrics-by-endpoint./api/licencias/activar.codes.200": 1130,
+        "vusers.failed": 0,
+        "vusers.completed": 1130
+      },
+      "rates": {
+        "http.request_rate": 114
+      },
+      "http.request_rate": null,
+      "firstCounterAt": 1790726820007,
+      "firstHistogramAt": 1790726820014,
+      "lastCounterAt": 1790726829995,
+      "lastHistogramAt": 1790726829919,
+      "firstMetricAt": 1790726820007,
+      "lastMetricAt": 1790726829995,
+      "summaries": {
+        "http.response_time": {
+          "min": 1,
+          "max": 50,
+          "count": 1130,
+          "mean": 3.3,
+          "p50": 3,
+          "median": 3,
+          "p75": 4,
+          "p90": 5,
+          "p95": 6,
+          "p99": 12.1,
+          "p999": 22
+        },
+        "http.response_time.2xx": {
+          "min": 1,
+          "max": 50,
+          "count": 1130,
+          "mean": 3.3,
+          "p50": 3,
+          "median": 3,
+          "p75": 4,
+          "p90": 5,
+          "p95": 6,
+          "p99": 12.1,
+          "p999": 22
+        },
+        "plugins.metrics-by-endpoint.response_time./api/licencias/activar": {
+          "min": 1,
+          "max": 50,
+          "count": 1130,
+          "mean": 3.3,
+          "p50": 3,
+          "median": 3,
+          "p75": 4,
+          "p90": 5,
+          "p95": 6,
+          "p99": 12.1,
+          "p999": 22
+        },
+        "vusers.session_length": {
+          "min": 2.1,
+          "max": 58.6,
+          "count": 1130,
+          "mean": 4.7,
+          "p50": 4,
+          "median": 4,
+          "p75": 5.2,
+          "p90": 6.5,
+          "p95": 7.6,
+          "p99": 18,
+          "p999": 51.9
+        }
+      },
+      "histograms": {
+        "http.response_time": {
+          "min": 1,
+          "max": 50,
+          "count": 1130,
+          "mean": 3.3,
+          "p50": 3,
+          "median": 3,
+          "p75": 4,
+          "p90": 5,
+          "p95": 6,
+          "p99": 12.1,
+          "p999": 22
+        },
+        "http.response_time.2xx": {
+          "min": 1,
+          "max": 50,
+          "count": 1130,
+          "mean": 3.3,
+          "p50": 3,
+          "median": 3,
+          "p75": 4,
+          "p90": 5,
+          "p95": 6,
+          "p99": 12.1,
+          "p999": 22
+        },
+        "plugins.metrics-by-endpoint.response_time./api/licencias/activar": {
+          "min": 1,
+          "max": 50,
+          "count": 1130,
+          "mean": 3.3,
+          "p50": 3,
+          "median": 3,
+          "p75": 4,
+          "p90": 5,
+          "p95": 6,
+          "p99": 12.1,
+          "p999": 22
+        },
+        "vusers.session_length": {
+          "min": 2.1,
+          "max": 58.6,
+          "count": 1130,
+          "mean": 4.7,
+          "p50": 4,
+          "median": 4,
+          "p75": 5.2,
+          "p90": 6.5,
+          "p95": 7.6,
+          "p99": 18,
+          "p999": 51.9
+        }
+      }
+    },
+    {
+      "period": "1790726830000",
+      "counters": {
+        "http.codes.200": 1509,
+        "http.responses": 1509,
+        "http.downloaded_bytes": 1092516,
+        "plugins.metrics-by-endpoint./api/licencias/activar.codes.200": 1509,
+        "vusers.failed": 0,
+        "vusers.completed": 1509,
+        "vusers.created_by_name.Activar licencia": 1500,
+        "vusers.created": 1500,
+        "http.requests": 1500
+      },
+      "rates": {
+        "http.request_rate": 150
+      },
+      "http.request_rate": null,
+      "firstCounterAt": 1790726830001,
+      "firstHistogramAt": 1790726830025,
+      "lastCounterAt": 1790726839999,
+      "lastHistogramAt": 1790726839999,
+      "firstMetricAt": 1790726830001,
+      "lastMetricAt": 1790726839999,
+      "summaries": {
+        "http.response_time": {
+          "min": 1,
+          "max": 77,
+          "count": 1509,
+          "mean": 3.2,
+          "p50": 2,
+          "median": 2,
+          "p75": 3,
+          "p90": 4,
+          "p95": 6,
+          "p99": 22,
+          "p999": 71.5
+        },
+        "http.response_time.2xx": {
+          "min": 1,
+          "max": 77,
+          "count": 1509,
+          "mean": 3.2,
+          "p50": 2,
+          "median": 2,
+          "p75": 3,
+          "p90": 4,
+          "p95": 6,
+          "p99": 22,
+          "p999": 71.5
+        },
+        "plugins.metrics-by-endpoint.response_time./api/licencias/activar": {
+          "min": 1,
+          "max": 77,
+          "count": 1509,
+          "mean": 3.2,
+          "p50": 2,
+          "median": 2,
+          "p75": 3,
+          "p90": 4,
+          "p95": 6,
+          "p99": 22,
+          "p999": 71.5
+        },
+        "vusers.session_length": {
+          "min": 2.2,
+          "max": 82.4,
+          "count": 1509,
+          "mean": 4.5,
+          "p50": 3.4,
+          "median": 3.4,
+          "p75": 4.4,
+          "p90": 6,
+          "p95": 7.5,
+          "p99": 24.8,
+          "p999": 73
+        }
+      },
+      "histograms": {
+        "http.response_time": {
+          "min": 1,
+          "max": 77,
+          "count": 1509,
+          "mean": 3.2,
+          "p50": 2,
+          "median": 2,
+          "p75": 3,
+          "p90": 4,
+          "p95": 6,
+          "p99": 22,
+          "p999": 71.5
+        },
+        "http.response_time.2xx": {
+          "min": 1,
+          "max": 77,
+          "count": 1509,
+          "mean": 3.2,
+          "p50": 2,
+          "median": 2,
+          "p75": 3,
+          "p90": 4,
+          "p95": 6,
+          "p99": 22,
+          "p999": 71.5
+        },
+        "plugins.metrics-by-endpoint.response_time./api/licencias/activar": {
+          "min": 1,
+          "max": 77,
+          "count": 1509,
+          "mean": 3.2,
+          "p50": 2,
+          "median": 2,
+          "p75": 3,
+          "p90": 4,
+          "p95": 6,
+          "p99": 22,
+          "p999": 71.5
+        },
+        "vusers.session_length": {
+          "min": 2.2,
+          "max": 82.4,
+          "count": 1509,
+          "mean": 4.5,
+          "p50": 3.4,
+          "median": 3.4,
+          "p75": 4.4,
+          "p90": 6,
+          "p95": 7.5,
+          "p99": 24.8,
+          "p999": 73
+        }
+      }
+    },
+    {
+      "period": "1790726840000",
+      "counters": {
+        "vusers.created_by_name.Activar licencia": 1083,
+        "vusers.created": 1083,
+        "http.requests": 1083,
+        "http.codes.200": 1083,
+        "http.responses": 1083,
+        "http.downloaded_bytes": 784092,
+        "plugins.metrics-by-endpoint./api/licencias/activar.codes.200": 1083,
+        "vusers.failed": 0,
+        "vusers.completed": 1083
+      },
+      "rates": {
+        "http.request_rate": 150
+      },
+      "http.request_rate": null,
+      "firstCounterAt": 1790726840001,
+      "firstHistogramAt": 1790726840004,
+      "lastCounterAt": 1790726847351,
+      "lastHistogramAt": 1790726847351,
+      "firstMetricAt": 1790726840001,
+      "lastMetricAt": 1790726847351,
+      "summaries": {
+        "http.response_time": {
+          "min": 1,
+          "max": 23,
+          "count": 1083,
+          "mean": 2.8,
+          "p50": 2,
+          "median": 2,
+          "p75": 3,
+          "p90": 4,
+          "p95": 5,
+          "p99": 10.9,
+          "p999": 21.1
+        },
+        "http.response_time.2xx": {
+          "min": 1,
+          "max": 23,
+          "count": 1083,
+          "mean": 2.8,
+          "p50": 2,
+          "median": 2,
+          "p75": 3,
+          "p90": 4,
+          "p95": 5,
+          "p99": 10.9,
+          "p999": 21.1
+        },
+        "plugins.metrics-by-endpoint.response_time./api/licencias/activar": {
+          "min": 1,
+          "max": 23,
+          "count": 1083,
+          "mean": 2.8,
+          "p50": 2,
+          "median": 2,
+          "p75": 3,
+          "p90": 4,
+          "p95": 5,
+          "p99": 10.9,
+          "p999": 21.1
+        },
+        "vusers.session_length": {
+          "min": 2.1,
+          "max": 35.3,
+          "count": 1083,
+          "mean": 4.1,
+          "p50": 3.4,
+          "median": 3.4,
+          "p75": 4.4,
+          "p90": 6,
+          "p95": 7.6,
+          "p99": 16.6,
+          "p999": 28.5
+        }
+      },
+      "histograms": {
+        "http.response_time": {
+          "min": 1,
+          "max": 23,
+          "count": 1083,
+          "mean": 2.8,
+          "p50": 2,
+          "median": 2,
+          "p75": 3,
+          "p90": 4,
+          "p95": 5,
+          "p99": 10.9,
+          "p999": 21.1
+        },
+        "http.response_time.2xx": {
+          "min": 1,
+          "max": 23,
+          "count": 1083,
+          "mean": 2.8,
+          "p50": 2,
+          "median": 2,
+          "p75": 3,
+          "p90": 4,
+          "p95": 5,
+          "p99": 10.9,
+          "p999": 21.1
+        },
+        "plugins.metrics-by-endpoint.response_time./api/licencias/activar": {
+          "min": 1,
+          "max": 23,
+          "count": 1083,
+          "mean": 2.8,
+          "p50": 2,
+          "median": 2,
+          "p75": 3,
+          "p90": 4,
+          "p95": 5,
+          "p99": 10.9,
+          "p999": 21.1
+        },
+        "vusers.session_length": {
+          "min": 2.1,
+          "max": 35.3,
+          "count": 1083,
+          "mean": 4.1,
+          "p50": 3.4,
+          "median": 3.4,
+          "p75": 4.4,
+          "p90": 6,
+          "p95": 7.6,
+          "p99": 16.6,
+          "p999": 28.5
+        }
+      }
+    }
+  ]
+}
