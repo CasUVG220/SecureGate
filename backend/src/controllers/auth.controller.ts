@@ -240,17 +240,32 @@ export const refresh = async (req: Request, res: Response) => {
     const newRefreshRaw = crypto.randomBytes(64).toString('hex');
     const expiresAt     = new Date(Date.now() + REFRESH_TTL_MS);
 
-    /** Hijo del token en la misma familia, SIN tocar al padre: la carrera legítima de dos pestañas (ver graciaDeRotacionS). */
-    const emitirEnGracia = () => pool.query(
-      `INSERT INTO refresh_tokens (usuario_id, token_hash, expires_at, ip_address, familia_id)
-       VALUES ($1, $2, $3, $4, $5)`,
-      [row.usuario_id, hashToken(newRefreshRaw), expiresAt, clientIp(req), row.familia_id],
-    );
+    /**
+     * Hijo del token en la misma familia, SIN tocar al padre: la carrera legítima de dos pestañas (ver graciaDeRotacionS).
+     * Una familia que la detección de robo YA cerró no emite nada más, ni siquiera dentro de la gracia de un token hermano
+     * rotado hace un instante: devuelve false y quien llama responde «sesión cerrada por seguridad».
+     */
+    const emitirEnGracia = async (): Promise<boolean> => {
+      const r = await pool.query(
+        `INSERT INTO refresh_tokens (usuario_id, token_hash, expires_at, ip_address, familia_id)
+         SELECT $1::uuid, $2::varchar, $3::timestamptz, $4::varchar, $5::uuid
+          WHERE NOT EXISTS (SELECT 1 FROM refresh_tokens WHERE familia_id = $5::uuid AND cierre_motivo = 'reutilizacion')`,
+        [row.usuario_id, hashToken(newRefreshRaw), expiresAt, clientIp(req), row.familia_id],
+      );
+      return (r.rowCount ?? 0) > 0;
+    };
+
+    /** El dueño legítimo de un token de una familia ya cerrada tiene que enterarse de por qué pierde la sesión. No es otro evento de robo. */
+    const familiaCerrada = () => {
+      auditarRechazo(401, 'sesion_cerrada_por_reuso');
+      res.clearCookie('refresh_token', { httpOnly: true, secure: cookieOpts.secure, sameSite: 'strict' });
+      return res.status(401).json(SESION_COMPROMETIDA);
+    };
 
     if (row.revoked) {
       // Revocado por ROTACIÓN hace un instante: otra pestaña lo cambió justo antes. Se le da su propio sucesor.
       if (row.rotado_en && row.en_gracia) {
-        await emitirEnGracia();
+        if (!(await emitirEnGracia())) return familiaCerrada();
       } else if (row.rotado_en) {
         // Revocado por rotación hace RATO y se presenta otra vez: quien lo trae es una copia (token robado) o el dueño
         // original después de que otra copia ya lo rotó. No se sabe cuál es cuál, así que se cierra la familia entera:
@@ -269,11 +284,8 @@ export const refresh = async (req: Request, res: Response) => {
         res.clearCookie('refresh_token', { httpOnly: true, secure: cookieOpts.secure, sameSite: 'strict' });
         return res.status(401).json(SESION_COMPROMETIDA);
       } else if (row.cierre_motivo === 'reutilizacion') {
-        // Un token de la familia que la detección de robo ya cerró. Si lo trae el dueño legítimo, tiene que enterarse de
-        // por qué pierde la sesión (si no, vería la pantalla de acceso sin explicación). No es otro evento de robo.
-        auditarRechazo(401, 'sesion_cerrada_por_reuso');
-        res.clearCookie('refresh_token', { httpOnly: true, secure: cookieOpts.secure, sameSite: 'strict' });
-        return res.status(401).json(SESION_COMPROMETIDA);
+        // Un token de la familia que la detección de robo ya cerró (ver familiaCerrada).
+        return familiaCerrada();
       } else {
         // Cierre de sesión, cambio de contraseña, baja o suspensión: no son señal de robo.
         return sinSesion('token_revocado');
@@ -293,7 +305,8 @@ export const refresh = async (req: Request, res: Response) => {
          RETURNING id`,
         [row.id, hashToken(newRefreshRaw), expiresAt, clientIp(req), nuevoId],
       );
-      if (rotado.rows.length === 0) await emitirEnGracia();
+      // Perdió la carrera (otra petición reclamó el token, o la familia se cerró entre la lectura y este UPDATE).
+      if (rotado.rows.length === 0 && !(await emitirEnGracia())) return familiaCerrada();
     }
 
     const payload = { id: row.usuario_id, nombre: row.nombre, email: row.email, rol: row.rol, sucursal_id, empresa_id };

@@ -67,7 +67,9 @@ describe('refresh: rotación normal', () => {
 
   it('pierde la carrera (otra petición ya lo reclamó): recibe su propio sucesor en la misma familia y no es un evento', async () => {
     conToken({});
-    mockPool.query.mockResolvedValueOnce({ rows: [], rowCount: 0 });                        // la rotación no devolvió fila
+    mockPool.query
+      .mockResolvedValueOnce({ rows: [], rowCount: 0 })                                     // la rotación no devolvió fila
+      .mockResolvedValueOnce({ rows: [], rowCount: 1 });                                    // el sucesor en gracia sí se insertó
     const res = await llamar();
     expect(res.status).not.toHaveBeenCalled();
     const hijo = sinAuditoria()[3];
@@ -75,11 +77,27 @@ describe('refresh: rotación normal', () => {
     expect(hijo[1][4]).toBe('fam-1');
     expect(auditorias()).toHaveLength(0);
   });
+
+  it('pierde la carrera Y la familia se cerró entre la lectura y la rotación: no emite nada, responde «sesión cerrada» sin otro evento de robo', async () => {
+    conToken({});
+    mockPool.query
+      .mockResolvedValueOnce({ rows: [], rowCount: 0 })                                     // la rotación no devolvió fila
+      .mockResolvedValueOnce({ rows: [], rowCount: 0 });                                    // y la guarda de «familia cerrada» no insertó
+    const res = await llamar();
+    expect(res.status).toHaveBeenCalledWith(401);
+    expect(res.json.mock.calls[0][0].codigo).toBe('sesion_comprometida');
+    expect(res.cookie).not.toHaveBeenCalled();
+    expect(res.clearCookie).toHaveBeenCalled();
+    expect(auditorias()).toHaveLength(1);
+    expect(auditorias()[0][1][1]).toBe('REFRESH_RECHAZADO');
+    expect(auditorias()[0][1][8]).toBe(JSON.stringify({ motivo: 'sesion_cerrada_por_reuso' }));
+  });
 });
 
 describe('refresh: token ya rotado', () => {
   it('DENTRO de la gracia: emite un sucesor en la misma familia sin tocar al padre ni cerrar nada', async () => {
     conToken({ revoked: true, rotado_en: new Date(), en_gracia: true });
+    mockPool.query.mockResolvedValueOnce({ rows: [], rowCount: 1 });                        // el sucesor se insertó
     const res = await llamar();
     expect(res.status).not.toHaveBeenCalled();
     expect(res.cookie).toHaveBeenCalled();
@@ -87,6 +105,19 @@ describe('refresh: token ya rotado', () => {
     expect(sqls.some(q => /UPDATE refresh_tokens/.test(q))).toBe(false);
     expect(sqls.some(q => /INSERT INTO refresh_tokens \(usuario_id, token_hash, expires_at, ip_address, familia_id\)/.test(q))).toBe(true);
     expect(auditorias()).toHaveLength(0);
+  });
+
+  it('DENTRO de la gracia de un token hermano pero con la familia YA cerrada por reutilización: no emite nada y avisa al titular', async () => {
+    conToken({ revoked: true, rotado_en: new Date(), en_gracia: true });
+    mockPool.query.mockResolvedValueOnce({ rows: [], rowCount: 0 });                        // la guarda de familia cerrada no insertó
+    const res = await llamar();
+    expect(res.status).toHaveBeenCalledWith(401);
+    expect(res.json.mock.calls[0][0].codigo).toBe('sesion_comprometida');
+    expect(res.cookie).not.toHaveBeenCalled();
+    const insercion = sinAuditoria().map(c => String(c[0])).find(q => /INSERT INTO refresh_tokens/.test(q))!;
+    expect(insercion).toMatch(/WHERE NOT EXISTS \(SELECT 1 FROM refresh_tokens WHERE familia_id = \$5::uuid AND cierre_motivo = 'reutilizacion'\)/);
+    expect(auditorias()).toHaveLength(1);
+    expect(auditorias()[0][1][8]).toBe(JSON.stringify({ motivo: 'sesion_cerrada_por_reuso' }));
   });
 
   it('FUERA de la gracia: cierra la familia entera, corta los access tokens, limpia la cookie, responde 401 y lo audita', async () => {
