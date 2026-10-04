@@ -5,6 +5,7 @@ import { validarPassword, BCRYPT_COST } from '../utils/password';
 import { revocarAccesoDeUsuario } from '../utils/revocacion';
 import { revocarSesionesDeUsuario } from './auth.controller';
 import { serverError, esUuid, esConflictoUnico } from '../utils/http';
+import { puedeUsar2fa } from '../utils/twofa';
 
 export const getUsuarios = async (req: Request, res: Response) => {
   const user = req.user!;
@@ -263,6 +264,15 @@ export const updateUsuario = async (req: Request, res: Response) => {
         RETURNING id, nombre, email, rol, sucursal_id, empresa_id, activo, created_at`,
       [id, nombreLimpio ?? null, correo ?? null, cambiaRol ? rol : null, passwordNueva ?? null],
     );
+    // Un rol que ya no puede usar la verificación en dos pasos (administrador → agente de garita) se queda sin ella: la app de
+    // escritorio no tiene segundo paso y la web no admite agentes, así que con el segundo factor activo la persona quedaría
+    // atrapada sin poder entrar a ningún lado hasta que alguien se lo restablezca (SCRUM-123). Lo hace quien la degrada, que
+    // ya tiene autoridad sobre la cuenta; bajar de rol por SQL o por otra vía NO lo quita (el ingreso lo sigue exigiendo).
+    let dosPasosQuitada = false;
+    if (cambiaRol && !puedeUsar2fa(rol as string)) {
+      await client.query('DELETE FROM usuario_2fa_recuperacion WHERE usuario_id = $1', [id]);
+      dosPasosQuitada = ((await client.query('DELETE FROM usuario_2fa WHERE usuario_id = $1', [id])).rowCount ?? 0) > 0;
+    }
     await client.query('COMMIT');
 
     if (passwordNueva !== undefined) {
@@ -275,6 +285,7 @@ export const updateUsuario = async (req: Request, res: Response) => {
     res.locals.auditoria = {
       campos: cambios,
       ...(cambiaRol ? { rol_anterior: previo.rol, rol_nuevo: rol } : {}),
+      ...(dosPasosQuitada ? { dos_pasos_quitada: true } : {}),
     };
     res.json(result.rows[0]);
   } catch (err) {

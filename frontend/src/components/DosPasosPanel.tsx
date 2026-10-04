@@ -1,8 +1,8 @@
 /**
  * Verificación en dos pasos del administrador (SCRUM-123), dentro de «Mi cuenta».
  *
- * - Activarla: se muestra el QR (y la clave en texto) → se escribe el primer código de la app → quedan activos y se
- *   entregan los 10 códigos de recuperación, que se ven UNA sola vez.
+ * - Activarla: se muestra el QR (y la clave en texto) → se escribe el primer código de la app y la contraseña → quedan
+ *   activos y se entregan los 10 códigos de recuperación, que se ven UNA sola vez.
  * - Desactivarla pide la contraseña y un código (de la app o de recuperación); generar códigos nuevos pide un código de la app.
  * - Un código errado nunca saca a la persona de la pantalla: el backend responde 400 (no 401) en estas rutas.
  */
@@ -95,8 +95,8 @@ export default function DosPasosPanel({ correo }: { correo: string }) {
       .finally(() => setEnviando(false));
   };
 
-  const activar = (e: FormEvent) => enviar(e, false, async () => {
-    const codigos = await confirmarDosPasos(codigo.trim());
+  const activar = (e: FormEvent) => enviar(e, true, async () => {
+    const codigos = await confirmarDosPasos(codigo.trim(), password);
     setDialogo(null);
     setCodigosNuevos(codigos);
     showToast(t('twofa.activated'));
@@ -209,6 +209,14 @@ export default function DosPasosPanel({ correo }: { correo: string }) {
           <p className="text-sm text-gray-300">{t('twofa.setup.step2')}</p>
           {error && <Alerta>{error}</Alerta>}
           {campoCodigo(false)}
+          <PasswordInput
+            label={t('common.password')}
+            hint={t('twofa.setup.passwordHint')}
+            value={password}
+            onChange={e => setPassword(e.target.value)}
+            requisitos={false}
+            autoComplete="current-password"
+          />
         </form>
       </Modal>
 

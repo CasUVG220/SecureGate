@@ -9,13 +9,15 @@ no basta para entrar. El personal de garita y los residentes no la usan: su acce
 **Activarla** (menú *Mi cuenta* → *Verificación en dos pasos*):
 
 1. *Activar* muestra un código QR (y el secreto en texto por si no se puede escanear).
-2. Se escanea con la app de autenticación y se escribe el código de seis dígitos que muestra.
-3. Con un código correcto queda activa y se muestran **una sola vez** 10 códigos de recuperación. Hay que guardarlos (impresos o en un gestor de contraseñas).
+2. Se escanea con la app de autenticación y se escribe el código de seis dígitos que muestra **y la contraseña** (se pide como para desactivarla: quien solo tenga una sesión robada no puede activarla con su propio teléfono y dejar fuera al titular).
+3. Con la contraseña y un código correctos queda activa y se muestran **una sola vez** 10 códigos de recuperación. Hay que guardarlos (impresos o en un gestor de contraseñas).
 
 **Entrar**: correo y contraseña → la pantalla pide el código de seis dígitos (o *Usar un código de recuperación*). El código de la app vale 30 segundos
 (se tolera un intervalo de desfase del reloj) y **no se puede usar dos veces**; cada código de recuperación también vale una sola vez.
 
 **Desactivarla** pide la contraseña **y** un código (de la app o de recuperación). **Generar códigos nuevos** pide un código de la app e invalida los anteriores.
+
+**Si a alguien lo degradan a agente de garita** (administrador → agente, desde *Personal*), pierde la verificación en dos pasos en ese mismo momento: la app de escritorio no tiene segundo paso y la web no admite agentes, así que con el segundo factor activo quedaría sin poder entrar a ningún lado. Queda en la bitácora (`USUARIO_EDITADO` con `dos_pasos_quitada`). Bajar de rol por otra vía (SQL directo) **no** lo quita: el ingreso sigue exigiéndolo, para que bajar el rol no sea una forma de saltárselo.
 
 **Si alguien pierde el teléfono y los códigos**: su superior se la restablece desde *Usuarios* (administrador de empresa → administradores de sus sucursales;
 owner → administradores de empresa). Eso borra el segundo factor, **cierra las sesiones** de la persona y queda en la bitácora (`TWOFA_RESTABLECIDO`). El
@@ -55,7 +57,7 @@ fuera el primer día; (3) la protección más importante, el bloqueo de intentos
   a ciegas (S-10, ver `docs/acciones_sensibles.md`).
 - **Límites de tasa** (`crearLimitador`, los bloqueos se auditan): 30 fallos / 15 min por IP en el ingreso; por usuario, 5 en desactivar y 10 en confirmar / regenerar.
   Ajustables con `RATE_LIMIT_2FA_MAX`, `RATE_LIMIT_2FA_DESACTIVAR_MAX`, `RATE_LIMIT_2FA_CONFIRMAR_MAX` y `RATE_LIMIT_2FA_CODIGOS_MAX` (solo para pruebas de carga).
-- Una contraseña errada al desactivar **no gasta** intentos del segundo factor.
+- Una contraseña errada al **activar** o al **desactivar** no gasta intentos del segundo factor (se comprueba primero, y cuenta en el límite por usuario de esa ruta).
 - Las rutas con sesión responden **400** (no 401) cuando el código o la contraseña están mal: el cliente trata todo 401 como «sesión vencida» y sacaría a la persona de la pantalla.
 
 ### Auditoría (RNF-10)
@@ -65,7 +67,7 @@ Cada evento deja usuario, fecha, IP y código HTTP en `audit_logs`; **nunca** el
 | Acción | Cuándo |
 |---|---|
 | `TWOFA_INICIADO` | Empieza la configuración (entrega el secreto) |
-| `TWOFA_ACTIVADO` | Confirma el primer código (también el intento fallido o bloqueado) |
+| `TWOFA_ACTIVADO` | Confirma la contraseña y el primer código (también el intento fallido, sin contraseña o bloqueado) |
 | `TWOFA_DESACTIVADO` | Desactivarla (también el intento fallido o bloqueado) |
 | `TWOFA_CODIGOS_REGENERADOS` | Códigos de recuperación nuevos |
 | `TWOFA_VERIFICACION` | Segundo paso del ingreso: correcto (`via`: `totp` / `recuperacion`), incorrecto (401), bloqueado (429, `motivo` o `limite`) |

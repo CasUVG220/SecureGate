@@ -100,12 +100,12 @@ describe('I-15 activar la verificación en dos pasos', () => {
     const a = await adminA1();
     const ini = await post(a.token, '/api/auth/2fa/iniciar');
 
-    const mal = await post(a.token, '/api/auth/2fa/confirmar', { codigo: '000000' });
+    const mal = await post(a.token, '/api/auth/2fa/confirmar', { password: PASSWORD, codigo: '000000' });
     expect(mal.status).toBe(400);                                  // 400, nunca 401: el cliente tomaría el 401 por sesión vencida
     expect(mal.body.codigo).toBe('CODIGO_INCORRECTO');
     expect((await filaDe(a.id)).activado).toBe(false);
 
-    const ok = await post(a.token, '/api/auth/2fa/confirmar', { codigo: totp(ini.body.secreto) });
+    const ok = await post(a.token, '/api/auth/2fa/confirmar', { password: PASSWORD, codigo: totp(ini.body.secreto) });
     expect(ok.status).toBe(200);
     expect(ok.body.activado).toBe(true);
     expect(ok.body.codigos_recuperacion).toHaveLength(10);
@@ -127,14 +127,46 @@ describe('I-15 activar la verificación en dos pasos', () => {
 
   it('confirmar sin haber iniciado, o ya activa, responde 409', async () => {
     const a = await adminA1();
-    const sinIniciar = await post(a.token, '/api/auth/2fa/confirmar', { codigo: '123456' });
+    const sinIniciar = await post(a.token, '/api/auth/2fa/confirmar', { password: PASSWORD, codigo: '123456' });
     expect(sinIniciar.status).toBe(409);
     expect(sinIniciar.body.codigo).toBe('SIN_INICIAR');
 
     const { secreto } = await activarDosPasos(app, a);
-    const otraVez = await post(a.token, '/api/auth/2fa/confirmar', { codigo: totp(secreto, 1) });
+    const otraVez = await post(a.token, '/api/auth/2fa/confirmar', { password: PASSWORD, codigo: totp(secreto, 1) });
     expect(otraVez.status).toBe(409);
     expect(otraVez.body.codigo).toBe('YA_ACTIVA');
+  });
+
+  it('activar pide la contraseña: sin ella o con una errada responde 400, no gasta intentos del código y no activa nada', async () => {
+    const a = await adminA1();
+    const ini = await post(a.token, '/api/auth/2fa/iniciar');
+    const bueno = totp(ini.body.secreto);
+
+    const sin = await post(a.token, '/api/auth/2fa/confirmar', { codigo: bueno });
+    expect([sin.status, sin.body.codigo]).toEqual([400, 'PASSWORD_REQUERIDA']);
+    const mala = await post(a.token, '/api/auth/2fa/confirmar', { password: 'Incorrecta#1', codigo: bueno });
+    expect([mala.status, mala.body.codigo]).toEqual([400, 'PASSWORD_INCORRECTA']);
+    for (const raro of [123456, null, ['x'], { a: 1 }, 'x'.repeat(101)]) {
+      expect((await post(a.token, '/api/auth/2fa/confirmar', { password: raro, codigo: bueno })).status).toBe(400);
+    }
+
+    const f = await filaDe(a.id);
+    expect([f.activado, f.intentos_fallidos]).toEqual([false, 0]);                 // la contraseña errada no suma fallos del segundo factor
+    expect(await codigosDe(a.id)).toHaveLength(0);
+
+    const ok = await post(a.token, '/api/auth/2fa/confirmar', { password: PASSWORD, codigo: bueno });   // el mismo código sigue sin gastar
+    expect(ok.status).toBe(200);
+    const filas = await auditoria('TWOFA_ACTIVADO', a.id, 3);
+    expect(filas.slice(0, 2).map(x => x.datos_nuevos.motivo)).toEqual(['password_requerida', 'password_incorrecta']);
+    expect(JSON.stringify(filas)).not.toContain('Incorrecta#1');                    // la contraseña jamás llega a la bitácora
+  });
+
+  it('quien solo tiene la sesión (sin la contraseña) no puede activarla con su teléfono para dejar fuera al titular', async () => {
+    const a = await adminA1();
+    const ini = await post(a.token, '/api/auth/2fa/iniciar');                       // el ladrón de la sesión puede empezar…
+    const intento = await post(a.token, '/api/auth/2fa/confirmar', { codigo: totp(ini.body.secreto) });
+    expect(intento.status).toBe(400);                                               // …pero no terminar
+    expect((await login(app, a.email)).body.requiere_2fa).toBeUndefined();          // el titular sigue entrando solo con su contraseña
   });
 
   it('iniciar con la verificación ya activa no pisa el secreto (409); a medio configurar sí lo reemplaza', async () => {
@@ -150,9 +182,9 @@ describe('I-15 activar la verificación en dos pasos', () => {
     const primero = await post(b.token, '/api/auth/2fa/iniciar');
     const segundo = await post(b.token, '/api/auth/2fa/iniciar');
     expect(segundo.body.secreto).not.toBe(primero.body.secreto);
-    const conElViejo = await post(b.token, '/api/auth/2fa/confirmar', { codigo: totp(primero.body.secreto) });
+    const conElViejo = await post(b.token, '/api/auth/2fa/confirmar', { password: PASSWORD, codigo: totp(primero.body.secreto) });
     expect(conElViejo.status).toBe(400);
-    const conElNuevo = await post(b.token, '/api/auth/2fa/confirmar', { codigo: totp(segundo.body.secreto) });
+    const conElNuevo = await post(b.token, '/api/auth/2fa/confirmar', { password: PASSWORD, codigo: totp(segundo.body.secreto) });
     expect(conElNuevo.status).toBe(200);
   });
 });
@@ -429,7 +461,7 @@ describe('I-15 límite de intentos por persona', () => {
     const a = await adminA1();
     await post(a.token, '/api/auth/2fa/iniciar');
     const estados: number[] = [];
-    for (let i = 0; i < 5; i++) estados.push((await post(a.token, '/api/auth/2fa/confirmar', { codigo: '000000' })).status);
+    for (let i = 0; i < 5; i++) estados.push((await post(a.token, '/api/auth/2fa/confirmar', { password: PASSWORD, codigo: '000000' })).status);
     expect(estados).toEqual([400, 400, 400, 400, 429]);
   });
 });
@@ -504,7 +536,7 @@ describe('I-15 quién puede usarla', () => {
     for (const quien of ['owner', 'adminEmpB']) {
       const ini = await post(sesion[quien], '/api/auth/2fa/iniciar');
       expect([quien, ini.status]).toEqual([quien, 200]);
-      expect((await post(sesion[quien], '/api/auth/2fa/confirmar', { codigo: totp(ini.body.secreto) })).status).toBe(200);
+      expect((await post(sesion[quien], '/api/auth/2fa/confirmar', { password: PASSWORD, codigo: totp(ini.body.secreto) })).status).toBe(200);
     }
   });
 });
@@ -577,12 +609,63 @@ describe('I-15 restablecer la verificación de otra persona', () => {
   });
 });
 
+describe('I-15 cambios de rol y baja de la empresa', () => {
+  it('degradar a un administrador a agente de garita le quita la verificación (si no, quedaría atrapado) y lo deja en la bitácora', async () => {
+    const { a } = await conDosPasos();
+    expect(await filaDe(a.id)).toBeDefined();
+    const r = await request(app).put(`/api/usuarios/${a.id}`).set(bearer(sesion.adminEmpA)).send({ rol: 'agente' });
+    expect(r.status).toBe(200);
+    expect(await filaDe(a.id)).toBeUndefined();
+    expect(await codigosDe(a.id)).toHaveLength(0);
+
+    // Entra solo con la contraseña (ya no hay desafío) y puede usar la app de escritorio.
+    const s = await login(app, a.email);
+    expect(s.body.requiere_2fa).toBeUndefined();
+    expect(s.token).toBeDefined();
+
+    const f = (await auditoria('USUARIO_EDITADO', fx.usuarios.adminEmpA)).pop();
+    expect(f.datos_nuevos).toMatchObject({ rol_anterior: 'admin_sucursal', rol_nuevo: 'agente', dos_pasos_quitada: true });
+  });
+
+  it('otros cambios (nombre, contraseña, o seguir siendo administrador) NO le quitan la verificación', async () => {
+    const { a } = await conDosPasos();
+    const nombre = await request(app).put(`/api/usuarios/${a.id}`).set(bearer(sesion.adminEmpA)).send({ nombre: 'Otro Nombre' });
+    expect(nombre.status).toBe(200);
+    expect(await filaDe(a.id)).toBeDefined();
+    expect((await request(app).put(`/api/usuarios/${a.id}`).set(bearer(sesion.adminEmpA)).send({ rol: 'admin_sucursal' })).status).toBe(200);   // mismo rol
+    expect(await filaDe(a.id)).toBeDefined();
+    expect((await login(app, a.email)).body.requiere_2fa).toBe(true);
+  });
+
+  it('promover a un agente a administrador no le activa nada: la verificación es opcional', async () => {
+    const x = await adminNuevo(app, 'admin_sucursal', fx.sucursales.A1, null, fx.sufijo);
+    await q(`UPDATE usuarios SET rol = 'agente' WHERE id = $1`, [x.id]);
+    const r = await request(app).put(`/api/usuarios/${x.id}`).set(bearer(sesion.adminEmpA)).send({ rol: 'admin_sucursal' });
+    expect(r.status).toBe(200);
+    expect(await filaDe(x.id)).toBeUndefined();
+  });
+
+  it('eliminar definitivamente una empresa con un administrador que tiene la verificación activa no se atora (las filas de dos pasos caen en cascada)', async () => {
+    const emp = (await uno<{ id: string }>(`INSERT INTO empresas (nombre) VALUES ($1) RETURNING id`, [`INT 2FA Borrar ${fx.sufijo}`]))!.id;
+    const suc = (await uno<{ id: string }>(`INSERT INTO sucursales (empresa_id, nombre, direccion, tipo) VALUES ($1, 'INT 2FA borrar', 'dir', 'residencial') RETURNING id`, [emp]))!.id;
+    const a = await adminNuevo(app, 'admin_sucursal', suc, null, fx.sufijo);
+    await activarDosPasos(app, a);
+    expect(await filaDe(a.id)).toBeDefined();
+
+    const r = await request(app).post(`/api/empresas/${emp}/eliminar-definitivo`).set(bearer(sesion.owner)).send({ password: PASSWORD });
+    expect(r.status).toBe(200);
+    expect(await uno('SELECT 1 FROM usuarios WHERE id = $1', [a.id])).toBeUndefined();
+    expect(await filaDe(a.id)).toBeUndefined();
+    expect(await codigosDe(a.id)).toHaveLength(0);
+  });
+});
+
 describe('I-15 lo que NO debe quedar en ningún lado', () => {
   it('ni el secreto ni los códigos (TOTP o de recuperación) aparecen en audit_logs, y el secreto no está en claro en la base', async () => {
     const a = await adminA1();
     const ini = await post(a.token, '/api/auth/2fa/iniciar');
     const codigoTotp = totp(ini.body.secreto);
-    const conf = await post(a.token, '/api/auth/2fa/confirmar', { codigo: codigoTotp });
+    const conf = await post(a.token, '/api/auth/2fa/confirmar', { password: PASSWORD, codigo: codigoTotp });
     await liberarPaso(a.id);
     const d = await desafioDe(a);
     await verificar(d, conf.body.codigos_recuperacion[0]);
@@ -609,8 +692,8 @@ describe('I-15 lo que NO debe quedar en ningún lado', () => {
   it('cada evento queda con la persona, la IP y el código HTTP real', async () => {
     const a = await adminA1();
     const ini = await post(a.token, '/api/auth/2fa/iniciar');
-    await post(a.token, '/api/auth/2fa/confirmar', { codigo: '000000' });                // 400
-    await post(a.token, '/api/auth/2fa/confirmar', { codigo: totp(ini.body.secreto) });  // 200
+    await post(a.token, '/api/auth/2fa/confirmar', { password: PASSWORD, codigo: '000000' });                // 400
+    await post(a.token, '/api/auth/2fa/confirmar', { password: PASSWORD, codigo: totp(ini.body.secreto) });  // 200
     const esperado: Array<[string, number[]]> = [['TWOFA_INICIADO', [200]], ['TWOFA_ACTIVADO', [400, 200]]];
     for (const [accion, estados] of esperado) {
       const filas = await auditoria(accion, a.id, estados.length);

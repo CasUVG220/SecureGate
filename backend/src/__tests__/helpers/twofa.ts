@@ -39,7 +39,7 @@ export interface DosPasosActivos { secreto: string; codigos: string[] }
 export const activarDosPasos = async (app: Express, a: AdminDePrueba): Promise<DosPasosActivos> => {
   const ini = await request(app).post('/api/auth/2fa/iniciar').set(bearer(a.token)).send({});
   if (ini.status !== 200) throw new Error(`iniciar: ${ini.status} ${JSON.stringify(ini.body)}`);
-  const conf = await request(app).post('/api/auth/2fa/confirmar').set(bearer(a.token)).send({ codigo: totp(ini.body.secreto) });
+  const conf = await request(app).post('/api/auth/2fa/confirmar').set(bearer(a.token)).send({ password: PASSWORD, codigo: totp(ini.body.secreto) });
   if (conf.status !== 200) throw new Error(`confirmar: ${conf.status} ${JSON.stringify(conf.body)}`);
   await liberarPaso(a.id);
   return { secreto: ini.body.secreto, codigos: conf.body.codigos_recuperacion };

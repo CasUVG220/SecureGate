@@ -166,6 +166,24 @@ const enTransaccion = async (trabajo: (db: PoolClient) => Promise<void>): Promis
   }
 };
 
+/**
+ * Pide y comprueba la contraseña de la persona (para activar y para desactivar el segundo factor). Devuelve la respuesta de
+ * error —ya enviada— o null si la contraseña es correcta. Una contraseña errada NO gasta intentos del segundo factor.
+ */
+const exigirPassword = async (req: Request, res: Response, accion: 'activarla' | 'desactivarla'): Promise<Response | null> => {
+  const password = req.body?.password;
+  if (typeof password !== 'string' || password.length === 0 || password.length > 100) {
+    res.locals.auditoria = { motivo: 'password_requerida' };
+    return res.status(400).json({ error: `Escribe tu contraseña para ${accion}`, codigo: 'PASSWORD_REQUERIDA' });
+  }
+  const clave = await pool.query<{ ok: boolean }>('SELECT crypt($1, password_hash) = password_hash AS ok FROM usuarios WHERE id = $2', [password, req.user!.id]);
+  if (clave.rows[0]?.ok !== true) {
+    res.locals.auditoria = { motivo: 'password_incorrecta' };
+    return res.status(400).json({ error: 'La contraseña no es correcta', codigo: 'PASSWORD_INCORRECTA' });
+  }
+  return null;
+};
+
 const YA_ACTIVA = { error: 'La verificación en dos pasos ya está activa. Desactívala primero si quieres configurarla de nuevo.', codigo: 'YA_ACTIVA' };
 const NO_ACTIVA = { error: 'La verificación en dos pasos no está activa', codigo: 'NO_ACTIVA' };
 
@@ -205,13 +223,20 @@ export const iniciar = async (req: Request, res: Response) => {
   }
 };
 
-/** POST /auth/2fa/confirmar { codigo } — con el primer código válido queda activa y se entregan los códigos de recuperación. */
+/**
+ * POST /auth/2fa/confirmar { password, codigo } — con la contraseña y el primer código válido queda activa y se entregan los
+ * códigos de recuperación. La contraseña se pide como para desactivarla: sin ella, quien robe una sesión podría activarla con
+ * SU teléfono y dejar fuera al titular (re-autenticación ante cambios de seguridad de la cuenta).
+ */
 export const confirmar = async (req: Request, res: Response) => {
   const u = req.user!;
   try {
     const fila = await leer2fa(u.id);
     if (!fila) return res.status(409).json({ error: 'Primero inicia la configuración para obtener el código QR', codigo: 'SIN_INICIAR' });
     if (fila.activado) return res.status(409).json(YA_ACTIVA);
+
+    const sinClave = await exigirPassword(req, res, 'activarla');
+    if (sinClave) return sinClave;
 
     const v = await comprobarCodigo(u.id, fila, req.body?.codigo, false);
     if (!v.ok) return rechazar(res, v, 400);
@@ -234,16 +259,9 @@ export const desactivar = async (req: Request, res: Response) => {
     const fila = await leer2fa(u.id);
     if (!fila?.activado) return res.status(409).json(NO_ACTIVA);
 
-    const password = req.body?.password;
-    if (typeof password !== 'string' || password.length === 0 || password.length > 100) {
-      return res.status(400).json({ error: 'Escribe tu contraseña para desactivarla', codigo: 'PASSWORD_REQUERIDA' });
-    }
     // La contraseña se comprueba primero: una contraseña errada no gasta intentos del segundo factor.
-    const clave = await pool.query<{ ok: boolean }>('SELECT crypt($1, password_hash) = password_hash AS ok FROM usuarios WHERE id = $2', [password, u.id]);
-    if (clave.rows[0]?.ok !== true) {
-      res.locals.auditoria = { motivo: 'password_incorrecta' };
-      return res.status(400).json({ error: 'La contraseña no es correcta', codigo: 'PASSWORD_INCORRECTA' });
-    }
+    const sinClave = await exigirPassword(req, res, 'desactivarla');
+    if (sinClave) return sinClave;
 
     const v = await comprobarCodigo(u.id, fila, req.body?.codigo, true);
     if (!v.ok) return rechazar(res, v, 400);

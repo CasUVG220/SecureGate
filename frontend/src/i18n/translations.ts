@@ -1404,7 +1404,7 @@ export const translations: Record<string, Record<string, string>> = {
     'twofa.setup.step1': '1. Escanea este código QR con tu app de autenticación (Google Authenticator, Microsoft Authenticator, Authy…).',
     'twofa.setup.qrAlt': 'Código QR para tu app de autenticación',
     'twofa.setup.manual': '¿No puedes escanearlo? Escribe esta clave en la app:',
-    'twofa.setup.step2': '2. Escribe el código de seis dígitos que muestra la app para confirmar que quedó bien.',
+    'twofa.setup.step2': '2. Escribe el código de seis dígitos que muestra la app y tu contraseña para confirmar.',
     'twofa.setup.loading': 'Preparando el código QR…',
     'twofa.setup.confirm': 'Activar',
     'twofa.copy': 'Copiar',
@@ -1471,6 +1471,7 @@ export const translations: Record<string, Record<string, string>> = {
     'audit.accion.REFRESH_REUTILIZADO': 'Sesión cerrada por uso repetido del token',
     'audit.motivo.token_reutilizado': 'un token ya usado se presentó otra vez (posible robo de sesión)',
     'login.sesionComprometida': 'Por seguridad cerramos tu sesión: detectamos que se usó dos veces. Inicia sesión de nuevo y, si no fuiste tú, cambia tu contraseña.',
+    'twofa.setup.passwordHint': 'Por seguridad pedimos tu contraseña para activarla, igual que para desactivarla.',
   },
 
   en: {
@@ -2877,7 +2878,7 @@ export const translations: Record<string, Record<string, string>> = {
     'twofa.setup.step1': '1. Scan this QR code with your authenticator app (Google Authenticator, Microsoft Authenticator, Authy…).',
     'twofa.setup.qrAlt': 'QR code for your authenticator app',
     'twofa.setup.manual': 'Cannot scan it? Type this key into the app:',
-    'twofa.setup.step2': '2. Type the six-digit code the app shows to confirm it worked.',
+    'twofa.setup.step2': '2. Enter the six-digit code the app shows and your password to confirm.',
     'twofa.setup.loading': 'Preparing the QR code…',
     'twofa.setup.confirm': 'Turn on',
     'twofa.copy': 'Copy',
@@ -2944,5 +2945,6 @@ export const translations: Record<string, Record<string, string>> = {
     'audit.accion.REFRESH_REUTILIZADO': 'Session closed after a token was reused',
     'audit.motivo.token_reutilizado': 'an already used token was presented again (possible session theft)',
     'login.sesionComprometida': 'For your security we closed your session: it was used twice. Sign in again and, if it was not you, change your password.',
+    'twofa.setup.passwordHint': 'For your security we ask for your password to turn it on, just as we do to turn it off.',
   },
 };

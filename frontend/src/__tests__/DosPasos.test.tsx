@@ -186,6 +186,8 @@ describe('Mi cuenta — verificación en dos pasos', () => {
   const desactivada = { activado: false, activado_en: null, codigos_restantes: 0 };
   const activada = (restantes = 8) => ({ activado: true, activado_en: '2026-10-05T15:00:00Z', codigos_restantes: restantes });
   const escribir = (etiqueta: RegExp | string, valor: string) => fireEvent.change(screen.getByLabelText(etiqueta), { target: { value: valor } });
+  /** La contraseña del diálogo abierto (campo de tipo password). */
+  const escribirClave = (valor: string) => fireEvent.change(within(screen.getByRole('dialog')).getByLabelText(/^Contraseña/), { target: { value: valor } });
 
   it('muestra los datos de la persona y el estado «No activada» con el botón Activar', async () => {
     mockEstado.mockResolvedValue(desactivada);
@@ -210,10 +212,11 @@ describe('Mi cuenta — verificación en dos pasos', () => {
     expect(screen.getByTestId('clave-manual')).toHaveTextContent('ABCD EFGH IJKL MNOP QRST UVWX YZ23 4567');
 
     escribir('Código de verificación', '123456');
+    escribirClave('Clave#2026a');
     fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Activar' }));
 
     const lista = await screen.findByTestId('codigos-recuperacion');
-    expect(mockConfirmar).toHaveBeenCalledWith('123456');
+    expect(mockConfirmar).toHaveBeenCalledWith('123456', 'Clave#2026a');
     expect(within(lista).getAllByRole('listitem').map(li => li.textContent)).toEqual(CODIGOS);
 
     // No se puede cerrar sin confirmar que se guardaron.
@@ -237,8 +240,37 @@ describe('Mi cuenta — verificación en dos pasos', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Activar' }));
     await screen.findByAltText('Código QR para tu app de autenticación');
     escribir('Código de verificación', '000000');
+    escribirClave('Clave#2026a');
     fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Activar' }));
     expect(await screen.findByText(/El código no es correcto/)).toBeInTheDocument();
+    expect(screen.queryByTestId('codigos-recuperacion')).toBeNull();
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+  });
+
+  it('activar sin escribir la contraseña no llama al servidor y la pide', async () => {
+    mockEstado.mockResolvedValue(desactivada);
+    mockIniciar.mockResolvedValue({ secreto: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567', otpauth_url: 'otpauth://x' });
+    render(<MiCuentaPage />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Activar' }));
+    await screen.findByAltText('Código QR para tu app de autenticación');
+    expect(screen.getByText(/pedimos tu contraseña para activarla/)).toBeInTheDocument();
+    escribir('Código de verificación', '123456');
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Activar' }));
+    expect(await screen.findByText('Escribe tu contraseña.')).toBeInTheDocument();
+    expect(mockConfirmar).not.toHaveBeenCalled();
+  });
+
+  it('activar con la contraseña errada muestra el aviso, conserva el diálogo y no entrega códigos', async () => {
+    mockEstado.mockResolvedValue(desactivada);
+    mockIniciar.mockResolvedValue({ secreto: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567', otpauth_url: 'otpauth://x' });
+    mockConfirmar.mockRejectedValue(error2fa('PASSWORD_INCORRECTA'));
+    render(<MiCuentaPage />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Activar' }));
+    await screen.findByAltText('Código QR para tu app de autenticación');
+    escribir('Código de verificación', '123456');
+    escribirClave('mala');
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Activar' }));
+    expect(await screen.findByText('La contraseña no es correcta.')).toBeInTheDocument();
     expect(screen.queryByTestId('codigos-recuperacion')).toBeNull();
     expect(screen.getByRole('dialog')).toBeInTheDocument();
   });

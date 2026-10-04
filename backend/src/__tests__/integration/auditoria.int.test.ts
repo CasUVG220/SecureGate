@@ -150,7 +150,7 @@ const CASOS: Caso[] = [
   { accion: 'TWOFA_ACTIVADO', quien: null, persona: true, ejecutar: async () => {
       const a = await adminNuevo(app, 'admin_sucursal', fx.sucursales.A1, null, fx.sufijo);
       const ini = await request(app).post('/api/auth/2fa/iniciar').set(bearer(a.token)).send({});
-      return request(app).post('/api/auth/2fa/confirmar').set(bearer(a.token)).send({ codigo: totp(ini.body.secreto) });
+      return request(app).post('/api/auth/2fa/confirmar').set(bearer(a.token)).send({ password: PASSWORD, codigo: totp(ini.body.secreto) });
   } },
   { accion: 'TWOFA_DESACTIVADO', quien: null, persona: true, ejecutar: async () => {
       const a = await adminNuevo(app, 'admin_sucursal', fx.sucursales.A1, null, fx.sufijo);

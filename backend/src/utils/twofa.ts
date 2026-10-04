@@ -19,6 +19,10 @@
 import crypto from 'crypto';
 import jwt from 'jsonwebtoken';
 
+/** Quién puede activarla: los tres roles de administración (el mismo conjunto que acepta `requireAdminSucursal`). */
+export const ROLES_CON_2FA: readonly string[] = ['owner', 'admin_empresa', 'admin_sucursal'];
+export const puedeUsar2fa = (rol: string | undefined | null): boolean => !!rol && ROLES_CON_2FA.includes(rol);
+
 export const EMISOR = 'SecureGate';
 /** Fallos del segundo factor tolerados en la ventana antes de bloquear a la persona. */
 export const MAX_INTENTOS = 5;
