@@ -27,6 +27,8 @@ Idioma de la interfaz: español de Guatemala, tuteo («tu sucursal», «escribe 
 | Persona que administra una empresa o sucursal | **Administrador** («administrador de empresa», «administrador de sucursal») | Administrator | «Admin», «Admin Sucursal» abreviados | Menús, botones, avisos |
 | Empresa o sucursal recién creada | Se marca **Sin administrador** o **Invitación pendiente** y se ofrece **Invitar administrador** | No administrator · Invitation pending | — | Listas de empresas y sucursales |
 | Rótulo del menú del administrador de empresa | **Mi empresa** (el rótulo **Administración global** es solo del owner) | My company | «Administración global» para el administrador de empresa | Menú |
+| Segundo factor del acceso de los administradores | **Verificación en dos pasos**: el **código de verificación** (seis dígitos de la app de autenticación) y los **códigos de recuperación** (10, de un solo uso). Se activa en **Mi cuenta**; si alguien lo pierde todo, su superior le **restablece la verificación en dos pasos** | Two-step verification · verification code · recovery codes | «2FA», «MFA», «autenticación en dos factores», «token», «OTP» | Mi cuenta, pantalla de acceso, Personal |
+| Pantalla de datos y seguridad de la propia persona | **Mi cuenta** (menú de los tres roles de administración) | My account | «Perfil», «Mi perfil» | Menú |
 | Lugar que visita la persona | **Casa** | House | «unidad» en pantallas de residentes | Todas |
 | Documento de identidad | **DPI** | National ID | «documento», «cédula» | Formularios |
 | Quién trabaja en la garita | **Agente de garita** (rol) · **Personal** (la lista) | Gate agent · Staff | «guardia» en rótulos, «terminal» | Menú, personal |
