@@ -540,6 +540,7 @@ La `auditLog` de cada ruta iba **después** de los guards de rol y de los limita
 **Revisión final del ticket (después de abrir el PR).** Al repasar el diseño con ojos frescos aparecieron dos huecos y se cerraron en un commit aparte:
 - **Activar pide la contraseña** (igual que desactivar). Sin ella, quien solo tuviera una sesión robada podía activar la verificación con **su** teléfono y dejar fuera al titular (re-autenticación ante cambios de seguridad de la cuenta). Una contraseña errada o ausente no gasta intentos del segundo factor ni llega a la bitácora; 2 pruebas de integración y 2 de pantalla.
 - **Degradar a un administrador a agente le quita la verificación** (desde *Personal*): la app de escritorio no tiene segundo paso y la web no admite agentes, así que quien conservaba el segundo factor activo quedaba atrapado sin poder entrar a ningún lado hasta que alguien se lo restableciera. Queda en la bitácora (`dos_pasos_quitada`). Bajar de rol por SQL **no** lo quita (el ingreso lo sigue exigiendo). De paso se probó que **eliminar definitivamente una empresa** con un administrador que tiene la verificación activa no se atora (las filas caen en cascada).
+- **El límite de intentos es a prueba de ráfagas.** El diseño inicial *leía* el estado, *evaluaba* el código y recién después *contaba* el fallo: una ráfaga de peticiones simultáneas (p. ej. desde muchas IPs, que el límite por IP no frena) podía probar más de 5 códigos antes de que el bloqueo existiera. Ahora cada comprobación **reserva su intento de forma atómica antes de mirar el código** (`reservarIntento`, fila bloqueada con `FOR UPDATE`) y solo un acierto lo deshace; el quinto intento sí se evalúa y los que llegan con el bloqueo puesto se rechazan sin evaluar su código. Pruebas: ráfagas de 40 reservas (pool propio de 40 conexiones) y de 30 peticiones HTTP, y cuatro casos de borde. **Se comprobó con una mutación** (quitar el `FOR UPDATE`) que las pruebas de ráfaga fallan en cada corrida, y que con el código real pasan de forma estable.
 
 **Auditoría (RNF-10):** 6 acciones nuevas —`TWOFA_INICIADO`, `TWOFA_ACTIVADO`, `TWOFA_DESACTIVADO`, `TWOFA_CODIGOS_REGENERADOS`, `TWOFA_VERIFICACION`, `TWOFA_RESTABLECIDO`— en `docs/acciones_sensibles.md`, con nombre en español e inglés y detalle legible en el panel del owner
 («Contraseña correcta; falta el código de dos pasos», «Entró con un código de recuperación», «Motivo: persona bloqueada por demasiados intentos»; de paso, el panel ya explica también los motivos de `REFRESH_RECHAZADO`). Cada una tiene su caso en la prueba I-11 (la prueba final lo exige) y **ningún secreto, código ni contraseña** llega a la bitácora (hay una prueba que lo busca).
@@ -666,7 +667,7 @@ Rama `sprint9-noche` (desde `main` actualizado), **65 commits**, 262 archivos (+
 | Suite | Línea base | Al final |
 |---|---:|---:|
 | Backend `npm test` (unitarias) | 30 suites · 594 | 35 suites · **701** |
-| Backend integración + regresión (`test:ci`, Postgres desechable) | 6 suites · 25 | 23 suites · **318** |
+| Backend integración + regresión (`test:ci`, Postgres desechable) | 6 suites · 25 | 23 suites · **322** |
 | Backend `tsc --noEmit` | limpio | limpio |
 | Frontend `npm test` · build | 22 archivos · 165 | 57 archivos · **441** · build verde |
 | Escritorio `npm test` · build | 11 archivos · 79 | 15 archivos · **109** · build verde |

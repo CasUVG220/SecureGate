@@ -55,6 +55,7 @@ fuera el primer día; (3) la protección más importante, el bloqueo de intentos
   cuántos desafíos distintos intente. Un acierto reinicia la cuenta. Es **la misma cuenta** para el ingreso, confirmar, desactivar y regenerar códigos, y mientras dura
   el bloqueo ni el código correcto entra. Solo alcanza a quien ya sabe la contraseña (sin ella no hay desafío), por lo que no sirve para bloquear cuentas ajenas
   a ciegas (S-10, ver `docs/acciones_sensibles.md`).
+- **A prueba de ráfagas:** cada comprobación **reserva su intento de forma atómica antes de mirar el código** (`reservarIntento`, con la fila bloqueada) y solo un acierto lo deshace. Contar el fallo *después* de evaluar el código dejaba que una ráfaga de peticiones simultáneas —por ejemplo desde muchas IPs, que el límite por IP no ve— probara más de 5 códigos antes de que el bloqueo existiera. El quinto intento sí se evalúa (puede ser el bueno y entra); los que llegan con el bloqueo ya puesto se rechazan sin evaluar su código.
 - **Límites de tasa** (`crearLimitador`, los bloqueos se auditan): 30 fallos / 15 min por IP en el ingreso; por usuario, 5 en desactivar y 10 en confirmar / regenerar.
   Ajustables con `RATE_LIMIT_2FA_MAX`, `RATE_LIMIT_2FA_DESACTIVAR_MAX`, `RATE_LIMIT_2FA_CONFIRMAR_MAX` y `RATE_LIMIT_2FA_CODIGOS_MAX` (solo para pruebas de carga).
 - Una contraseña errada al **activar** o al **desactivar** no gasta intentos del segundo factor (se comprueba primero, y cuenta en el límite por usuario de esa ruta).

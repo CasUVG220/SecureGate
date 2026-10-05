@@ -53,27 +53,39 @@ interface Veredicto {
   espera_s?: number;
 }
 
-/** Cuenta un fallo; al llegar al tope bloquea a la persona. El fallo que dispara el bloqueo ya responde «bloqueado». */
-const registrarFallo = async (usuarioId: string): Promise<Veredicto> => {
-  const r = await pool.query<{ intentos_fallidos: number }>(
-    `UPDATE usuario_2fa
-        SET intentos_fallidos = CASE WHEN ultimo_fallo_en IS NOT NULL AND ultimo_fallo_en > NOW() - make_interval(mins => $2::int)
-                                     THEN intentos_fallidos + 1 ELSE 1 END,
-            ultimo_fallo_en = NOW()
-      WHERE usuario_id = $1
-      RETURNING intentos_fallidos`,
-    [usuarioId, VENTANA_INTENTOS_MIN],
+/**
+ * Reserva un intento ANTES de mirar el código, de forma atómica. Cada comprobación cuenta como un fallo desde el momento en que
+ * se reserva y solo un acierto lo deshace (los reinicios de `comprobarCodigo`): así el tope de 5 intentos por ventana no se puede
+ * saltar con una ráfaga de peticiones simultáneas —aunque vengan de muchas IPs, que el límite por IP no ve—, porque contar el
+ * fallo DESPUÉS de evaluar el código dejaba que todas las peticiones de la ráfaga se evaluaran antes de que el bloqueo existiera.
+ *
+ * - La fila se bloquea (`FOR UPDATE`): las reservas simultáneas se ponen en fila, y las que llegan con el bloqueo ya puesto no
+ *   obtienen intento (`permitido: false`) sin que su código llegue a evaluarse.
+ * - El intento que llega al tope SÍ se evalúa (es el quinto permitido) y deja el bloqueo puesto; `bloqueadaAhora` avisa de ello
+ *   para que, si ese código tampoco es correcto, la respuesta ya sea «bloqueada». Un acierto limpia el bloqueo.
+ */
+export const reservarIntento = async (
+  usuarioId: string, db: { query: typeof pool.query } = pool,
+): Promise<{ permitido: boolean; bloqueadaAhora: boolean }> => {
+  const r = await db.query<{ bloqueada_ahora: boolean }>(
+    `WITH cuenta AS (
+       SELECT usuario_id,
+              CASE WHEN ultimo_fallo_en IS NOT NULL AND ultimo_fallo_en > NOW() - make_interval(mins => $2::int)
+                   THEN intentos_fallidos + 1 ELSE 1 END AS n
+         FROM usuario_2fa
+        WHERE usuario_id = $1 AND (bloqueado_hasta IS NULL OR bloqueado_hasta <= NOW())
+          FOR UPDATE
+     )
+     UPDATE usuario_2fa f
+        SET intentos_fallidos = CASE WHEN c.n >= $3::int THEN 0 ELSE c.n END,
+            ultimo_fallo_en   = CASE WHEN c.n >= $3::int THEN NULL ELSE NOW() END,
+            bloqueado_hasta   = CASE WHEN c.n >= $3::int THEN NOW() + make_interval(mins => $4::int) ELSE f.bloqueado_hasta END
+       FROM cuenta c
+      WHERE f.usuario_id = c.usuario_id
+      RETURNING (c.n >= $3::int) AS bloqueada_ahora`,
+    [usuarioId, VENTANA_INTENTOS_MIN, MAX_INTENTOS, BLOQUEO_MIN],
   );
-  if ((r.rows[0]?.intentos_fallidos ?? 0) >= MAX_INTENTOS) {
-    await pool.query(
-      `UPDATE usuario_2fa
-          SET bloqueado_hasta = NOW() + make_interval(mins => $2::int), intentos_fallidos = 0, ultimo_fallo_en = NULL
-        WHERE usuario_id = $1`,
-      [usuarioId, BLOQUEO_MIN],
-    );
-    return { ok: false, motivo: 'bloqueado', espera_s: BLOQUEO_MIN * 60 };
-  }
-  return { ok: false, motivo: 'incorrecto' };
+  return r.rows.length === 0 ? { permitido: false, bloqueadaAhora: true } : { permitido: true, bloqueadaAhora: r.rows[0].bloqueada_ahora };
 };
 
 const olvidarFallos = (usuarioId: string) =>
@@ -91,13 +103,21 @@ const secretoDe = (fila: Pick<Fila2fa, 'secreto_cifrado'>, usuarioId: string): s
 
 /**
  * Comprueba un código de la persona. `aceptaRecuperacion`: además del TOTP vale uno de recuperación (ingreso y desactivar).
- * Un código correcto reinicia la cuenta de fallos; uno incorrecto la suma; con la persona bloqueada ni se mira el código.
+ * Con la persona bloqueada ni se mira el código; si no, cada comprobación reserva un intento antes de evaluarse
+ * (`reservarIntento`) y solo un código correcto reinicia la cuenta de fallos.
  */
 const comprobarCodigo = async (
   usuarioId: string, fila: Pick<Fila2fa, 'secreto_cifrado' | 'ultimo_paso' | 'bloqueado' | 'espera_s'>,
   codigoCrudo: unknown, aceptaRecuperacion: boolean,
 ): Promise<Veredicto> => {
   if (fila.bloqueado) return { ok: false, motivo: 'bloqueado', espera_s: fila.espera_s ?? BLOQUEO_MIN * 60 };
+
+  const intento = await reservarIntento(usuarioId);
+  if (!intento.permitido) {
+    // Otra petición ocupó el último intento y dejó el bloqueo puesto entre la lectura de la fila y esta reserva.
+    const actual = await leer2fa(usuarioId);
+    return { ok: false, motivo: 'bloqueado', espera_s: actual?.espera_s ?? BLOQUEO_MIN * 60 };
+  }
   const codigo = limpiarCodigo(codigoCrudo);
 
   if (esCodigoTotp(codigo)) {
@@ -126,7 +146,10 @@ const comprobarCodigo = async (
       }
     }
   }
-  return registrarFallo(usuarioId);
+  // El fallo ya quedó contado al reservar el intento; si ese intento fue el que llegó al tope, la persona queda bloqueada.
+  return intento.bloqueadaAhora
+    ? { ok: false, motivo: 'bloqueado', espera_s: BLOQUEO_MIN * 60 }
+    : { ok: false, motivo: 'incorrecto' };
 };
 
 /** Respuesta de un código rechazado: 429 con la espera si la persona quedó bloqueada; si no, `estadoIncorrecto`. */
