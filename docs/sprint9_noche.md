@@ -669,7 +669,7 @@ Rama `sprint9-noche` (desde `main` actualizado), **65 commits**, 262 archivos (+
 | Backend `npm test` (unitarias) | 30 suites · 594 | 35 suites · **701** |
 | Backend integración + regresión (`test:ci`, Postgres desechable) | 6 suites · 25 | 23 suites · **322** |
 | Backend `tsc --noEmit` | limpio | limpio |
-| Frontend `npm test` · build | 22 archivos · 165 | 57 archivos · **441** · build verde |
+| Frontend `npm test` · build | 22 archivos · 165 | 57 archivos · **443** · build verde |
 | Escritorio `npm test` · build | 11 archivos · 79 | 15 archivos · **109** · build verde |
 | Escritorio Rust (`cargo test --lib`) | 65 | **97** |
 
