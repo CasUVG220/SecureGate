@@ -4,7 +4,7 @@ import { ownershipParams, resolverSucursal } from '../utils/tenant';
 import { validarPassword, BCRYPT_COST } from '../utils/password';
 import { revocarAccesoDeUsuario } from '../utils/revocacion';
 import { revocarSesionesDeUsuario } from './auth.controller';
-import { serverError } from '../utils/http';
+import { serverError, esUuid, esConflictoUnico } from '../utils/http';
 
 export const getUsuarios = async (req: Request, res: Response) => {
   const user = req.user!;
@@ -104,6 +104,145 @@ export const deleteUsuario = async (req: Request, res: Response) => {
     res.json(result.rows[0]);
   } catch (error) {
     serverError(res, error, 'Error al eliminar usuario');
+  }
+};
+
+/** Roles que se pueden asignar al editar a alguien del personal (los demás tienen su propio flujo). */
+const ROLES_ASIGNABLES = ['agente', 'admin_sucursal'];
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/**
+ * Edición de un usuario del personal: nombre, correo, rol y, opcionalmente,
+ * contraseña nueva. Mismo alcance que la baja (`deleteUsuario`):
+ *
+ *   owner            → cualquiera menos otro owner
+ *   admin_empresa    → admin_sucursal / agente / residente de SU empresa
+ *   admin_sucursal   → admin_sucursal / agente / residente de SU sucursal
+ *
+ * - Un objetivo fuera del alcance responde 404 (igual que no existente), para no
+ *   confirmar que el UUID existe en otra empresa.
+ * - Nadie se edita a sí mismo por aquí (cambiar el propio rol o contraseña sin
+ *   pedir la actual abriría una escalada o un robo de sesión persistente).
+ * - Solo se puede pasar de `agente` a `admin_sucursal` y al revés. El resto de
+ *   roles (owner, admin_empresa, residente) no cambia de rol en esta ruta.
+ * - Cambiar la contraseña cierra todas sus sesiones (refresh tokens + access
+ *   token); cambiar el rol invalida el access token vigente, que lleva el rol
+ *   viejo, y el siguiente refresh trae el nuevo.
+ * - La auditoría deja `USUARIO_EDITADO` con usuario, IP y la lista de campos
+ *   que cambiaron. La contraseña nunca se registra, ni siquiera cifrada.
+ */
+export const updateUsuario = async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const user = req.user!;
+  const body = (req.body ?? {}) as Record<string, unknown>;
+
+  if (!esUuid(id)) return res.status(400).json({ error: 'id de usuario inválido' });
+  if (id === user.id) {
+    return res.status(400).json({ error: 'No puedes editar tu propio usuario desde aquí' });
+  }
+
+  const { nombre, email, rol, password } = body;
+  for (const [campo, valor] of Object.entries({ nombre, email, rol, password })) {
+    if (valor !== undefined && typeof valor !== 'string') {
+      return res.status(400).json({ error: `${campo} debe ser texto` });
+    }
+  }
+  if (nombre === undefined && email === undefined && rol === undefined && password === undefined) {
+    return res.status(400).json({ error: 'Indica al menos un campo a modificar: nombre, email, rol o password' });
+  }
+
+  const nombreLimpio = typeof nombre === 'string' ? nombre.trim() : undefined;
+  if (nombreLimpio !== undefined && (nombreLimpio.length === 0 || nombreLimpio.length > 100)) {
+    return res.status(400).json({ error: 'El nombre es requerido y no puede superar 100 caracteres' });
+  }
+  const correo = typeof email === 'string' ? email.trim().toLowerCase() : undefined;
+  if (correo !== undefined && (!EMAIL_RE.test(correo) || correo.length > 150)) {
+    return res.status(400).json({ error: 'El correo no es válido' });
+  }
+  if (typeof rol === 'string' && !ROLES_ASIGNABLES.includes(rol)) {
+    return res.status(400).json({ error: `Rol no permitido: ${rol}. Usa uno de: ${ROLES_ASIGNABLES.join(', ')}` });
+  }
+  // Una cadena vacía en `password` significa «no cambiar»: el formulario la manda así.
+  const passwordNueva = typeof password === 'string' && password.length > 0 ? password : undefined;
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const actual = await client.query(
+      `SELECT u.id, u.nombre, u.email, u.rol, u.sucursal_id, u.empresa_id, u.activo
+         FROM usuarios u
+        WHERE u.id = $1
+          AND (
+            ($2::text = 'owner' AND u.rol <> 'owner')
+            OR ($2::text = 'admin_empresa'
+                AND u.rol IN ('admin_sucursal', 'agente', 'residente')
+                AND EXISTS (SELECT 1 FROM sucursales s WHERE s.id = u.sucursal_id AND s.empresa_id = $3))
+            OR ($2::text = 'admin_sucursal'
+                AND u.rol IN ('admin_sucursal', 'agente', 'residente')
+                AND u.sucursal_id = $4)
+          )
+        FOR UPDATE OF u`,
+      [id, ...ownershipParams(user)],
+    );
+    if (actual.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Usuario no encontrado o sin acceso' });
+    }
+    const previo = actual.rows[0] as { rol: string; nombre: string; email: string };
+
+    const cambiaRol = typeof rol === 'string' && rol !== previo.rol;
+    if (cambiaRol && !(ROLES_ASIGNABLES.includes(previo.rol) && ROLES_ASIGNABLES.includes(rol as string))) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'El rol de este usuario no se puede cambiar' });
+    }
+    if (passwordNueva !== undefined) {
+      const problema = validarPassword(passwordNueva, correo ?? previo.email);
+      if (problema) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ error: problema });
+      }
+    }
+
+    const cambios: string[] = [];
+    if (nombreLimpio !== undefined && nombreLimpio !== previo.nombre) cambios.push('nombre');
+    if (correo !== undefined && correo !== previo.email) cambios.push('email');
+    if (cambiaRol) cambios.push('rol');
+    if (passwordNueva !== undefined) cambios.push('password');
+
+    const result = await client.query(
+      `UPDATE usuarios
+          SET nombre = COALESCE($2, nombre),
+              email  = COALESCE($3, email),
+              rol    = COALESCE($4, rol),
+              password_hash = CASE WHEN $5::text IS NULL THEN password_hash
+                                   ELSE crypt($5::text, gen_salt('bf', ${BCRYPT_COST})) END
+        WHERE id = $1
+        RETURNING id, nombre, email, rol, sucursal_id, empresa_id, activo, created_at`,
+      [id, nombreLimpio ?? null, correo ?? null, cambiaRol ? rol : null, passwordNueva ?? null],
+    );
+    await client.query('COMMIT');
+
+    if (passwordNueva !== undefined) {
+      await revocarSesionesDeUsuario(pool, id);
+      revocarAccesoDeUsuario(id);
+    } else if (cambiaRol) {
+      revocarAccesoDeUsuario(id);
+    }
+
+    res.locals.auditoria = {
+      campos: cambios,
+      ...(cambiaRol ? { rol_anterior: previo.rol, rol_nuevo: rol } : {}),
+    };
+    res.json(result.rows[0]);
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => undefined);
+    if (esConflictoUnico((err as { code?: string }).code)) {
+      return res.status(409).json({ error: 'El email ya está registrado' });
+    }
+    serverError(res, err, 'Error al editar usuario');
+  } finally {
+    client.release();
   }
 };
 

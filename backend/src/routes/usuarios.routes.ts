@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { getUsuarios, getUsuariosSucursal, createUsuario, deleteUsuario, updatePreferencias } from '../controllers/usuarios.controller';
+import { getUsuarios, getUsuariosSucursal, createUsuario, updateUsuario, deleteUsuario, updatePreferencias } from '../controllers/usuarios.controller';
 import { requireAdminSucursal } from '../middleware/auth.middleware';
 import { auditLog } from '../middleware/audit.middleware';
 
@@ -21,6 +21,7 @@ router.put('/me/preferencias', updatePreferencias);
 router.get('/', requireAdminSucursal, getUsuarios);
 router.get('/sucursal', requireAdminSucursal, getUsuariosSucursal);
 router.post('/', requireAdminSucursal, auditLog({ accion: 'USUARIO_CREADO', tabla: 'usuarios' }), createUsuario);
+router.put('/:id', requireAdminSucursal, auditLog({ accion: 'USUARIO_EDITADO', tabla: 'usuarios' }), updateUsuario);
 router.delete('/:id', requireAdminSucursal, auditLog({ accion: 'USUARIO_DESACTIVADO', tabla: 'usuarios' }), deleteUsuario);
 
 export default router;
