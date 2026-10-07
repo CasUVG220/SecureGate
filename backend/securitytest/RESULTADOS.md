@@ -234,6 +234,27 @@ Además, revisión estática de `nginx/nginx.conf`: `X-Forwarded-For` se **sobre
 | `desktop/src-tauri` (cargo, 528 crates) | 0 vulnerabilidades, 7 avisos (6 sin mantenimiento, 1 de solidez) | igual (S-15) |
 | gitleaks (120 commits) | 2 hallazgos | **falso positivo**: un token de prueba en `AceptarInvitacionPage.test.tsx:23` (2 commits) |
 
+#### l-bis) Actualización de cifras — 10/10/2026 (Sprint 9, SCRUM-118)
+
+Las cifras de arriba son las del Sprint 8. Se volvió a correr `npm audit` en los tres proyectos el 10/10/2026 y
+**ya no coincidían** (el frontend tenía 11 y el backend una crítica). Salidas tal cual (`npm audit`, última línea):
+
+| Proyecto | `npm audit` completo | `npm audit --omit=dev` (lo que llega a producción) |
+|---|---|---|
+| `backend` — **antes** de `npm audit fix` | `47 vulnerabilities (10 moderate, 35 high, 2 critical)` | `3 vulnerabilities (2 moderate, 1 critical)` |
+| `backend` — **después** de `npm audit fix` | `40 vulnerabilities (8 moderate, 32 high)` | `2 moderate severity vulnerabilities` |
+| `frontend` | `11 vulnerabilities (5 moderate, 6 high)` | `found 0 vulnerabilities` |
+| `desktop` | `8 vulnerabilities (2 moderate, 6 high)` | `found 0 vulnerabilities` |
+
+- **La crítica de producción era `proxy-addr` 1.1.0–2.0.7** (`GHSA-jqcg-44mw-7w3h`, suplantación de IP vía subred IPv4
+  mapeada en IPv6): afecta a `req.ip`, o sea a los límites de tasa y a la IP de la auditoría. `npm audit fix` la subió a
+  2.0.8 sin saltos mayores (sólo `backend/package-lock.json`); la otra crítica del audit completo era `handlebars`
+  (dependencia de `ts-jest`, sólo desarrollo) y también quedó cerrada.
+- **Lo que queda en producción (backend): 2 moderadas, `node-cron` → `uuid`** (S-14; exige `node-cron` 4.x).
+- **Lo que queda en el audit completo** son herramientas de desarrollo: `jest` y su cadena (vía `braces`/`micromatch`),
+  `nodemon` y `artillery` en el backend; `tailwindcss`/`vitest` en frontend y desktop (S-13).
+- Tras el `audit fix` del backend: 594 pruebas unitarias, 25 de integración/regresión y `tsc --noEmit` siguen en verde.
+
 `.env.cloudsql` está en `.gitignore` y nunca entró al historial. gitleaks no ve secretos de baja entropía:
 buscando los valores públicos conocidos con `git log -S`, `securegate_jwt_secret_dev` aparece en 4 commits,
 `sgpassword123` en 6, `admin123` en 7 y `change_me_in_production` en 3 (desde marzo de 2026) → S-12.
@@ -381,7 +402,7 @@ Mismo ambiente, misma base sembrada, mismos límites de producción. `backend`: 
 | S-07 | `ELIM-limite-por-ip` | 2.º owner: 429 | **403 (cupo por usuario)** |
 | S-08 | `HDR-cache-control-*` | ausente | **`no-store`** |
 | S-09 | `ERR-*-ruta-inexistente`; ZAP 10055 y 10063 | HTML «Cannot GET»; 2 avisos | **JSON 404; 0 avisos** |
-| S-13 | `npm audit` frontend | 14 (7 altas) | **3 moderadas** |
+| S-13 | `npm audit` frontend | 14 (7 altas) | **3 moderadas** (cifra del Sprint 8; el 10/10/2026 el audit completo da 11, ver l-bis) |
 | — | ZAP baseline | 64 pasan / 3 avisos | **66 pasan / 1 informativo** |
 | — | Suite completa 01–09 | 487 anomalías | **5** (S-06 ×1, S-11 ×4: deuda) |
 
