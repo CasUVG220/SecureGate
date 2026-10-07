@@ -111,3 +111,9 @@ Corrección importante: **no existe `POST /sync/garita`.** `sync/garita` es `GET
 12. **I-3 y el nombre "sync/garita":** el plan debe aclarar que el ingreso offline es `POST /api/accesos` + `X-Licencia-Token`; `GET /api/sync/garita` es el snapshot de descarga.
 13. **Datos que dependen de fecha** (reservas `2030-01-01`, `CURRENT_DATE`): pueden volverse frágiles con el tiempo.
 14. **Pendiente de verificar:** que `init.sql` aplique limpio con `psql -f` en un Postgres vacío (solo vi que lo aplica `runMigrations` por query única); que no haya otros tests que dependan del reloj; tiempo de integración en Actions.
+
+## Correcciones tras implementar (2026-10-06)
+Al escribir las pruebas se comprobó que dos afirmaciones de esta auditoría eran inexactas; las pruebas afirman el comportamiento real:
+- **I-3:** `GET /api/sync/garita` **sin** `X-Licencia-Token` responde **401** ("Token de licencia no proporcionado"), no 403. Con un JWT de usuario como licencia responde 403. `POST /api/accesos` sin licencia es una petición web válida (201), no se rechaza.
+- **R-3:** tras suspender, `POST /api/auth/refresh` con la cookie previa responde **401**, no 423: `suspenderEmpresa` ya revoca todos los refresh tokens de la empresa, así que la rama 423 de `refresh` (`auth.controller.ts:185-189`) casi nunca se alcanza. No sirve como línea para la demo; las líneas útiles son `auth.controller.ts:145` (login) y `licencia.middleware.ts:96-98` (heartbeat).
+- **R-1:** para romper `reservas.controller.ts:95` hay que quitar también `...ownershipParams(req.user!)`; si no, Postgres responde 500 por parámetros de más.
