@@ -34,7 +34,7 @@ export default function ReservasAdminPage() {
             onClick={() => setTab(tb.key)}
             className={`px-5 py-2.5 text-sm font-semibold transition-colors ${
               tab === tb.key
-                ? 'bg-blue-600 text-white'
+                ? 'bg-brand-500 text-brand-ink'
                 : 'bg-gray-800 text-gray-400 hover:text-gray-200'
             }`}
           >

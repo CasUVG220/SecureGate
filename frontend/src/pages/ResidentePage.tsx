@@ -704,20 +704,16 @@ export default function ResidentePage({ requestedTab, tabNonce = 0 }: ResidenteP
                       </div>
 
                       <div className="flex gap-3 pt-1">
-                        <button
-                          type="submit"
-                          disabled={saving}
-                          className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm font-medium px-5 py-2 rounded-lg transition-colors"
-                        >
-                          {saving ? t('common.saving') : 'Guardar'}
-                        </button>
-                        <button
-                          type="button"
+                        <Button type="submit" loading={saving} className="px-5">
+                          {saving ? t('common.saving') : t('common.save')}
+                        </Button>
+                        <Button
+                          variant="secondary"
                           onClick={() => { setShowForm(false); setFormError(null); setForm(EMPTY_FORM); }}
-                          className="bg-gray-700 hover:bg-gray-600 text-gray-200 text-sm font-medium px-5 py-2 rounded-lg transition-colors"
+                          className="px-5"
                         >
                           {t('common.cancel')}
-                        </button>
+                        </Button>
                       </div>
                     </form>
                   </div>
@@ -815,7 +811,7 @@ export default function ResidentePage({ requestedTab, tabNonce = 0 }: ResidenteP
             </div>
             <button
               onClick={() => setShowQrCreate(true)}
-              className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-4 py-2 rounded-xl text-sm transition-colors"
+              className="bg-emerald-700 hover:bg-emerald-600 text-white font-semibold px-4 py-2 rounded-xl text-sm transition-colors"
             >
               {t('qr.newInvite')}
             </button>
@@ -893,7 +889,7 @@ export default function ResidentePage({ requestedTab, tabNonce = 0 }: ResidenteP
             {!showTicketForm && (
               <button
                 onClick={() => { setShowTicketForm(true); setTicketError(null); }}
-                className="text-sm bg-emerald-600 hover:bg-emerald-500 text-white font-medium px-4 py-2 rounded-lg transition-colors"
+                className="text-sm bg-emerald-700 hover:bg-emerald-600 text-white font-medium px-4 py-2 rounded-lg transition-colors"
               >
                 {t('tickets.new')}
               </button>
@@ -941,7 +937,7 @@ export default function ResidentePage({ requestedTab, tabNonce = 0 }: ResidenteP
                 <button
                   onClick={handleCreateTicket}
                   disabled={ticketSaving}
-                  className="flex-1 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-semibold py-2 rounded-xl transition-colors flex items-center justify-center gap-2"
+                  className="flex-1 bg-emerald-700 hover:bg-emerald-600 disabled:opacity-50 text-white font-semibold py-2 rounded-xl transition-colors flex items-center justify-center gap-2"
                 >
                   {ticketSaving && <Spinner size={14} />}
                   {ticketSaving ? t('common.saving') : t('tickets.send')}

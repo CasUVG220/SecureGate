@@ -3,8 +3,8 @@ import {
   getEmpresaStats, getSucursales, createSucursal, deleteSucursal, assignAdminSucursal,
   type EmpresaStats, type Sucursal, type SucursalInput,
 } from '../../services/api';
-import { Skeleton, Spinner, TableSkeleton } from '../../components/Skeleton';
-import { ROW_ICON, RowActions, StatusText } from '../../components/ui';
+import { Skeleton, TableSkeleton } from '../../components/Skeleton';
+import { Button, ROW_ICON, RowActions, StatusText } from '../../components/ui';
 import { ResumenCifrasEsqueleto } from '../../components/charts';
 import ResumenEmpresa from '../admin_empresa/ResumenEmpresa';
 import { useToast } from '../../components/Toast';
@@ -150,12 +150,9 @@ export default function EmpresaDetail({ empresaId, onBack }: Props) {
         <div className="px-6 py-4 border-b border-gray-700 space-y-3">
           <div className="flex items-center justify-between">
             <h2 className="text-base font-semibold text-white">{t('empDetail.branches')}</h2>
-            <button
-              onClick={openSucModal}
-              className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium px-3 py-1.5 rounded-lg transition-colors"
-            >
-              <span className="text-base leading-none">+</span> {t('empDetail.newBranch')}
-            </button>
+            <Button size="sm" onClick={openSucModal} icon={<span className="text-base leading-none" aria-hidden="true">+</span>}>
+              {t('empDetail.newBranch')}
+            </Button>
           </div>
           <input
             type="text"
@@ -259,17 +256,12 @@ export default function EmpresaDetail({ empresaId, onBack }: Props) {
                 )
               ))}
               <div className="flex gap-3 pt-2">
-                <button
-                  type="submit"
-                  disabled={saving}
-                  className="flex-1 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-sm font-medium py-2 rounded-lg transition-colors flex items-center justify-center gap-2"
-                >
-                  {saving && <Spinner size={14} />} {t('empDetail.createBranch')}
-                </button>
-                <button type="button" onClick={closeModal}
-                  className="px-4 py-2 text-sm text-gray-400 hover:text-gray-200 transition-colors">
+                <Button type="submit" loading={saving} className="flex-1">
+                  {t('empDetail.createBranch')}
+                </Button>
+                <Button variant="ghost" onClick={closeModal}>
                   {t('common.cancel')}
-                </button>
+                </Button>
               </div>
             </form>
           </div>
@@ -297,17 +289,12 @@ export default function EmpresaDetail({ empresaId, onBack }: Props) {
                 />
               </div>
               <div className="flex gap-3 pt-2">
-                <button
-                  type="submit"
-                  disabled={saving}
-                  className="flex-1 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-sm font-medium py-2 rounded-lg transition-colors flex items-center justify-center gap-2"
-                >
-                  {saving && <Spinner size={14} />} {t('empDetail.assign')}
-                </button>
-                <button type="button" onClick={closeModal}
-                  className="px-4 py-2 text-sm text-gray-400 hover:text-gray-200 transition-colors">
+                <Button type="submit" loading={saving} className="flex-1">
+                  {t('empDetail.assign')}
+                </Button>
+                <Button variant="ghost" onClick={closeModal}>
                   {t('common.cancel')}
-                </button>
+                </Button>
               </div>
             </form>
           </div>

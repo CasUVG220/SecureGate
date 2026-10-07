@@ -455,7 +455,7 @@ function AppShell() {
                     <NavIcon d={item.d} />
                     <span className="truncate">{t(item.labelKey)}</span>
                     {item.key === 'tickets' && ticketsUnread > 0 && (
-                      <span className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-danger-500 px-1 text-2xs font-bold leading-none text-white">
+                      <span className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-danger-600 px-1 text-2xs font-bold leading-none text-white">
                         {ticketsUnread > 9 ? '9+' : ticketsUnread}
                       </span>
                     )}

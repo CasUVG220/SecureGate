@@ -5,7 +5,7 @@ import {
   getUsuarios, createUsuario,
   type Empresa, type EmpresaInput, type Usuario,
 } from '../../services/api';
-import { TableSkeleton, Spinner } from '../../components/Skeleton';
+import { TableSkeleton } from '../../components/Skeleton';
 import { Button, Input, Modal, ROW_ICON, RowActions, StatusText, Textarea } from '../../components/ui';
 import { useToast } from '../../components/Toast';
 import InvitacionesPanel from '../../components/InvitacionesPanel';
@@ -457,7 +457,7 @@ export default function OwnerEmpresas() {
                   onClick={() => { setAssignMode(m); setFormError(null); }}
                   className={`flex-1 text-xs font-medium py-1.5 rounded-md transition-colors ${
                     assignMode === m
-                      ? 'bg-blue-600 text-white'
+                      ? 'bg-brand-500 text-brand-ink'
                       : 'text-gray-400 hover:text-gray-200'
                   }`}
                 >
@@ -488,17 +488,12 @@ export default function OwnerEmpresas() {
                   </select>
                 </div>
                 <div className="flex gap-3">
-                  <button
-                    type="submit"
-                    disabled={saving}
-                    className="flex-1 bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 disabled:opacity-50 text-white text-sm font-medium py-2 rounded-lg transition-all flex items-center justify-center gap-2 shadow-sm"
-                  >
-                    {saving && <Spinner size={14} />} {t('owner.assignAdmin')}
-                  </button>
-                  <button type="button" onClick={closeModal}
-                    className="px-4 py-2 text-sm text-gray-400 hover:text-gray-200 transition-colors">
+                  <Button type="submit" loading={saving} className="flex-1">
+                    {t('owner.assignAdmin')}
+                  </Button>
+                  <Button variant="ghost" onClick={closeModal}>
                     {t('common.cancel')}
-                  </button>
+                  </Button>
                 </div>
               </form>
             ) : (
@@ -520,17 +515,12 @@ export default function OwnerEmpresas() {
                   </div>
                 ))}
                 <div className="flex gap-3 pt-1">
-                  <button
-                    type="submit"
-                    disabled={saving}
-                    className="flex-1 bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 disabled:opacity-50 text-white text-sm font-medium py-2 rounded-lg transition-all flex items-center justify-center gap-2 shadow-sm"
-                  >
-                    {saving && <Spinner size={14} />} {t('owner.createAndAssign')}
-                  </button>
-                  <button type="button" onClick={closeModal}
-                    className="px-4 py-2 text-sm text-gray-400 hover:text-gray-200 transition-colors">
+                  <Button type="submit" loading={saving} className="flex-1">
+                    {t('owner.createAndAssign')}
+                  </Button>
+                  <Button variant="ghost" onClick={closeModal}>
                     {t('common.cancel')}
-                  </button>
+                  </Button>
                 </div>
               </form>
             )}
@@ -565,21 +555,12 @@ export default function OwnerEmpresas() {
               ))}
 
               <div className="flex gap-3 pt-2">
-                <button
-                  type="submit"
-                  disabled={saving}
-                  className="flex-1 bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 disabled:opacity-50 text-white text-sm font-medium py-2 rounded-lg transition-all flex items-center justify-center gap-2 shadow-sm"
-                >
-                  {saving && <Spinner size={14} />}
+                <Button type="submit" loading={saving} className="flex-1">
                   {modal === 'create' ? t('empresas.create') : t('common.save')}
-                </button>
-                <button
-                  type="button"
-                  onClick={closeModal}
-                  className="px-4 py-2 text-sm text-gray-400 hover:text-gray-200 transition-colors"
-                >
+                </Button>
+                <Button variant="ghost" onClick={closeModal}>
                   {t('common.cancel')}
-                </button>
+                </Button>
               </div>
             </form>
           </div>

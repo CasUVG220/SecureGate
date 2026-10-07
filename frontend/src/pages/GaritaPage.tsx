@@ -467,7 +467,7 @@ export default function GaritaPage() {
               <div className="flex items-center gap-2 px-4 py-2.5 border-b border-gray-700 shrink-0">
                 <span className="text-sm font-semibold text-gray-200">{t('gate.dpiScanner')}</span>
                 {dpiOcr && (
-                  <span className="text-xs bg-emerald-600 text-white px-2 py-0.5 rounded-full font-medium">OCR</span>
+                  <span className="text-xs bg-emerald-700 text-white px-2 py-0.5 rounded-full font-medium">OCR</span>
                 )}
               </div>
               <div className="flex-1 bg-gray-900 min-h-0 overflow-hidden">
@@ -480,7 +480,7 @@ export default function GaritaPage() {
                 <button
                   onClick={handleCaptureDpi}
                   disabled={ocringDpi}
-                  className="w-full bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-semibold py-2 rounded-xl transition-colors text-sm"
+                  className="w-full bg-emerald-700 hover:bg-emerald-600 disabled:opacity-50 text-white font-semibold py-2 rounded-xl transition-colors text-sm"
                 >
                   {ocringDpi ? t('common.processing') : t('gate.scanDocument')}
                 </button>
@@ -492,7 +492,7 @@ export default function GaritaPage() {
               <div className="flex items-center gap-2 px-4 py-2.5 border-b border-gray-700 shrink-0">
                 <span className="text-sm font-semibold text-gray-200">{t('gate.plateScanner')}</span>
                 {placaOcr && (
-                  <span className="text-xs bg-emerald-600 text-white px-2 py-0.5 rounded-full font-medium">OCR</span>
+                  <span className="text-xs bg-emerald-700 text-white px-2 py-0.5 rounded-full font-medium">OCR</span>
                 )}
               </div>
               <div className="flex-1 bg-gray-900 min-h-0 overflow-hidden">
@@ -505,7 +505,7 @@ export default function GaritaPage() {
                 <button
                   onClick={handleCapturePlaca}
                   disabled={ocringPlaca}
-                  className="w-full bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-semibold py-2 rounded-xl transition-colors text-sm"
+                  className="w-full bg-emerald-700 hover:bg-emerald-600 disabled:opacity-50 text-white font-semibold py-2 rounded-xl transition-colors text-sm"
                 >
                   {ocringPlaca ? t('common.processing') : t('gate.scanPlate')}
                 </button>
@@ -517,7 +517,7 @@ export default function GaritaPage() {
               <div className="flex items-center gap-2 px-4 py-2.5 border-b border-gray-700 shrink-0">
                 <span className="text-sm font-semibold text-gray-200">{t('gate.qrScanner')}</span>
                 {qrInvitacion && (
-                  <span className="text-xs bg-emerald-600 text-white px-2 py-0.5 rounded-full font-medium">
+                  <span className="text-xs bg-emerald-700 text-white px-2 py-0.5 rounded-full font-medium">
                     {t('gate.qrValid')}
                   </span>
                 )}
@@ -585,7 +585,7 @@ export default function GaritaPage() {
                   <span className="text-xs bg-emerald-700 text-white px-1.5 py-0.5 rounded font-medium">OCR</span>
                 )}
                 {dpiHistorial && !dpiOcr && (
-                  <span className="text-xs bg-blue-700 text-white px-1.5 py-0.5 rounded font-medium">Historial</span>
+                  <span className="text-xs bg-brand-500 text-brand-ink px-1.5 py-0.5 rounded font-medium">Historial</span>
                 )}
               </div>
               <input
@@ -720,7 +720,7 @@ export default function GaritaPage() {
           <button
             onClick={handleAutorizar}
             disabled={loading || !!blacklistBlock || !!(qrInvitacion && configQr?.requiere_placa && !form.placa)}
-            className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-5 rounded-2xl transition-colors text-sm tracking-widest shadow-xl"
+            className="bg-emerald-700 hover:bg-emerald-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-5 rounded-2xl transition-colors text-sm tracking-widest shadow-xl"
           >
             {loading ? t('gate.registering') : t('gate.authorizeEntry')}
           </button>

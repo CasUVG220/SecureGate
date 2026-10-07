@@ -8,7 +8,7 @@ import {
   type AccesoActivo,
 } from '../services/api';
 import { CardSkeleton } from '../components/Skeleton';
-import { ROW_ICON, RowActions } from '../components/ui';
+import { Button, ROW_ICON, RowActions } from '../components/ui';
 import { useTranslation } from '../i18n/useTranslation';
 
 export default function SalidaPage() {
@@ -324,12 +324,9 @@ export default function SalidaPage() {
                   {t('exit.exitOkDesc')} <strong className="uppercase">{placa}</strong>
                 </p>
               </div>
-              <button
-                onClick={handleNuevaBusqueda}
-                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-xl transition-colors"
-              >
+              <Button size="lg" fullWidth onClick={handleNuevaBusqueda}>
                 {t('exit.newSearch')}
-              </button>
+              </Button>
             </div>
           )}
 
