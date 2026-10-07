@@ -1,3 +1,12 @@
+# PLANTILLA de nginx para producción. NO se monta tal cual: scripts/render-nginx.sh
+# (lo invoca scripts/deploy.sh) sustituye el marcador de dominio y genera
+# nginx/nginx.conf, que es el archivo que monta docker-compose.prod.yml. Si el
+# dominio falta o queda un marcador sin sustituir, el despliegue falla antes de
+# levantar nada.
+#
+# Solo se sustituye ese marcador; las variables propias de nginx ($host, $scheme…)
+# no se tocan.
+
 worker_processes auto;
 
 events {
@@ -30,7 +39,7 @@ http {
     # Redirect HTTP → HTTPS
     server {
         listen 80;
-        server_name DOMINIO;
+        server_name ${DOMINIO};
 
         location / {
             return 301 https://$host$request_uri;
@@ -41,10 +50,10 @@ http {
     server {
         listen 443 ssl;
         http2 on;
-        server_name DOMINIO;
+        server_name ${DOMINIO};
 
-        ssl_certificate     /etc/letsencrypt/live/DOMINIO/fullchain.pem;
-        ssl_certificate_key /etc/letsencrypt/live/DOMINIO/privkey.pem;
+        ssl_certificate     /etc/letsencrypt/live/${DOMINIO}/fullchain.pem;
+        ssl_certificate_key /etc/letsencrypt/live/${DOMINIO}/privkey.pem;
 
         # Perfil "intermediate" de Mozilla (TLS 1.2 con AEAD + TLS 1.3).
         ssl_protocols       TLSv1.2 TLSv1.3;
