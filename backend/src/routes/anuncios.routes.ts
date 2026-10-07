@@ -12,7 +12,7 @@ router.post('/:id/leer', ctrl.marcarLeido);
 // Admin
 router.get('/',    requireAdminSucursal, ctrl.getAnuncios);
 router.post('/',   requireAdminSucursal, auditLog({ accion: 'ANUNCIO_CREADO', tabla: 'anuncios' }), ctrl.createAnuncio);
-router.put('/:id', requireAdminSucursal, ctrl.updateAnuncio);
+router.put('/:id', requireAdminSucursal, auditLog({ accion: 'ANUNCIO_EDITADO', tabla: 'anuncios' }), ctrl.updateAnuncio);
 router.delete('/:id', requireAdminSucursal, auditLog({ accion: 'ANUNCIO_ELIMINADO', tabla: 'anuncios' }), ctrl.deleteAnuncio);
 
 export default router;

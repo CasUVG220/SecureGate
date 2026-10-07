@@ -1,8 +1,10 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { login, logout, tomarBloqueoGuardado, EmpresaBloqueadaError, PortalIncorrectoError, type BloqueoEmpresa } from '../services/api';
+import { login, logout, tomarBloqueoGuardado, tomarAvisoSesionGuardado, EmpresaBloqueadaError, PortalIncorrectoError, type BloqueoEmpresa, type LoginResult } from '../services/api';
 import { Button, Input } from '../components/ui';
+import VerificacionDosPasos from '../components/VerificacionDosPasos';
 import { useTranslation } from '../i18n/useTranslation';
 import { ENLACE_PORTAL, NOMBRE_PORTAL, RUTA_PORTAL, otroPortal, type Portal } from '../routing/portales';
+import { formatearFecha } from '../utils/fecha';
 
 interface LoginPageProps {
   onLogin: (token: string, rol: string, usuario: Record<string, unknown>) => void;
@@ -38,13 +40,32 @@ export default function LoginPage({ onLogin, portal = 'personal', onCambiarPorta
   const [soloEscritorio, setSoloEscritorio] = useState(false);
   /** La empresa de la cuenta está suspendida o de baja: nadie de ella entra. */
   const [bloqueo, setBloqueo] = useState<BloqueoEmpresa | null>(null);
+  /** Contraseña correcta en una cuenta con verificación en dos pasos: falta el código (SCRUM-123). */
+  const [desafio, setDesafio] = useState<string | null>(null);
 
   // Si la sesión murió por una suspensión (refresh → 423), el aviso llega
-  // guardado desde services/api y se muestra al aterrizar aquí.
+  // guardado desde services/api y se muestra al aterrizar aquí. Lo mismo si
+  // el servidor la cerró por seguridad porque un token se usó dos veces.
   useEffect(() => {
     const guardado = tomarBloqueoGuardado();
     if (guardado) setBloqueo(guardado);
+    if (tomarAvisoSesionGuardado()) setError(t('login.sesionComprometida'));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  /** Con la sesión ya abierta (con contraseña sola o tras el segundo paso). */
+  const completarSesion = async (result: LoginResult) => {
+    if (result.usuario.rol === ROL_SOLO_ESCRITORIO) {
+      // Credenciales correctas, pero este no es su punto de entrada. La
+      // sesión que el backend acaba de abrir se cierra de inmediato.
+      await logout();
+      setDesafio(null);
+      setSoloEscritorio(true);
+      return;
+    }
+    localStorage.setItem('token', result.token);
+    onLogin(result.token, result.usuario.rol, result.usuario);
+  };
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -55,15 +76,13 @@ export default function LoginPage({ onLogin, portal = 'personal', onCambiarPorta
     setLoading(true);
     try {
       const result = await login(email, password, portal);
-      if (result.usuario.rol === ROL_SOLO_ESCRITORIO) {
-        // Credenciales correctas, pero este no es su punto de entrada. La
-        // sesión que el backend acaba de abrir se cierra de inmediato.
-        await logout();
-        setSoloEscritorio(true);
+      if ('requiere_2fa' in result) {
+        // La contraseña no se queda en pantalla mientras se escribe el código.
+        setPassword('');
+        setDesafio(result.desafio);
         return;
       }
-      localStorage.setItem('token', result.token);
-      onLogin(result.token, result.usuario.rol, result.usuario);
+      await completarSesion(result);
     } catch (err: unknown) {
       if (err instanceof EmpresaBloqueadaError) {
         setBloqueo(err.bloqueo);
@@ -111,7 +130,7 @@ export default function LoginPage({ onLogin, portal = 'personal', onCambiarPorta
             {bloqueo.codigo === 'empresa_suspendida' && (
               <dl className="mt-2 space-y-0.5 pl-7 text-xs text-danger-400/90">
                 {bloqueo.motivo && <div><dt className="inline font-semibold">{t('login.suspensionMotivo')}: </dt><dd className="inline">{bloqueo.motivo}</dd></div>}
-                {bloqueo.desde && <div><dt className="inline font-semibold">{t('login.suspensionDesde')}: </dt><dd className="inline">{new Date(bloqueo.desde).toLocaleDateString()}</dd></div>}
+                {bloqueo.desde && <div><dt className="inline font-semibold">{t('login.suspensionDesde')}: </dt><dd className="inline">{formatearFecha(bloqueo.desde)}</dd></div>}
               </dl>
             )}
             <p className="mt-2 pl-7 text-xs text-gray-300">{t('login.suspensionContacto')}</p>
@@ -157,6 +176,15 @@ export default function LoginPage({ onLogin, portal = 'personal', onCambiarPorta
           </Button>
         )}
 
+        {desafio ? (
+          <VerificacionDosPasos
+            desafio={desafio}
+            onVerificado={completarSesion}
+            onVencido={mensaje => { setDesafio(null); setError(mensaje); }}
+            onBloqueo={b => { setDesafio(null); setBloqueo(b); }}
+            onVolver={() => { setDesafio(null); setError(''); }}
+          />
+        ) : (
         <form onSubmit={handleSubmit} className="space-y-4">
           <Input
             type="email"
@@ -184,11 +212,12 @@ export default function LoginPage({ onLogin, portal = 'personal', onCambiarPorta
             {loading ? t('login.submitting') : t('login.submit')}
           </Button>
         </form>
+        )}
 
         {/* Quien llegue a la puerta equivocada tiene la otra a un clic, en vez
             de tener que conocer la dirección de memoria. Se oculta si el intento
             de acceso ya ofreció el mismo enlace como botón. */}
-        {onCambiarPortal && !portalSugerido && (
+        {onCambiarPortal && !portalSugerido && !desafio && (
           <p className="mt-6 border-t border-gray-700 pt-5 text-center text-xs text-gray-400">
             <button
               type="button"

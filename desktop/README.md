@@ -32,7 +32,7 @@ La garita tiene **cuatro tareas** y cada una puede usar una cámara distinta
 
 | Tarea | Para qué | Cómo funciona |
 |---|---|---|
-| **QR** | La invitación que el residente mandó al visitante | Escaneo continuo (jsQR): el agente no pulsa nada. Sólo lee códigos con prefijo `SGQR:` y UUID, para no consultar al servidor por cualquier etiqueta. **Requiere conexión.** |
+| **QR** | La invitación que el residente mandó al visitante | Escaneo continuo (jsQR): el agente no pulsa nada. Sólo lee códigos con prefijo `SGQR:` y UUID, para no consultar al servidor por cualquier etiqueta. **Funciona sin internet** con la copia local de las invitaciones de la sucursal (se baja en cada sincronización); ver `docs/qr_sin_conexion.md` para qué pasa si una invitación se revoca sin red. |
 | **Placa** (entrada) | Placa del vehículo que entra | Captura a demanda → OCR local (sidecar). **Funciona sin internet.** |
 | **DPI** | Documento del visitante | Captura a demanda → OCR en el backend (fase 2 lo hará local). Requiere conexión. |
 | **Salida** | Placa del vehículo que sale | Captura → OCR local → busca el acceso abierto con esa placa y lo cierra. **Requiere conexión.** |
@@ -45,6 +45,30 @@ pasar uno ya gastado; la entrada que se cierra en una salida pudo registrarla
 otra garita o la web, y el espejo local sólo guarda lo que salió de ESTE
 equipo. Sin red, el camino manual (DPI + formulario) sigue funcionando
 offline como siempre, que es la promesa que sí se mantiene.
+
+**Decisión (SCRUM-111): la salida se queda en línea.** La cola offline
+(`accesos_pendientes`) solo guarda ENTRADAS: no hay un espejo de los accesos
+abiertos ni un endpoint idempotente para cerrar una salida pendiente, y una salida
+encolada contra un acceso que otra garita ya cerró (o que aún no se sincroniza)
+dejaría vehículos «dentro» para siempre o cerraría el acceso equivocado. Hacerla sin
+red exigiría ese espejo y esa idempotencia; mientras tanto, sin conexión el agente
+levanta la pluma con «Abrir talanquera» y registra la salida al volver la red. La
+pantalla lo dice con texto visible en vez de apagar el botón sin explicar.
+
+### Sin cámara
+
+Si la cámara falta, está ocupada o el permiso se negó, nada se bloquea:
+
+| Tarea | Alternativa manual |
+|---|---|
+| **QR** | «¿No se lee? Escribe el código»: acepta el texto que el residente ve bajo su QR (`SGQR:<id>`, o el id solo, con o sin guiones). También funciona sin internet, con la copia local. |
+| **Placa** | «Escribir placa» lleva el cursor al campo de la placa del formulario. |
+| **DPI** | Se escribe en el formulario (13 dígitos); queda marcado «capturado manualmente». |
+| **Salida** | «Escribir placa» abre el diálogo de salida; o «Dar salida» en la lista **Registrados en este equipo**, que además se puede buscar por nombre, DPI, placa o casa. |
+
+Cada botón apagado muestra debajo el motivo («No hay cámara disponible…»,
+«Sin conexión…», «El OCR local no está disponible…»). Con la vista única en
+«Salida», el panel derecho pasa a «Registrar salida» y deja de hablar de entradas.
 
 ### Disposición: 1, 2 ó 4 vistas
 
@@ -184,9 +208,11 @@ src-tauri/src/           Rust, un módulo por dominio
   fingerprint.rs         huella de hardware (MachineGuid + CPU, sin MAC)
   secure_store.rs        Windows Credential Manager / Keychain
   license.rs             activación, heartbeat, gracia 72 h, kill switch
-  auth.rs                sesión del agente (JWT + refresh)
+  auth.rs                sesión del agente (JWT + refresh). Una cuenta con verificación en dos pasos (administradores) no entra
+                         aquí: se le indica que use la versión web. Un refresh token que el servidor ve usado dos veces cierra la
+                         sesión (`sesion_comprometida`); la garita sigue registrando sin conexión (docs/refresh_tokens.md)
   db.rs                  SQLite + SQLCipher, clave Argon2id
-  garita.rs              espejo local, evaluación de visitante, cola
+  garita.rs              espejo local, evaluación de visitante, validación de invitaciones QR sin red (docs/qr_sin_conexion.md), cola
   sync.rs                pull del espejo, push con backoff, purga
   ocr.rs                 arranque y protocolo del sidecar de OCR
 sidecar-ocr/             proceso Node con ppu-paddle-ocr (ONNX Runtime nativo)

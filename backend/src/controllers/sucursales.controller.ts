@@ -19,7 +19,12 @@ export const getSucursales = async (req: Request, res: Response) => {
       `SELECT s.*,
               e.nombre                        AS empresa_nombre,
               COUNT(DISTINCT r.id)::int       AS total_residentes,
-              COUNT(DISTINCT u.id)::int       AS total_agentes
+              COUNT(DISTINCT u.id)::int       AS total_agentes,
+              EXISTS (SELECT 1 FROM usuarios a
+                       WHERE a.sucursal_id = s.id AND a.rol = 'admin_sucursal' AND a.activo = TRUE) AS tiene_admin,
+              EXISTS (SELECT 1 FROM invitaciones i
+                       WHERE i.sucursal_id = s.id AND i.rol_invitado = 'admin_sucursal'
+                         AND i.estado = 'pendiente' AND i.expira_en > NOW()) AS invitacion_pendiente
        FROM sucursales s
        JOIN empresas e ON s.empresa_id = e.id
        LEFT JOIN residentes r ON r.sucursal_id = s.id

@@ -23,6 +23,7 @@ vi.mock('../services/api', async () => {
     PortalIncorrectoError,
     EmpresaBloqueadaError,
     tomarBloqueoGuardado: vi.fn(() => { const b = guardado.v ? JSON.parse(guardado.v) : null; guardado.v = null; return b; }),
+    tomarAvisoSesionGuardado: vi.fn(() => null),
     __guardarBloqueo: (b: unknown) => { guardado.v = JSON.stringify(b); },
   };
 });
@@ -61,6 +62,14 @@ describe('LoginPage', () => {
     api.__guardarBloqueo({ codigo: 'empresa_inactiva', empresa: 'Condominio Y', motivo: null, desde: null, error: 'x' });
     render(<LoginPage onLogin={vi.fn()} />);
     expect(await screen.findByText('Condominio Y ya no opera en SecureGate.')).toBeInTheDocument();
+  });
+
+  it('si el servidor cerró la sesión por seguridad (token usado dos veces), el aviso se ve al volver al login', async () => {
+    const api = await import('../services/api') as unknown as { tomarAvisoSesionGuardado: ReturnType<typeof vi.fn> };
+    api.tomarAvisoSesionGuardado.mockReturnValueOnce('sesion_comprometida');
+    render(<LoginPage onLogin={vi.fn()} />);
+    expect(await screen.findByText(/Por seguridad cerramos tu sesión/)).toBeInTheDocument();
+    expect(screen.getByText(/si no fuiste tú, cambia tu contraseña/)).toBeInTheDocument();
   });
 
   it('rol agente: no entra al dashboard web, ve el aviso de la app de escritorio y se cierra la sesión', async () => {

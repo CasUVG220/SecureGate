@@ -80,7 +80,7 @@ async fn flujo_completo_de_garita() {
     assert!(secure_store::leer(secure_store::CLAVE_SESION).unwrap().is_some());
 
     // 3. Pull del espejo.
-    let (res, _bl, _pre) = sync::pull(&state).await.expect("pull");
+    let (res, _bl, _pre, _qr) = sync::pull(&state).await.expect("pull");
     assert!(res > 0, "la sucursal de prueba debe tener residentes");
     let residentes = garita::con_db(&state, |c| garita::buscar_residentes(c, "", 5)).unwrap();
     let residente = residentes.first().expect("residente local").clone();
@@ -119,7 +119,7 @@ async fn flujo_completo_de_garita() {
 
     // Blacklist local: un DPI vetado no se encola.
     garita::con_db(&state, |c| {
-        c.execute("INSERT INTO blacklist_local VALUES ('bl-test', '1234500000000', 'X', 'vetado', NULL, NULL)", [])?;
+        c.execute("INSERT INTO blacklist_local (id, numero_dpi, visitante_nombre, razon, fecha_fin, residente_id) VALUES ('bl-test', '1234500000000', 'X', 'vetado', NULL, NULL)", [])?;
         Ok(())
     }).unwrap();
     let err = garita::con_db(&state, |c| garita::encolar_acceso(c, &agente_id, &garita::NuevoAcceso {

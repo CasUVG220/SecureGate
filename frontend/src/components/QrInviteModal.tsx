@@ -6,8 +6,11 @@ import {
 } from '../services/api';
 import { Spinner } from './Skeleton';
 import { useTranslation } from '../i18n/useTranslation';
+import { hoyEnZona } from '../utils/fecha';
+import { formatearPlaca, normalizarPlaca } from '../utils/placa';
+import PlacaInput from './PlacaInput';
 
-const today = () => new Date().toISOString().slice(0, 10);
+const today = hoyEnZona;
 
 const EMPTY_FORM = {
   tipo: 'individual' as InvitacionQrTipo,
@@ -70,7 +73,7 @@ export default function QrInviteModal({ invitacion, onClose, onCreated }: Props)
       setFormError(t('qr.errorIndividual'));
       return;
     }
-    if (placaRequerida && !form.placa.trim()) {
+    if (placaRequerida && !normalizarPlaca(form.placa)) {
       setFormError(t('qr.errorPlacaRequerida'));
       return;
     }
@@ -80,7 +83,7 @@ export default function QrInviteModal({ invitacion, onClose, onCreated }: Props)
       const payload: InvitacionQrInput = {
         tipo: form.tipo,
         etiqueta: form.etiqueta.trim() || undefined,
-        placa: form.placa.trim() || undefined,
+        placa: normalizarPlaca(form.placa) || undefined,
         fecha_inicio: form.fecha_inicio,
         fecha_fin: form.fecha_fin || undefined,
         usos_maximos: form.usos_maximos ? Number(form.usos_maximos) : undefined,
@@ -99,6 +102,19 @@ export default function QrInviteModal({ invitacion, onClose, onCreated }: Props)
   };
 
   const canShareFiles = typeof navigator !== 'undefined' && !!navigator.canShare && !!navigator.share;
+
+  // El código de texto del QR: si la cámara de la garita no lo lee, el guardia puede escribirlo.
+  const [codigoCopiado, setCodigoCopiado] = useState(false);
+  const copiarCodigo = async () => {
+    if (!created) return;
+    try {
+      await navigator.clipboard.writeText(created.id);
+      setCodigoCopiado(true);
+      setTimeout(() => setCodigoCopiado(false), 2500);
+    } catch {
+      /* Sin permiso de portapapeles el código sigue a la vista para copiarlo a mano. */
+    }
+  };
 
   const handleShare = async () => {
     if (!qrDataUri || !created) return;
@@ -142,17 +158,25 @@ export default function QrInviteModal({ invitacion, onClose, onCreated }: Props)
                 </p>
               )}
               {created.placa && (
-                <p className="text-gray-400">{t('qr.plate')}: {created.placa}</p>
+                <p className="text-gray-400">{t('qr.plate')}: {formatearPlaca(created.placa)}</p>
               )}
               {created.usos_maximos != null && (
                 <p className="text-gray-400">{created.usos_actuales}/{created.usos_maximos} {t('qr.usesLabel')}</p>
               )}
             </div>
+            <div className="rounded-lg border border-gray-700 bg-gray-500/[0.06] px-3 py-2.5 text-left">
+              <p className="text-2xs font-bold uppercase tracking-wider text-gray-400">{t('qr.codeLabel')}</p>
+              <p className="mt-1 break-all font-mono text-xs text-gray-100 select-all" data-testid="qr-codigo">{created.id}</p>
+              <p className="mt-1 text-xs text-gray-400">{t('qr.codeHint')}</p>
+              <button type="button" onClick={copiarCodigo} className="mt-1.5 text-xs font-semibold text-gray-300 underline underline-offset-4 hover:text-gray-50">
+                {codigoCopiado ? t('qr.codeCopied') : t('qr.copyCode')}
+              </button>
+            </div>
             <div className="flex gap-3">
               <a
                 href={qrDataUri ?? undefined}
                 download={`invitacion-qr-${created.id}.png`}
-                className={`flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 rounded-xl transition-colors text-sm ${!qrDataUri ? 'pointer-events-none opacity-50' : ''}`}
+                className={`flex-1 bg-brand-500 hover:bg-brand-600 text-brand-ink text-center font-semibold py-2 rounded-xl transition-colors text-sm ${!qrDataUri ? 'pointer-events-none opacity-50' : ''}`}
               >
                 {t('qr.download')}
               </a>
@@ -175,7 +199,7 @@ export default function QrInviteModal({ invitacion, onClose, onCreated }: Props)
         ) : (
           <form onSubmit={handleCrear} className="space-y-4">
             {formError && (
-              <div className="bg-red-900/40 border border-red-700 rounded-lg px-3 py-2 text-red-300 text-sm">
+              <div className="bg-danger-900/40 border border-danger-700 rounded-lg px-3 py-2 text-danger-300 text-sm">
                 {formError}
               </div>
             )}
@@ -238,12 +262,10 @@ export default function QrInviteModal({ invitacion, onClose, onCreated }: Props)
               <label className="block text-xs font-medium text-gray-400 mb-1">
                 {placaRequerida ? `${t('qr.plate')} *` : t('qr.plateOptional')}
               </label>
-              <input
+              <PlacaInput
                 name="placa"
                 value={form.placa}
-                onChange={handleChange}
-                placeholder="P123ABC"
-                className="sg-input"
+                onChange={placa => setForm(prev => ({ ...prev, placa }))}
               />
               <p className="text-xs text-gray-500 mt-1">{t('qr.plateHelp')}</p>
             </div>

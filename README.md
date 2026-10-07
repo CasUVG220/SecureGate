@@ -250,7 +250,11 @@ reverse proxy con HTTPS. Requisitos previos:
 1. Apuntar el registro A del dominio a la IP publica del servidor.
 2. Emitir el certificado en el host:
    `sudo certbot certonly --standalone -d midominio.com`
-3. Sustituir `DOMINIO` por el dominio real en `nginx/nginx.conf`.
+3. Definir el dominio: `DOMINIO=midominio.com` (o basta `PUBLIC_URL`, de donde se
+   toma el host). **`nginx/nginx.conf` ya no se edita a mano**: se genera desde
+   `nginx/nginx.conf.template` con `scripts/render-nginx.sh`, que falla si el
+   dominio falta, sigue siendo el literal `DOMINIO` o no es un nombre válido.
+   (`nginx/certbot-init.sh` también lee `DOMINIO` y `EMAIL` del entorno.)
 4. Exportar las variables obligatorias (o ponerlas en un `.env`):
 
 ```bash
@@ -259,7 +263,8 @@ export JWT_SECRET=$(openssl rand -hex 48)   # >= 32 caracteres, no público
 export PUBLIC_URL=https://midominio.com
 export ALLOWED_ORIGINS=https://midominio.com
 
-docker compose -f docker-compose.prod.yml up --build -d
+./scripts/deploy.sh          # producción por defecto: valida, genera nginx y levanta
+./scripts/deploy.sh --check  # solo valida (guardas + nginx), no despliega
 ```
 
 5. **Crear el primer owner** (en producción no hay cuentas demo):
@@ -275,8 +280,12 @@ sin privilegios, el frontend son archivos estáticos (no el servidor de Vite),
 `TRUST_PROXY=1` hace que el rate limit y la auditoría vean la IP real del
 cliente, y el **pago con tarjeta simulado responde 501** (sólo se habilita con
 `PAGOS_TARJETA_SIMULADA=true`, que únicamente define el compose de desarrollo:
-esa pasarela es un mock que liquida deudas). Para desplegar con este compose:
-`COMPOSE_FILE=docker-compose.prod.yml ./scripts/deploy.sh`.
+esa pasarela es un mock que liquida deudas). `scripts/deploy.sh` **despliega
+producción por defecto** (`docker-compose.prod.yml`) y se niega a continuar si
+`PAGOS_TARJETA_SIMULADA` está activa (entorno, `.env` o compose) o si nginx no
+se pudo generar con un dominio válido; el propio backend también aborta el
+arranque en producción con esa bandera. Para desarrollo/staging:
+`COMPOSE_FILE=docker-compose.yml ./scripts/deploy.sh`.
 
 **Backups:** en producción la base vive en Cloud SQL; `scripts/backup-postgres.sh`
 sólo aplica al Postgres en contenedor (perfil `local-db`). Activa los backups

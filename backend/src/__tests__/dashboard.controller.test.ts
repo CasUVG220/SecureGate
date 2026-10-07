@@ -31,8 +31,9 @@ const RESPUESTAS: Array<[string, Array<Record<string, unknown>>]> = [
   ['EXTRACT(HOUR', [{ hora: 8, total: 3 }, { hora: 18, total: 7 }]],
   ['CURRENT_DATE - 1', [{ total: 9 }]],
   ['timestamp_salida IS NULL', [{ total: 2 }]],
-  ['estado_pago', [{ total: 4 }]],
+  ['estado_pago', [{ total: 4, registrados: 120 }]],
   ["estado = 'pendiente'", [{ total: 6 }]],
+  ["estado = 'pendiente_aprobacion'", [{ total: 5 }]],
   ['LIMIT 10', [{ id: 'a1', nombre_visitante: 'Luis', numero_casa: 'A-12', timestamp_entrada: '2026-09-24T10:00:00', timestamp_salida: null }]],
   ['COUNT(*)::int AS total', [{ total: 10 }]],
 ];
@@ -61,6 +62,15 @@ it('devuelve la serie de hoy por hora (24 posiciones) y la referencia de ayer', 
   expect(body.dentro_ahora).toBe(2);
 });
 
+it('trae el total de residentes del alcance para decidir si el panel muestra los primeros pasos', async () => {
+  const body = await pedir(ADM_SUC);
+  expect(body.residentes_mora).toBe(4);
+  expect(body.total_residentes).toBe(120);
+  const sql = mockPool.query.mock.calls.map(([s]) => s as string).find(s => s.includes('estado_pago'))!;
+  expect(sql).toMatch(/COUNT\(\*\) FILTER \(WHERE r\.estado_pago = 'mora'\)/);
+  expect(sql).toContain('r.sucursal_id  = $1');
+});
+
 it('"dentro ahora" se cuenta en la base (últimas 24 h), no con la lista de recientes', async () => {
   await pedir(ADM_SUC);
   const sql = mockPool.query.mock.calls.map(([s]) => s as string).find(s => s.includes('timestamp_salida IS NULL'))!;
@@ -75,15 +85,27 @@ it('la referencia de ayer se corta a la hora actual, no al día completo', async
 });
 
 it.each([
-  ['admin de sucursal', ADM_SUC, /ra\.sucursal_id = \$1|r\.sucursal_id  = \$1|p\.sucursal_id  = \$1/, 'suc-1'],
+  ['admin de sucursal', ADM_SUC, /ra\.sucursal_id = \$1|r\.sucursal_id  = \$1|p\.sucursal_id  = \$1|a\.sucursal_id  = \$1/, 'suc-1'],
   ['admin de empresa', ADM_EMP, /_s\.empresa_id = \$1/, 'emp-1'],
-])('%s: las siete consultas filtran por su alcance', async (_n, user, filtro, param) => {
+])('%s: las ocho consultas filtran por su alcance', async (_n, user, filtro, param) => {
   await pedir(user);
-  expect(mockPool.query).toHaveBeenCalledTimes(7);
+  expect(mockPool.query).toHaveBeenCalledTimes(8);
   for (const [sql, params] of mockPool.query.mock.calls) {
     expect(sql).toMatch(filtro);
     expect(params).toEqual([param]);
   }
+});
+
+it('reservas por aprobar: cuenta las pendientes de aprobación dentro del alcance del rol', async () => {
+  const body = await pedir(ADM_SUC);
+  expect(body.reservas_pendientes).toBe(5);
+  const sql = mockPool.query.mock.calls.map(([s]) => s as string).find(s => s.includes("'pendiente_aprobacion'"))!;
+  expect(sql).toContain('areas_comunes');
+  expect(sql).toMatch(/a\.sucursal_id\s+= \$1/);
+  mockPool.query.mockClear();
+  await pedir(ADM_EMP);
+  const sqlEmp = mockPool.query.mock.calls.map(([s]) => s as string).find(s => s.includes("'pendiente_aprobacion'"))!;
+  expect(sqlEmp).toMatch(/_s\.empresa_id = \$1/);
 });
 
 it('owner: sin parámetros de tenant', async () => {

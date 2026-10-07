@@ -1,8 +1,8 @@
 import { Router } from 'express';
-import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 import * as ctrl from '../controllers/empresas.controller';
 import { requireOwner, requireAdminEmpresa } from '../middleware/auth.middleware';
-import { auditLog, registrarAuditoria } from '../middleware/audit.middleware';
+import { auditLog } from '../middleware/audit.middleware';
+import { crearLimitador } from '../middleware/limitadores';
 
 const router = Router();
 
@@ -23,16 +23,14 @@ router.patch('/:id/suspender', requireOwner,       auditLog({ accion: 'EMPRESA_S
 // IP del owner le agotaba el cupo. Los intentos bloqueados (429) también quedan
 // en audit_logs: antes el limitador corría antes de auditLog y quien insistía
 // tras el bloqueo no dejaba rastro.
-export const eliminarLimiter = rateLimit({
+export const eliminarLimiter = crearLimitador({
+  nombre: 'eliminar-empresa-usuario',
   windowMs: 15 * 60 * 1000,
   max: parseInt(process.env.RATE_LIMIT_ELIMINAR_MAX || '5', 10),
-  standardHeaders: true,
-  legacyHeaders: false,
-  keyGenerator: req => `owner:${req.user?.id ?? ipKeyGenerator(req.ip ?? '')}`,
-  handler: (req, res) => {
-    registrarAuditoria(req, { accion: 'EMPRESA_ELIMINADA_DEFINITIVO', tabla: 'empresas' }, 429);
-    res.status(429).json({ error: 'Demasiados intentos; espera 15 minutos' });
-  },
+  porUsuario: true,
+  accion: 'EMPRESA_ELIMINADA_DEFINITIVO',
+  tabla: 'empresas',
+  mensaje: 'Demasiados intentos; espera 15 minutos',
 });
 router.post('/:id/eliminar-definitivo', requireOwner, eliminarLimiter,
   auditLog({ accion: 'EMPRESA_ELIMINADA_DEFINITIVO', tabla: 'empresas' }), ctrl.eliminarEmpresaDefinitivo);

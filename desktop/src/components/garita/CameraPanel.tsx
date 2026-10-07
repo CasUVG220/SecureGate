@@ -28,6 +28,10 @@ interface Props {
   qrPausado: boolean;
   /** Tarea cuya captura se está procesando, para bloquear sólo ese botón. */
   ocupado: Proposito | null;
+  /** «Escribir placa» del panel de placa: enfoca el campo del formulario. */
+  onEscribirPlaca?: () => void;
+  /** «Escribir placa» del panel de salida: abre el diálogo de salida vacío. */
+  onSalidaManual?: () => void;
 }
 
 /** Rejilla por layout: una columna, o dos (que con cuatro paneles da 2×2). */
@@ -39,6 +43,7 @@ const REJILLA: Record<Layout, string> = {
 
 export function CameraPanel({
   ocrDisponible, enLinea, disposicion, onLayout, onPanel, onCaptura, onQr, qrPausado, ocupado,
+  onEscribirPlaca, onSalidaManual,
 }: Props) {
   const { camaras, asignacion, asignar, refrescar } = useCamaras();
   const [config, setConfig] = useState(false);
@@ -109,6 +114,8 @@ export function CameraPanel({
             onCambiarProposito={nuevo => onPanel(i, nuevo)}
             onConfigurar={abrirConfig}
             onCamaraLista={alAbrirCamara}
+            onEscribirPlaca={onEscribirPlaca}
+            onSalidaManual={onSalidaManual}
           />
         ))}
       </div>

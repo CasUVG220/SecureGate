@@ -18,7 +18,8 @@ export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElemen
 const VARIANT: Record<ButtonVariant, string> = {
   primary:   'bg-brand-500 text-brand-ink hover:bg-brand-600 active:bg-brand-700 shadow-xs',
   secondary: 'border border-gray-600 bg-gray-800 text-gray-200 hover:bg-gray-700 hover:text-gray-50',
-  danger:    'bg-danger-500 text-white hover:bg-danger-600 active:bg-danger-700 shadow-xs',
+  // danger-600/700: blanco encima da ≥ 4.8:1 en los dos temas (con 500 eran 3.8:1 en oscuro).
+  danger:    'bg-danger-600 text-white hover:bg-danger-700 active:bg-danger-700 shadow-xs',
   ghost:     'text-gray-300 hover:bg-gray-500/12 hover:text-gray-50',
 };
 
@@ -31,7 +32,7 @@ const SIZE: Record<ButtonSize, string> = {
 const SPINNER_SIZE: Record<ButtonSize, number> = { sm: 12, md: 14, lg: 16 };
 
 /**
- * Botón base de SecureGate. Sustituye a los `<button className="bg-blue-600 …">`
+ * Botón base de SecureGate. Sustituye a los `<button className="bg-brand-600 …">`
  * que cada pantalla declaraba por su cuenta.
  */
 const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(

@@ -419,8 +419,8 @@ html.dark {
   }
   .sg-btn-secondary:hover:not(:disabled) { background: rgb(var(--c-surface-raised)); color: rgb(var(--c-neutral-50)); }
 
-  .sg-btn-danger { background: rgb(var(--c-danger-500)); color: #ffffff; }
-  .sg-btn-danger:hover:not(:disabled) { background: rgb(var(--c-danger-600)); }
+  .sg-btn-danger { background: rgb(var(--c-danger-600)); color: #ffffff; }
+  .sg-btn-danger:hover:not(:disabled) { background: rgb(var(--c-danger-700)); }
 
   .sg-btn-ghost { background: transparent; color: rgb(var(--c-neutral-300)); }
   .sg-btn-ghost:hover:not(:disabled) { background: rgb(var(--c-neutral-500) / 0.12); color: rgb(var(--c-neutral-50)); }
@@ -562,6 +562,96 @@ html.dark {
    sólido de color (botones, badges, hero), donde debe seguir siendo blanco. */
 html:not(.dark) .text-white:not(button):not(a):not([class*='bg-brand-']):not([class*='bg-blue-']):not([class*='bg-teal-']):not([class*='bg-emerald-']):not([class*='bg-green-']):not([class*='bg-red-']):not([class*='bg-danger-']):not([class*='bg-amber-']):not([class*='bg-yellow-']):not([class*='bg-indigo-']):not([class*='bg-purple-']):not([class*='bg-dark-']):not([class*='bg-gradient-']):not(.sg-btn-primary):not(.sg-btn-danger) {
   color: rgb(var(--c-neutral-50));
+}
+
+/* ── H01 · Contraste de los rellenos de marca (SCRUM-108) ────────────────────
+   La marca es carbón y su relleno se INVIERTE en oscuro: ahí brand 300-800 son
+   grises claros. Los alias heredados (blue, teal, cyan, indigo, purple) apuntan
+   a la misma escala, así que un `bg-blue-600 text-white` —blanco sobre gris casi
+   blanco, ~1.1:1— dejaba el botón principal ilegible en el tema oscuro.
+
+   Red de seguridad global: en oscuro, cualquier elemento con un relleno SÓLIDO de
+   esa familia (fondo o inicio de degradado) y `text-white` toma la tinta de marca
+   (`--c-brand-ink`), igual que `<Button>`. Los fondos con transparencia
+   (`bg-blue-600/20`) no son sólidos y no entran. Las pantallas nuevas deben usar
+   `<Button>` o `text-brand-ink` directamente: la prueba
+   `src/styles/__tests__/contraste.test.ts` falla si alguien vuelve a escribir el
+   par, y calcula la razón de contraste de cada combinación en ambos temas. */
+html.dark :is(
+  .bg-brand-300,
+  .bg-brand-400,
+  .bg-brand-500,
+  .bg-brand-600,
+  .bg-brand-700,
+  .bg-brand-800,
+  .bg-blue-300,
+  .bg-blue-400,
+  .bg-blue-500,
+  .bg-blue-600,
+  .bg-blue-700,
+  .bg-blue-800,
+  .bg-teal-300,
+  .bg-teal-400,
+  .bg-teal-500,
+  .bg-teal-600,
+  .bg-teal-700,
+  .bg-teal-800,
+  .bg-cyan-300,
+  .bg-cyan-400,
+  .bg-cyan-500,
+  .bg-cyan-600,
+  .bg-cyan-700,
+  .bg-cyan-800,
+  .bg-indigo-300,
+  .bg-indigo-400,
+  .bg-indigo-500,
+  .bg-indigo-600,
+  .bg-indigo-700,
+  .bg-indigo-800,
+  .bg-purple-300,
+  .bg-purple-400,
+  .bg-purple-500,
+  .bg-purple-600,
+  .bg-purple-700,
+  .bg-purple-800,
+  .from-brand-300,
+  .from-brand-400,
+  .from-brand-500,
+  .from-brand-600,
+  .from-brand-700,
+  .from-brand-800,
+  .from-blue-300,
+  .from-blue-400,
+  .from-blue-500,
+  .from-blue-600,
+  .from-blue-700,
+  .from-blue-800,
+  .from-teal-300,
+  .from-teal-400,
+  .from-teal-500,
+  .from-teal-600,
+  .from-teal-700,
+  .from-teal-800,
+  .from-cyan-300,
+  .from-cyan-400,
+  .from-cyan-500,
+  .from-cyan-600,
+  .from-cyan-700,
+  .from-cyan-800,
+  .from-indigo-300,
+  .from-indigo-400,
+  .from-indigo-500,
+  .from-indigo-600,
+  .from-indigo-700,
+  .from-indigo-800,
+  .from-purple-300,
+  .from-purple-400,
+  .from-purple-500,
+  .from-purple-600,
+  .from-purple-700,
+  .from-purple-800
+).text-white {
+  color: rgb(var(--c-brand-ink));
 }
 
 /* Los formularios heredados fijan su propio fondo oscuro; se reencauzan al

@@ -24,6 +24,18 @@ const renderPage = () => render(<ToastProvider><AdminReservasPage /></ToastProvi
  */
 const enTabla = () => within(screen.getByRole('table'));
 
+/**
+ * La página pide dos cosas: la lista (con todos los filtros) y, aparte, el conteo de reservas por
+ * aprobar (solo `{ estado }`). Este ayudante reparte las listas en orden a la primera y contesta
+ * `pendientes` a la segunda.
+ */
+const esConteo = (f?: Record<string, unknown>) => Object.keys(f ?? {}).length === 1;
+const conPendientes = (listas: unknown[][], pendientes: unknown[] = []) => {
+  const cola = [...listas];
+  mockGetReservas.mockImplementation(async (f?: Record<string, unknown>) => (esConteo(f) ? pendientes : (cola.shift() ?? [])));
+};
+const llamadasALista = () => mockGetReservas.mock.calls.filter(([f]) => !esConteo(f)).length;
+
 const reserva = (over: Partial<Record<string, unknown>> = {}) => ({
   id: 'rsv1',
   area_id: 'a1',
@@ -80,9 +92,7 @@ describe('AdminReservasPage', () => {
   });
 
   it('aprueba una reserva pendiente y recarga la lista', async () => {
-    mockGetReservas
-      .mockResolvedValueOnce([reserva()])
-      .mockResolvedValueOnce([reserva({ estado: 'confirmada' })]);
+    conPendientes([[reserva()], [reserva({ estado: 'confirmada' })]], [reserva()]);
     mockAprobar.mockResolvedValue(reserva({ estado: 'confirmada' }));
     renderPage();
 
@@ -91,34 +101,73 @@ describe('AdminReservasPage', () => {
     await waitFor(() => expect(mockAprobar).toHaveBeenCalledWith('rsv1'));
     expect(await screen.findByText('Reserva aprobada')).toBeInTheDocument();
     // Se refresca la tabla tras la mutación
-    await waitFor(() => expect(mockGetReservas).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(llamadasALista()).toBe(2));
     await waitFor(() => expect(enTabla().getByText('Confirmada')).toBeInTheDocument());
   });
 
-  it('rechaza una reserva pendiente pasando el motivo que escribe el admin', async () => {
-    vi.spyOn(window, 'prompt').mockReturnValue('El salón está en mantenimiento');
-    mockGetReservas
-      .mockResolvedValueOnce([reserva()])
-      .mockResolvedValueOnce([reserva({ estado: 'rechazada' })]);
+  it('avisa cuántas reservas esperan aprobación y el botón deja solo las pendientes', async () => {
+    conPendientes([[reserva({ estado: 'confirmada' })], [reserva()]], [reserva(), reserva({ id: 'rsv2' })]);
+    renderPage();
+
+    const aviso = await screen.findByRole('status');
+    expect(aviso).toHaveTextContent('Reservas esperando tu aprobación: 2');
+    fireEvent.click(within(aviso).getByRole('button', { name: 'Ver solo pendientes' }));
+
+    await waitFor(() => expect(mockGetReservas).toHaveBeenCalledWith(expect.objectContaining({ estado: 'pendiente_aprobacion', area_id: '' })));
+    // Ya se está viendo solo lo pendiente: el aviso sobra.
+    await waitFor(() => expect(screen.queryByRole('status')).toBeNull());
+  });
+
+  it('sin reservas por aprobar no hay aviso', async () => {
+    conPendientes([[reserva({ estado: 'confirmada' })]], []);
+    renderPage();
+    await screen.findByText('Residente Demo');
+    expect(screen.queryByText(/esperando tu aprobación/)).toBeNull();
+  });
+
+  /** «Rechazar» vive en el menú de la fila (lo destructivo no va al lado de «Aprobar»). */
+  const abrirRechazo = async () => {
+    fireEvent.click(await screen.findByRole('button', { name: 'Más acciones' }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Rechazar' }));
+    return screen.findByRole('dialog', { name: 'Rechazar la reserva' });
+  };
+
+  it('rechaza una reserva pendiente pasando el motivo que escribe el admin en el diálogo de la app', async () => {
+    const prompt = vi.spyOn(window, 'prompt');
+    conPendientes([[reserva()], [reserva({ estado: 'rechazada' })]], [reserva()]);
     mockRechazar.mockResolvedValue(reserva({ estado: 'rechazada' }));
     renderPage();
 
-    fireEvent.click(await screen.findByText('Rechazar'));
+    const dialogo = await abrirRechazo();
+    expect(within(dialogo).getByText('Salón Social · A-01')).toBeInTheDocument();
+    fireEvent.change(within(dialogo).getByLabelText('Motivo del rechazo'), { target: { value: '  El salón está en mantenimiento ' } });
+    fireEvent.click(within(dialogo).getByRole('button', { name: 'Rechazar reserva' }));
 
     await waitFor(() =>
       expect(mockRechazar).toHaveBeenCalledWith('rsv1', 'El salón está en mantenimiento')
     );
     expect(await screen.findByText('Reserva rechazada')).toBeInTheDocument();
+    expect(prompt).not.toHaveBeenCalled();
   });
 
-  it('no rechaza nada si el admin cancela el prompt', async () => {
-    vi.spyOn(window, 'prompt').mockReturnValue(null);
+  it('el motivo es opcional: sin escribirlo se rechaza igual, sin motivo', async () => {
+    conPendientes([[reserva()], [reserva({ estado: 'rechazada' })]], [reserva()]);
+    mockRechazar.mockResolvedValue(reserva({ estado: 'rechazada' }));
+    renderPage();
+    const dialogo = await abrirRechazo();
+    fireEvent.click(within(dialogo).getByRole('button', { name: 'Rechazar reserva' }));
+    await waitFor(() => expect(mockRechazar).toHaveBeenCalledWith('rsv1', undefined));
+  });
+
+  it('no rechaza nada si el admin cancela el diálogo', async () => {
     mockGetReservas.mockResolvedValue([reserva()]);
     renderPage();
 
-    fireEvent.click(await screen.findByText('Rechazar'));
+    const dialogo = await abrirRechazo();
+    fireEvent.click(within(dialogo).getByRole('button', { name: 'Cancelar' }));
 
-    await waitFor(() => expect(mockRechazar).not.toHaveBeenCalled());
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(mockRechazar).not.toHaveBeenCalled();
   });
 
   it('no ofrece aprobar ni rechazar una reserva ya confirmada', async () => {

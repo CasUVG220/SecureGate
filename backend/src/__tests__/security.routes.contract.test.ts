@@ -222,6 +222,7 @@ const MATRIZ: Array<[string, string, string[]]> = [
   ['PATCH', `/api/cargos/${UUID}/aplicar`, SOLO_ADMIN_SUC_ARRIBA],
   ['GET', '/api/usuarios', SOLO_ADMIN_SUC_ARRIBA],
   ['POST', '/api/usuarios', SOLO_ADMIN_SUC_ARRIBA],
+  ['PUT', `/api/usuarios/${UUID}`, SOLO_ADMIN_SUC_ARRIBA],
   ['DELETE', `/api/usuarios/${UUID}`, SOLO_ADMIN_SUC_ARRIBA],
   ['GET', '/api/licencias', SOLO_ADMIN_SUC_ARRIBA],
   ['POST', '/api/licencias', SOLO_ADMIN_SUC_ARRIBA],

@@ -1,13 +1,16 @@
 /* Este módulo comparte mapas de etiquetas con las vistas de tickets. */
 /* eslint-disable react-refresh/only-export-components */
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   getTicketMensajes, addTicketMensaje, cerrarTicket,
   decodeTokenPayload,
   type Ticket, type TicketMensaje,
 } from '../services/api';
-import { Skeleton, Spinner } from './Skeleton';
+import { Skeleton } from './Skeleton';
+import { Button, useConfirmacion } from './ui';
 import { useTranslation } from '../i18n/useTranslation';
+import { usePolling } from '../hooks/usePolling';
+import { formatearFechaHoraCorta } from '../utils/fecha';
 
 export const TIPO_LABEL: Record<string, string> = {
   mantenimiento: 'tickets.tipoMantenimiento',
@@ -17,8 +20,8 @@ export const TIPO_LABEL: Record<string, string> = {
 };
 
 export const ESTADO_BADGE: Record<string, string> = {
-  abierto:    'bg-blue-900/50 text-blue-400',
-  en_proceso: 'bg-amber-900/50 text-amber-400',
+  abierto:    'bg-brand-900/50 text-brand-400',
+  en_proceso: 'bg-warning-900/50 text-warning-400',
   cerrado:    'bg-gray-700 text-gray-400',
 };
 
@@ -36,6 +39,7 @@ interface Props {
 
 export default function TicketChat({ ticketId, viewerRole, onActivity }: Props) {
   const { t } = useTranslation();
+  const { confirmar, dialogo } = useConfirmacion();
   const [ticket, setTicket]     = useState<Ticket | null>(null);
   const [mensajes, setMensajes] = useState<TicketMensaje[]>([]);
   const [loading, setLoading]   = useState(true);
@@ -53,14 +57,34 @@ export default function TicketChat({ ticketId, viewerRole, onActivity }: Props) 
   const load = () => {
     setLoading(true);
     getTicketMensajes(ticketId)
-      .then(({ ticket, mensajes }) => { setTicket(ticket); setMensajes(mensajes); })
+      .then(({ ticket, mensajes }) => { firma.current = firmaDe(ticket, mensajes); setTicket(ticket); setMensajes(mensajes); })
       .catch(() => setError(t('tickets.errorLoad')))
       .finally(() => setLoading(false));
   };
 
   useEffect(() => { load(); /* opening the chat marks it read server-side */ onActivity?.(); }, [ticketId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [mensajes.length]);
+  /**
+   * Sondeo ligero: mientras el chat está abierto se vuelve a pedir la conversación cada 10 s para que
+   * el estado del encabezado (abierto → en proceso → cerrado) y los mensajes nuevos de la otra persona
+   * aparezcan solos, sin recargar. Es silencioso: no vuelve a mostrar el esqueleto de carga ni pisa lo
+   * que se está escribiendo.
+   */
+  const firma = useRef('');
+  const firmaDe = (tk: Ticket, ms: TicketMensaje[]) => `${tk.estado}|${tk.titulo}|${ms.length}|${ms.at(-1)?.id ?? ''}`;
+
+  const refrescar = useCallback(async () => {
+    const { ticket: nuevo, mensajes: nuevos } = await getTicketMensajes(ticketId);
+    const f = firmaDe(nuevo, nuevos);
+    if (f === firma.current) return;      // nada cambió: no se repinta ni se molesta al padre
+    firma.current = f;
+    setTicket(nuevo);
+    setMensajes(nuevos);
+    onActivity?.();
+  }, [ticketId, onActivity]);
+  usePolling(refrescar, 10_000, !loading && !error);
+
+  useEffect(() => { bottomRef.current?.scrollIntoView?.({ behavior: 'smooth' }); }, [mensajes.length]);
 
   const cerrado = ticket?.estado === 'cerrado';
   const inputBloqueado = cerrado && viewerRole === 'residente';
@@ -81,7 +105,12 @@ export default function TicketChat({ ticketId, viewerRole, onActivity }: Props) 
   };
 
   const handleClose = async () => {
-    if (!window.confirm(t('tickets.confirmClose'))) return;
+    const ok = await confirmar({
+      title: t('tickets.confirmClose'),
+      message: t('confirm.closeTicket.message'),
+      confirmLabel: t('tickets.close'),
+    });
+    if (!ok) return;
     setClosing(true);
     try {
       const updated = await cerrarTicket(ticketId);
@@ -95,14 +124,14 @@ export default function TicketChat({ ticketId, viewerRole, onActivity }: Props) 
   };
 
   const fmt = (d: string) =>
-    new Date(d).toLocaleString('es-GT', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+    formatearFechaHoraCorta(d);
 
   return (
     <div className="flex flex-col h-full bg-gray-800 rounded-2xl shadow-xl overflow-hidden">
       {/* Header */}
       <div className="px-4 py-3 border-b border-gray-700 flex items-center justify-between gap-2 shrink-0">
         <div className="min-w-0">
-          <p className="text-white font-semibold text-sm truncate">{ticket?.titulo ?? '…'}</p>
+          <p className="text-white font-semibold text-sm truncate" title={ticket?.titulo}>{ticket?.titulo ?? '…'}</p>
           {ticket && (
             <div className="flex items-center gap-2 mt-0.5">
               <span className="text-xs text-gray-400">{t(TIPO_LABEL[ticket.tipo] ?? 'tickets.tipoOtro')}</span>
@@ -116,7 +145,7 @@ export default function TicketChat({ ticketId, viewerRole, onActivity }: Props) 
           <button
             onClick={handleClose}
             disabled={closing}
-            className="text-xs bg-gray-700 hover:bg-red-900/60 hover:text-red-300 text-gray-300 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50 shrink-0"
+            className="text-xs bg-gray-700 hover:bg-danger-900/60 hover:text-danger-300 text-gray-300 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50 shrink-0"
           >
             {closing ? '…' : t('tickets.close')}
           </button>
@@ -146,13 +175,13 @@ export default function TicketChat({ ticketId, viewerRole, onActivity }: Props) 
             return (
               <div key={m.id} className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
                 <div className={`max-w-[80%] rounded-2xl px-3 py-2 ${
-                  mine ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-100'
+                  mine ? 'bg-brand-500 text-brand-ink' : 'bg-gray-700 text-gray-100'
                 }`}>
                   {!mine && (
                     <p className="text-[11px] font-semibold text-gray-300 mb-0.5">{m.autor_nombre}</p>
                   )}
                   <p className="text-sm whitespace-pre-line break-words">{m.mensaje}</p>
-                  <p className={`text-[10px] mt-1 ${mine ? 'text-blue-200' : 'text-gray-400'}`}>{fmt(m.created_at)}</p>
+                  <p className={`text-[10px] mt-1 ${mine ? 'text-brand-200' : 'text-gray-400'}`}>{fmt(m.created_at)}</p>
                 </div>
               </div>
             );
@@ -163,7 +192,7 @@ export default function TicketChat({ ticketId, viewerRole, onActivity }: Props) 
 
       {/* Input */}
       <div className="border-t border-gray-700 p-3 shrink-0">
-        {error && <p className="text-xs text-red-400 mb-2">{error}</p>}
+        {error && <p className="text-xs text-danger-400 mb-2">{error}</p>}
         {inputBloqueado ? (
           <p className="text-xs text-gray-500 text-center py-2">{t('tickets.closedNotice')}</p>
         ) : (
@@ -174,18 +203,15 @@ export default function TicketChat({ ticketId, viewerRole, onActivity }: Props) 
               onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
               rows={1}
               placeholder={t('tickets.messagePlaceholder')}
-              className="flex-1 bg-gray-700 border border-gray-600 rounded-xl px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 resize-none max-h-28"
+              className="flex-1 bg-gray-700 border border-gray-600 rounded-xl px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-brand-500 resize-none max-h-28"
             />
-            <button
-              onClick={handleSend}
-              disabled={sending || !texto.trim()}
-              className="bg-blue-600 hover:bg-blue-700 disabled:opacity-40 text-white font-semibold px-4 py-2 rounded-xl text-sm transition-colors flex items-center gap-2"
-            >
-              {sending ? <Spinner size={14} /> : t('tickets.send')}
-            </button>
+            <Button onClick={handleSend} disabled={!texto.trim()} loading={sending}>
+              {t('tickets.send')}
+            </Button>
           </div>
         )}
       </div>
+      {dialogo}
     </div>
   );
 }

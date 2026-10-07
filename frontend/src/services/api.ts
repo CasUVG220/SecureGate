@@ -77,6 +77,24 @@ export const tomarBloqueoGuardado = (): BloqueoEmpresa | null => {
   }
 };
 
+// ── Sesión cerrada por seguridad (S-06) ───────────────────────────────────
+// Si un refresh token ya usado se presenta otra vez, el servidor cierra la sesión entera y responde
+// `sesion_comprometida`. Quien la pierde llega a la pantalla de acceso: sin una explicación creería que es un fallo.
+
+export const AVISO_SESION_KEY = 'sg_aviso_sesion';
+
+/** Lee y borra el aviso de «sesión cerrada por seguridad» (una sola vez). */
+export const tomarAvisoSesionGuardado = (): 'sesion_comprometida' | null => {
+  try {
+    const raw = localStorage.getItem(AVISO_SESION_KEY);
+    if (!raw) return null;
+    localStorage.removeItem(AVISO_SESION_KEY);
+    return raw === 'sesion_comprometida' ? raw : null;
+  } catch {
+    return null;
+  }
+};
+
 // ── Auth helpers ──────────────────────────────────────────────────────────
 
 export const refreshToken = async (): Promise<string | null> => {
@@ -90,6 +108,13 @@ export const refreshToken = async (): Promise<string | null> => {
       // para que la pantalla de acceso lo muestre al volver.
       const body = await res.json().catch(() => ({})) as Partial<BloqueoEmpresa>;
       guardarBloqueo(body);
+      return null;
+    }
+    if (res.status === 401) {
+      const body = await res.json().catch(() => ({})) as { codigo?: string };
+      if (body.codigo === 'sesion_comprometida') {
+        try { localStorage.setItem(AVISO_SESION_KEY, 'sesion_comprometida'); } catch { /* sin storage no se recuerda */ }
+      }
       return null;
     }
     if (!res.ok) return null;
@@ -180,11 +205,14 @@ export const getResidentes = async (): Promise<Residente[]> => {
 export class BlacklistDenialError extends Error {
   razon: string;
   fecha_fin: string | null;
-  constructor(razon: string, fecha_fin: string | null) {
-    super('Visitante en lista negra');
+  /** Qué coincidió con la lista negra: el DPI del visitante o la placa del vehículo. */
+  motivo: 'dpi' | 'placa';
+  constructor(razon: string, fecha_fin: string | null, motivo: 'dpi' | 'placa' = 'dpi') {
+    super(motivo === 'placa' ? 'Vehículo en lista negra' : 'Visitante en lista negra');
     this.name = 'BlacklistDenialError';
     this.razon = razon;
     this.fecha_fin = fecha_fin;
+    this.motivo = motivo;
   }
 }
 
@@ -197,8 +225,8 @@ export const registrarAcceso = async (data: AccesoPayload): Promise<AccesoResult
   const body = await res.json();
   if (!res.ok) {
     if (res.status === 403 && (body as { razon?: string }).razon) {
-      const b = body as { razon: string; fecha_fin?: string | null };
-      throw new BlacklistDenialError(b.razon, b.fecha_fin ?? null);
+      const b = body as { razon: string; fecha_fin?: string | null; motivo?: 'dpi' | 'placa' };
+      throw new BlacklistDenialError(b.razon, b.fecha_fin ?? null, b.motivo === 'placa' ? 'placa' : 'dpi');
     }
     throw new Error((body as { error?: string }).error || 'Error al registrar acceso');
   }
@@ -272,15 +300,22 @@ export class PortalIncorrectoError extends Error {
 }
 
 /**
+ * La contraseña fue correcta pero la cuenta tiene la verificación en dos pasos: todavía NO hay sesión. El `desafio`
+ * (válido 5 minutos) se canjea por la sesión en `verificarDosPasos` junto con el código (SCRUM-123).
+ */
+export interface DesafioDosPasos { requiere_2fa: true; desafio: string }
+
+/**
  * Inicia sesión contra un portal concreto. El backend rechaza las credenciales
  * que no pertenecen a ese portal: un residente no entra por el de personal ni
- * al revés.
+ * al revés. Si la cuenta tiene la verificación en dos pasos activa responde un
+ * `DesafioDosPasos` en vez de la sesión (`'requiere_2fa' in resultado`).
  */
 export const login = async (
   email: string,
   password: string,
   portal?: 'personal' | 'residente',
-): Promise<LoginResult> => {
+): Promise<LoginResult | DesafioDosPasos> => {
   const res = await fetch(`${BASE_URL}/api/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -297,6 +332,89 @@ export const login = async (
     throw new Error(body.error || 'Credenciales incorrectas');
   }
   return body;
+};
+
+// ── Verificación en dos pasos (SCRUM-123) ─────────────────────────────────
+
+/**
+ * Error de una operación de dos pasos. `codigo` es el que manda el backend (`CODIGO_INCORRECTO`, `BLOQUEADO`,
+ * `PASSWORD_INCORRECTA`, `DESAFIO_INVALIDO`, `YA_ACTIVA`…) para que la pantalla muestre el texto en el idioma elegido;
+ * `espera_s` viene cuando la persona quedó bloqueada por demasiados intentos.
+ */
+export class DosPasosError extends Error {
+  codigo: string;
+  status: number;
+  espera_s?: number;
+
+  constructor(mensaje: string, codigo: string, status: number, espera_s?: number) {
+    super(mensaje);
+    this.name = 'DosPasosError';
+    this.codigo = codigo;
+    this.status = status;
+    this.espera_s = espera_s;
+  }
+}
+
+const errorDeDosPasos = async (res: Response, respaldo: string): Promise<DosPasosError> => {
+  const body = await res.json().catch(() => ({})) as { error?: string; codigo?: string; espera_s?: number };
+  return new DosPasosError(body.error || respaldo, body.codigo ?? '', res.status, body.espera_s);
+};
+
+/** Segundo paso del acceso: canjea el desafío del login y un código (de la app o de recuperación) por la sesión. */
+export const verificarDosPasos = async (desafio: string, codigo: string): Promise<LoginResult> => {
+  const res = await fetch(`${BASE_URL}/api/auth/2fa/verificar`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({ desafio, codigo }),
+  });
+  if (res.status === HTTP_BLOQUEO) throw new EmpresaBloqueadaError(await res.json() as BloqueoEmpresa);
+  if (!res.ok) throw await errorDeDosPasos(res, 'No se pudo verificar el código');
+  return res.json() as Promise<LoginResult>;
+};
+
+export interface DosPasosEstado {
+  activado: boolean;
+  activado_en: string | null;
+  codigos_restantes: number;
+}
+
+const llamarDosPasos = async <T,>(ruta: string, metodo: 'GET' | 'POST', cuerpo?: object, respaldo = 'No se pudo completar la operación'): Promise<T> => {
+  const res = await apiFetch(`${BASE_URL}/api/auth/2fa/${ruta}`, {
+    method: metodo,
+    headers: authHeaders(),
+    ...(cuerpo ? { body: JSON.stringify(cuerpo) } : {}),
+  });
+  if (!res.ok) throw await errorDeDosPasos(res, respaldo);
+  return res.json() as Promise<T>;
+};
+
+export const getDosPasosEstado = (): Promise<DosPasosEstado> =>
+  llamarDosPasos<DosPasosEstado>('estado', 'GET', undefined, 'No se pudo consultar la verificación en dos pasos');
+
+/** Empieza la configuración: entrega el secreto (para escribirlo a mano) y la URL `otpauth://` que se dibuja como QR. */
+export const iniciarDosPasos = (): Promise<{ secreto: string; otpauth_url: string }> =>
+  llamarDosPasos('iniciar', 'POST', {}, 'No se pudo iniciar la verificación en dos pasos');
+
+/**
+ * Activa con la contraseña y el primer código de la app (la contraseña se pide como para desactivarla: re-autenticación ante
+ * un cambio de seguridad de la cuenta). Devuelve los códigos de recuperación: se muestran UNA vez.
+ */
+export const confirmarDosPasos = async (codigo: string, password: string): Promise<string[]> =>
+  (await llamarDosPasos<{ codigos_recuperacion: string[] }>('confirmar', 'POST', { codigo, password }, 'No se pudo activar')).codigos_recuperacion;
+
+export const desactivarDosPasos = async (password: string, codigo: string): Promise<void> => {
+  await llamarDosPasos('desactivar', 'POST', { password, codigo }, 'No se pudo desactivar');
+};
+
+/** Códigos de recuperación nuevos; los anteriores dejan de valer. Pide un código de la app. */
+export const regenerarCodigosRecuperacion = async (codigo: string): Promise<string[]> =>
+  (await llamarDosPasos<{ codigos_recuperacion: string[] }>('codigos-recuperacion', 'POST', { codigo }, 'No se pudieron generar los códigos')).codigos_recuperacion;
+
+/** Un superior borra el segundo factor de quien perdió el teléfono y los códigos; le cierra las sesiones. */
+export const restablecerDosPasos = async (usuarioId: string): Promise<void> => {
+  const res = await apiFetch(`${BASE_URL}/api/usuarios/${usuarioId}/2fa`, { method: 'DELETE', headers: authHeaders() });
+  if (!res.ok) throw await errorDeDosPasos(res, 'No se pudo restablecer la verificación en dos pasos');
 };
 
 export interface AccesoActivo {
@@ -449,15 +567,49 @@ export interface PagoTarjetaInput {
  * se sustituirá por la integración real de Visanet en un sprint futuro. La
  * firma de esta función no debería cambiar cuando eso ocurra.
  */
+/** La pasarela rechazó la tarjeta (HTTP 402). No es un pago: el servidor no lo guarda. */
+export class PagoRechazadoError extends Error {
+  constructor(mensaje: string) {
+    super(mensaje);
+    this.name = 'PagoRechazadoError';
+  }
+}
+
 export const pagarConTarjeta = async (data: PagoTarjetaInput): Promise<Pago> => {
   const res = await apiFetch(`${BASE_URL}/api/pagos/tarjeta`, {
     method: 'POST',
     headers: authHeaders(),
     body: JSON.stringify(data),
   });
-  const body = await res.json();
+  const body = await res.json().catch(() => ({}));
+  if (res.status === 402) {
+    throw new PagoRechazadoError((body as { error?: string }).error || 'Pago rechazado');
+  }
   if (!res.ok) throw new Error((body as { error?: string }).error || 'Error al procesar el pago');
   return body as Pago;
+};
+
+export interface EstadoTarjeta {
+  /** El cobro con tarjeta está habilitado en este servidor. */
+  disponible: boolean;
+  /** La pasarela es la de prueba: solo entonces se muestran los avisos de «pago simulado». */
+  simulada: boolean;
+}
+
+/**
+ * Pregunta al servidor si hay pasarela y si es simulada. Si la consulta falla se asume que
+ * SÍ hay pasarela y que NO es simulada: no se esconde el botón por un fallo de red (el
+ * servidor responde con su propio mensaje si no está disponible) ni se muestra un aviso de
+ * «entorno de prueba» sin saberlo.
+ */
+export const getEstadoTarjeta = async (): Promise<EstadoTarjeta> => {
+  try {
+    const res = await apiFetch(`${BASE_URL}/api/pagos/tarjeta/estado`, { headers: authHeaders() });
+    if (!res.ok) throw new Error('estado');
+    return await res.json() as EstadoTarjeta;
+  } catch {
+    return { disponible: true, simulada: false };
+  }
 };
 
 export const getMisPagos = async (): Promise<Pago[]> => {
@@ -732,7 +884,11 @@ export const getResidenteMe = async (): Promise<ResidenteMe> => {
 export interface DashboardData {
   accesos_hoy: number;
   residentes_mora: number;
+  /** Residentes registrados en el alcance; en 0 el panel enseña los primeros pasos. */
+  total_residentes?: number;
   pagos_pendientes: number;
+  /** Reservas en estado «pendiente de aprobación» dentro del alcance del usuario. */
+  reservas_pendientes?: number;
   accesos_recientes: Array<{
     id: string;
     nombre_visitante: string;
@@ -953,6 +1109,10 @@ export interface Empresa {
   suspendida_en: string | null;
   created_at: string;
   total_sucursales: number;
+  /** Hay un administrador de empresa activo. Ausente en respuestas de servidores anteriores. */
+  tiene_admin?: boolean;
+  /** Hay una invitación de administrador vigente (aún sin aceptar). */
+  invitacion_pendiente?: boolean;
 }
 
 export const suspenderEmpresa = async (id: string, motivo: string): Promise<Empresa> => {
@@ -1078,6 +1238,10 @@ export interface Sucursal {
   total_residentes: number;
   total_agentes: number;
   created_at: string;
+  /** Hay un administrador de sucursal activo. */
+  tiene_admin?: boolean;
+  /** Hay una invitación de administrador vigente (aún sin aceptar). */
+  invitacion_pendiente?: boolean;
 }
 
 export interface SucursalInput {
@@ -1158,6 +1322,8 @@ export interface Usuario {
   sucursal_nombre: string | null;
   activo: boolean;
   created_at: string;
+  /** Tiene la verificación en dos pasos activada (sólo la lista de administración lo informa). */
+  dos_pasos?: boolean;
 }
 
 export interface UsuarioInput {
@@ -1183,6 +1349,39 @@ export const createUsuario = async (data: UsuarioInput): Promise<Usuario> => {
   const body = await res.json();
   if (!res.ok) throw new Error((body as { error?: string }).error || 'Error al crear usuario');
   return body as Usuario;
+};
+
+export interface UsuarioCambios {
+  nombre?: string;
+  email?: string;
+  /** Solo `agente` o `admin_sucursal`. */
+  rol?: string;
+  /** Opcional: vacío o ausente conserva la contraseña actual. */
+  password?: string;
+}
+
+/** Edita a un usuario del personal. Alcance y reglas: backend `updateUsuario`. */
+export const updateUsuario = async (id: string, cambios: UsuarioCambios): Promise<Usuario> => {
+  const res = await apiFetch(`${BASE_URL}/api/usuarios/${id}`, {
+    method: 'PUT',
+    headers: authHeaders(),
+    body: JSON.stringify(cambios),
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error((body as { error?: string }).error || 'Error al editar usuario');
+  return body as Usuario;
+};
+
+/** Baja lógica: el usuario deja de poder entrar y se le cierran las sesiones. */
+export const desactivarUsuario = async (id: string): Promise<void> => {
+  const res = await apiFetch(`${BASE_URL}/api/usuarios/${id}`, {
+    method: 'DELETE',
+    headers: authHeaders(),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error((body as { error?: string }).error || 'Error al dar de baja al usuario');
+  }
 };
 
 export interface Preferencias {
@@ -1226,9 +1425,12 @@ export interface Blacklist {
   fecha_fin: string | null;
   activo: boolean;
   created_at: string;
-  visitante_id: string;
-  visitante_nombre: string;
-  numero_dpi: string;
+  /** Vacíos cuando se bloqueó solo un vehículo (placa) sin visitante conocido. */
+  visitante_id: string | null;
+  visitante_nombre: string | null;
+  numero_dpi: string | null;
+  /** Placa normalizada (P123ABC) si el bloqueo es por vehículo. */
+  placa: string | null;
   sucursal_nombre: string;
   creado_por_nombre: string;
 }
@@ -1239,7 +1441,9 @@ export type BlacklistEntry = Blacklist;
 export type BlacklistDuracion = 'temporal_dias' | '30_dias' | 'indefinido';
 
 export interface BlacklistInput {
-  visitante_id: string;
+  /** Se necesita `visitante_id` o `placa` (o las dos). */
+  visitante_id?: string;
+  placa?: string;
   razon: string;
   duracion: BlacklistDuracion;
   dias?: number;
@@ -1250,6 +1454,8 @@ export interface VisitanteBasico {
   id: string;
   nombre: string;
   numero_dpi: string;
+  /** Presente al buscar por placa: el vehículo que coincidió. */
+  placa?: string | null;
 }
 
 export interface VisitanteFrecuente {
@@ -1264,6 +1470,17 @@ export const buscarVisitantesPorDpi = async (dpi: string): Promise<VisitanteBasi
   if (dpi.length < 3) return [];
   const res = await apiFetch(
     `${BASE_URL}/api/visitantes?dpi=${encodeURIComponent(dpi)}`,
+    { headers: authHeaders() }
+  );
+  if (!res.ok) return [];
+  return res.json() as Promise<VisitanteBasico[]>;
+};
+
+/** «Buscar visitante por DPI o placa»: la placa se compara sin guiones ni espacios y sin importar mayúsculas. */
+export const buscarVisitantesPorPlaca = async (placa: string): Promise<VisitanteBasico[]> => {
+  if (placa.replace(/[^A-Za-z0-9]/g, '').length < 3) return [];
+  const res = await apiFetch(
+    `${BASE_URL}/api/visitantes?placa=${encodeURIComponent(placa)}`,
     { headers: authHeaders() }
   );
   if (!res.ok) return [];
@@ -1332,7 +1549,10 @@ export interface Anuncio {
   created_at: string;
   sucursal_nombre: string;
   creado_por_nombre: string;
+  /** Residentes que ya lo abrieron. */
   total_lecturas: number;
+  /** Residentes de la sucursal, que son quienes pueden verlo. Ausente en servidores anteriores. */
+  total_residentes?: number;
 }
 
 export interface AnuncioInput {
@@ -1354,6 +1574,8 @@ export interface MiAnuncio {
   created_at: string;
   leido: boolean;
   leido_at: string | null;
+  /** Aviso dirigido a este residente (no un comunicado para toda la comunidad). */
+  es_personal?: boolean;
 }
 
 export const getAnuncios = async (): Promise<Anuncio[]> => {
@@ -1634,9 +1856,16 @@ export interface AuditLog {
   usuario_email: string | null;
   accion: string;
   tabla_afectada: string | null;
+  registro_id?: string | null;
   ip_address: string | null;
   sucursal_id: string | null;
+  /** Código HTTP con el que terminó la acción: 2xx salió bien, 429 la frenó un límite, 4xx se rechazó. */
+  status_code?: number | null;
+  /** Detalle: el correo intentado en un login, el límite que bloqueó, el guard que denegó… Nunca contraseñas. */
+  datos_nuevos?: Record<string, unknown> | null;
 }
+
+export type AuditEstado = 'ok' | 'rechazado' | 'bloqueado' | 'error';
 
 export const getAuditLogs = async (params: {
   limit?: number;
@@ -1645,6 +1874,10 @@ export const getAuditLogs = async (params: {
   usuario_id?: string;
   desde?: string;
   hasta?: string;
+  /** Resultado de la acción según su código HTTP. */
+  estado?: AuditEstado;
+  /** Persona (nombre o correo de la cuenta) o correo intentado en un login. */
+  buscar?: string;
 }): Promise<{ logs: AuditLog[]; total: number }> => {
   const url = new URL(`${BASE_URL}/api/audit-logs`);
   if (params.limit  !== undefined) url.searchParams.set('limit',  String(params.limit));
@@ -1653,10 +1886,21 @@ export const getAuditLogs = async (params: {
   if (params.usuario_id) url.searchParams.set('usuario_id', params.usuario_id);
   if (params.desde)      url.searchParams.set('desde',      params.desde);
   if (params.hasta)      url.searchParams.set('hasta',      params.hasta);
+  if (params.estado)     url.searchParams.set('estado',     params.estado);
+  if (params.buscar)     url.searchParams.set('buscar',     params.buscar);
 
   const res = await apiFetch(url.toString(), { headers: authHeaders() });
   if (!res.ok) throw new Error('Error al cargar logs de auditoría');
   return res.json() as Promise<{ logs: AuditLog[]; total: number }>;
+};
+
+export interface AuditAccion { accion: string; total: number; ultima: string }
+
+/** Acciones que existen en la bitácora (con su cantidad): llenan el filtro del panel. */
+export const getAuditAcciones = async (): Promise<AuditAccion[]> => {
+  const res = await apiFetch(`${BASE_URL}/api/audit-logs/acciones`, { headers: authHeaders() });
+  if (!res.ok) throw new Error('Error al cargar las acciones de auditoría');
+  return ((await res.json()) as { acciones: AuditAccion[] }).acciones;
 };
 
 

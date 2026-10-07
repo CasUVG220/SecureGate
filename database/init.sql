@@ -7,7 +7,7 @@ CREATE TABLE IF NOT EXISTS empresas (
   id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   nombre     VARCHAR(150) NOT NULL,
   nit        VARCHAR(20),
-  logo_url   VARCHAR(500),
+  logo_url   TEXT,
   activo     BOOLEAN NOT NULL DEFAULT TRUE,
   created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
@@ -354,9 +354,19 @@ END $$;
 -- widen date columns to TIMESTAMP, drop the single-ban unique constraint).
 ALTER TABLE visitante_blacklist DROP CONSTRAINT IF EXISTS visitante_blacklist_visitante_id_sucursal_id_key;
 ALTER TABLE visitante_blacklist DROP COLUMN IF EXISTS tipo;
-ALTER TABLE visitante_blacklist ALTER COLUMN fecha_inicio TYPE TIMESTAMP USING fecha_inicio::timestamp;
+-- Solo si todavía son DATE (el esquema original): en cada arranque esto volvía a dejarlas en TIMESTAMP y deshacía la
+-- conversión a TIMESTAMPTZ del final de este archivo (S-17).
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = current_schema()
+              AND table_name = 'visitante_blacklist' AND column_name = 'fecha_inicio' AND data_type = 'date') THEN
+    ALTER TABLE visitante_blacklist ALTER COLUMN fecha_inicio TYPE TIMESTAMP USING fecha_inicio::timestamp;
+  END IF;
+  IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = current_schema()
+              AND table_name = 'visitante_blacklist' AND column_name = 'fecha_fin' AND data_type = 'date') THEN
+    ALTER TABLE visitante_blacklist ALTER COLUMN fecha_fin TYPE TIMESTAMP USING fecha_fin::timestamp;
+  END IF;
+END $$;
 ALTER TABLE visitante_blacklist ALTER COLUMN fecha_inicio SET DEFAULT NOW();
-ALTER TABLE visitante_blacklist ALTER COLUMN fecha_fin    TYPE TIMESTAMP USING fecha_fin::timestamp;
 CREATE INDEX IF NOT EXISTS idx_bl_visitante_activo ON visitante_blacklist(visitante_id, activo);
 
 -- ── S6: Reservas de áreas comunes ─────────────────────────────────────────
@@ -654,5 +664,141 @@ EXCEPTION WHEN duplicate_column THEN NULL;
 END $$;
 
 CREATE INDEX IF NOT EXISTS idx_audit_sucursal ON audit_logs(sucursal_id);
+
+-- ── Lista negra por placa (SCRUM-110 / H03) ────────────────────────────────
+-- Decisión de modelo (la más simple y segura): NO hay una tabla aparte. Una entrada
+-- de `visitante_blacklist` identifica al visitante (visitante_id, que ya viene del
+-- DPI) o, sin conocerlo, solo a un vehículo (placa). Así reutiliza vigencia, motivo,
+-- aislamiento por sucursal, auditoría y "quitar bloqueo" que ya tiene el DPI.
+-- La placa se guarda NORMALIZADA (mayúsculas, sin separadores: P123ABC) y se compara
+-- siempre normalizada, de modo que "p-123 abc" y "P123ABC" son el mismo vehículo.
+ALTER TABLE visitante_blacklist ALTER COLUMN visitante_id DROP NOT NULL;
+
+DO $$ BEGIN
+  ALTER TABLE visitante_blacklist ADD COLUMN placa VARCHAR(20);
+EXCEPTION WHEN duplicate_column THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  ALTER TABLE visitante_blacklist ADD CONSTRAINT visitante_blacklist_objetivo_chk
+    CHECK (visitante_id IS NOT NULL OR placa IS NOT NULL);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  ALTER TABLE visitante_blacklist ADD CONSTRAINT visitante_blacklist_placa_chk
+    CHECK (placa IS NULL OR placa ~ '^[A-Z0-9]{3,20}$');
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+CREATE INDEX IF NOT EXISTS idx_bl_placa ON visitante_blacklist(sucursal_id, placa) WHERE placa IS NOT NULL;
+
+-- ── Logo de la empresa como archivo (SCRUM-115 / H12) ──────────────────────
+-- Antes el logo era una URL (VARCHAR(500)) que alguien tenía que alojar aparte. Ahora puede subirse como imagen
+-- (PNG/JPG/WebP reescalada en el navegador) y se guarda como data URI en la misma columna, como ya se hace con la
+-- foto de las áreas comunes. La columna pasa a TEXT (solo la primera vez: en cada arranque no se vuelve a tocar) y un
+-- CHECK acota el tamaño por si algo se salta la validación de la API.
+DO $$ BEGIN
+  IF (SELECT data_type FROM information_schema.columns
+       WHERE table_schema = current_schema() AND table_name = 'empresas' AND column_name = 'logo_url') <> 'text' THEN
+    ALTER TABLE empresas ALTER COLUMN logo_url TYPE TEXT;
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  ALTER TABLE empresas ADD CONSTRAINT empresas_logo_url_largo_chk
+    CHECK (logo_url IS NULL OR char_length(logo_url) <= 300000);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+-- ── Refresh tokens: familias y detección de reutilización (SCRUM-124 / S-06) ───────────────────────
+-- Cada inicio de sesión abre una FAMILIA (`familia_id`); cada renovación rota el token dentro de ella. Un token que ya
+-- fue rotado y se presenta otra vez pasada la ventana de gracia significa que alguien más tiene una copia (robo): se
+-- revoca la familia entera y queda auditado (REFRESH_REUTILIZADO). `rotado_en` marca los revocados POR ROTACIÓN (a
+-- diferencia de los revocados por cierre de sesión, cambio de contraseña o suspensión, que no son señal de robo);
+-- `revoked_at` dice cuándo se revocó cualquiera; `reemplazado_por` es el sucesor. Las filas anteriores quedan, cada una,
+-- como su propia familia (no hay manera de reconstruir el linaje). Las columnas nuevas usan TIMESTAMPTZ (ver S-17).
+ALTER TABLE refresh_tokens ADD COLUMN IF NOT EXISTS familia_id UUID;
+UPDATE refresh_tokens SET familia_id = gen_random_uuid() WHERE familia_id IS NULL;
+ALTER TABLE refresh_tokens ALTER COLUMN familia_id SET DEFAULT gen_random_uuid();
+ALTER TABLE refresh_tokens ALTER COLUMN familia_id SET NOT NULL;
+ALTER TABLE refresh_tokens ADD COLUMN IF NOT EXISTS rotado_en TIMESTAMPTZ;
+ALTER TABLE refresh_tokens ADD COLUMN IF NOT EXISTS revoked_at TIMESTAMPTZ;
+ALTER TABLE refresh_tokens ADD COLUMN IF NOT EXISTS reemplazado_por UUID;
+-- Por qué se cerró un token que NO se rotó: 'reutilizacion' = lo cerró la detección de robo (el dueño legítimo debe enterarse).
+ALTER TABLE refresh_tokens ADD COLUMN IF NOT EXISTS cierre_motivo VARCHAR(30);
+CREATE INDEX IF NOT EXISTS idx_rt_familia ON refresh_tokens(familia_id);
+
+-- ── Verificación en dos pasos para administradores (SCRUM-123) ─────────────
+-- Una fila por persona que empezó a configurarla; `activado` sigue en FALSE hasta que confirma su primer código.
+-- El secreto TOTP NUNCA va en claro: se guarda cifrado (AES-256-GCM, ver backend/src/utils/twofa.ts). `ultimo_paso` es el
+-- último intervalo de 30 s aceptado, para que un código usado no valga dos veces. `intentos_fallidos`, `ultimo_fallo_en` y
+-- `bloqueado_hasta` limitan los intentos POR PERSONA (5 fallos en 15 min → 15 min bloqueada), vengan de cuántas IPs vengan.
+-- Estas tablas nuevas usan TIMESTAMPTZ (el resto del esquema usa TIMESTAMP, ver S-17 en backend/DEUDA_TECNICA.md).
+CREATE TABLE IF NOT EXISTS usuario_2fa (
+  usuario_id        UUID PRIMARY KEY REFERENCES usuarios(id) ON DELETE CASCADE,
+  secreto_cifrado   TEXT NOT NULL,
+  activado          BOOLEAN NOT NULL DEFAULT FALSE,
+  activado_en       TIMESTAMPTZ,
+  ultimo_paso       BIGINT,
+  intentos_fallidos INT NOT NULL DEFAULT 0 CHECK (intentos_fallidos >= 0),
+  ultimo_fallo_en   TIMESTAMPTZ,
+  bloqueado_hasta   TIMESTAMPTZ,
+  created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Códigos de recuperación: 10 por persona, de un solo uso, guardados como HMAC (con la base sola no se leen ni se adivinan).
+CREATE TABLE IF NOT EXISTS usuario_2fa_recuperacion (
+  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  usuario_id  UUID NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+  codigo_hash CHAR(64) NOT NULL,
+  usado_en    TIMESTAMPTZ,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (usuario_id, codigo_hash)
+);
+
+CREATE INDEX IF NOT EXISTS idx_2fa_recuperacion_usuario ON usuario_2fa_recuperacion(usuario_id);
+
+-- ── S-17 · TIMESTAMP → TIMESTAMPTZ (SCRUM-124 / SCRUM-177) ────────────────────────────────────────────
+-- Causa raíz del «desfase de 6 horas»: Postgres corre en UTC y el backend en America/Guatemala. Una columna TIMESTAMP guarda
+-- una hora de reloj SIN zona: lo que escribe `NOW()` es la hora UTC, pero `pg` la lee como si fuera hora local de Node, así
+-- que cada fecha llegaba 6 h corrida (la bitácora, la caducidad de las invitaciones, el bloqueo de un QR…). Con
+-- TIMESTAMPTZ la base guarda el INSTANTE y no hay nada que interpretar.
+--
+-- Cómo se convierten los datos que ya existen. Se conserva lo que Postgres ya hacía al COMPARAR contra NOW() (en una sesión
+-- UTC, la hora de reloj de una TIMESTAMP se leía como UTC), así que la regla general es `AT TIME ZONE 'UTC'`: ninguna
+-- comparación del SQL cambia de resultado. Las únicas columnas que NO escribió Postgres sino Node, con un `Date` serializado
+-- en hora de Guatemala, se leen con esa zona:
+--   · refresh_tokens.expires_at   (JS Date) — por eso un token duraba 6 d 18 h en vez de 7 d
+--   · visitante_blacklist.fecha_fin (JS Date)
+-- Desde aquí los `Date` de Node viajan con su zona y se guardan bien sin ninguna conversión.
+--
+-- La regla es general (todas las TIMESTAMP del esquema) para que ninguna se quede atrás, y es idempotente: solo toca lo que
+-- sigue siendo `timestamp without time zone`. Cada columna va en su propio sub-bloque: si una falla se avisa (WARNING) y las
+-- demás migraciones de este archivo —que corre como UNA transacción— no se pierden.
+DO $$
+DECLARE
+  c    RECORD;
+  zona TEXT;
+BEGIN
+  FOR c IN
+    SELECT col.table_name AS tabla, col.column_name AS columna
+      FROM information_schema.columns col
+      JOIN information_schema.tables t
+        ON t.table_schema = col.table_schema AND t.table_name = col.table_name AND t.table_type = 'BASE TABLE'
+     WHERE col.table_schema = current_schema()
+       AND col.data_type = 'timestamp without time zone'
+     ORDER BY col.table_name, col.ordinal_position
+  LOOP
+    zona := CASE WHEN (c.tabla, c.columna) IN (('refresh_tokens', 'expires_at'), ('visitante_blacklist', 'fecha_fin'))
+                 THEN 'America/Guatemala' ELSE 'UTC' END;
+    BEGIN
+      EXECUTE format('ALTER TABLE %I ALTER COLUMN %I TYPE TIMESTAMPTZ USING %I AT TIME ZONE %L',
+                     c.tabla, c.columna, c.columna, zona);
+    EXCEPTION WHEN OTHERS THEN
+      RAISE WARNING '[init] S-17: no se pudo convertir %.% a TIMESTAMPTZ (%): %', c.tabla, c.columna, zona, SQLERRM;
+    END;
+  END LOOP;
+END $$;
 
 SELECT 'SecureGate DB inicializada correctamente' AS mensaje;

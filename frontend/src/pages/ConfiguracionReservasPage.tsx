@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { getConfigReservas, updateConfigReservas, type ConfigReservas } from '../services/api';
-import { FormSkeleton, Spinner } from '../components/Skeleton';
+import { FormSkeleton } from '../components/Skeleton';
+import { Button, FormActions } from '../components/ui';
+import { useCambiosSinGuardar } from '../hooks/useCambiosSinGuardar';
 import { useToast } from '../components/Toast';
 import { useTranslation } from '../i18n/useTranslation';
 
@@ -18,7 +20,7 @@ function Campo({
 }
 
 const INPUT =
-  'w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-blue-500';
+  'w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-brand-500';
 
 export default function ConfiguracionReservasPage() {
   const { t } = useTranslation();
@@ -42,12 +44,14 @@ export default function ConfiguracionReservasPage() {
     buffer_motivo: '',
   });
 
+  const { hayCambios, marcarGuardado } = useCambiosSinGuardar(form);
+
   useEffect(() => {
     getConfigReservas()
       .then(c => {
         setConfig(c);
         setEsDefault(!!c.es_default);
-        setForm({
+        const inicial = {
           permite_cancelacion: c.permite_cancelacion,
           horas_limite_cancelacion_completa: String(c.horas_limite_cancelacion_completa),
           horas_limite_cancelacion_parcial: String(c.horas_limite_cancelacion_parcial),
@@ -59,11 +63,13 @@ export default function ConfiguracionReservasPage() {
           requiere_aprobacion_admin: c.requiere_aprobacion_admin,
           buffer_minutos_entre_reservas: String(c.buffer_minutos_entre_reservas),
           buffer_motivo: c.buffer_motivo ?? '',
-        });
+        };
+        setForm(inicial);
+        marcarGuardado(inicial);
       })
       .catch(() => setError('No se pudo cargar la configuración de reservas.'))
       .finally(() => setLoading(false));
-  }, []);
+  }, [marcarGuardado]);
 
   const handleSave = async () => {
     const completa = Number(form.horas_limite_cancelacion_completa);
@@ -93,6 +99,7 @@ export default function ConfiguracionReservasPage() {
       });
       setConfig(saved);
       setEsDefault(false);
+      marcarGuardado(form);
       showToast(t('reservas.configSaved'));
     } catch (err) {
       setFormError(err instanceof Error ? err.message : t('common.error'));
@@ -104,7 +111,7 @@ export default function ConfiguracionReservasPage() {
   if (loading) return <div className="sg-page-inner"><FormSkeleton fields={5} /></div>;
   if (error && !config) {
     return (
-      <div className="bg-red-900/40 border border-red-700 rounded-lg px-4 py-3 text-red-300 text-sm">
+      <div className="bg-danger-900/40 border border-danger-700 rounded-lg px-4 py-3 text-danger-300 text-sm">
         {error}
       </div>
     );
@@ -118,13 +125,13 @@ export default function ConfiguracionReservasPage() {
       </div>
 
       {esDefault && (
-        <div className="bg-blue-900/30 border border-blue-700/50 rounded-lg px-4 py-3 text-blue-300 text-sm">
+        <div className="bg-brand-900/30 border border-brand-700/50 rounded-lg px-4 py-3 text-brand-300 text-sm">
           {t('reservas.usingDefaults')}
         </div>
       )}
 
       {formError && (
-        <div className="bg-red-900/40 border border-red-700 rounded-lg px-4 py-3 text-red-300 text-sm">
+        <div className="bg-danger-900/40 border border-danger-700 rounded-lg px-4 py-3 text-danger-300 text-sm">
           {formError}
         </div>
       )}
@@ -234,14 +241,12 @@ export default function ConfiguracionReservasPage() {
           />
         </Campo>
 
-        <button
-          onClick={handleSave}
-          disabled={saving}
-          className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-semibold px-6 py-2 rounded-xl transition-colors flex items-center gap-2"
-        >
-          {saving && <Spinner size={14} />}
-          {saving ? t('common.saving') : t('common.save')}
-        </button>
+        {/* «Guardar» fijo al pie: el formulario es largo y el botón no debe quedar fuera de vista. */}
+        <FormActions nota={hayCambios ? t('common.unsavedChanges') : undefined}>
+          <Button onClick={handleSave} loading={saving} className="px-6">
+            {saving ? t('common.saving') : t('common.save')}
+          </Button>
+        </FormActions>
       </div>
     </div>
   );

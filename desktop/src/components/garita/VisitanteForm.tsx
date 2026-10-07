@@ -6,11 +6,12 @@
  * teclear el número y el agente puede forzarlo; viaja hasta el backend para
  * auditoría.
  */
-import { forwardRef, useEffect, useImperativeHandle, useState, type FormEvent } from 'react';
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState, type FormEvent } from 'react';
 import { Alert } from '../shared/Alert';
 import { Button, Input, Textarea } from '../ui';
 import { api, mensajeDe, type Evaluacion, type InvitacionQr, type Residente, type ResultadoApertura } from '../../lib/tauri';
 import { esValida, formatear, normalizar } from '../../lib/placa';
+import { diaCorto } from '../../lib/tiempo';
 
 export interface VisitanteFormHandle {
   /** Rellena la placa (desde el OCR). */
@@ -19,6 +20,8 @@ export interface VisitanteFormHandle {
   setDesdeOcrDpi: (nombre: string, numeroDpi: string) => void;
   /** Rellena el formulario con una invitación QR ya verificada. */
   setDesdeQr: (inv: InvitacionQr) => void;
+  /** Lleva el cursor al campo de la placa (alternativa a la cámara: «Escribir placa»). */
+  enfocarPlaca: () => void;
 }
 
 interface Props {
@@ -48,9 +51,14 @@ export const VisitanteForm = forwardRef<VisitanteFormHandle, Props>(function Vis
   const [enviando, setEnviando] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [ok, setOk] = useState<string | null>(null);
+  const placaRef = useRef<HTMLInputElement>(null);
 
   useImperativeHandle(ref, () => ({
     setPlaca: p => setPlaca(p),
+    enfocarPlaca: () => {
+      placaRef.current?.focus();
+      placaRef.current?.scrollIntoView?.({ block: 'center', behavior: 'smooth' });
+    },
     setDesdeOcrDpi: (n, d) => {
       if (n) setNombre(n);
       if (d) { setDpi(d); setManual(false); }
@@ -155,9 +163,10 @@ export const VisitanteForm = forwardRef<VisitanteFormHandle, Props>(function Vis
           error={dpi && !DPI_RE.test(dpi) ? 'Debe tener 13 dígitos' : null}
         />
         <Input
+          ref={placaRef}
           label="Placa (opcional)"
           className={CAMPO_GRANDE}
-          placeholder="P123ABC"
+          placeholder="P-123ABC"
           value={placa}
           onChange={e => setPlaca(e.target.value.toUpperCase())}
           error={placa && !esValida(placa) ? 'Formato: prefijo + 3 dígitos + 3 letras' : null}
@@ -174,14 +183,22 @@ export const VisitanteForm = forwardRef<VisitanteFormHandle, Props>(function Vis
           {qr.etiqueta ? ` · ${qr.etiqueta}` : ''}
           {qr.usos_maximos != null && ` · uso ${qr.usos_actuales + 1} de ${qr.usos_maximos}`}
           {!qr.numero_dpi && '. Pide el DPI y captúralo antes de registrar.'}
+          {qr.validada_sin_conexion && (
+            <span data-testid="qr-sin-conexion" className="mt-1 block text-xs">
+              Validada sin conexión con la copia de este equipo: el servidor la confirma al sincronizar.
+            </span>
+          )}
         </Alert>
       )}
 
       {evaluacion && (
         bloqueado
-          ? <Alert tone="bad"><strong>En lista negra:</strong> {evaluacion.razon_bloqueo}. No se puede registrar el acceso.</Alert>
+          ? <Alert tone="bad">
+              <strong>{evaluacion.motivo_bloqueo === 'placa' ? 'Vehículo en lista negra:' : 'En lista negra:'}</strong>{' '}
+              {evaluacion.razon_bloqueo}. No se puede registrar el acceso.
+            </Alert>
           : evaluacion.preautorizado
-            ? <Alert tone="ok">Preautorizado por el residente{evaluacion.preautorizacion?.fecha_fin ? ` hasta ${evaluacion.preautorizacion.fecha_fin}` : ''}.</Alert>
+            ? <Alert tone="ok">Visita avisada por el residente{evaluacion.preautorizacion?.fecha_fin ? ` hasta el ${diaCorto(evaluacion.preautorizacion.fecha_fin)}` : ''}.</Alert>
             : null
       )}
 
@@ -236,7 +253,15 @@ export const VisitanteForm = forwardRef<VisitanteFormHandle, Props>(function Vis
       {error && <Alert tone="bad">{error}</Alert>}
       {ok && <Alert tone="ok">{ok}</Alert>}
 
-      <div className="flex justify-end gap-3 pt-1">
+      <div className="flex flex-wrap items-center justify-end gap-3 pt-1">
+        {/* El motivo de un botón apagado se lee en pantalla, no solo en el tooltip. */}
+        {(!habilitado || bloqueado) && (
+          <p role="status" className="mr-auto text-xs font-medium text-warning-400">
+            {!habilitado
+              ? 'No se puede registrar: revisa la licencia o la sesión del agente.'
+              : 'No se puede registrar: el visitante o el vehículo está en la lista negra.'}
+          </p>
+        )}
         <Button variant="ghost" onClick={limpiar}>Limpiar</Button>
         <Button type="submit" size="lg" loading={enviando} disabled={!habilitado || bloqueado}>
           Registrar entrada

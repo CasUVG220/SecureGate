@@ -10,7 +10,14 @@ export const getEmpresas = async (_req: Request, res: Response) => {
     const result = await pool.query(
       // Sin filtrar por activo: es la vista del owner, que necesita ver (y
       // poder reactivar) las empresas dadas de baja o suspendidas.
-      `SELECT e.*, COUNT(s.id)::int AS total_sucursales
+      // `tiene_admin` / `invitacion_pendiente` alimentan el aviso «sin administrador»:
+      // una empresa recién creada no sirve de nada hasta que alguien la administre.
+      `SELECT e.*, COUNT(s.id)::int AS total_sucursales,
+              EXISTS (SELECT 1 FROM usuarios a
+                       WHERE a.empresa_id = e.id AND a.rol = 'admin_empresa' AND a.activo = TRUE) AS tiene_admin,
+              EXISTS (SELECT 1 FROM invitaciones i
+                       WHERE i.empresa_id = e.id AND i.rol_invitado = 'admin_empresa'
+                         AND i.estado = 'pendiente' AND i.expira_en > NOW()) AS invitacion_pendiente
        FROM empresas e
        LEFT JOIN sucursales s ON s.empresa_id = e.id AND s.activo = TRUE
        GROUP BY e.id
@@ -22,10 +29,27 @@ export const getEmpresas = async (_req: Request, res: Response) => {
   }
 };
 
-/** El logo se pinta como <img src>; sólo se aceptan URLs http(s) razonables. */
-const LOGO_RE = /^https?:\/\/[^\s"'<>]{4,500}$/i;
-const logoInvalido = (v: unknown): boolean =>
-  v !== undefined && v !== null && v !== '' && (typeof v !== 'string' || !LOGO_RE.test(v));
+/**
+ * El logo se pinta como <img src>. Se acepta:
+ *   - una URL http(s) razonable (las que ya existían), o
+ *   - una imagen subida como archivo: data URI PNG / JPEG / WebP en base64 de hasta 200 KB (el navegador la reescala
+ *     antes de enviarla). Nada de SVG: puede llevar scripts y aquí no hay motivo para aceptarlo.
+ */
+const LOGO_URL_RE = /^https?:\/\/[^\s"'<>]{4,500}$/i;
+const LOGO_DATA_RE = /^data:image\/(?:png|jpeg|webp);base64,([A-Za-z0-9+/]+={0,2})$/;
+export const LOGO_MAX_BYTES = 200 * 1024;
+
+const logoInvalido = (v: unknown): boolean => {
+  if (v === undefined || v === null || v === '') return false;
+  if (typeof v !== 'string') return true;
+  if (LOGO_URL_RE.test(v)) return false;
+  const m = LOGO_DATA_RE.exec(v);
+  if (!m) return true;
+  const relleno = (m[1].match(/=+$/)?.[0].length ?? 0);
+  return Math.floor((m[1].length * 3) / 4) - relleno > LOGO_MAX_BYTES;
+};
+
+const ERROR_LOGO = 'El logo debe ser una URL http(s) o una imagen PNG, JPG o WebP de hasta 200 KB';
 
 export const createEmpresa = async (req: Request, res: Response) => {
   const { nombre, nit, logo_url } = req.body;
@@ -33,7 +57,7 @@ export const createEmpresa = async (req: Request, res: Response) => {
     return res.status(400).json({ error: 'Campo requerido: nombre' });
   }
   if (logoInvalido(logo_url)) {
-    return res.status(400).json({ error: 'logo_url debe ser una URL http(s) válida' });
+    return res.status(400).json({ error: ERROR_LOGO });
   }
 
   try {
@@ -59,7 +83,7 @@ export const revocarSesionesDeEmpresa = async (db: import('pg').PoolClient | imp
   // Access tokens vigentes de toda la empresa: se cortan ya (utils/revocacion.ts).
   revocarAccesoDeEmpresa(empresaId);
   await db.query(
-    `UPDATE refresh_tokens SET revoked = TRUE
+    `UPDATE refresh_tokens SET revoked = TRUE, revoked_at = NOW()
      WHERE revoked = FALSE AND usuario_id IN (
        SELECT u.id FROM usuarios u
        LEFT JOIN sucursales s ON s.id = u.sucursal_id
@@ -74,8 +98,10 @@ export const revocarSesionesDeEmpresa = async (db: import('pg').PoolClient | imp
  * Desde este momento el login y las licencias de garita (activar, heartbeat,
  * sync) de la empresa responden 423 con el motivo; nada se borra ni se
  * desactiva. Las sesiones que YA estaban abiertas se cortan aquí mismo
- * (access tokens y refresh tokens revocados), así que su siguiente /auth/refresh
- * responde 401 y no 423: el cliente ve el motivo al volver a iniciar sesión.
+ * (access tokens y refresh tokens revocados). Su siguiente /auth/refresh responde
+ * 423 con el motivo (aunque el token ya esté revocado, S-11): el cliente muestra
+ * el aviso en vez de caer al login sin explicación. Con la empresa reactivada
+ * ese mismo token sigue revocado y responde 401: hay que iniciar sesión de nuevo.
  */
 export const suspenderEmpresa = async (req: Request, res: Response) => {
   const { id } = req.params;
@@ -126,19 +152,22 @@ export const updateEmpresa = async (req: Request, res: Response) => {
   const { id } = req.params;
   const { nombre, nit, logo_url, activo } = req.body;
   if (logoInvalido(logo_url)) {
-    return res.status(400).json({ error: 'logo_url debe ser una URL http(s) válida' });
+    return res.status(400).json({ error: ERROR_LOGO });
   }
+
+  // `logo_url` ausente = no se toca; presente pero vacío / null = se quita el logo; con valor = se reemplaza.
+  const tocaLogo = Object.prototype.hasOwnProperty.call(req.body, 'logo_url');
 
   try {
     const result = await pool.query(
       `UPDATE empresas
        SET nombre   = COALESCE($1, nombre),
            nit      = COALESCE($2, nit),
-           logo_url = COALESCE($3, logo_url),
-           activo   = COALESCE($4, activo)
-       WHERE id = $5
+           logo_url = CASE WHEN $3::boolean THEN $4::text ELSE logo_url END,
+           activo   = COALESCE($5, activo)
+       WHERE id = $6
        RETURNING *`,
-      [nombre ?? null, nit ?? null, logo_url ?? null, activo ?? null, id]
+      [nombre ?? null, nit ?? null, tocaLogo, logo_url || null, activo ?? null, id]
     );
 
     if (result.rows.length === 0) {

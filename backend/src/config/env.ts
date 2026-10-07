@@ -46,10 +46,25 @@ export const validarJwtSecret = (env: NodeJS.ProcessEnv = process.env): { secret
   return { secret: crypto.randomBytes(48).toString('hex'), generado: true };
 };
 
+export const TWOFA_KEY_MIN = 32;
+
+/**
+ * TWOFA_KEY es OPCIONAL: sin ella, los secretos de la verificación en dos pasos se protegen con una llave derivada de
+ * JWT_SECRET. Sirve para poder rotar JWT_SECRET sin perderlos (se fija con el valor actual de JWT_SECRET antes de rotarlo,
+ * ver docs/verificacion_dos_pasos.md). Si se define, tiene que ser una llave de verdad, no un valor de relleno.
+ */
+export const validarTwofaKey = (env: NodeJS.ProcessEnv = process.env): void => {
+  const clave = env.TWOFA_KEY?.trim();
+  if (!clave) return;
+  if (SECRETOS_CONOCIDOS.has(clave)) throw new Error('TWOFA_KEY es un valor público conocido; genera uno propio (openssl rand -hex 32).');
+  if (clave.length < TWOFA_KEY_MIN) throw new Error(`TWOFA_KEY debe tener al menos ${TWOFA_KEY_MIN} caracteres (openssl rand -hex 32).`);
+};
+
 /** Aplica la validación sobre process.env. Lanza si el entorno no es seguro. */
 export const validarEntorno = (): void => {
   const { secret, generado } = validarJwtSecret();
   process.env.JWT_SECRET = secret;
+  validarTwofaKey();
   if (generado) {
     console.warn(
       '[env] JWT_SECRET no definido: se generó uno aleatorio para esta ejecución. ' +
@@ -64,8 +79,18 @@ export const validarEntorno = (): void => {
     if (/sgpassword123/.test(process.env.DATABASE_URL ?? '')) {
       throw new Error('DATABASE_URL usa la contraseña de desarrollo del repositorio; cámbiala en producción.');
     }
+    if (pagoSimuladoActivo()) {
+      throw new Error(
+        'PAGOS_TARJETA_SIMULADA está activada en producción: la pasarela simulada aprueba cualquier tarjeta ' +
+        'y liquida las deudas de los residentes. Quita la variable (solo es para desarrollo).',
+      );
+    }
   }
 };
+
+/** ¿Está encendida la pasarela de tarjeta simulada? Mismo criterio que scripts/deploy.sh. */
+export const pagoSimuladoActivo = (env: NodeJS.ProcessEnv = process.env): boolean =>
+  /^(true|1|yes|on|si|sí)$/i.test((env.PAGOS_TARJETA_SIMULADA ?? '').trim());
 
 /**
  * Saltos de proxy de confianza para `req.ip` (express `trust proxy`).

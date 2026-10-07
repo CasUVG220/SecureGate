@@ -27,6 +27,7 @@ pub mod hardware;
 mod hardware_cmd;
 mod license;
 mod ocr;
+mod placa;
 mod secure_store;
 mod sync;
 #[cfg(test)]

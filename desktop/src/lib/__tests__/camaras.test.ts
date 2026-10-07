@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import {
   ajustarPaneles, asignacionHuerfana, asignacionPorDefecto, etiquetaCamara, guardarDisposicion,
-  idDeQr, leerAsignacion, leerDisposicion, resolverDispositivo, STORAGE_KEY, guardarAsignacion,
+  idDeQr, idDeCodigoManual, esModoSalida, leerAsignacion, leerDisposicion, resolverDispositivo, STORAGE_KEY, guardarAsignacion,
   LAYOUT_STORAGE_KEY, DISPOSICION_POR_DEFECTO,
 } from '../camaras';
 
@@ -86,6 +86,31 @@ describe('idDeQr', () => {
     expect(idDeQr('SGQR:no-es-uuid')).toBeNull();
     expect(idDeQr(UUID)).toBeNull();
     expect(idDeQr('')).toBeNull();
+  });
+});
+
+describe('idDeCodigoManual (código escrito a mano cuando la cámara no sirve)', () => {
+  it('acepta lo que lee el escáner y el id solo, con o sin guiones, espacios o mayúsculas', () => {
+    expect(idDeCodigoManual(`SGQR:${UUID}`)).toBe(UUID);
+    expect(idDeCodigoManual(`  sgqr: ${UUID.toUpperCase()} `)).toBe(UUID);
+    expect(idDeCodigoManual(UUID)).toBe(UUID);
+    expect(idDeCodigoManual(UUID.replace(/-/g, ''))).toBe(UUID);
+    expect(idDeCodigoManual(UUID.replace(/-/g, ' '))).toBe(UUID);
+  });
+
+  it('rechaza lo que no es un id de invitación', () => {
+    for (const malo of ['', '  ', 'hola', 'SGQR:', UUID.slice(0, -1), `${UUID}0`, UUID.replace('3f1b', 'zzzz')]) {
+      expect(idDeCodigoManual(malo), JSON.stringify(malo)).toBeNull();
+    }
+  });
+});
+
+describe('esModoSalida', () => {
+  it('solo con una vista y la tarea de salida', () => {
+    expect(esModoSalida({ layout: 1, paneles: ['salida'] })).toBe(true);
+    expect(esModoSalida({ layout: 1, paneles: ['qr'] })).toBe(false);
+    expect(esModoSalida({ layout: 2, paneles: ['salida', 'qr'] })).toBe(false);
+    expect(esModoSalida({ layout: 4, paneles: ['qr', 'placa', 'dpi', 'salida'] })).toBe(false);
   });
 });
 

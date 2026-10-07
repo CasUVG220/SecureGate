@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { rellenar } from '../components/charts/format';
 import {
   getResidenteMe,
   getMisPreautorizaciones,
@@ -6,6 +7,8 @@ import {
   deleteMisPreautorizacion,
   getMisAccesos,
   getMisPagos,
+  getEstadoTarjeta,
+  type EstadoTarjeta,
   getMiResumenMes,
   type ResumenMes,
   crearTransferencia,
@@ -27,12 +30,19 @@ import { useTranslation } from '../i18n/useTranslation';
 import TicketChat, { TIPO_LABEL, ESTADO_BADGE, ESTADO_LABEL } from '../components/TicketChat';
 import QrInviteModal from '../components/QrInviteModal';
 import PagoTarjetaModal from '../components/PagoTarjetaModal';
-import { Badge, Button, ErrorState, ESTADO_PAGO_TONE, ROW_ICON, RowActions } from '../components/ui';
+import { Badge, Button, EmptyState, ErrorState, ESTADO_PAGO_TONE, Input, ROW_ICON, RowActions, StatusText, useConfirmacion } from '../components/ui';
+import AvisarVisitaModal, { type DatosVisita } from '../components/AvisarVisitaModal';
 import { useIsHandheld } from '../hooks/useMediaQuery';
+import { usePolling } from '../hooks/usePolling';
+import { diaISO, formatearFecha, formatearFechaHoraCorta, formatearRangoDias, hoyEnZona } from '../utils/fecha';
+import { formatearPlaca, normalizarPlaca } from '../utils/placa';
+import PlacaInput from '../components/PlacaInput';
+
+const ICON_VISITA = 'M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75';
 
 const TICKET_TIPOS: TicketTipo[] = ['mantenimiento', 'queja', 'seguridad', 'otro'];
 
-const today = () => new Date().toISOString().slice(0, 10);
+const today = hoyEnZona;
 
 const EMPTY_FORM = { nombre_visitante: '', numero_dpi: '', placa: '' };
 const EMPTY_TRF  = { monto: '', referencia: '', banco: '', fecha_transferencia: today() };
@@ -50,6 +60,7 @@ interface ResidentePageProps {
 export default function ResidentePage({ requestedTab, tabNonce = 0 }: ResidentePageProps = {}) {
   const showToast = useToast();
   const { t } = useTranslation();
+  const { confirmar, dialogo } = useConfirmacion();
   // En teléfono y tablet la barra inferior del shell ya ofrece estas mismas
   // secciones, así que la barra de pestañas sobra: duplicaba la navegación y
   // se comía una franja de una pantalla que va justa de alto.
@@ -95,6 +106,8 @@ export default function ResidentePage({ requestedTab, tabNonce = 0 }: ResidenteP
   const [enviando, setEnviando]           = useState(false);
   const [trfError, setTrfError]           = useState<string | null>(null);
   const [showTarjeta, setShowTarjeta]     = useState(false);
+  // Qué pasarela hay: los avisos de «pago simulado» solo se ven si el servidor dice que lo es.
+  const [estadoTarjeta, setEstadoTarjeta] = useState<EstadoTarjeta>({ disponible: true, simulada: false });
 
   // Invitados tab state
   const [preauths, setPreauths] = useState<MiPreautorizacion[]>([]);
@@ -108,6 +121,8 @@ export default function ResidentePage({ requestedTab, tabNonce = 0 }: ResidenteP
   const [saving, setSaving]     = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  /** «Avisar de una visita»: vacío o con los datos de un visitante guardado. */
+  const [avisoDlg, setAvisoDlg] = useState<{ abierto: boolean; inicial: DatosVisita | null }>({ abierto: false, inicial: null });
 
   // Invitaciones QR tab state
   const [qrInvites, setQrInvites]   = useState<InvitacionQr[]>([]);
@@ -142,6 +157,7 @@ export default function ResidentePage({ requestedTab, tabNonce = 0 }: ResidenteP
       .then(setData)
       .catch(() => setError('No se pudo cargar tu información.'))
       .finally(() => setLoading(false));
+    getEstadoTarjeta().then(setEstadoTarjeta);
     loadPagos();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -153,6 +169,10 @@ export default function ResidentePage({ requestedTab, tabNonce = 0 }: ResidenteP
   };
 
   const closeTicketChat = () => { setSelectedTicket(null); loadTickets(true); };
+
+  // El estado de cada solicitud (abierta → en proceso → cerrada) y los mensajes sin leer se
+  // actualizan solos cada 15 s mientras se mira la pestaña de solicitudes, sin recargar.
+  usePolling(async () => { setTickets(await getMisTickets()); }, 15_000, tab === 'solicitudes' && ticketsLoaded);
 
   useEffect(() => {
     if (!selectedTicket) return;
@@ -186,7 +206,13 @@ export default function ResidentePage({ requestedTab, tabNonce = 0 }: ResidenteP
   }, [requestedTab, tabNonce]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleRevokeQr = async (inv: InvitacionQr) => {
-    if (!window.confirm(t('qr.confirmRevoke'))) return;
+    const ok = await confirmar({
+      title: t('confirm.revokeQr.title'),
+      message: t('confirm.revokeQr.message'),
+      confirmLabel: t('qr.revoke'),
+      tone: 'danger',
+    });
+    if (!ok) return;
     setRevokingQrId(inv.id);
     try {
       await revocarInvitacionQr(inv.id);
@@ -207,9 +233,9 @@ export default function ResidentePage({ requestedTab, tabNonce = 0 }: ResidenteP
   };
 
   const QR_ESTADO_BADGE: Record<string, string> = {
-    active:    'bg-green-900/40 text-green-400',
+    active:    'bg-success-900/40 text-success-400',
     expired:   'bg-gray-700 text-gray-300',
-    exhausted: 'bg-amber-900/50 text-amber-400',
+    exhausted: 'bg-warning-900/50 text-warning-400',
   };
   const QR_ESTADO_LABEL: Record<string, string> = {
     active:    t('qr.statusActive'),
@@ -308,12 +334,13 @@ export default function ResidentePage({ requestedTab, tabNonce = 0 }: ResidenteP
       const created = await createMisPreautorizacion({
         nombre_visitante: form.nombre_visitante,
         numero_dpi:       form.numero_dpi || undefined,
-        placa:            form.placa || undefined,
+        placa:            normalizarPlaca(form.placa) || undefined,
         fecha_inicio:     today(),
       });
-      setPreauths(prev => [created, ...prev].filter(p => p.fecha_fin === null));
+      setPreauths(prev => [created, ...prev]);
       setShowForm(false);
       setForm(EMPTY_FORM);
+      showToast(t('aviso.saved.save'), 'success');
     } catch (err) {
       setFormError(err instanceof Error ? err.message : 'Error al guardar');
     } finally {
@@ -321,37 +348,39 @@ export default function ResidentePage({ requestedTab, tabNonce = 0 }: ResidenteP
     }
   };
 
-  const handlePreautHoy = async (p: MiPreautorizacion) => {
-    setFormError(null);
-    setSaving(true);
-    try {
-      await createMisPreautorizacion({
-        nombre_visitante: p.nombre_visitante,
-        numero_dpi:       p.numero_dpi || undefined,
-        placa:            p.placa || undefined,
-        fecha_inicio:     today(),
-        fecha_fin:        today(),
-      });
-      showToast('Preautorización de hoy creada', 'success');
-    } catch (err) {
-      showToast(err instanceof Error ? err.message : 'Error al preautorizar', 'error');
-    } finally {
-      setSaving(false);
-    }
-  };
+  /** Avisar de la visita de alguien ya guardado: abre el mismo formulario, con sus datos puestos. */
+  const avisarDe = (p: MiPreautorizacion) => setAvisoDlg({
+    abierto: true,
+    inicial: { nombre_visitante: p.nombre_visitante, numero_dpi: p.numero_dpi, placa: p.placa },
+  });
 
-  const handleDelete = async (id: string, nombre: string) => {
-    if (!window.confirm(`¿Eliminar la preautorización de ${nombre}?`)) return;
+  const handleDelete = async (id: string, nombre: string, guardado: boolean) => {
+    const clave = guardado ? 'deleteSavedVisitor' : 'deleteNotice';
+    const ok = await confirmar({
+      title: rellenar(t(`confirm.${clave}.title`), { nombre }),
+      message: t(`confirm.${clave}.message`),
+      confirmLabel: guardado ? t('common.delete') : t('common.delete'),
+      tone: 'danger',
+    });
+    if (!ok) return;
     setDeletingId(id);
     try {
       await deleteMisPreautorizacion(id);
       setPreauths(prev => prev.filter(p => p.id !== id));
-    } catch {
-      // silently ignore — the card stays
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'No se pudo eliminar', 'error');
     } finally {
       setDeletingId(null);
     }
   };
+
+  // Una fila sin fecha_fin es un visitante guardado (no autoriza nada); con fecha_fin es una visita avisada.
+  const hoyDia = today();
+  const estadoAviso = (p: MiPreautorizacion): 'hoy' | 'proxima' => ((diaISO(p.fecha_inicio) ?? '') > hoyDia ? 'proxima' : 'hoy');
+  const guardados = preauths.filter(p => p.fecha_fin === null);
+  const avisos = preauths
+    .filter(p => p.fecha_fin !== null && (diaISO(p.fecha_fin) ?? '') >= hoyDia)
+    .sort((a, b) => (diaISO(a.fecha_inicio) ?? '').localeCompare(diaISO(b.fecha_inicio) ?? ''));
 
   if (loading) {
     return (
@@ -398,7 +427,7 @@ export default function ResidentePage({ requestedTab, tabNonce = 0 }: ResidenteP
         <div className="mt-5 grid grid-cols-1 gap-4 border-t border-white/10 pt-5 sm:grid-cols-2">
           <div>
             <p className="text-gray-400 text-xs">{t('portal.pendingBalance')}</p>
-            <p className={`text-xl font-semibold mt-0.5 ${saldo > 0 ? 'text-red-400' : 'text-green-400'}`}>
+            <p className={`text-xl font-semibold mt-0.5 ${saldo > 0 ? 'text-danger-400' : 'text-success-400'}`}>
               Q{saldo.toFixed(2)}
             </p>
             {saldo > 0 && (
@@ -433,7 +462,7 @@ export default function ResidentePage({ requestedTab, tabNonce = 0 }: ResidenteP
               ? t('qr.tabTitle')
               : t('tickets.myTickets')}
             {tabKey === 'solicitudes' && ticketsUnread > 0 && (
-              <span className="absolute top-1.5 right-2 min-w-[16px] h-4 px-1 flex items-center justify-center rounded-full bg-red-600 text-white text-[10px] font-bold leading-none">
+              <span className="absolute top-1.5 right-2 min-w-[16px] h-4 px-1 flex items-center justify-center rounded-full bg-danger-600 text-white text-[10px] font-bold leading-none">
                 {ticketsUnread > 9 ? '9+' : ticketsUnread}
               </span>
             )}
@@ -466,7 +495,7 @@ export default function ResidentePage({ requestedTab, tabNonce = 0 }: ResidenteP
                 </ul>
                 <div className="flex justify-between gap-3 text-sm border-t border-gray-700 pt-2">
                   <span className="font-semibold text-gray-300">{t('reservas.monthTotal')}</span>
-                  <span className="font-bold text-emerald-400">
+                  <span className="font-bold text-success-400">
                     Q{resumenMes.total_pendiente.toFixed(2)}
                   </span>
                 </div>
@@ -480,7 +509,7 @@ export default function ResidentePage({ requestedTab, tabNonce = 0 }: ResidenteP
               <h2 className="text-base font-semibold text-white">{t('portal.makePayment')}</h2>
               <p className="text-sm text-gray-400 mt-0.5">
                 {t('portal.pendingBalance')}:{' '}
-                <span className={`font-semibold ${parseFloat(data!.saldo_pendiente) > 0 ? 'text-red-400' : 'text-emerald-400'}`}>
+                <span className={`font-semibold ${parseFloat(data!.saldo_pendiente) > 0 ? 'text-danger-400' : 'text-success-400'}`}>
                   Q{parseFloat(data!.saldo_pendiente).toFixed(2)}
                 </span>
               </p>
@@ -488,15 +517,21 @@ export default function ResidentePage({ requestedTab, tabNonce = 0 }: ResidenteP
 
             {!showTrf ? (
               <div className="space-y-3">
-                <button
-                  onClick={() => setShowTarjeta(true)}
-                    className="sg-btn sg-btn-primary flex w-full items-center justify-center gap-2"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
-                  </svg>
-                  {t('portal.payCard')}
-                </button>
+                {estadoTarjeta.disponible ? (
+                  <button
+                    onClick={() => setShowTarjeta(true)}
+                      className="sg-btn sg-btn-primary flex w-full items-center justify-center gap-2"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+                    </svg>
+                    {t('portal.payCard')}
+                  </button>
+                ) : (
+                  <p role="status" className="rounded-lg border border-gray-600 bg-gray-500/10 px-3 py-2.5 text-xs text-gray-300">
+                    {t('portal.cardUnavailable')}
+                  </p>
+                )}
                 <button
                   onClick={() => setShowTrf(true)}
                     className="sg-btn sg-btn-secondary flex w-full items-center justify-center gap-2"
@@ -515,7 +550,7 @@ export default function ResidentePage({ requestedTab, tabNonce = 0 }: ResidenteP
                     className="text-gray-400 hover:text-white text-xl leading-none">✕</button>
                 </div>
                 {trfError && (
-                  <p className="text-sm text-red-400 bg-red-900/30 border border-red-700/40 rounded-lg px-3 py-2">{trfError}</p>
+                  <p className="text-sm text-danger-400 bg-danger-900/30 border border-danger-700/40 rounded-lg px-3 py-2">{trfError}</p>
                 )}
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <div>
@@ -547,7 +582,7 @@ export default function ResidentePage({ requestedTab, tabNonce = 0 }: ResidenteP
                 {/* Image upload */}
                 <div>
                   <label className="block text-xs text-gray-400 mb-1">{t('portal.receiptImage')}</label>
-                  <label className="flex min-h-12 w-full cursor-pointer items-center gap-2 rounded-xl border border-dashed border-gray-500 bg-gray-700 px-3 py-2.5 transition-colors hover:border-emerald-400">
+                  <label className="flex min-h-12 w-full cursor-pointer items-center gap-2 rounded-xl border border-dashed border-gray-500 bg-gray-700 px-3 py-2.5 transition-colors hover:border-success-400">
                     <svg className="w-4 h-4 text-gray-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                     </svg>
@@ -560,7 +595,7 @@ export default function ResidentePage({ requestedTab, tabNonce = 0 }: ResidenteP
                     <div className="mt-2 relative">
                       <img src={imgPreview} alt="Vista previa" className="w-full max-h-40 object-contain rounded-lg border border-gray-600 bg-gray-900" />
                       <button type="button" onClick={() => { setImgBase64(null); setImgPreview(null); }}
-                        className="absolute top-1 right-1 bg-gray-900/80 hover:bg-red-900/80 text-gray-300 hover:text-red-300 rounded-full w-6 h-6 flex items-center justify-center text-xs transition-colors">
+                        className="absolute top-1 right-1 bg-gray-900/80 hover:bg-danger-900/80 text-gray-300 hover:text-danger-300 rounded-full w-6 h-6 flex items-center justify-center text-xs transition-colors">
                         ✕
                       </button>
                     </div>
@@ -589,14 +624,14 @@ export default function ResidentePage({ requestedTab, tabNonce = 0 }: ResidenteP
               <div className="flex items-center justify-center py-8">
                 <Spinner size={24} />
               </div>
-            ) : misPagos.length === 0 ? (
+            ) : misPagos.filter(p => p.estado !== 'rechazado').length === 0 ? (
               <p className="text-gray-400 text-sm text-center py-8">{t('portal.noPayments')}</p>
             ) : (
               <div className="space-y-3">
-                {misPagos.map(p => (
+                {misPagos.filter(p => p.estado !== 'rechazado').map(p => (
                   <div key={p.id} className="sg-card flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:gap-4">
-                    <div className="w-10 h-10 bg-emerald-900/40 rounded-full flex items-center justify-center border border-emerald-700/40 shrink-0">
-                      <svg className="w-5 h-5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <div className="w-10 h-10 bg-success-900/40 rounded-full flex items-center justify-center border border-success-700/40 shrink-0">
+                      <svg className="w-5 h-5 text-success-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                       </svg>
                     </div>
@@ -609,21 +644,41 @@ export default function ResidentePage({ requestedTab, tabNonce = 0 }: ResidenteP
                       </div>
                       <p className="text-gray-400 text-xs mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-1">
                         <span>
-                          {new Date(p.fecha_pago).toLocaleDateString('es-GT')} | {PAGO_METODO_LABEL[p.metodo] ?? p.metodo}
+                          {formatearFecha(p.fecha_pago)} | {PAGO_METODO_LABEL[p.metodo] ?? p.metodo}
                           {p.tarjeta_ultimos4 && ` ···· ${p.tarjeta_ultimos4}`}
                         </span>
-                        {p.es_simulado && <Badge tone="warning">{t('card.simulated')}</Badge>}
+                        {p.es_simulado && estadoTarjeta.simulada && <Badge tone="warning">{t('card.simulated')}</Badge>}
                       </p>
                       {p.referencia && (
                         <p className="text-gray-500 text-xs mt-0.5 font-mono">{p.referencia}</p>
-                      )}
-                      {p.estado === 'rechazado' && p.comentario_rechazo && (
-                        <p className="text-xs text-red-400/80 italic mt-1">Motivo: "{p.comentario_rechazo}"</p>
                       )}
                     </div>
                   </div>
                 ))}
               </div>
+            )}
+
+            {/* Un comprobante rechazado no es un pago: no va en el historial, pero el motivo
+                sigue a la mano para poder corregirlo y volver a enviarlo. */}
+            {misPagos.some(p => p.estado === 'rechazado') && (
+              <details className="mt-4 rounded-xl border border-gray-700 bg-gray-500/[0.04] px-4 py-3">
+                <summary className="cursor-pointer text-sm font-semibold text-gray-200">
+                  {t('portal.rejectedReceipts')} ({misPagos.filter(p => p.estado === 'rechazado').length})
+                </summary>
+                <p className="mt-2 text-xs text-gray-400">{t('portal.rejectedReceiptsHint')}</p>
+                <ul className="mt-2 space-y-2">
+                  {misPagos.filter(p => p.estado === 'rechazado').map(p => (
+                    <li key={p.id} className="text-sm text-gray-300">
+                      <span className="font-semibold">Q{parseFloat(p.monto).toFixed(2)}</span>
+                      {' · '}{formatearFecha(p.fecha_pago)}
+                      {p.referencia && <span className="font-mono text-xs text-gray-400"> · {p.referencia}</span>}
+                      {p.comentario_rechazo && (
+                        <span className="block text-xs italic text-danger-400">{t('portal.rejectedReason')}: "{p.comentario_rechazo}"</span>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </details>
             )}
           </div>
         </div>
@@ -631,136 +686,46 @@ export default function ResidentePage({ requestedTab, tabNonce = 0 }: ResidenteP
 
       {/* ── Tab: Invitados ── */}
       {tab === 'invitados' && (
-        <div className="space-y-8 lg:grid lg:grid-cols-2 lg:gap-8 lg:space-y-0">
+        <div className="space-y-8">
           {invLoading ? (
-            <CardSkeleton count={4} className="lg:col-span-2" />
+            <CardSkeleton count={4} />
           ) : (
             <>
-              {/* Visitantes guardados */}
-              <section>
-                <div className="flex items-center justify-between mb-4">
-                  <h2 className="text-base font-semibold text-white">Visitantes guardados</h2>
-                  {!showForm && (
-                    <button
-                      onClick={() => setShowForm(true)}
-                      className="sg-btn sg-btn-primary px-4 text-sm"
-                    >
-                      Guardar visitante
-                    </button>
-                  )}
+              {/* Visitas avisadas: lo que la garita está esperando */}
+              <section aria-labelledby="visitas-avisadas">
+                <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                  <h2 id="visitas-avisadas" className="text-base font-semibold text-white">{t('aviso.mine.title')}</h2>
+                  <Button onClick={() => setAvisoDlg({ abierto: true, inicial: null })}>{t('aviso.title')}</Button>
                 </div>
-
-                {/* Inline create form */}
-                {showForm && (
-                  <div ref={formRef}>
-                    <form onSubmit={handleSave} className="sg-card mb-4 space-y-4 p-5 sm:p-6">
-                      <h3 className="text-sm font-semibold text-white">Guardar datos del visitante</h3>
-                      <p className="text-xs text-gray-400">Guarda los datos para preautorizar con un clic en cualquier momento.</p>
-
-                      {formError && (
-                        <div role="alert" className="rounded-lg border border-danger-500/30 bg-danger-500/10 px-3 py-2 text-sm text-danger-400">
-                          {formError}
-                        </div>
-                      )}
-
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                        <div className="sm:col-span-3">
-                          <label className="block text-xs text-gray-400 mb-1">{t('portal.visitorName')} *</label>
-                          <input
-                            name="nombre_visitante"
-                            value={form.nombre_visitante}
-                            onChange={handleFormChange}
-                            required
-                            placeholder="Juan Pérez"
-                            className="sg-input"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-xs text-gray-400 mb-1">
-                            {t('portal.dpi')}
-                            <span className="ml-1 text-gray-500">(requerido si no hay placa)</span>
-                          </label>
-                          <input
-                            name="numero_dpi"
-                            value={form.numero_dpi}
-                            onChange={handleFormChange}
-                            placeholder="1234567890101"
-                            className="sg-input"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-xs text-gray-400 mb-1">
-                            {t('portal.plate')}
-                            <span className="ml-1 text-gray-500">(requerido si no hay DPI)</span>
-                          </label>
-                          <input
-                            name="placa"
-                            value={form.placa}
-                            onChange={handleFormChange}
-                            placeholder="P-123ABC"
-                            className="sg-input uppercase"
-                          />
-                        </div>
-                      </div>
-
-                      <div className="flex gap-3 pt-1">
-                        <button
-                          type="submit"
-                          disabled={saving}
-                          className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm font-medium px-5 py-2 rounded-lg transition-colors"
-                        >
-                          {saving ? t('common.saving') : 'Guardar'}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => { setShowForm(false); setFormError(null); setForm(EMPTY_FORM); }}
-                          className="bg-gray-700 hover:bg-gray-600 text-gray-200 text-sm font-medium px-5 py-2 rounded-lg transition-colors"
-                        >
-                          {t('common.cancel')}
-                        </button>
-                      </div>
-                    </form>
-                  </div>
-                )}
-
-                {/* Cards — only show saved data (fecha_fin === null) */}
-                {preauths.filter(p => p.fecha_fin === null).length === 0 ? (
-                  <p className="text-gray-400 text-sm text-center py-8">No hay visitantes guardados.</p>
+                {avisos.length === 0 ? (
+                  <EmptyState compact icon={ICON_VISITA} title={t('aviso.mine.empty')} description={t('aviso.mine.emptyHint')} />
                 ) : (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    {preauths.filter(p => p.fecha_fin === null).map(p => (
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                    {avisos.map(p => (
                       <div key={p.id} className="sg-card p-4">
                         <div className="flex items-start justify-between gap-2">
-                          <p className="font-semibold text-white text-sm">{p.nombre_visitante}</p>
-                          <span className="text-xs bg-gray-700 text-gray-300 px-2 py-0.5 rounded-full font-medium shrink-0">
-                            Guardado
-                          </span>
+                          <p className="text-sm font-semibold text-white">{p.nombre_visitante}</p>
+                          <StatusText kind={estadoAviso(p) === 'hoy' ? 'on' : 'warn'}>
+                            {t(estadoAviso(p) === 'hoy' ? 'aviso.state.current' : 'aviso.state.upcoming')}
+                          </StatusText>
                         </div>
                         <div className="mt-2 space-y-0.5 text-xs text-gray-400">
+                          <p className="text-gray-300">{formatearRangoDias(p.fecha_inicio, p.fecha_fin)}</p>
                           {p.numero_dpi && <p>{t('portal.dpi')}: {p.numero_dpi}</p>}
-                          {p.placa      && <p>{t('portal.plate')}: {p.placa}</p>}
+                          {p.placa      && <p>{t('portal.plate')}: {formatearPlaca(p.placa)}</p>}
                         </div>
                         <div className="mt-3">
                           <RowActions
                             align="start"
-                            inline={2}
                             menuLabel={`${t('common.actions')}: ${p.nombre_visitante}`}
                             actions={[
-                              {
-                                id: 'hoy',
-                                label: 'Preautorizar hoy',
-                                icon: ROW_ICON.clock,
-                                tone: 'primary',
-                                disabled: saving,
-                                onClick: () => handlePreautHoy(p),
-                              },
                               {
                                 id: 'eliminar',
                                 label: t('common.delete'),
                                 icon: ROW_ICON.trash,
                                 tone: 'danger',
                                 loading: deletingId === p.id,
-                                onClick: () => handleDelete(p.id, p.nombre_visitante),
+                                onClick: () => handleDelete(p.id, p.nombre_visitante, false),
                               },
                             ]}
                           />
@@ -771,37 +736,162 @@ export default function ResidentePage({ requestedTab, tabNonce = 0 }: ResidenteP
                 )}
               </section>
 
-              {/* Historial */}
-              <section>
-                <h2 className="text-base font-semibold text-white mb-4">{t('portal.visitHistory')}</h2>
-                {visitas.length === 0 ? (
-                  <p className="text-gray-400 text-sm text-center py-8">{t('portal.noVisits')}</p>
-                ) : (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    {visitas.map(v => (
-                      <div key={v.id} className="sg-card p-4">
-                        <p className="font-semibold text-white text-sm">{v.nombre_visitante}</p>
-                        <div className="mt-2 space-y-0.5 text-xs text-gray-400">
-                          <p>{t('portal.dpi')}: {v.numero_dpi}</p>
-                          {v.placa && <p>{t('portal.plate')}: {v.placa}</p>}
-                          <p className="text-gray-300 mt-1">
-                            {t('portal.entry')}: {new Date(v.timestamp_entrada).toLocaleString('es-GT', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' })}
-                          </p>
-                          {v.timestamp_salida ? (
-                            <p>{t('portal.exit')}: {new Date(v.timestamp_salida).toLocaleString('es-GT', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' })}</p>
-                          ) : (
-                            <span className="inline-block bg-blue-100 text-blue-700 text-xs font-semibold px-2 py-0.5 rounded-full mt-1">
-                              {t('portal.active')}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    ))}
+              <div className="space-y-8 lg:grid lg:grid-cols-2 lg:gap-8 lg:space-y-0">
+                {/* Visitantes guardados: la libreta; guardar a alguien NO deja entrar a nadie */}
+                <section aria-labelledby="visitantes-guardados">
+                  <div className="mb-1 flex items-center justify-between">
+                    <h2 id="visitantes-guardados" className="text-base font-semibold text-white">{t('aviso.saved.title')}</h2>
+                    {!showForm && (
+                      <Button variant="secondary" onClick={() => setShowForm(true)}>{t('aviso.saved.save')}</Button>
+                    )}
                   </div>
-                )}
-              </section>
+                  <p className="mb-4 text-xs text-gray-400">{t('aviso.saved.hint')}</p>
+
+                  {/* Inline create form */}
+                  {showForm && (
+                    <div ref={formRef}>
+                      <form onSubmit={handleSave} className="sg-card mb-4 space-y-4 p-5 sm:p-6">
+                        <h3 className="text-sm font-semibold text-white">{t('aviso.saved.form')}</h3>
+                        <p className="text-xs text-gray-400">{t('aviso.saved.formHint')}</p>
+
+                        {formError && (
+                          <div role="alert" className="rounded-lg border border-danger-500/30 bg-danger-500/10 px-3 py-2 text-sm text-danger-400">
+                            {formError}
+                          </div>
+                        )}
+
+                        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                          <Input
+                            wrapperClassName="sm:col-span-2"
+                            name="nombre_visitante"
+                            label={t('portal.visitorName')}
+                            value={form.nombre_visitante}
+                            onChange={handleFormChange}
+                            required
+                            placeholder="Juan Pérez"
+                          />
+                          <Input
+                            name="numero_dpi"
+                            label={`${t('portal.dpi')} (${t('aviso.saved.orPlate')})`}
+                            value={form.numero_dpi}
+                            onChange={handleFormChange}
+                            placeholder="1234567890101"
+                            inputMode="numeric"
+                          />
+                          <div className="min-w-0">
+                            <label htmlFor="guardado-placa" className="mb-1.5 block text-xs font-semibold text-gray-300">
+                              {t('portal.plate')} ({t('aviso.saved.orDpi')})
+                            </label>
+                            <PlacaInput
+                              id="guardado-placa"
+                              name="placa"
+                              value={form.placa}
+                              onChange={placa => setForm(prev => ({ ...prev, placa }))}
+                            />
+                          </div>
+                        </div>
+
+                        <div className="flex gap-3 pt-1">
+                          <Button type="submit" loading={saving} className="px-5">
+                            {saving ? t('common.saving') : t('common.save')}
+                          </Button>
+                          <Button
+                            variant="secondary"
+                            onClick={() => { setShowForm(false); setFormError(null); setForm(EMPTY_FORM); }}
+                            className="px-5"
+                          >
+                            {t('common.cancel')}
+                          </Button>
+                        </div>
+                      </form>
+                    </div>
+                  )}
+
+                  {guardados.length === 0 ? (
+                    !showForm && <p className="py-8 text-center text-sm text-gray-400">{t('aviso.saved.empty')}</p>
+                  ) : (
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                      {guardados.map(p => (
+                        <div key={p.id} className="sg-card p-4">
+                          <div className="flex items-start justify-between gap-2">
+                            <p className="text-sm font-semibold text-white">{p.nombre_visitante}</p>
+                            <span className="shrink-0 rounded-full bg-gray-700 px-2 py-0.5 text-xs font-medium text-gray-300">
+                              {t('aviso.saved.badge')}
+                            </span>
+                          </div>
+                          <div className="mt-2 space-y-0.5 text-xs text-gray-400">
+                            {p.numero_dpi && <p>{t('portal.dpi')}: {p.numero_dpi}</p>}
+                            {p.placa      && <p>{t('portal.plate')}: {formatearPlaca(p.placa)}</p>}
+                          </div>
+                          <div className="mt-3">
+                            <RowActions
+                              align="start"
+                              inline={2}
+                              menuLabel={`${t('common.actions')}: ${p.nombre_visitante}`}
+                              actions={[
+                                {
+                                  id: 'avisar',
+                                  label: t('aviso.saved.notify'),
+                                  icon: ROW_ICON.clock,
+                                  tone: 'primary',
+                                  onClick: () => avisarDe(p),
+                                },
+                                {
+                                  id: 'eliminar',
+                                  label: t('common.delete'),
+                                  icon: ROW_ICON.trash,
+                                  tone: 'danger',
+                                  loading: deletingId === p.id,
+                                  onClick: () => handleDelete(p.id, p.nombre_visitante, true),
+                                },
+                              ]}
+                            />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </section>
+
+                {/* Historial */}
+                <section>
+                  <h2 className="mb-4 text-base font-semibold text-white">{t('portal.visitHistory')}</h2>
+                  {visitas.length === 0 ? (
+                    <p className="py-8 text-center text-sm text-gray-400">{t('portal.noVisits')}</p>
+                  ) : (
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                      {visitas.map(v => (
+                        <div key={v.id} className="sg-card p-4">
+                          <p className="text-sm font-semibold text-white">{v.nombre_visitante}</p>
+                          <div className="mt-2 space-y-0.5 text-xs text-gray-400">
+                            <p>{t('portal.dpi')}: {v.numero_dpi}</p>
+                            {v.placa && <p>{t('portal.plate')}: {formatearPlaca(v.placa)}</p>}
+                            <p className="mt-1 text-gray-300">
+                              {t('portal.entry')}: {formatearFechaHoraCorta(v.timestamp_entrada)}
+                            </p>
+                            {v.timestamp_salida ? (
+                              <p>{t('portal.exit')}: {formatearFechaHoraCorta(v.timestamp_salida)}</p>
+                            ) : (
+                              <span className="mt-1 inline-block rounded-full bg-brand-100 px-2 py-0.5 text-xs font-semibold text-brand-700">
+                                {t('portal.active')}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </section>
+              </div>
             </>
           )}
+
+          <AvisarVisitaModal
+            open={avisoDlg.abierto}
+            onClose={() => setAvisoDlg(d => ({ ...d, abierto: false }))}
+            inicial={avisoDlg.inicial}
+            onCreada={creada => setPreauths(prev => [creada as MiPreautorizacion, ...prev])}
+          />
         </div>
       )}
 
@@ -815,7 +905,7 @@ export default function ResidentePage({ requestedTab, tabNonce = 0 }: ResidenteP
             </div>
             <button
               onClick={() => setShowQrCreate(true)}
-              className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-4 py-2 rounded-xl text-sm transition-colors"
+              className="bg-success-700 hover:bg-success-600 text-white font-semibold px-4 py-2 rounded-xl text-sm transition-colors"
             >
               {t('qr.newInvite')}
             </button>
@@ -835,7 +925,7 @@ export default function ResidentePage({ requestedTab, tabNonce = 0 }: ResidenteP
                   <div key={inv.id} className="sg-card flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
                     <div className="min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-semibold text-white truncate">
+                        <span className="font-semibold text-white truncate" title={inv.etiqueta || inv.nombre_visitante || undefined}>
                           {inv.etiqueta || (inv.tipo === 'individual' ? inv.nombre_visitante : t('qr.typeGroup'))}
                         </span>
                         <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${QR_ESTADO_BADGE[estado]}`}>
@@ -893,7 +983,7 @@ export default function ResidentePage({ requestedTab, tabNonce = 0 }: ResidenteP
             {!showTicketForm && (
               <button
                 onClick={() => { setShowTicketForm(true); setTicketError(null); }}
-                className="text-sm bg-emerald-600 hover:bg-emerald-500 text-white font-medium px-4 py-2 rounded-lg transition-colors"
+                className="text-sm bg-success-700 hover:bg-success-600 text-white font-medium px-4 py-2 rounded-lg transition-colors"
               >
                 {t('tickets.new')}
               </button>
@@ -905,7 +995,7 @@ export default function ResidentePage({ requestedTab, tabNonce = 0 }: ResidenteP
             <div className="sg-card space-y-4 p-5 sm:p-6">
               <h3 className="text-sm font-semibold text-white">{t('tickets.newTitle')}</h3>
               {ticketError && (
-                <div className="bg-red-900/40 border border-red-700 rounded-lg px-3 py-2 text-red-300 text-sm">{ticketError}</div>
+                <div className="bg-danger-900/40 border border-danger-700 rounded-lg px-3 py-2 text-danger-300 text-sm">{ticketError}</div>
               )}
               <div>
                 <label className="block text-xs text-gray-400 mb-1">{t('tickets.typeLabel')}</label>
@@ -941,7 +1031,7 @@ export default function ResidentePage({ requestedTab, tabNonce = 0 }: ResidenteP
                 <button
                   onClick={handleCreateTicket}
                   disabled={ticketSaving}
-                  className="flex-1 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-semibold py-2 rounded-xl transition-colors flex items-center justify-center gap-2"
+                  className="flex-1 bg-success-700 hover:bg-success-600 disabled:opacity-50 text-white font-semibold py-2 rounded-xl transition-colors flex items-center justify-center gap-2"
                 >
                   {ticketSaving && <Spinner size={14} />}
                   {ticketSaving ? t('common.saving') : t('tickets.send')}
@@ -967,12 +1057,12 @@ export default function ResidentePage({ requestedTab, tabNonce = 0 }: ResidenteP
                 <button
                   key={tk.id}
                   onClick={() => setSelectedTicket(tk.id)}
-                  className="sg-card w-full text-left p-4 transition hover:border-emerald-500/40 hover:bg-gray-700/60"
+                  className="sg-card w-full text-left p-4 transition hover:border-success-500/40 hover:bg-gray-700/60"
                 >
                   <div className="flex items-center gap-2">
-                    <span className="text-white font-medium text-sm flex-1 truncate">{tk.titulo}</span>
+                    <span className="text-white font-medium text-sm flex-1 truncate" title={tk.titulo}>{tk.titulo}</span>
                     {Number(tk.no_leidos) > 0 && (
-                      <span className="min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full bg-red-600 text-white text-[10px] font-bold">
+                      <span className="min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full bg-danger-600 text-white text-[10px] font-bold">
                         {Number(tk.no_leidos)}
                       </span>
                     )}
@@ -984,7 +1074,7 @@ export default function ResidentePage({ requestedTab, tabNonce = 0 }: ResidenteP
                     <span className="text-[11px] text-gray-400">{t(TIPO_LABEL[tk.tipo])}</span>
                   </div>
                   {tk.ultimo_mensaje && (
-                    <p className="text-xs text-gray-500 mt-1 truncate">{tk.ultimo_mensaje}</p>
+                    <p className="text-xs text-gray-400 mt-1 truncate" title={tk.ultimo_mensaje}>{tk.ultimo_mensaje}</p>
                   )}
                 </button>
               ))}
@@ -1020,17 +1110,17 @@ export default function ResidentePage({ requestedTab, tabNonce = 0 }: ResidenteP
         open={showTarjeta}
         onClose={() => setShowTarjeta(false)}
         saldo={saldo}
-        onResultado={(pago, aprobado) => {
-          // El intento se guarda aprobado o rechazado: en ambos casos entra al
-          // historial, así que se recarga la pestaña de pagos.
+        simulada={estadoTarjeta.simulada}
+        onResultado={pago => {
+          // Solo llegan pagos APROBADOS (un rechazo no se guarda): entran al historial y
+          // el saldo queda al día.
           setMisPagos(prev => [pago, ...prev]);
-          if (aprobado) {
-            showToast(t('card.approved').replace('{monto}', parseFloat(pago.monto).toFixed(2)));
-            setData(prev => prev ? { ...prev, saldo_pendiente: '0.00', estado_pago: 'al_dia' } : prev);
-            getMiResumenMes().then(setResumenMes).catch(() => {});
-          }
+          showToast(t('card.approved').replace('{monto}', parseFloat(pago.monto).toFixed(2)));
+          setData(prev => prev ? { ...prev, saldo_pendiente: '0.00', estado_pago: 'al_dia' } : prev);
+          getMiResumenMes().then(setResumenMes).catch(() => {});
         }}
       />
+      {dialogo}
     </main>
   );
 }

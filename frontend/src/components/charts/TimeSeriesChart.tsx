@@ -45,9 +45,11 @@ const columna = (x: number, ancho: number, yTope: number, base: number): string 
  * una línea de 2 px), y con el foco las flechas recorren los días.
  */
 export default function TimeSeriesChart({
-  datos, anterior, variante = 'area', alto = 220, lang,
+  datos, anterior, variante: varianteSolicitada = 'area', alto = 220, lang,
   formatoValor, formatoEje = formatoValor, etiquetas, ariaLabel, etiquetaX, etiquetaDetalle,
 }: TimeSeriesChartProps) {
+  // Un área de un solo punto no dibuja nada (no hay con quién unir la línea): con un solo día se muestra como columna.
+  const variante = varianteSolicitada === 'area' && datos.length === 1 ? 'columnas' : varianteSolicitada;
   const [ref, ancho] = useAncho<HTMLDivElement>();
   const rotuloX = etiquetaX ?? ((i: number) => fmtFechaCorta(datos[i].fecha, lang));
   const detalle = etiquetaDetalle ?? ((i: number) => fmtFechaLarga(datos[i].fecha, lang));
@@ -182,6 +184,15 @@ export default function TimeSeriesChart({
             className={activo == null || activo === i ? 'fill-viz-series' : 'fill-viz-series/45'}
           />
         ))}
+
+        {/* Con un solo día el periodo anterior no es una línea: se marca como una raya a su altura, detrás de la columna. */}
+        {n === 1 && hayAnterior && (
+          <line
+            x1={xDe(0) - anchoColumna / 2 - 8} x2={xDe(0) + anchoColumna / 2 + 8}
+            y1={yDe(anterior![0])} y2={yDe(anterior![0])}
+            strokeWidth={2} strokeLinecap="round" className="stroke-gray-500"
+          />
+        )}
 
         {/* Rótulo selectivo: sólo el máximo del periodo. */}
         {iMax >= 0 && etiquetas.maximo && activo == null && (

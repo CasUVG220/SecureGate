@@ -7,13 +7,20 @@ import { Badge, Button, EmptyState, cx } from '../components/ui';
 import Skeleton from '../components/ui/Skeleton';
 import { useTranslation } from '../i18n/useTranslation';
 import { inicial, tiempoRelativo } from '../utils/tiempo';
+import { formatearFechaHora, formatearFechaLarga, formatearHora } from '../utils/fecha';
 
 const ICON = {
   dentro: 'M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2zM9 22V12h6v10',
   inbox:  'M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3',
 };
 
-const LOCALE = { es: 'es-GT', en: 'en-US' } as const;
+
+/** Lo que le falta a una sucursal recién creada, en el orden en que conviene hacerlo. */
+const PRIMEROS_PASOS = [
+  { pagina: 'residentes', texto: 'dashboard.firstSteps.residents' },
+  { pagina: 'agentes',    texto: 'dashboard.firstSteps.staff' },
+  { pagina: 'garitas',    texto: 'dashboard.firstSteps.gate' },
+] as const;
 
 export default function DashboardPage({ onNavigate }: { onNavigate?: (pagina: string) => void } = {}) {
   const { t, language: lang } = useTranslation();
@@ -55,7 +62,7 @@ export default function DashboardPage({ onNavigate }: { onNavigate?: (pagina: st
   const n = (x: number) => fmtNumero(x, lang);
   // Sólo la inicial en mayúscula ("Jueves, 24 de septiembre"): `capitalize`
   // de CSS la pondría en cada palabra.
-  const fecha = new Date().toLocaleDateString(LOCALE[lang], { weekday: 'long', day: 'numeric', month: 'long' });
+  const fecha = formatearFechaLarga(new Date(), lang);
   const hoy = fecha.charAt(0).toUpperCase() + fecha.slice(1);
 
   return (
@@ -74,6 +81,24 @@ export default function DashboardPage({ onNavigate }: { onNavigate?: (pagina: st
             <span>{t(errorKey)}</span>
             <Button variant="secondary" size="sm" onClick={cargar}>{t('dashboard.retry')}</Button>
           </div>
+        )}
+
+        {data && data.total_residentes === 0 && (
+          <section aria-labelledby="primeros-pasos" className="sg-card p-5 sm:p-6">
+            <h2 id="primeros-pasos" className="text-base font-semibold text-gray-50">{t('dashboard.firstSteps.title')}</h2>
+            <p className="mt-1 text-sm text-gray-400">{t('dashboard.firstSteps.intro')}</p>
+            <ol className="mt-4 space-y-3">
+              {PRIMEROS_PASOS.map((paso, i) => (
+                <li key={paso.pagina} className="flex flex-wrap items-center gap-3">
+                  <span aria-hidden="true" className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gray-500/15 text-xs font-bold text-gray-200">{i + 1}</span>
+                  <span className="min-w-0 flex-1 text-sm text-gray-200">{t(paso.texto)}</span>
+                  {onNavigate && (
+                    <Button variant="secondary" size="sm" onClick={() => onNavigate(paso.pagina)}>{t('dashboard.firstSteps.go')}</Button>
+                  )}
+                </li>
+              ))}
+            </ol>
+          </section>
         )}
 
         {loading && !data ? (
@@ -115,6 +140,16 @@ export default function DashboardPage({ onNavigate }: { onNavigate?: (pagina: st
                   ? { texto: t('dashboard.goVerify'), onClick: () => onNavigate('verificacion') }
                   : undefined,
               },
+              ...(data.reservas_pendientes !== undefined ? [{
+                id: 'reservas',
+                etiqueta: t('dashboard.pendingReservations'),
+                valor: n(data.reservas_pendientes),
+                nota: data.reservas_pendientes ? t('dashboard.pendingReservationsHint') : t('dashboard.pendingReservationsNone'),
+                atencion: data.reservas_pendientes > 0 ? ('warning' as const) : undefined,
+                accion: onNavigate && data.reservas_pendientes > 0
+                  ? { texto: t('dashboard.goReservations'), onClick: () => onNavigate('reservas') }
+                  : undefined,
+              }] : []),
               {
                 id: 'mora',
                 etiqueta: t('dashboard.residentsInDebt'),
@@ -171,13 +206,13 @@ export default function DashboardPage({ onNavigate }: { onNavigate?: (pagina: st
                       </span>
 
                       <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-semibold text-gray-100">{a.nombre_visitante}</p>
+                        <p className="truncate text-sm font-semibold text-gray-100" title={a.nombre_visitante}>{a.nombre_visitante}</p>
                         <p className="mt-0.5 text-xs text-gray-400">
                           {t('dashboard.unit')} <span className="font-semibold text-gray-300">{a.numero_casa}</span>
                           {' · '}
                           <time
                             dateTime={a.timestamp_entrada}
-                            title={new Date(a.timestamp_entrada).toLocaleString('es-GT')}
+                            title={formatearFechaHora(a.timestamp_entrada, lang)}
                           >
                             {tiempoRelativo(a.timestamp_entrada, t)}
                           </time>
@@ -189,7 +224,7 @@ export default function DashboardPage({ onNavigate }: { onNavigate?: (pagina: st
                       ) : (
                         <span className="shrink-0 text-xs text-gray-400">
                           {t('dashboard.exit')}{' '}
-                          {new Date(a.timestamp_salida!).toLocaleTimeString('es-GT', { hour: '2-digit', minute: '2-digit' })}
+                          {formatearHora(a.timestamp_salida)}
                         </span>
                       )}
                     </li>

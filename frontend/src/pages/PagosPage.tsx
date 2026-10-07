@@ -9,6 +9,7 @@ import {
 } from '../components/ui';
 import { Skeleton } from '../components/Skeleton';
 import { useTranslation } from '../i18n/useTranslation';
+import { formatearFecha } from '../utils/fecha';
 
 const EMPTY_FORM = { residente_id: '', monto: '' };
 
@@ -101,12 +102,14 @@ export default function PagosPage() {
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
+    // La vista normal no incluye los rechazados (no son ingresos); se ven al elegir «Rechazado».
     return pagos.filter(p =>
-      (!filterEstado || p.estado === filterEstado) &&
+      (filterEstado ? p.estado === filterEstado : p.estado !== 'rechazado') &&
       (`${p.numero_casa} ${p.residente_nombre}`).toLowerCase().includes(q)
     );
   }, [pagos, filterEstado, search]);
 
+  const ocultosRechazados = filterEstado ? 0 : pagos.filter(p => p.estado === 'rechazado').length;
   const filtrando = Boolean(search || filterEstado);
 
   const columns: Column<Pago>[] = [
@@ -134,7 +137,7 @@ export default function PagosPage() {
     },
     {
       key: 'fecha', header: t('common.date'), className: 'whitespace-nowrap text-gray-400',
-      cell: p => new Date(p.fecha_pago).toLocaleDateString('es-GT'),
+      cell: p => formatearFecha(p.fecha_pago),
     },
     {
       key: 'acciones', header: t('common.actions'), align: 'right', actions: true,
@@ -160,12 +163,17 @@ export default function PagosPage() {
             <div className="mt-1 text-sm text-gray-400">
               {loading
                 ? <Skeleton height="0.875rem" width="5rem" />
-                : <p>{`${filtered.length} / ${pagos.length}`}</p>}
+                : <p>
+                    {`${filtered.length} / ${pagos.length - ocultosRechazados}`}
+                    {ocultosRechazados > 0 && ` · ${ocultosRechazados} ${t('payments.hiddenRejected')}`}
+                  </p>}
             </div>
           </div>
-          <Button onClick={() => { setForm(EMPTY_FORM); setFormError(null); setShowModal(true); }}>
-            {t('payments.registerCash')}
-          </Button>
+          {(loading || filtrando || pagos.length > 0) && (
+            <Button onClick={() => { setForm(EMPTY_FORM); setFormError(null); setShowModal(true); }}>
+              {t('payments.registerCash')}
+            </Button>
+          )}
         </header>
 
         {error && (
@@ -187,7 +195,7 @@ export default function PagosPage() {
             onChange={e => setFilterEstado(e.target.value)}
             aria-label={t('common.status')}
           >
-            <option value="">Todos</option>
+            <option value="">{t('payments.allNoRejected')}</option>
             <option value="pendiente">{t('payments.pending')}</option>
             <option value="aprobado">{t('payments.approved')}</option>
             <option value="rechazado">{t('payments.rejected')}</option>

@@ -26,6 +26,7 @@ const mockPool = pool as unknown as { query: jest.Mock; connect: jest.Mock };
 const mockRes = () => {
   const res: any = {};
   res.status = jest.fn().mockReturnValue(res);
+  res.locals = {};
   res.json = jest.fn().mockReturnValue(res);
   res.cookie = jest.fn().mockReturnValue(res);
   res.clearCookie = jest.fn().mockReturnValue(res);
@@ -37,6 +38,10 @@ const SUSPENDIDA = { ...EMPRESA, suspendida: true, suspension_motivo: 'Factura d
 const FP = 'a'.repeat(64);
 
 beforeEach(() => { mockPool.query.mockReset(); mockPool.connect.mockReset(); });
+
+/** Las consultas del controlador, sin la fila de auditoría que se escribe al margen (fire-and-forget). */
+const sinAuditoria = () => mockPool.query.mock.calls.filter(c => !/INSERT INTO audit_logs/.test(String(c[0])));
+const auditorias = () => mockPool.query.mock.calls.filter(c => /INSERT INTO audit_logs/.test(String(c[0])));
 
 describe('evaluarEmpresa / bloqueoDeUsuario', () => {
   it('activa y no suspendida → sin bloqueo; suspendida → motivo; inactiva → baja', () => {
@@ -104,6 +109,7 @@ describe('login con empresa suspendida', () => {
 
 describe('refresh con empresa suspendida', () => {
   it('revoca el refresh token, limpia la cookie y responde 423', async () => {
+    mockPool.query.mockResolvedValue({ rows: [], rowCount: 0 });       // por omisión (p. ej. la fila de auditoría)
     mockPool.query
       .mockResolvedValueOnce({ rows: [{ id: 'rt-1', usuario_id: 'u-1', nombre: 'Ana', email: 'a@x.com', rol: 'residente', sucursal_id: 'suc-1', empresa_id: null, empresa_id_via_sucursal: 'emp-1' }] })
       .mockResolvedValueOnce({ rows: [SUSPENDIDA] })
@@ -113,8 +119,62 @@ describe('refresh con empresa suspendida', () => {
 
     expect(res.status).toHaveBeenCalledWith(HTTP_BLOQUEO);
     expect(res.clearCookie).toHaveBeenCalledWith('refresh_token', expect.any(Object));
-    expect(mockPool.query.mock.calls[2][0]).toMatch(/SET revoked = TRUE WHERE id = \$1/);
+    expect(sinAuditoria()[2][0]).toMatch(/SET revoked = TRUE, revoked_at = NOW\(\) WHERE id = \$1/);
     expect(mockPool.query.mock.calls.some(c => /INSERT INTO refresh_tokens/.test(c[0]))).toBe(false);
+    // El rechazo queda en la bitácora con la persona del token, la IP y el motivo (RNF-10).
+    expect(auditorias()).toHaveLength(1);
+    expect(auditorias()[0][1]).toEqual(['u-1', 'REFRESH_RECHAZADO', 'refresh_tokens', null, '1.1.1.1', null, 'suc-1', 423, JSON.stringify({ motivo: 'empresa_suspendida' })]);
+  });
+});
+
+describe('refresh: 423 también cuando suspender ya revocó el token (S-11)', () => {
+  const FILA = { id: 'rt-1', usuario_id: 'u-1', nombre: 'Ana', email: 'a@x.com', rol: 'residente', sucursal_id: 'suc-1', empresa_id: null, empresa_id_via_sucursal: 'emp-1', activo: true };
+  const llamar = async () => {
+    const res = mockRes();
+    await refresh({ cookies: { refresh_token: 'raw' }, headers: {}, ip: '1.1.1.1' } as any, res);
+    return res;
+  };
+  beforeEach(() => { mockPool.query.mockResolvedValue({ rows: [], rowCount: 0 }); });
+
+  it('token revocado por la suspensión + empresa suspendida → 423 con el motivo, sin tocar nada más', async () => {
+    mockPool.query
+      .mockResolvedValueOnce({ rows: [{ ...FILA, revoked: true, vigente: true }] })
+      .mockResolvedValueOnce({ rows: [SUSPENDIDA] });
+    const res = await llamar();
+    expect(res.status).toHaveBeenCalledWith(HTTP_BLOQUEO);
+    expect((res.json as jest.Mock).mock.calls[0][0]).toEqual(expect.objectContaining({ codigo: 'empresa_suspendida', empresa: SUSPENDIDA.nombre }));
+    expect(res.clearCookie).toHaveBeenCalled();
+    expect(sinAuditoria()).toHaveLength(2);   // ya estaba revocado: no vuelve a escribir
+    expect(auditorias()).toHaveLength(1);
+  });
+
+  it('token revocado y empresa en regla (cierre de sesión, rotación vieja) → 401, auditado como «token_revocado»', async () => {
+    mockPool.query
+      .mockResolvedValueOnce({ rows: [{ ...FILA, revoked: true, vigente: true }] })
+      .mockResolvedValueOnce({ rows: [{ id: 'emp-1', nombre: 'Condominio', activo: true, suspendida: false, suspension_motivo: null, suspendida_en: null }] });
+    const res = await llamar();
+    expect(res.status).toHaveBeenCalledWith(401);
+    expect(mockPool.query.mock.calls.some(c => /INSERT INTO refresh_tokens/.test(c[0]))).toBe(false);
+    expect(auditorias()[0][1][1]).toBe('REFRESH_RECHAZADO');
+    expect(auditorias()[0][1][7]).toBe(401);
+    expect(auditorias()[0][1][8]).toBe(JSON.stringify({ motivo: 'token_revocado' }));
+  });
+
+  it('token vencido o usuario dado de baja → 401 sin revelar el estado de la empresa (ni consultarlo)', async () => {
+    mockPool.query.mockResolvedValueOnce({ rows: [{ ...FILA, revoked: true, vigente: false }] });
+    expect((await llamar()).status).toHaveBeenCalledWith(401);
+    mockPool.query.mockResolvedValueOnce({ rows: [{ ...FILA, revoked: false, vigente: true, activo: false }] });
+    expect((await llamar()).status).toHaveBeenCalledWith(401);
+    expect(sinAuditoria()).toHaveLength(2);   // solo las dos búsquedas del token
+    expect(auditorias().map(a => JSON.parse(a[1][8]).motivo)).toEqual(['token_vencido', 'usuario_inactivo']);
+  });
+
+  it('token que no existe → 401 (sin usuario que atribuir, pero con IP)', async () => {
+    mockPool.query.mockResolvedValueOnce({ rows: [] });
+    expect((await llamar()).status).toHaveBeenCalledWith(401);
+    expect(auditorias()[0][1][0]).toBeNull();
+    expect(auditorias()[0][1][4]).toBe('1.1.1.1');
+    expect(auditorias()[0][1][8]).toBe(JSON.stringify({ motivo: 'token_desconocido' }));
   });
 });
 

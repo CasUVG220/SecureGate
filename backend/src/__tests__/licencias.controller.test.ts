@@ -24,6 +24,7 @@ const FP = 'a'.repeat(64);
 const mockRes = () => {
   const res: any = {};
   res.status = jest.fn().mockReturnValue(res);
+  res.locals = {};
   res.json = jest.fn().mockReturnValue(res);
   return res;
 };

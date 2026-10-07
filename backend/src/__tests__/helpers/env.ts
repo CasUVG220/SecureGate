@@ -19,6 +19,7 @@ def('DB_POOL_MAX', '5');
 // pruebas que verifican un límite concreto lo bajan antes de importar la app.
 for (const k of [
   'GENERAL', 'LOGIN', 'LOGIN_CUENTA', 'SESION', 'ACTIVAR', 'HEARTBEAT', 'INVITACION', 'OCR', 'ELIMINAR',
+  '2FA', '2FA_CONFIRMAR', '2FA_DESACTIVAR', '2FA_CODIGOS',
 ]) def(`RATE_LIMIT_${k}_MAX`, '100000');
 
 validarBaseDePrueba(process.env.DATABASE_URL);

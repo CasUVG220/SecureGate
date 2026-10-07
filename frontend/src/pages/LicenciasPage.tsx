@@ -15,8 +15,10 @@ import {
 import {
   Badge, Button, DataTable, EmptyState, Input, Modal, RowActions, Select, StatusText, useToast,
   type Column, type RowAction,
+  useConfirmacion,
 } from '../components/ui';
 import { useTranslation } from '../i18n/useTranslation';
+import { plural } from '../i18n/plural';
 
 const ICON_KEY = 'M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4';
 const ICON_COPY = 'M8 4h10a2 2 0 0 1 2 2v10M4 8h10a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V10a2 2 0 0 1 2-2z';
@@ -42,6 +44,7 @@ function haceCuanto(iso: string | null, lang: string): string {
 
 export default function LicenciasPage() {
   const { t, language } = useTranslation();
+  const { confirmar, dialogo } = useConfirmacion();
   const showToast = useToast();
   const rol = useMemo(rolActual, []);
   // El admin de sucursal emite para la suya (la toma el backend del JWT);
@@ -99,12 +102,19 @@ export default function LicenciasPage() {
       await navigator.clipboard.writeText(codigo);
       showToast(t('lic.copied'), 'info');
     } catch {
-      window.prompt(t('lic.copy'), codigo);
+      // Sin permiso de portapapeles el código se deja a la vista, en un aviso que no se va solo, para copiarlo a mano.
+      showToast(`${t('lic.copyManually')} ${codigo}`, 'info', { persistente: true });
     }
   };
 
   const revocar = async (lic: Licencia) => {
-    if (!window.confirm(`${t('lic.confirmRevoke')} ${lic.etiqueta || lic.codigo_activacion}?`)) return;
+    const ok = await confirmar({
+      title: t('confirm.revokeLicense.title').replace('{nombre}', lic.etiqueta || lic.codigo_activacion),
+      message: t('confirm.revokeLicense.message'),
+      confirmLabel: t('lic.revoke'),
+      tone: 'danger',
+    });
+    if (!ok) return;
     try {
       await revocarLicencia(lic.id);
       showToast(t('lic.revoked'), 'warning');
@@ -120,8 +130,8 @@ export default function LicenciasPage() {
         key: 'etiqueta', header: t('lic.col.device'), primary: true,
         cell: lic => (
           <div className="min-w-0">
-            <p className="truncate font-medium text-gray-100">{lic.etiqueta || t('lic.noLabel')}</p>
-            {eligeSucursal && <p className="truncate text-xs text-gray-400">{lic.sucursal_nombre}</p>}
+            <p className="truncate font-medium text-gray-100" title={lic.etiqueta || undefined}>{lic.etiqueta || t('lic.noLabel')}</p>
+            {eligeSucursal && <p className="truncate text-xs text-gray-400" title={lic.sucursal_nombre}>{lic.sucursal_nombre}</p>}
           </div>
         ),
       },
@@ -171,7 +181,7 @@ export default function LicenciasPage() {
         </div>
         {!loading && (
           <div className="flex items-center gap-4 text-sm">
-            <StatusText kind="on">{activas} {t('lic.summary.active')}</StatusText>
+            <StatusText kind="on">{plural(t, 'lic.summary.active', activas)}</StatusText>
             {pendientes > 0 && <StatusText kind="warn">{pendientes} {t('lic.summary.pending')}</StatusText>}
           </div>
         )}
@@ -179,9 +189,11 @@ export default function LicenciasPage() {
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="sg-section-title">{t('lic.listTitle')}</h2>
-        <Button onClick={abrir} icon={<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={ICON_KEY} /></svg>}>
-          {t('lic.new')}
-        </Button>
+        {(loading || licencias.length > 0) && (
+          <Button onClick={abrir} icon={<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={ICON_KEY} /></svg>}>
+            {t('lic.new')}
+          </Button>
+        )}
       </div>
 
       {error && <p role="alert" className="rounded-lg border border-danger-500/30 bg-danger-500/10 px-4 py-3 text-sm font-medium text-danger-400">{t('lic.loadError')}</p>}
@@ -244,6 +256,7 @@ export default function LicenciasPage() {
           </form>
         )}
       </Modal>
+      {dialogo}
     </div>
   );
 }

@@ -20,7 +20,7 @@ jest.mock('../db/pool', () => ({
 
 import pool from '../db/pool';
 import { validarPassword, PASSWORD_MIN } from '../utils/password';
-import { validarJwtSecret, trustProxyHops, SECRETOS_CONOCIDOS } from '../config/env';
+import { validarJwtSecret, validarTwofaKey, trustProxyHops, SECRETOS_CONOCIDOS } from '../config/env';
 import { revocarAccesoDeUsuario, revocarAccesoDeEmpresa, tokenRevocado, _reiniciarRevocaciones } from '../utils/revocacion';
 import { runMigrations, desactivarCuentasDemo, CUENTAS_DEMO } from '../db/migrate';
 import { auditLog } from '../middleware/audit.middleware';
@@ -37,6 +37,7 @@ const mockPool = pool as unknown as { query: jest.Mock; connect: jest.Mock };
 const makeRes = () => {
   const res: Partial<Response> = {};
   res.status = jest.fn().mockReturnValue(res);
+  res.locals = {};
   res.json = jest.fn().mockReturnValue(res);
   return res as Response;
 };
@@ -106,6 +107,22 @@ describe('validarJwtSecret (arranque seguro)', () => {
 
   it('en desarrollo un secreto definido pero corto también se rechaza', () => {
     expect(() => validarJwtSecret({ NODE_ENV: 'development', JWT_SECRET: 'corto' } as any)).toThrow(/al menos/);
+  });
+});
+
+describe('validarTwofaKey (llave opcional de la verificación en dos pasos)', () => {
+  it('sin definir no hace nada (los secretos se protegen con una llave derivada de JWT_SECRET)', () => {
+    expect(() => validarTwofaKey({} as any)).not.toThrow();
+    expect(() => validarTwofaKey({ TWOFA_KEY: '   ' } as any)).not.toThrow();
+  });
+
+  it('acepta una llave larga', () => {
+    expect(() => validarTwofaKey({ TWOFA_KEY: 'b'.repeat(64) } as any)).not.toThrow();
+  });
+
+  it('rechaza una llave corta o un valor público conocido', () => {
+    expect(() => validarTwofaKey({ TWOFA_KEY: 'corta' } as any)).toThrow(/al menos 32/);
+    expect(() => validarTwofaKey({ TWOFA_KEY: 'change_me_in_production' } as any)).toThrow(/público/);
   });
 });
 
@@ -256,12 +273,22 @@ describe('migraciones y cuentas demo', () => {
 // ─────────────────────────────────────────────────────────────────────────────
 describe('refresh token', () => {
   it('un usuario DESACTIVADO ya no puede renovar sesión (antes conservaba 7 días de refresh)', async () => {
-    mockPool.query.mockResolvedValueOnce({ rows: [] });
+    // El usuario se trae con su estado (SCRUM-129 / S-11 dejó de filtrarlo en el WHERE para poder distinguir una
+    // empresa suspendida); si está dado de baja se responde 401 sin consultar nada más ni rotar el token.
+    mockPool.query.mockResolvedValueOnce({ rows: [{
+      id: 'rt-1', usuario_id: 'u-1', revoked: false, vigente: true, activo: false,
+      nombre: 'Ana', email: 'a@x.com', rol: 'agente', sucursal_id: 'suc-1', empresa_id: null, empresa_id_via_sucursal: 'emp-1',
+    }] });
+    mockPool.query.mockResolvedValue({ rows: [], rowCount: 0 });   // la fila de auditoría del rechazo
     const res = Object.assign(makeRes(), { clearCookie: jest.fn() });
-    await refresh({ cookies: { refresh_token: 'x'.repeat(128) }, ip: '1.1.1.1' } as unknown as Request, res);
+    await refresh({ cookies: { refresh_token: 'x'.repeat(128) }, headers: {}, ip: '1.1.1.1' } as unknown as Request, res);
 
-    expect(mockPool.query.mock.calls[0][0]).toContain('u.activo      = TRUE');
+    expect(mockPool.query.mock.calls[0][0]).toContain('u.activo');
     expect(res.status).toHaveBeenCalledWith(401);
+    expect(res.clearCookie).toHaveBeenCalled();
+    // ni empresa, ni UPDATE, ni INSERT del token nuevo: solo la búsqueda y la fila de auditoría
+    const otras = mockPool.query.mock.calls.filter(c => !/INSERT INTO audit_logs/.test(String(c[0])));
+    expect(otras).toHaveLength(1);
   });
 });
 

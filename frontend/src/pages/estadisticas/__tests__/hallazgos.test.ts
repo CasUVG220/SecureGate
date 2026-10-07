@@ -42,7 +42,7 @@ describe('calcularHallazgos', () => {
     const e = estadisticasFixture();
     e.accesos.no_autorizados = 2;
     const h = calcularHallazgos(e, t, 'es').find(x => x.id === 'no-autorizados');
-    expect(h).toEqual({ id: 'no-autorizados', tono: 'danger', texto: 'Hubo 2 ingresos no autorizados.' });
+    expect(h).toEqual({ id: 'no-autorizados', tono: 'danger', texto: 'Hubo 2 entradas no autorizadas.' });
   });
 
   it('funciona en inglés', () => {

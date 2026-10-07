@@ -150,23 +150,34 @@ const b64 = o => Buffer.from(typeof o === 'string' ? o : JSON.stringify(o)).toSt
     resultado: baja.status === 200 && despues.status === 401 && refr.status === 401 && relogin.status === 401 ? 'OK' : 'FALLA', severidad: 'alta' });
   L.psql(`UPDATE usuarios SET activo = TRUE WHERE id = '${F.usuarios.cobayaA}'`);
 
-  // ── 10. Refresh token: rotación y reutilización ────────────────────────────
-  const l1 = await L.login(L.EMAIL.resA1);
+  // ── 10. Refresh token: rotación, gracia y reutilización (S-06, SCRUM-124) ──────
+  // Se usa a la cobaya: cerrar una familia por reutilización corta también los access tokens de esa persona, y las demás
+  // suites siguen usando los tokens de los usuarios de siembra.
+  const l1 = await L.login(L.EMAIL.cobayaA);
   const cookie0 = l1.cookie;
   const r1 = await L.call('POST', '/api/auth/refresh', { cookie: cookie0 });
   const cookie1 = (r1.setCookie.find(x => x.startsWith('refresh_token=')) || '').split(';')[0];
-  const reuso = await L.call('POST', '/api/auth/refresh', { cookie: cookie0 });          // el ya rotado
-  const nuevoSigueVivo = await L.call('POST', '/api/auth/refresh', { cookie: cookie1 });  // ¿se revocó la familia?
-  S.registrar({ id: 'JWT-refresh-rotacion', titulo: 'El refresh token rota y el anterior queda inválido', esperado: 'reuso del anterior → 401',
-    request: { method: 'POST', path: '/api/auth/refresh', actor: 'residente A1 (cookie)' },
-    real: { status: reuso.status, body: `1er refresh=${r1.status}; reuso del viejo=${reuso.status}` },
+  const enGracia = await L.call('POST', '/api/auth/refresh', { cookie: cookie0 });         // dos pestañas a la vez: se tolera
+  const cookieGracia = (enGracia.setCookie.find(x => x.startsWith('refresh_token=')) || '').split(';')[0];
+  S.registrar({ id: 'JWT-refresh-gracia', titulo: 'Ventana de gracia: el token recién rotado se tolera unos segundos (dos pestañas renovando a la vez)',
+    esperado: 'reuso inmediato del anterior → 200 con un sucesor propio; la sesión sigue viva',
+    request: { method: 'POST', path: '/api/auth/refresh', actor: 'cobaya (cookie rotada hace un instante)' },
+    real: { status: enGracia.status, body: `1er refresh=${r1.status}; reuso inmediato=${enGracia.status}` },
+    resultado: r1.status === 200 && enGracia.status === 200 && cookieGracia && cookieGracia !== cookie1 ? 'OK' : 'FALLA', severidad: 'media' });
+  // Pasa el tiempo: el token se rotó hace una hora (fuera de la gracia de 10 s).
+  L.psql(`UPDATE refresh_tokens SET rotado_en = NOW() - interval '1 hour' WHERE usuario_id = '${F.usuarios.cobayaA}' AND rotado_en IS NOT NULL`);
+  const reuso = await L.call('POST', '/api/auth/refresh', { cookie: cookie0 });            // el ya rotado, pasada la gracia
+  const nuevoSigueVivo = await L.call('POST', '/api/auth/refresh', { cookie: cookie1 });   // ¿se revocó la familia?
+  S.registrar({ id: 'JWT-refresh-rotacion', titulo: 'El refresh token rota y el anterior queda inválido (pasada la gracia)', esperado: 'reuso del anterior → 401',
+    request: { method: 'POST', path: '/api/auth/refresh', actor: 'cobaya (cookie)' },
+    real: { status: reuso.status, body: `1er refresh=${r1.status}; reuso del viejo tras la gracia=${reuso.status}` },
     resultado: r1.status === 200 && reuso.status === 401 ? 'OK' : 'FALLA', severidad: 'alta' });
-  S.registrar({ id: 'JWT-refresh-deteccion-reuso', titulo: 'Detección de reutilización: al reusar un refresh robado se revoca toda la familia',
-    esperado: 'tras el reuso del viejo, el refresh nuevo también deja de valer (401)',
-    request: { method: 'POST', path: '/api/auth/refresh', actor: 'residente A1 (cookie nueva tras el reuso)' },
-    real: { status: nuevoSigueVivo.status, body: `refresh nuevo tras reuso del viejo=${nuevoSigueVivo.status}` },
-    resultado: nuevoSigueVivo.status === 401 ? 'OK' : 'FALLA', severidad: 'baja',
-    nota: 'Conocido y aceptado en SECURITY_REVIEW.md (M6 «pendiente»). Un refresh robado y usado ANTES que el legítimo deja al atacante con sesión; el legítimo recibe 401 pero nadie se entera.' });
+  S.registrar({ id: 'JWT-refresh-deteccion-reuso', titulo: 'Detección de reutilización: al reusar un refresh ya rotado se revoca toda la familia',
+    esperado: 'tras el reuso del viejo, el refresh nuevo también deja de valer (401 sesion_comprometida) y queda REFRESH_REUTILIZADO en la bitácora',
+    request: { method: 'POST', path: '/api/auth/refresh', actor: 'cobaya (cookie nueva tras el reuso)' },
+    real: { status: nuevoSigueVivo.status, body: `refresh nuevo tras reuso del viejo=${nuevoSigueVivo.status} ${JSON.stringify(nuevoSigueVivo.json?.codigo ?? '')}` },
+    resultado: nuevoSigueVivo.status === 401 && reuso.json?.codigo === 'sesion_comprometida' ? 'OK' : 'FALLA', severidad: 'media',
+    nota: 'S-06 corregido en el Sprint 9 (SCRUM-124): familia de tokens, gracia de 10 s, auditoría y aviso al titular.' });
   const flags = (l1.resp.setCookie[0] || '');
   S.registrar({ id: 'JWT-cookie-flags', titulo: 'Flags de la cookie de refresh en este entorno (desarrollo)', esperado: 'HttpOnly; SameSite=Strict; Path=/; (Secure solo en producción)',
     request: { method: 'POST', path: '/api/auth/login', actor: 'residente A1' },

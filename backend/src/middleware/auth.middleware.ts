@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { tokenRevocado } from '../utils/revocacion';
+import { registrarAuditoria } from './audit.middleware';
 
 export type UserRol = 'owner' | 'admin_empresa' | 'admin_sucursal' | 'agente' | 'residente';
 
@@ -64,9 +65,22 @@ export const verifyToken = (req: Request, res: Response, next: NextFunction) => 
   }
 };
 
+/**
+ * Una persona con sesión que pide algo que su rol no permite deja huella (acción ACCESO_DENEGADO): es la señal de alguien
+ * que prueba rutas de administración. Va aquí, en el guard, porque el `auditLog` de cada ruta está DESPUÉS y nunca llega a
+ * correr cuando el rol ya fue rechazado. Los 401 (sin sesión) no se auditan: son ruido anónimo de escáneres.
+ */
+const denegar = (req: Request, res: Response, guarda: string, error: string) => {
+  registrarAuditoria(
+    req, { accion: 'ACCESO_DENEGADO' }, 403,
+    { guarda, metodo: req.method, ruta: (req.originalUrl ?? '').split('?')[0].slice(0, 200), rol: req.user?.rol ?? null },
+  );
+  return res.status(403).json({ error });
+};
+
 export const requireOwner = (req: Request, res: Response, next: NextFunction) => {
   if (req.user?.rol !== 'owner') {
-    return res.status(403).json({ error: 'Acceso restringido a owner' });
+    return denegar(req, res, 'owner', 'Acceso restringido a owner');
   }
   next();
 };
@@ -74,7 +88,7 @@ export const requireOwner = (req: Request, res: Response, next: NextFunction) =>
 export const requireAdminEmpresa = (req: Request, res: Response, next: NextFunction) => {
   const allowed: UserRol[] = ['owner', 'admin_empresa'];
   if (!req.user || !allowed.includes(req.user.rol)) {
-    return res.status(403).json({ error: 'Acceso restringido a admin de empresa' });
+    return denegar(req, res, 'admin_empresa', 'Acceso restringido a admin de empresa');
   }
   next();
 };
@@ -82,14 +96,14 @@ export const requireAdminEmpresa = (req: Request, res: Response, next: NextFunct
 export const requireAdminSucursal = (req: Request, res: Response, next: NextFunction) => {
   const allowed: UserRol[] = ['owner', 'admin_empresa', 'admin_sucursal'];
   if (!req.user || !allowed.includes(req.user.rol)) {
-    return res.status(403).json({ error: 'Acceso restringido a admin de sucursal' });
+    return denegar(req, res, 'admin_sucursal', 'Acceso restringido a admin de sucursal');
   }
   next();
 };
 
 export const requireStaff = (req: Request, res: Response, next: NextFunction) => {
   if (!req.user || !ROLES_PERSONAL.includes(req.user.rol)) {
-    return res.status(403).json({ error: 'Acceso restringido a personal' });
+    return denegar(req, res, 'personal', 'Acceso restringido a personal');
   }
   next();
 };

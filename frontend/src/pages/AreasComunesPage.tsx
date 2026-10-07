@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
+import { rellenar } from '../components/charts/format';
 import {
   getAreas, createArea, updateArea, deleteArea,
   type AreaComun, type TarifaTipo,
 } from '../services/api';
 import { GridSkeleton, Spinner } from '../components/Skeleton';
 import { useToast } from '../components/Toast';
-import { Button, ROW_ICON, RowActions } from '../components/ui';
+import { Button, Modal, ROW_ICON, RowActions, useConfirmacion } from '../components/ui';
 import { useTranslation } from '../i18n/useTranslation';
 import { archivoADataUri, esImagenValida, ImagenError } from '../utils/imagen';
 
@@ -39,6 +40,7 @@ const EMPTY_FORM = {
 
 export default function AreasComunesPage() {
   const { t } = useTranslation();
+  const { confirmar, dialogo } = useConfirmacion();
   const showToast = useToast();
 
   const [areas, setAreas] = useState<AreaComun[]>([]);
@@ -141,7 +143,13 @@ export default function AreasComunesPage() {
   };
 
   const handleDelete = async (a: AreaComun) => {
-    if (!window.confirm(`${t('reservas.confirmDeleteArea')} "${a.nombre}"?`)) return;
+    const ok = await confirmar({
+      title: rellenar(t('confirm.deleteArea.title'), { nombre: a.nombre }),
+      message: t('confirm.deleteArea.message'),
+      confirmLabel: t('common.delete'),
+      tone: 'danger',
+    });
+    if (!ok) return;
     try {
       await deleteArea(a.id);
       setAreas(prev => prev.map(x => (x.id === a.id ? { ...x, activa: false } : x)));
@@ -173,7 +181,7 @@ export default function AreasComunesPage() {
       </div>
 
       {error && (
-        <div className="bg-red-900/40 border border-red-700 rounded-lg px-4 py-3 text-red-300 text-sm">
+        <div className="bg-danger-900/40 border border-danger-700 rounded-lg px-4 py-3 text-danger-300 text-sm">
           {error}
         </div>
       )}
@@ -214,9 +222,9 @@ export default function AreasComunesPage() {
                   )}
                 </div>
                 {a.descripcion && (
-                  <p className="text-sm text-gray-400 line-clamp-2">{a.descripcion}</p>
+                  <p className="text-sm text-gray-400 line-clamp-2" title={a.descripcion}>{a.descripcion}</p>
                 )}
-                <p className="text-sm font-medium text-emerald-400">{tarifaTexto(a)}</p>
+                <p className="text-sm font-medium text-success-400">{tarifaTexto(a)}</p>
                 {a.requiere_aprobacion !== null && (
                   <p className="text-xs text-gray-500">
                     {a.requiere_aprobacion
@@ -243,20 +251,23 @@ export default function AreasComunesPage() {
         </div>
       )}
 
-      {showModal && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="bg-gray-800 rounded-t-2xl sm:rounded-2xl shadow-2xl w-full sm:max-w-lg p-6 space-y-4 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between">
-              <h2 className="text-lg font-bold text-white">
-                {editTarget ? t('reservas.editArea') : t('reservas.createArea')}
-              </h2>
-              <button onClick={closeModal} className="text-gray-400 hover:text-white text-xl leading-none">
-                ✕
-              </button>
-            </div>
-
+      {/* Modal propio: el formulario es largo y «Guardar» queda fijo al pie (footer), a la vista. */}
+      <Modal
+        open={showModal}
+        onClose={closeModal}
+        dismissible={!saving}
+        size="md"
+        title={editTarget ? t('reservas.editArea') : t('reservas.createArea')}
+        footer={
+          <>
+            <Button variant="ghost" onClick={closeModal} disabled={saving}>{t('common.cancel')}</Button>
+            <Button onClick={handleSave} loading={saving}>{saving ? t('common.saving') : t('common.save')}</Button>
+          </>
+        }
+      >
+          <div className="space-y-4">
             {formError && (
-              <div className="bg-red-900/40 border border-red-700 rounded-lg px-3 py-2 text-red-300 text-sm">
+              <div className="bg-danger-900/40 border border-danger-700 rounded-lg px-3 py-2 text-danger-300 text-sm">
                 {formError}
               </div>
             )}
@@ -269,7 +280,7 @@ export default function AreasComunesPage() {
                 name="nombre"
                 value={form.nombre}
                 onChange={e => setForm(prev => ({ ...prev, nombre: e.target.value }))}
-                className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-blue-500"
+                className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-brand-500"
               />
             </div>
 
@@ -282,7 +293,7 @@ export default function AreasComunesPage() {
                 rows={2}
                 value={form.descripcion}
                 onChange={e => setForm(prev => ({ ...prev, descripcion: e.target.value }))}
-                className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 resize-none"
+                className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-brand-500 resize-none"
               />
             </div>
 
@@ -295,9 +306,9 @@ export default function AreasComunesPage() {
                 placeholder={t('reservas.imageUrl')}
                 value={form.imagen_url.startsWith('data:') ? '' : form.imagen_url}
                 onChange={e => setForm(prev => ({ ...prev, imagen_url: e.target.value }))}
-                className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 mb-2"
+                className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-brand-500 mb-2"
               />
-              <label className="flex items-center gap-2 w-full cursor-pointer bg-gray-700 border border-dashed border-gray-500 hover:border-blue-500 rounded-lg px-3 py-2.5 transition-colors text-sm text-gray-300">
+              <label className="flex items-center gap-2 w-full cursor-pointer bg-gray-700 border border-dashed border-gray-500 hover:border-brand-500 rounded-lg px-3 py-2.5 transition-colors text-sm text-gray-300">
                 <input
                   type="file"
                   accept="image/jpeg,image/png,image/webp"
@@ -338,7 +349,7 @@ export default function AreasComunesPage() {
                   onChange={e =>
                     setForm(prev => ({ ...prev, tarifa_tipo: e.target.value as TarifaTipo }))
                   }
-                  className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500 appearance-none"
+                  className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-500 appearance-none"
                 >
                   {TARIFAS.map(tf => (
                     <option key={tf.value} value={tf.value}>{t(tf.labelKey)}</option>
@@ -357,7 +368,7 @@ export default function AreasComunesPage() {
                   disabled={form.tarifa_tipo === 'gratis'}
                   value={form.tarifa_tipo === 'gratis' ? '' : form.tarifa_monto}
                   onChange={e => setForm(prev => ({ ...prev, tarifa_monto: e.target.value }))}
-                  className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 disabled:opacity-40"
+                  className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-brand-500 disabled:opacity-40"
                 />
               </div>
             </div>
@@ -370,7 +381,7 @@ export default function AreasComunesPage() {
                 name="aprobacion"
                 value={form.aprobacion}
                 onChange={e => setForm(prev => ({ ...prev, aprobacion: e.target.value }))}
-                className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500 appearance-none"
+                className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-500 appearance-none"
               >
                 {APROBACION.map(o => (
                   <option key={o.value} value={o.value}>{t(o.labelKey)}</option>
@@ -387,25 +398,9 @@ export default function AreasComunesPage() {
               {t('reservas.areaActive')}
             </label>
 
-            <div className="flex gap-3 pt-1">
-              <button
-                onClick={handleSave}
-                disabled={saving}
-                className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-semibold py-2 rounded-xl transition-colors flex items-center justify-center gap-2"
-              >
-                {saving && <Spinner size={14} />}
-                {saving ? t('common.saving') : t('common.save')}
-              </button>
-              <button
-                onClick={closeModal}
-                className="bg-gray-700 hover:bg-gray-600 text-gray-200 font-medium px-4 py-2 rounded-xl transition-colors"
-              >
-                {t('common.cancel')}
-              </button>
-            </div>
           </div>
-        </div>
-      )}
+      </Modal>
+      {dialogo}
     </div>
   );
 }

@@ -1,11 +1,13 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { rellenar } from '../components/charts/format';
 import {
   getAnuncios, createAnuncio, updateAnuncio, deleteAnuncio,
   decodeTokenPayload,
   type Anuncio, type AnuncioPrioridad,
 } from '../services/api';
-import { Badge, Button, DataTable, EmptyState, Input, Modal, Textarea, useToast, type Column } from '../components/ui';
+import { Badge, Button, DataTable, EmptyState, Input, Modal, ROW_ICON, RowActions, Textarea, useToast, type Column, useConfirmacion } from '../components/ui';
 import { useTranslation } from '../i18n/useTranslation';
+import { diaISO, formatearDia, formatearFecha, hoyEnZona } from '../utils/fecha';
 
 const PRIORIDADES: { value: AnuncioPrioridad; labelKey: string }[] = [
   { value: 'normal',     labelKey: 'announce.prioNormal' },
@@ -38,6 +40,7 @@ const EMPTY_FORM = {
 export default function AnunciosPage() {
   const showToast = useToast();
   const { t } = useTranslation();
+  const { confirmar, dialogo } = useConfirmacion();
 
   const sucursalId = (() => {
     const token = localStorage.getItem('token');
@@ -55,6 +58,21 @@ export default function AnunciosPage() {
   const [form, setForm]             = useState(EMPTY_FORM);
   const [saving, setSaving]         = useState(false);
   const [formError, setFormError]   = useState<string | null>(null);
+  // Anuncio recién publicado, resaltado un momento para que se vea dónde quedó.
+  const [resaltadoId, setResaltadoId] = useState<string | null>(null);
+  const temporizadorResalte = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const resaltar = (id: string) => {
+    setSearch('');
+    setResaltadoId(id);
+    if (temporizadorResalte.current) clearTimeout(temporizadorResalte.current);
+    temporizadorResalte.current = setTimeout(() => setResaltadoId(null), 6000);
+    // La fila ya está pintada (el aviso aparece tras publicar): se lleva a la vista.
+    window.requestAnimationFrame(() => {
+      document.querySelector(`[data-row-key="${id}"]`)?.scrollIntoView?.({ block: 'center', behavior: 'smooth' });
+    });
+  };
+  useEffect(() => () => { if (temporizadorResalte.current) clearTimeout(temporizadorResalte.current); }, []);
 
   const load = () => {
     setLoading(true);
@@ -102,7 +120,10 @@ export default function AnunciosPage() {
       } else {
         const created = await createAnuncio({ ...payload, sucursal_id: sucursalId ?? undefined });
         setAnuncios(prev => [created, ...prev]);
-        showToast(t('announce.created'));
+        // Confirmación que dura hasta que se cierre y lleva al anuncio recién publicado.
+        showToast(t('announce.published'), 'success', {
+          accion: { label: t('announce.viewIt'), onClick: () => resaltar(created.id) },
+        });
       }
       closeModal();
     } catch (err: unknown) {
@@ -113,7 +134,13 @@ export default function AnunciosPage() {
   };
 
   const handleDelete = async (a: Anuncio) => {
-    if (!window.confirm(`${t('announce.confirmDelete')} "${a.titulo}"?`)) return;
+    const ok = await confirmar({
+      title: rellenar(t('confirm.deleteAnnouncement.title'), { nombre: a.titulo }),
+      message: t('confirm.deleteAnnouncement.message'),
+      confirmLabel: t('common.delete'),
+      tone: 'danger',
+    });
+    if (!ok) return;
     try {
       await deleteAnuncio(a.id);
       setAnuncios(prev => prev.filter(x => x.id !== a.id));
@@ -123,7 +150,17 @@ export default function AnunciosPage() {
     }
   };
 
-  const fmtDate = (d: string | null) => d ? new Date(d).toLocaleDateString('es-GT') : null;
+  const fmtDate = (d: string | null) => d ? formatearFecha(d) : null;
+
+  /** Si el anuncio todavía no empieza, ya terminó o está a la vista de los residentes (días de calendario). */
+  const estadoVigencia = (a: Anuncio): 'futuro' | 'vencido' | 'vigente' => {
+    const hoy = hoyEnZona();
+    const desde = diaISO(a.vigente_desde) ?? '';
+    const hasta = diaISO(a.vigente_hasta);
+    if (desde > hoy) return 'futuro';
+    if (hasta && hasta < hoy) return 'vencido';
+    return 'vigente';
+  };
 
   const vigencia = (a: Anuncio): string => {
     const desde = fmtDate(a.vigente_desde) ?? '—';
@@ -134,6 +171,14 @@ export default function AnunciosPage() {
   const filtered = anuncios.filter(a =>
     `${a.titulo} ${a.contenido}`.toLowerCase().includes(search.toLowerCase())
   );
+
+  /** Aviso, antes de publicar, de quién lo va a ver y desde/hasta cuándo. */
+  const visibilidad = useMemo(() => {
+    const desde = form.vigente_desde ? formatearDia(form.vigente_desde) : null;
+    const hasta = form.vigente_hasta ? formatearDia(form.vigente_hasta) : null;
+    const empiezaHoy = !form.vigente_desde || form.vigente_desde <= hoyEnZona();
+    return { desde, hasta, empiezaHoy };
+  }, [form.vigente_desde, form.vigente_hasta]);
 
   const columns: Column<Anuncio>[] = [
     {
@@ -154,16 +199,45 @@ export default function AnunciosPage() {
       ),
     },
     { key: 'vigencia', header: t('announce.colValidity'), className: 'whitespace-nowrap text-xs text-gray-400', cell: a => vigencia(a) },
-    { key: 'lecturas', header: t('announce.colReads'), align: 'center', className: 'text-gray-300', cell: a => a.total_lecturas ?? 0 },
+    {
+      // «Lecturas» sola decía poco (y un 0 parecía un fallo): se explica qué es y por qué puede ser cero.
+      key: 'lecturas',
+      header: (
+        <span className="block">
+          {t('announce.colReads')}
+          <span className="block text-2xs font-normal normal-case tracking-normal text-gray-400">{t('announce.colReadsHint')}</span>
+        </span>
+      ),
+      align: 'center',
+      cell: a => {
+        const leidas = a.total_lecturas ?? 0;
+        const total = a.total_residentes;
+        const nota = leidas > 0
+          ? (total !== undefined && leidas >= total ? t('announce.readsAll') : null)
+          : estadoVigencia(a) === 'futuro' ? t('announce.readsNotYet')
+          : estadoVigencia(a) === 'vencido' ? t('announce.readsExpired')
+          : t('announce.readsNone');
+        return (
+          <span className="block">
+            <span className="font-semibold tabular-nums text-gray-100">
+              {total !== undefined ? rellenar(t('announce.reads'), { n: leidas, total }) : leidas}
+            </span>
+            {nota && <span className="block text-2xs text-gray-400">{nota}</span>}
+          </span>
+        );
+      },
+    },
     {
       key: 'acciones', header: t('common.actions'), align: 'right', actions: true,
       cell: a => (
-        <div className="flex justify-end gap-2">
-          <Button size="sm" variant="ghost" onClick={() => openEdit(a)}>{t('common.edit')}</Button>
-          <Button size="sm" variant="ghost" onClick={() => handleDelete(a)} className="text-danger-400 hover:bg-danger-500/12 hover:text-danger-400">
-            {t('common.delete')}
-          </Button>
-        </div>
+        <RowActions
+          align="end"
+          menuLabel={`${t('common.actions')}: ${a.titulo}`}
+          actions={[
+            { id: 'editar', label: t('common.edit'), icon: ROW_ICON.edit, tone: 'primary', onClick: () => openEdit(a) },
+            { id: 'eliminar', label: t('common.delete'), icon: ROW_ICON.trash, tone: 'danger', onClick: () => handleDelete(a) },
+          ]}
+        />
       ),
     },
   ];
@@ -176,7 +250,7 @@ export default function AnunciosPage() {
             <h1 className="text-2xl font-bold text-gray-50">{t('announce.title')}</h1>
             <p className="mt-1 text-sm text-gray-400">{t('announce.subtitle')}</p>
           </div>
-          <Button onClick={openCreate}>{t('announce.new')}</Button>
+          {(loading || !!search || anuncios.length > 0) && <Button onClick={openCreate}>{t('announce.new')}</Button>}
         </header>
 
         <Input
@@ -198,6 +272,7 @@ export default function AnunciosPage() {
           rowKey={a => a.id}
           loading={loading}
           caption={t('announce.title')}
+          rowClassName={a => a.id === resaltadoId && 'bg-success-500/10 ring-1 ring-inset ring-success-500/40'}
           empty={
             search ? (
               <EmptyState icon={ICON_SEARCH} title={t('announce.empty')} />
@@ -219,6 +294,16 @@ export default function AnunciosPage() {
         title={editTarget ? t('announce.editTitle') : t('announce.createTitle')}
         size="lg"
         dismissible={!saving}
+        footer={
+          <>
+            <Button variant="ghost" onClick={closeModal} disabled={saving}>{t('common.cancel')}</Button>
+            <Button onClick={handleSave} loading={saving}>
+              {editTarget
+                ? (saving ? t('common.saving') : t('common.save'))
+                : (saving ? t('announce.publishing') : t('announce.publish'))}
+            </Button>
+          </>
+        }
       >
         <div className="space-y-4">
           {formError && (
@@ -280,12 +365,26 @@ export default function AnunciosPage() {
             />
           </div>
 
-          <div className="flex flex-wrap justify-end gap-3 pt-2">
-            <Button variant="ghost" onClick={closeModal} disabled={saving}>{t('common.cancel')}</Button>
-            <Button onClick={handleSave} loading={saving}>{saving ? t('common.saving') : t('common.save')}</Button>
+          {/* Quién lo verá: se dice ANTES de publicar, no después. */}
+          <div className="rounded-lg border border-brand-500/30 bg-brand-500/10 px-3 py-2.5 text-xs text-gray-200" role="note">
+            <p className="font-semibold text-gray-50">{t('announce.visibilityTitle')}</p>
+            {editTarget ? (
+              <p className="mt-1">{t('announce.editVisibility')}</p>
+            ) : visibilidad.empiezaHoy ? (
+              <p className="mt-1">{t('announce.visibilityNow')}</p>
+            ) : (
+              <p className="mt-1">{t('announce.visibilityFrom')} <strong>{visibilidad.desde}</strong>.</p>
+            )}
+            <p className="mt-1">
+              {visibilidad.hasta
+                ? <>{t('announce.visibilityUntil')} <strong>{visibilidad.hasta}</strong>.</>
+                : t('announce.visibilityOpen')}
+            </p>
+            {form.prioridad === 'urgente' && <p className="mt-1 font-semibold text-danger-400">{t('announce.visibilityUrgent')}</p>}
           </div>
         </div>
       </Modal>
+      {dialogo}
     </div>
   );
 }

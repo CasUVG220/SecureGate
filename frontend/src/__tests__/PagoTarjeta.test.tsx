@@ -1,12 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import PagoTarjetaModal from '../components/PagoTarjetaModal';
-import { pagarConTarjeta } from '../services/api';
+import { pagarConTarjeta, PagoRechazadoError } from '../services/api';
 import {
   esLuhnValido, formatearNumero, formatearVencimiento, detectarMarca, validarTarjeta,
 } from '../utils/tarjeta';
 
-vi.mock('../services/api', () => ({ pagarConTarjeta: vi.fn() }));
+vi.mock('../services/api', () => {
+  class PagoRechazadoError extends Error {}
+  return { pagarConTarjeta: vi.fn(), PagoRechazadoError };
+});
 
 const mockPagar = pagarConTarjeta as unknown as ReturnType<typeof vi.fn>;
 
@@ -113,14 +116,63 @@ const llenar = (over: Partial<Record<string, string>> = {}) => {
 describe('PagoTarjetaModal', () => {
   beforeEach(() => { mockPagar.mockReset(); });
 
-  const renderModal = (onResultado = vi.fn()) => {
-    render(<PagoTarjetaModal open onClose={vi.fn()} saldo={850} onResultado={onResultado} />);
+  const renderModal = (onResultado = vi.fn(), extra: Partial<React.ComponentProps<typeof PagoTarjetaModal>> = {}) => {
+    render(<PagoTarjetaModal open onClose={vi.fn()} saldo={850} onResultado={onResultado} {...extra} />);
     return onResultado;
   };
 
-  it('advierte que la pasarela es simulada', () => {
-    renderModal();
+  it('en un entorno de PRUEBA (simulada) advierte que no se cobra a una tarjeta real', () => {
+    renderModal(vi.fn(), { simulada: true });
     expect(screen.getByText(/no se cobra a ninguna tarjeta real/i)).toBeInTheDocument();
+    expect(screen.getByText(/Pago simulado/)).toBeInTheDocument();
+  });
+
+  it('al residente real NO se le muestra ningún texto de implementación (simulado / Visanet / entorno de prueba)', () => {
+    const { baseElement } = render(<PagoTarjetaModal open onClose={vi.fn()} saldo={850} onResultado={vi.fn()} />);
+    expect(baseElement.textContent).not.toMatch(/simulad|visanet|entorno de prueba|no se cobra/i);
+    expect(screen.getByText('Paga tu saldo pendiente con tarjeta.')).toBeInTheDocument();
+  });
+
+  describe('advertencia cuando el monto supera el saldo', () => {
+    const cambiarMonto = (v: string) => fireEvent.change(screen.getByLabelText(/Monto a pagar/), { target: { value: v } });
+
+    it('con el monto igual al saldo no avisa', () => {
+      renderModal();
+      expect(screen.queryByText(/supera tu saldo pendiente/)).toBeNull();
+    });
+
+    it('si el monto es mayor, avisa con las dos cifras y NO bloquea el pago', async () => {
+      mockPagar.mockResolvedValue({ id: 'p9', monto: '900.00', estado: 'aprobado', es_simulado: true });
+      renderModal();
+      cambiarMonto('900');
+      const aviso = screen.getByRole('status');
+      expect(aviso).toHaveTextContent('El monto (Q900.00) supera tu saldo pendiente (Q850.00)');
+      expect(aviso).toHaveTextContent('el excedente no se acredita');
+
+      llenar();
+      fireEvent.click(screen.getByRole('button', { name: /Confirmar pago/ }));
+      await waitFor(() => expect(mockPagar).toHaveBeenCalledWith(expect.objectContaining({ monto: 900 })));
+    });
+
+    it('«Usar mi saldo» vuelve a poner el saldo exacto y el aviso desaparece', () => {
+      renderModal();
+      cambiarMonto('1200');
+      fireEvent.click(screen.getByRole('button', { name: 'Usar mi saldo (Q850.00)' }));
+      expect(screen.getByLabelText(/Monto a pagar/)).toHaveValue(850);
+      expect(screen.queryByText(/supera tu saldo pendiente/)).toBeNull();
+    });
+
+    it('un monto menor al saldo no es una advertencia', () => {
+      renderModal();
+      cambiarMonto('100');
+      expect(screen.queryByRole('status')).toBeNull();
+    });
+
+    it('sin saldo pendiente avisa que el pago no reduce ninguna deuda', () => {
+      renderModal(vi.fn(), { saldo: 0 });
+      cambiarMonto('50');
+      expect(screen.getByRole('status')).toHaveTextContent('No tienes saldo pendiente');
+    });
   });
 
   it('precarga el saldo pendiente como monto a cobrar', () => {
@@ -169,18 +221,18 @@ describe('PagoTarjetaModal', () => {
     expect(enviado).not.toContain('4111111111111111');
     expect(enviado).not.toContain('123');
 
-    await waitFor(() => expect(onResultado).toHaveBeenCalledWith(expect.objectContaining({ id: 'p1' }), true));
+    await waitFor(() => expect(onResultado).toHaveBeenCalledWith(expect.objectContaining({ id: 'p1' })));
   });
 
-  it('pago rechazado: informa al usuario y deja el formulario abierto', async () => {
-    mockPagar.mockResolvedValue({ id: 'p2', monto: '850.00', estado: 'rechazado', es_simulado: true });
+  it('pago rechazado: informa al usuario, deja el formulario abierto y NO lo reporta como pago', async () => {
+    mockPagar.mockRejectedValue(new PagoRechazadoError('Pago rechazado por el emisor. Intenta con otra tarjeta.'));
     const onResultado = renderModal();
 
     llenar();
     fireEvent.click(screen.getByRole('button', { name: /Confirmar pago/ }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent(/rechazado por el emisor/i);
-    await waitFor(() => expect(onResultado).toHaveBeenCalledWith(expect.objectContaining({ id: 'p2' }), false));
+    expect(onResultado).not.toHaveBeenCalled();        // una tarjeta rechazada no es un pago: no llega al historial
     expect(screen.getByRole('dialog')).toBeInTheDocument();
   });
 });

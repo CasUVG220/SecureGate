@@ -1,82 +1,81 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { rellenar } from '../components/charts/format';
 import {
-  getPreautorizaciones, createPreautorizacion, deletePreautorizacion, getResidentes,
+  getPreautorizaciones, deletePreautorizacion, getResidentes,
   type Preautorizacion, type Residente,
 } from '../services/api';
-import { TableSkeleton, Spinner } from '../components/Skeleton';
 import { useToast } from '../components/Toast';
-import { ROW_ICON, RowActions } from '../components/ui';
+import {
+  Button, DataTable, EmptyState, ROW_ICON, RowActions, StatusText,
+  type Column, type StatusKind,
+  useConfirmacion,
+} from '../components/ui';
+import AvisarVisitaModal, { type DatosVisita } from '../components/AvisarVisitaModal';
 import { useTranslation } from '../i18n/useTranslation';
+import { diaISO, formatearRangoDias, hoyEnZona } from '../utils/fecha';
+import { formatearPlaca } from '../utils/placa';
 
-const today = () => new Date().toISOString().slice(0, 10);
-const EMPTY_FORM = { residente_id: '', nombre_visitante: '', numero_dpi: '', placa: '', fecha_inicio: '', fecha_fin: '' };
+const ICON_VISITA = 'M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75';
 
+type Estado = 'hoy' | 'proxima' | 'vencida';
+const ESTADO_KEY: Record<Estado, string> = { hoy: 'aviso.state.current', proxima: 'aviso.state.upcoming', vencida: 'aviso.state.expired' };
+const ESTADO_TONO: Record<Estado, StatusKind> = { hoy: 'on', proxima: 'warn', vencida: 'off' };
+
+/** Estado de un aviso respecto de hoy (día de Guatemala). Las fechas son días de calendario. */
+const estadoDe = (p: Preautorizacion, hoy: string): Estado => {
+  const inicio = diaISO(p.fecha_inicio) ?? '';
+  const fin = diaISO(p.fecha_fin) ?? '';
+  if (fin && fin < hoy) return 'vencida';
+  if (inicio > hoy) return 'proxima';
+  return 'hoy';
+};
+
+/**
+ * Visitas avisadas (administrador). Solo aparecen los avisos con fecha de fin: los «visitantes guardados» de la
+ * libreta de un residente no autorizan nada y no tienen por qué estorbar aquí. Las vencidas se esconden hasta pedirlas.
+ */
 export default function PreautPage() {
   const showToast = useToast();
   const { t } = useTranslation();
-  const [preauths, setPreauths]     = useState<Preautorizacion[]>([]);
+  const { confirmar, dialogo: dialogoConfirmar } = useConfirmacion();
+  const [avisos, setAvisos]         = useState<Preautorizacion[]>([]);
   const [residentes, setResidentes] = useState<Residente[]>([]);
   const [loading, setLoading]       = useState(true);
   const [error, setError]           = useState<string | null>(null);
-  const [showModal, setShowModal]   = useState(false);
-  const [form, setForm]             = useState(EMPTY_FORM);
-  const [saving, setSaving]         = useState(false);
-  const [formError, setFormError]   = useState<string | null>(null);
+  const [dialogo, setDialogo]       = useState<{ abierto: boolean; inicial: DatosVisita | null }>({ abierto: false, inicial: null });
+  const [verVencidas, setVerVencidas] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const cargar = () => {
     setLoading(true);
     getPreautorizaciones()
-      .then(setPreauths)
-      .catch(() => setError('No se pudo cargar la lista de preautorizaciones.'))
+      .then(setAvisos)
+      .catch(() => setError('No se pudo cargar la lista de visitas avisadas.'))
       .finally(() => setLoading(false));
   };
 
-  useEffect(() => {
-    cargar();
-    getResidentes().then(setResidentes).catch(() => {});
-  }, []);
+  // Carga inicial de la pantalla; el estado se actualiza al resolver las peticiones.
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => { cargar(); getResidentes().then(setResidentes).catch(() => {}); }, []);
 
-  const handleFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
-    setForm(prev => ({ ...prev, [e.target.name]: e.target.value }));
+  const hoy = hoyEnZona();
+  const conFecha = useMemo(() => avisos.filter(p => p.fecha_fin !== null), [avisos]);
+  const vencidas = useMemo(() => conFecha.filter(p => estadoDe(p, hoy) === 'vencida').length, [conFecha, hoy]);
+  const visibles = verVencidas ? conFecha : conFecha.filter(p => estadoDe(p, hoy) !== 'vencida');
 
-  const handleCrear = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!form.residente_id || !form.nombre_visitante || !form.fecha_inicio) {
-      setFormError('Residente, nombre del visitante y fecha de inicio son obligatorios.');
-      return;
-    }
-    if (!form.numero_dpi && !form.placa) {
-      setFormError('Se requiere al menos DPI o placa del visitante.');
-      return;
-    }
-    setSaving(true); setFormError(null);
+  const handleEliminar = async (p: Preautorizacion) => {
+    const ok = await confirmar({
+      title: rellenar(t('confirm.deleteNotice.title'), { nombre: p.nombre_visitante }),
+      message: t('confirm.deleteNotice.message'),
+      confirmLabel: t('common.delete'),
+      tone: 'danger',
+    });
+    if (!ok) return;
+    setDeletingId(p.id);
     try {
-      await createPreautorizacion({
-        residente_id:     form.residente_id,
-        nombre_visitante: form.nombre_visitante,
-        numero_dpi:       form.numero_dpi   || undefined,
-        placa:            form.placa        || undefined,
-        fecha_inicio:     form.fecha_inicio,
-        fecha_fin:        form.fecha_fin    || undefined,
-      });
-      setShowModal(false);
+      await deletePreautorizacion(p.id);
       cargar();
-      showToast(t('preauth.created'));
-    } catch (err: unknown) {
-      setFormError(err instanceof Error ? err.message : 'Error al crear preautorización');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleEliminar = async (id: string) => {
-    if (!window.confirm(t('preauth.confirmDelete'))) return;
-    setDeletingId(id);
-    try {
-      await deletePreautorizacion(id);
-      cargar();
-      showToast(t('preauth.deleted'), 'warning');
+      showToast(t('aviso.deleted'), 'warning');
     } catch (err: unknown) {
       showToast(err instanceof Error ? err.message : 'Error al eliminar', 'error');
     } finally {
@@ -84,151 +83,100 @@ export default function PreautPage() {
     }
   };
 
-  const handlePreautHoy = (p: Preautorizacion) => {
-    setForm({
-      residente_id:     p.residente_id,
-      nombre_visitante: p.nombre_visitante,
-      numero_dpi:       p.numero_dpi || '',
-      placa:            p.placa || '',
-      fecha_inicio:     today(),
-      fecha_fin:        today(),
-    });
-    setFormError(null);
-    setShowModal(true);
-  };
+  const abrirNuevo = () => setDialogo({ abierto: true, inicial: null });
+  const abrirOtraVez = (p: Preautorizacion) => setDialogo({
+    abierto: true,
+    inicial: { residente_id: p.residente_id, nombre_visitante: p.nombre_visitante, numero_dpi: p.numero_dpi, placa: p.placa },
+  });
 
-  const formatFecha = (iso: string | null) =>
-    iso ? new Date(iso).toLocaleDateString('es-GT') : '—';
+  const columnas: Column<Preautorizacion>[] = [
+    {
+      key: 'casa', header: t('aviso.list.house'), primary: true,
+      cell: p => (
+        <>
+          <span className="font-medium text-gray-100">{p.numero_casa}</span>
+          <span className="block text-xs text-gray-400">{p.residente_nombre}</span>
+        </>
+      ),
+    },
+    { key: 'visitante', header: t('aviso.list.visitor'), cell: p => <span className="text-gray-100">{p.nombre_visitante}</span> },
+    { key: 'dpi', header: t('aviso.dpi'), hideOnMobile: true, cell: p => <span className="text-gray-400">{p.numero_dpi ?? '—'}</span> },
+    {
+      key: 'placa', header: t('aviso.plate'),
+      cell: p => p.placa ? <span className="font-mono text-gray-200">{formatearPlaca(p.placa)}</span> : <span className="text-gray-500">—</span>,
+    },
+    { key: 'fechas', header: t('aviso.list.dates'), cell: p => <span className="text-gray-300">{formatearRangoDias(p.fecha_inicio, p.fecha_fin)}</span> },
+    {
+      key: 'estado', header: t('common.status'), hideOnMobile: true,
+      cell: p => { const e = estadoDe(p, hoy); return <StatusText kind={ESTADO_TONO[e]}>{t(ESTADO_KEY[e])}</StatusText>; },
+    },
+    {
+      key: 'acciones', header: t('common.actions'), actions: true,
+      cell: p => (
+        <RowActions
+          align="start"
+          menuLabel={`${t('common.actions')}: ${p.nombre_visitante}`}
+          actions={[
+            { id: 'otra-vez', label: t('aviso.again'), icon: ROW_ICON.clock, tone: 'primary', onClick: () => abrirOtraVez(p) },
+            {
+              id: 'eliminar', label: t('common.delete'), icon: ROW_ICON.trash, tone: 'danger',
+              loading: deletingId === p.id, onClick: () => handleEliminar(p),
+            },
+          ]}
+        />
+      ),
+    },
+  ];
 
   return (
     <div className="sg-page text-gray-100">
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-bold text-white">{t('preauth.title')}</h1>
-        <button
-          onClick={() => { setForm(EMPTY_FORM); setFormError(null); setShowModal(true); }}
-          className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors"
-        >
-          {t('preauth.new')}
-        </button>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-bold text-white">{t('aviso.list.title')}</h1>
+          <p className="mt-1 text-sm text-gray-400">{t('aviso.list.subtitle')}</p>
+        </div>
+        {(loading || visibles.length > 0) && <Button onClick={abrirNuevo}>{t('aviso.title')}</Button>}
       </div>
 
       {error && (
-        <div className="bg-red-900/40 border border-red-700 rounded-lg px-4 py-3 text-red-300 text-sm">{error}</div>
+        <div role="alert" className="rounded-lg border border-danger-500/30 bg-danger-500/10 px-4 py-3 text-sm text-danger-400">{error}</div>
       )}
 
-      <div className="bg-gray-800 rounded-2xl shadow-xl overflow-hidden">
-        {!loading && preauths.length === 0 ? (
-          <p className="text-gray-400 text-sm text-center py-12">{t('preauth.noPreauths')}</p>
-        ) : (
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-gray-700 text-gray-400 text-left">
-                <th className="px-4 py-3 font-medium">{t('residents.house')}</th>
-                <th className="px-4 py-3 font-medium">{t('preauth.visitorName')}</th>
-                <th className="px-4 py-3 font-medium">{t('gate.dpi')}</th>
-                <th className="px-4 py-3 font-medium">{t('preauth.from')}</th>
-                <th className="px-4 py-3 font-medium">{t('preauth.until')}</th>
-                <th className="px-4 py-3 font-medium">{t('common.actions')}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {loading ? (
-                <TableSkeleton rows={5} cols={6} />
-              ) : (
-                preauths.map(p => (
-                  <tr key={p.id} className="border-b border-gray-700 last:border-0">
-                    <td className="px-4 py-3 font-medium">{p.numero_casa}</td>
-                    <td className="px-4 py-3">{p.nombre_visitante}</td>
-                    <td className="px-4 py-3 text-gray-400">{p.numero_dpi ?? '—'}</td>
-                    <td className="px-4 py-3 text-gray-300">{formatFecha(p.fecha_inicio)}</td>
-                    <td className="px-4 py-3 text-gray-300">{formatFecha(p.fecha_fin)}</td>
-                    <td className="px-4 py-3">
-                      <RowActions
-                        align="start"
-                        menuLabel={`${t('common.actions')}: ${p.nombre_visitante}`}
-                        actions={[
-                          { id: 'hoy', label: 'Preautorizar hoy', icon: ROW_ICON.clock, tone: 'primary', onClick: () => handlePreautHoy(p) },
-                          {
-                            id: 'eliminar',
-                            label: t('common.delete'),
-                            icon: ROW_ICON.trash,
-                            tone: 'danger',
-                            loading: deletingId === p.id,
-                            onClick: () => handleEliminar(p.id),
-                          },
-                        ]}
-                      />
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        )}
-      </div>
+      <DataTable
+        columns={columnas}
+        rows={visibles}
+        rowKey={p => p.id}
+        loading={loading}
+        caption={t('aviso.list.title')}
+        empty={
+          <EmptyState
+            icon={ICON_VISITA}
+            title={t('aviso.list.empty')}
+            description={t('aviso.list.emptyHint')}
+            action={<Button onClick={abrirNuevo}>{t('aviso.title')}</Button>}
+          />
+        }
+      />
 
-      {showModal && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 px-4">
-          <div className="bg-gray-800 rounded-2xl p-8 w-full max-w-md shadow-2xl">
-            <h2 className="text-lg font-bold text-white mb-6">{t('preauth.modalTitle')}</h2>
-            {formError && (
-              <div className="mb-4 bg-red-900/40 border border-red-700 rounded-lg px-4 py-3 text-red-300 text-sm">{formError}</div>
-            )}
-            <form onSubmit={handleCrear} className="space-y-4">
-              <div>
-                <label className="block text-sm text-gray-300 mb-1">{t('common.name')} *</label>
-                <select name="residente_id" value={form.residente_id} onChange={handleFormChange} required
-                  className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-blue-500 transition-colors">
-                  <option value="">{t('preauth.selectResident')}</option>
-                  {residentes.map(r => (
-                    <option key={r.id} value={r.id}>Casa {r.numero_casa} — {r.nombre}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm text-gray-300 mb-1">{t('preauth.visitorNameLabel')} *</label>
-                <input name="nombre_visitante" value={form.nombre_visitante} onChange={handleFormChange} required placeholder="Juan Pérez"
-                  className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-white placeholder-gray-400 focus:outline-none focus:border-blue-500 transition-colors" />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-sm text-gray-300 mb-1">DPI <span className="text-gray-500 text-xs">(o placa)</span></label>
-                  <input name="numero_dpi" value={form.numero_dpi} onChange={handleFormChange} placeholder="1234567890101"
-                    className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-white placeholder-gray-400 focus:outline-none focus:border-blue-500 transition-colors" />
-                </div>
-                <div>
-                  <label className="block text-sm text-gray-300 mb-1">{t('gate.plate')} <span className="text-gray-500 text-xs">(o DPI)</span></label>
-                  <input name="placa" value={form.placa} onChange={handleFormChange} placeholder="P-123ABC"
-                    className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-white placeholder-gray-400 focus:outline-none focus:border-blue-500 transition-colors" />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-sm text-gray-300 mb-1">{t('preauth.fromRequired')} *</label>
-                  <input type="date" name="fecha_inicio" value={form.fecha_inicio} onChange={handleFormChange} required
-                    className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2.5 text-white focus:outline-none focus:border-blue-500 transition-colors" />
-                </div>
-                <div>
-                  <label className="block text-sm text-gray-300 mb-1">{t('preauth.untilOptional')}</label>
-                  <input type="date" name="fecha_fin" value={form.fecha_fin} onChange={handleFormChange}
-                    className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2.5 text-white focus:outline-none focus:border-blue-500 transition-colors" />
-                </div>
-              </div>
-              <div className="flex gap-3 pt-2">
-                <button type="submit" disabled={saving}
-                  className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-semibold py-2.5 rounded-lg transition-colors flex items-center justify-center gap-2">
-                  {saving && <Spinner />}
-                  {saving ? t('common.saving') : t('common.save')}
-                </button>
-                <button type="button" onClick={() => setShowModal(false)} disabled={saving}
-                  className="flex-1 bg-gray-700 hover:bg-gray-600 disabled:opacity-50 text-white font-semibold py-2.5 rounded-lg transition-colors">
-                  {t('common.cancel')}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
+      {vencidas > 0 && (
+        <button
+          type="button"
+          onClick={() => setVerVencidas(v => !v)}
+          aria-expanded={verVencidas}
+          className="self-start text-xs font-semibold text-gray-300 underline underline-offset-4 hover:text-gray-50"
+        >
+          {verVencidas ? t('aviso.list.hideExpired') : t('aviso.list.showExpired').replace('{n}', String(vencidas))}
+        </button>
       )}
+
+      <AvisarVisitaModal
+        open={dialogo.abierto}
+        onClose={() => setDialogo(d => ({ ...d, abierto: false }))}
+        residentes={residentes}
+        inicial={dialogo.inicial}
+        onCreada={() => cargar()}
+      />
+      {dialogoConfirmar}
     </div>
   );
 }

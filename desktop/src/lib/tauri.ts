@@ -35,6 +35,8 @@ export interface SesionDto {
   usuario: Usuario | null;
   requiere_login: boolean;
   iniciada_en: string | null;
+  /** Texto del servidor si la sesión se cortó porque la empresa está suspendida o dada de baja (423). */
+  motivo_bloqueo?: string | null;
 }
 
 export interface EstadoSync {
@@ -153,6 +155,8 @@ export interface Preautorizacion {
 export interface Evaluacion {
   bloqueado: boolean;
   razon_bloqueo: string | null;
+  /** Qué coincidió con la lista negra: el DPI del visitante o la placa del vehículo. */
+  motivo_bloqueo?: 'dpi' | 'placa' | null;
   preautorizado: boolean;
   preautorizacion: Preautorizacion | null;
   visitante_conocido: string | null;
@@ -194,7 +198,13 @@ export interface InvitacionQr {
   numero_casa: string;
   residente_nombre: string;
   usos_maximos: number | null;
+  /** Con la validación sin red incluye los usos de este equipo que el servidor aún no cuenta. */
   usos_actuales: number;
+  /**
+   * Se validó contra la copia local porque no había red (o el servidor no respondió): el servidor confirma —o rechaza— el uso
+   * cuando el equipo sincronice. Ausente cuando respondió el servidor.
+   */
+  validada_sin_conexion?: boolean;
 }
 
 export interface AccesoPendiente {
@@ -209,6 +219,8 @@ export interface AccesoPendiente {
   placa: string | null;
   residente_casa: string | null;
   capturado_manualmente: boolean;
+  /** Id del registro en el servidor; vacío mientras el acceso siga pendiente de enviar. */
+  registro_id?: string | null;
 }
 
 export interface ItemOcr {

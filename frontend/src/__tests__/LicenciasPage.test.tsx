@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import LicenciasPage from '../pages/LicenciasPage';
 import { crearLicencia, getLicencias, revocarLicencia } from '../services/api';
 
@@ -38,8 +38,8 @@ describe('LicenciasPage (admin de sucursal)', () => {
 
     expect(await screen.findByText('SG-AAAA-BBBB-CCCC-DDDD')).toBeInTheDocument();
     expect(screen.getByText('Sin activar')).toBeInTheDocument();
-    expect(screen.getByText('Activa')).toBeInTheDocument();
-    expect(screen.getByText('Revocada')).toBeInTheDocument();
+    expect(screen.getByText('Activo')).toBeInTheDocument();
+    expect(screen.getByText('Revocado')).toBeInTheDocument();
     expect(screen.getByText('hace un momento')).toBeInTheDocument();
   });
 
@@ -61,13 +61,20 @@ describe('LicenciasPage (admin de sucursal)', () => {
   it('revoca una licencia activa tras confirmar', async () => {
     mockGet.mockResolvedValue([lic({ activada: true })]);
     mockRevocar.mockResolvedValue(undefined);
-    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    const confirmNativo = vi.spyOn(window, 'confirm');
     render(<LicenciasPage />);
 
     await screen.findByText('SG-AAAA-BBBB-CCCC-DDDD');
     fireEvent.click(screen.getByRole('button', { name: /Acciones: Garita norte/ }));
     fireEvent.click(await screen.findByRole('menuitem', { name: /Revocar/ }));
 
+    // Primero se explica qué pasa; no se revoca hasta confirmar.
+    const dialogo = await screen.findByRole('dialog', { name: '¿Revocar el código de activación de Garita norte?' });
+    expect(within(dialogo).getByText(/dejará de sincronizar/)).toBeInTheDocument();
+    expect(mockRevocar).not.toHaveBeenCalled();
+    fireEvent.click(within(dialogo).getByRole('button', { name: 'Revocar' }));
+
     await waitFor(() => expect(mockRevocar).toHaveBeenCalledWith('lic-1'));
+    expect(confirmNativo).not.toHaveBeenCalled();
   });
 });

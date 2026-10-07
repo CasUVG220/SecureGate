@@ -144,8 +144,8 @@ traslada al residente; el login ignora `rol`/`empresa_id` del body; el número d
 | Rol desconocido / sin rol / token en la URL / cabecera de 20 KB | 403 / 403 / 401 / 4xx |
 | TTL del access token | 3 600 s; claims: id, nombre, email, rol, sucursal_id, empresa_id, iat, exp |
 | Revocación al dar de baja a un usuario | token, refresh y login mueren al instante (401) |
-| Rotación del refresh token | el anterior queda inválido (401) |
-| **Detección de reutilización del refresh** | **No existe** (S-06) |
+| Rotación del refresh token | el anterior queda inválido (401) pasada la ventana de gracia de 10 s |
+| **Detección de reutilización del refresh** | **Corregida en el Sprint 9 (SCRUM-124):** familia de tokens, gracia de 10 s, cierre de la familia, `REFRESH_REUTILIZADO` y aviso al titular (S-06). *En la corrida del Sprint 8 no existía.* |
 | Cookie de refresh en desarrollo / en producción | HttpOnly + SameSite=Strict / además `Secure` |
 
 ### f) Rate limit real, con los límites de producción (`09-ratelimit`)
@@ -188,7 +188,8 @@ el estado de la empresa; el owner y las demás empresas no se ven afectados. Rea
 licencia vuelven a funcionar. Dada de baja (`DELETE`): login y heartbeat denegados.
 **Refresh → 401, no 423** para sesiones abiertas antes de suspender (suspender revoca los refresh tokens): el acceso se
 corta, pero difiere del contrato documentado (S-11). La rama 423 de `/auth/refresh` sí funciona cuando el token sigue vigente
-(comprobado suspendiendo directamente en la BD).
+(comprobado suspendiendo directamente en la BD). **Corregido en el Sprint 9 (SCRUM-129):** `/auth/refresh` busca el token sin
+filtrar por `revoked` y responde 423 con el motivo aunque la suspensión ya lo haya revocado (ver l-ter).
 
 ### j) SQL injection (`07-sqli` + sqlmap)
 **Payloads manuales:** 1 814 peticiones sobre **67 puntos de inyección**: 30 parámetros de búsqueda/filtro (`dpi`,
@@ -234,6 +235,53 @@ Además, revisión estática de `nginx/nginx.conf`: `X-Forwarded-For` se **sobre
 | `desktop/src-tauri` (cargo, 528 crates) | 0 vulnerabilidades, 7 avisos (6 sin mantenimiento, 1 de solidez) | igual (S-15) |
 | gitleaks (120 commits) | 2 hallazgos | **falso positivo**: un token de prueba en `AceptarInvitacionPage.test.tsx:23` (2 commits) |
 
+#### l-bis) Actualización de cifras — 10/10/2026 (Sprint 9, SCRUM-118)
+
+Las cifras de arriba son las del Sprint 8. Se volvió a correr `npm audit` en los tres proyectos el 10/10/2026 y
+**ya no coincidían** (el frontend tenía 11 y el backend una crítica). Salidas tal cual (`npm audit`, última línea):
+
+| Proyecto | `npm audit` completo | `npm audit --omit=dev` (lo que llega a producción) |
+|---|---|---|
+| `backend` — **antes** de `npm audit fix` | `47 vulnerabilities (10 moderate, 35 high, 2 critical)` | `3 vulnerabilities (2 moderate, 1 critical)` |
+| `backend` — **después** de `npm audit fix` | `40 vulnerabilities (8 moderate, 32 high)` | `2 moderate severity vulnerabilities` |
+| `frontend` | `11 vulnerabilities (5 moderate, 6 high)` | `found 0 vulnerabilities` |
+| `desktop` | `8 vulnerabilities (2 moderate, 6 high)` | `found 0 vulnerabilities` |
+
+- **La crítica de producción era `proxy-addr` 1.1.0–2.0.7** (`GHSA-jqcg-44mw-7w3h`, suplantación de IP vía subred IPv4
+  mapeada en IPv6): afecta a `req.ip`, o sea a los límites de tasa y a la IP de la auditoría. `npm audit fix` la subió a
+  2.0.8 sin saltos mayores (sólo `backend/package-lock.json`); la otra crítica del audit completo era `handlebars`
+  (dependencia de `ts-jest`, sólo desarrollo) y también quedó cerrada.
+- **Lo que queda en producción (backend): 2 moderadas, `node-cron` → `uuid`** (S-14; exige `node-cron` 4.x).
+- **Lo que queda en el audit completo** son herramientas de desarrollo: `jest` y su cadena (vía `braces`/`micromatch`),
+  `nodemon` y `artillery` en el backend; `tailwindcss`/`vitest` en frontend y desktop (S-13).
+- Tras el `audit fix` del backend: 594 pruebas unitarias, 25 de integración/regresión y `tsc --noEmit` siguen en verde.
+
+#### l-ter) Cifras después de SCRUM-129 — 10/10/2026 (S-11, S-13, S-14, S-15)
+
+Salidas tal cual de `npm audit` / `cargo audit` ejecutadas después de los cambios de SCRUM-129:
+
+| Proyecto | `npm audit` completo | `npm audit --omit=dev` (producción) | Cambio |
+|---|---|---|---|
+| `backend` | `38 vulnerabilities (6 moderate, 32 high)` | `found 0 vulnerabilities` | `node-cron` 3.0.3 → **4.6.0** (ya no arrastra `uuid` vulnerable); producción pasa de 2 moderadas a **0** |
+| `frontend` | `8 vulnerabilities (2 moderate, 6 high)` | `found 0 vulnerabilities` | `vitest`/`@vitest/ui` 4.1.10 → **4.1.11** (cierra `GHSA-82fw-gwwq-j7x9`, la ruta de lectura de archivos de `@vitest/mocker`) |
+| `desktop` | `8 vulnerabilities (2 moderate, 6 high)` | `found 0 vulnerabilities` | `vitest` 4.1.10 → **4.1.11** (igual que el frontend) |
+| `desktop/src-tauri` (`cargo audit`, 528 crates, 1 296 avisos de RustSec) | **0 vulnerabilidades**, 7 avisos (6 sin mantenimiento, 1 de solidez) | — | `yoke-derive` 0.8.3 → **0.8.4** (estaba *yanked*); antes 8 avisos |
+
+- **S-13 (vitest):** el aviso ya no pedía un salto mayor: la versión corregida (4.1.11) es del mismo major. **No se subió a vitest 5.x**
+  porque exige Node ≥ 22.12 y el CI y los Dockerfile usan Node 20; hacerlo obligaría a subir también el runtime. Lo que queda en
+  frontend y desktop son 8 avisos de **desarrollo** (`tailwindcss` 3 → `chokidar`/`micromatch`/`braces`, `postcss-selector-parser`,
+  `fast-glob`, `source-map-js`): se cierran con Tailwind 4 (migración del sistema de estilos, aparte) y ninguno llega a producción.
+- **S-14 (node-cron 4.x):** las tres tareas diarias pasaron a `src/jobs/programacion.ts` y una prueba comprueba que cada
+  expresión es válida para la versión instalada, que las de zona (`America/Guatemala`) disparan a la hora local aunque el contenedor
+  esté en UTC y que una corrida fallida se registra sin tumbar nada. Se quitó `@types/node-cron` (la 4.x trae sus tipos).
+- **S-15 (Tauri):** `cargo update --dry-run` mueve `tauri` 2.11.5 → 2.12.2 (con `wry` 0.55 → 0.57, `tao`, `muda`, `tray-icon`,
+  86 paquetes) y eso **elimina los 5 `unic-*`** (`urlpattern` 0.3 → 0.6). **No se aplicó**: cambia la capa de WebView2 de Windows,
+  que es el único sistema objetivo, y no hay forma de probar el instalador aquí; conviene hacerlo en el mismo ciclo en que se valida
+  la app en Windows (SCRUM-157). Quedan `proc-macro-error` y `glib` (pila GTK de Linux; no se compila para Windows).
+- **S-11 (refresh 423):** corregido en backend (`auth.controller.ts`), web (`refreshToken` ya guardaba el aviso; ahora se prueba) y
+  escritorio (`auth.rs`: el 423 marca la sesión como «requiere login» y la pantalla de acceso muestra el motivo del servidor).
+  Regresión R-3 actualizada: refresh tras suspender → **423 con motivo**; tras reactivar, la cookie vieja → 401.
+
 `.env.cloudsql` está en `.gitignore` y nunca entró al historial. gitleaks no ve secretos de baja entropía:
 buscando los valores públicos conocidos con `git log -S`, `securegate_jwt_secret_dev` aparece en 4 commits,
 `sgpassword123` en 6, `admin123` en 7 y `change_me_in_production` en 3 (desde marzo de 2026) → S-12.
@@ -251,15 +299,15 @@ Severidad según el impacto real en este sistema (no la etiqueta de la herramien
 | S-03 | Baja | 500 en vez de 400 ante UUID/fecha inválidos, NUL, textos largos y parámetros repetidos. | `07`, `05`, `08`, ZAP | ✅ Corregido |
 | S-04 | Baja | `GET /reservas/disponibilidad` muestra áreas y horarios de otra empresa a cualquier personal. | `01` | ✅ Corregido |
 | S-05 | Baja | `POST /anuncios/:id/leer` deja a un residente escribir sobre un anuncio de otra empresa. | `01` | ✅ Corregido |
-| S-06 | Baja | El refresh token no detecta reutilización. | `03` | ⏳ Deuda |
+| S-06 | Baja | El refresh token no detecta reutilización. | `03` | ✅ Corregido en el Sprint 9 (SCRUM-124) |
 | S-07 | Baja | `eliminar-definitivo`: límite por IP y los intentos bloqueados no se auditan. | `05` | ✅ Corregido |
 | S-08 | Baja | Respuestas con datos personales y el JWT sin `Cache-Control: no-store`. | `08`, ZAP 10049 | ✅ Corregido |
 | S-09 | Baja | 404 HTML de Express que además pisa el CSP; `Permissions-Policy` ausente. | `08`, ZAP 10055/10063 | ✅ Corregido |
-| S-10 | Baja | Bloqueo de login por cuenta: cualquiera que conozca el correo deja sin acceso al titular 15 min. | `09` | ⏳ Deuda (trade-off) |
-| S-11 | Baja | Sesión abierta + empresa suspendida: `/auth/refresh` responde 401, no 423. | `06` | ⏳ Deuda (comentario corregido) |
-| S-14 | Baja | Backend: 4 avisos npm moderados (sin ruta explotable / solo dev). | `npm audit` | ⏳ Deuda |
-| S-15 | Baja | Rust: 7 crates sin mantenimiento (transitivos de Tauri). | `cargo audit` | ⏳ Deuda |
-| S-17 | Baja | Desfase de 6 h en `TIMESTAMP` sin zona (raíz de S-02): `refresh_tokens` dura 6 d 18 h, no 7 d. | `04` + verificación en BD | ⏳ Deuda |
+| S-10 | Baja | Bloqueo de login por cuenta: cualquiera que conozca el correo deja sin acceso al titular 15 min. | `09` | ✅ Decidido en el Sprint 9 (SCRUM-125): se mantiene, con bloqueos auditados y filtrables, y 2FA para administradores (ver `DEUDA_TECNICA.md`) |
+| S-11 | Baja | Sesión abierta + empresa suspendida: `/auth/refresh` responde 401, no 423. | `06` | ✅ Corregido en Sprint 9 (SCRUM-129): 423 con motivo en backend, web y escritorio |
+| S-14 | Baja | Backend: 4 avisos npm moderados (sin ruta explotable / solo dev). | `npm audit` | ✅ `node-cron` 4.6.0: producción sin avisos (SCRUM-129); queda solo desarrollo |
+| S-15 | Baja | Rust: 7 crates sin mantenimiento (transitivos de Tauri). | `cargo audit` | ⏳ Revisado (SCRUM-129): `yoke-derive` corregido; Tauri 2.12 quita 5 más, pendiente de validar en Windows |
+| S-17 | Baja | Desfase de 6 h en `TIMESTAMP` sin zona (raíz de S-02): `refresh_tokens` dura 6 d 18 h, no 7 d. | `04` + verificación en BD | ✅ Corregido en el Sprint 9 (SCRUM-124): columnas `TIMESTAMPTZ`; ver `docs/s17_timestamptz.md` |
 | S-16 | Info | ZAP: «XSS persistente en JSON» (no explotable en la API). | ZAP | ⏳ Sin acción en backend |
 | S-18 | Info | `/health` muestra nombre y versión del servicio. | `08` | Aceptado |
 
@@ -339,12 +387,15 @@ sustituye el CSP de helmet por `default-src 'none'` solo (ZAP 10055); sin `Permi
 
 **S-10 — Bloqueo por cuenta.** Con 10 fallos contra un correo, el titular con la **contraseña correcta** también recibe
 429 durante 15 min. Sin límite por cuenta se pierde la defensa contra fuerza bruta distribuida, y las
-alternativas cambian la política de seguridad → deuda.
+alternativas cambian la política de seguridad → deuda. *(Sprint 9, SCRUM-125: **decidido, se mantiene** con compensaciones: cada bloqueo
+queda en `audit_logs` con el correo, la IP y el límite, el owner los filtra en el panel de auditoría, el bloqueo sólo cuenta fallos y
+no corta sesiones abiertas, y los administradores podrán activar la verificación en dos pasos. Detalle y alternativas descartadas en
+`DEUDA_TECNICA.md`.)*
 
 **S-11 — Refresh 401 vs 423.** Sesiones abiertas antes de suspender: `/auth/refresh` → 401 porque suspender
 revoca los refresh tokens; el contrato documentado decía 423. El acceso se corta correctamente; solo se pierde
-el motivo hasta el siguiente login. Se corrigió el comentario del código; el cambio de comportamiento
-requiere tocar frontend y desktop → deuda.
+el motivo hasta el siguiente login. *(Sprint 9, SCRUM-129: corregido. El servidor busca el token sin filtrar por
+`revoked` y responde 423 con el motivo si la empresa está suspendida o dada de baja; web y escritorio lo muestran.)*
 
 **S-14, S-15, S-16, S-17, S-18:** ver `backend/DEUDA_TECNICA.md`.
 
@@ -354,14 +405,14 @@ requiere tocar frontend y desktop → deuda.
    control si falla. Verificar también qué compose corre la VM (S-13): debe ser `docker-compose.prod.yml`.
 2. **Desplegar el fix de login (S-01)**: cierra la enumeración de cuentas, la base de cualquier ataque
    dirigido (relacionado con S-10).
-3. **Aplicar `npm audit fix` en frontend (S-13)** — hecho; falta subir `vitest` de versión mayor.
+3. **Aplicar `npm audit fix` en frontend (S-13)** — hecho; `vitest` 4.1.11 cierra el aviso restante de producción-de-pruebas (vitest 5 exige Node 22; ver l-ter).
 4. **Cerrar los cruces de tenant (S-04, S-05)** — hecho; sugerencia: añadir la comprobación de alcance a la
    plantilla de controladores nuevos, porque los guards de rol no la cubren.
 5. **Errores 4xx correctos (S-03), caducidad en SQL (S-02), límite por usuario en la acción más destructiva
    (S-07), cabeceras y 404 (S-08, S-09)** — hecho.
 6. **Deuda con esfuerzo medio:** detección de reutilización del refresh (S-06, ~1 día), zona horaria de los
    `TIMESTAMP` (S-17, ~1 día), bloqueo de login menos abusable (S-10, ~2 días).
-7. **Mantenimiento:** `node-cron` 4.x (S-14), actualizar Tauri (S-15).
+7. **Mantenimiento:** `node-cron` 4.x (S-14) ✅ hecho; actualizar Tauri (S-15) junto con la validación en Windows.
 
 ## 6. Resultado después del fix
 
@@ -381,9 +432,9 @@ Mismo ambiente, misma base sembrada, mismos límites de producción. `backend`: 
 | S-07 | `ELIM-limite-por-ip` | 2.º owner: 429 | **403 (cupo por usuario)** |
 | S-08 | `HDR-cache-control-*` | ausente | **`no-store`** |
 | S-09 | `ERR-*-ruta-inexistente`; ZAP 10055 y 10063 | HTML «Cannot GET»; 2 avisos | **JSON 404; 0 avisos** |
-| S-13 | `npm audit` frontend | 14 (7 altas) | **3 moderadas** |
+| S-13 | `npm audit` frontend | 14 (7 altas) | **3 moderadas** (cifra del Sprint 8; el 10/10/2026 el audit completo daba 11 y, tras SCRUM-129, 8 sólo de desarrollo; ver l-bis y l-ter) |
 | — | ZAP baseline | 64 pasan / 3 avisos | **66 pasan / 1 informativo** |
-| — | Suite completa 01–09 | 487 anomalías | **5** (S-06 ×1, S-11 ×4: deuda) |
+| — | Suite completa 01–09 | 487 anomalías | **5** (S-06 ×1, S-11 ×4) — las 4 de S-11 se corrigieron en el Sprint 9 (refresh → 423) |
 
 Regresiones descartadas: IDOR 648/0, roles 192/0, rate limit 18/0, headers 69/0; el ZAP activo del owner sigue
 sin altas ni medias reales.

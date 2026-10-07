@@ -13,10 +13,14 @@ concurrency:
   group: ci-integracion-${{ github.ref }}
   cancel-in-progress: true
 
+# Todos los jobs corren en `ubuntu-24.04` FIJO (SCRUM-117 / SCRUM-158): `ubuntu-latest` es un alias que GitHub mueve de
+# versión (avisó el cambio a Ubuntu 26 el 19-oct-2026) y una migración del runner no debe romper el CI un día cualquiera.
+# Se sube a propósito, en un cambio que se pueda revisar.
+
 jobs:
   integracion-regresion:
     name: Integración y regresión (Node 20 + Postgres 15)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
 
     services:
@@ -80,3 +84,108 @@ jobs:
         if: always()
         working-directory: .
         run: node .github/scripts/resumen-junit.js backend/reports >> "$GITHUB_STEP_SUMMARY"
+
+  # Pruebas unitarias de los tres paquetes (SCRUM-158). Antes solo corrían a mano: el backend (con `pg` simulado), el
+  # frontend y la parte web del escritorio (vitest + jsdom) no tenían ningún job. Cada paquete va por separado para que
+  # un fallo en uno no oculte lo que pasa en los otros, y además se comprueba que compile (tipos).
+  unitarias:
+    name: Unitarias · ${{ matrix.paquete }} (Node 20)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # El backend corre en producción con TZ=America/Guatemala (las tareas programadas y las fechas dependen de ella).
+          # Las pantallas, en cambio, no pueden depender de la zona del navegador (`utils/fecha` fija America/Guatemala):
+          # se prueban en UTC, la del runner, para que una prueba que solo pase en Guatemala falle aquí.
+          - paquete: backend
+            zona: America/Guatemala
+            compilar: npx tsc --noEmit
+          - paquete: frontend
+            zona: UTC
+            compilar: npm run build
+          - paquete: desktop
+            zona: UTC
+            compilar: npm run build
+
+    env:
+      TZ: ${{ matrix.zona }}
+
+    defaults:
+      run:
+        working-directory: ${{ matrix.paquete }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: ${{ matrix.paquete }}/package-lock.json
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Pruebas unitarias
+        run: npm test
+
+      - name: Compilar (tipos)
+        if: always()
+        run: ${{ matrix.compilar }}
+
+  # Pruebas de la parte nativa del escritorio (`cargo test --lib`): la lógica de sincronización, la base cifrada, las
+  # placas y las licencias. Tauri compila contra GTK/WebKit en Linux aunque aquí no se abra ninguna ventana, y exige que
+  # existan tres cosas que no se versionan (el frontend compilado, el runtime de Node del sidecar y sus recursos): se
+  # crean vacías, porque `cargo test` no las ejecuta.
+  #
+  # Compilar Tauri tarda (≈ 8 min en una máquina de 8 núcleos; más en el runner, y menos con la caché). Este workflow se dispara por
+  # `push` Y por `pull_request`, así que sin condición un PR lo correría dos veces: aquí solo corre en pull requests, a mano
+  # y en `main`.
+  desktop-rust:
+    name: Unitarias · desktop (Rust)
+    if: github.event_name != 'push' || github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+
+    defaults:
+      run:
+        working-directory: desktop/src-tauri
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Dependencias del sistema (Tauri 2 en Ubuntu 24.04)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential pkg-config perl \
+            libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev libssl-dev
+
+      - name: Archivos que Tauri exige para compilar y que no se versionan
+        run: |
+          mkdir -p ../dist resources/sidecar-ocr binaries
+          touch binaries/node-x86_64-unknown-linux-gnu
+
+      # `rust-version` del paquete es 1.88: el Rust estable del runner la cumple; `rustup update` solo lo asegura.
+      - name: Rust estable
+        run: rustup update stable --no-self-update && rustc --version
+
+      - name: Caché de cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            desktop/src-tauri/target
+          key: cargo-${{ runner.os }}-${{ hashFiles('desktop/src-tauri/Cargo.lock') }}
+          restore-keys: cargo-${{ runner.os }}-
+
+      - name: Pruebas de Rust
+        run: cargo test --lib --locked

@@ -109,8 +109,10 @@ describe('ReservasPage (residente)', () => {
             hora_inicio: '14:00:00',
             hora_fin: '16:00:00',
             estado: 'confirmada',
-            bloqueo_desde: '2026-12-10T13:30:00',
-            bloqueo_hasta: '2026-12-10T16:30:00',
+            // Como los manda el servidor: instantes en UTC (13:30 y 16:30 en Guatemala). Sin el «Z» el resultado dependería
+            // de la zona horaria de quien corre la prueba (en UTC, el runner del CI, saldría 07:30).
+            bloqueo_desde: '2026-12-10T19:30:00.000Z',
+            bloqueo_hasta: '2026-12-10T22:30:00.000Z',
           },
         ],
       })

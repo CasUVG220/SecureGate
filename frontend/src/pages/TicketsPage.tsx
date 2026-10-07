@@ -1,9 +1,11 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { getTickets, type Ticket, type TicketEstado, type TicketTipo } from '../services/api';
 import { Badge, CardSkeleton, EmptyState, Select } from '../components/ui';
 import { useTranslation } from '../i18n/useTranslation';
 import TicketChat, { TIPO_LABEL, ESTADO_LABEL } from '../components/TicketChat';
 import type { BadgeTone } from '../components/ui';
+import { usePolling } from '../hooks/usePolling';
+import { formatearFechaHoraCorta } from '../utils/fecha';
 
 const ICON_TICKETS = 'M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z';
 
@@ -34,12 +36,17 @@ export default function TicketsPage() {
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { load(); }, []);
 
+  // Refresco silencioso (sin esqueleto): el estado y los no leídos de cada solicitud se actualizan
+  // solos cada 15 s mientras la pestaña está visible, y tras cada actividad del chat.
+  const refrescar = useCallback(async () => { setTickets(await getTickets()); }, []);
+  usePolling(refrescar, 15_000);
+
   const filtered = useMemo(() => tickets.filter(tk =>
     (!fEstado || tk.estado === fEstado) && (!fTipo || tk.tipo === fTipo)
   ), [tickets, fEstado, fTipo]);
 
   const fmt = (d: string | null) =>
-    d ? new Date(d).toLocaleDateString('es-GT', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '';
+    d ? formatearFechaHoraCorta(d) : '';
 
   return (
     <div className="sg-page text-gray-100 h-full flex flex-col">
@@ -93,9 +100,9 @@ export default function TicketsPage() {
                   }`}
                 >
                   <div className="flex items-center gap-2">
-                    <span className="text-white font-medium text-sm truncate flex-1">{tk.titulo}</span>
+                    <span className="text-white font-medium text-sm truncate flex-1" title={tk.titulo}>{tk.titulo}</span>
                     {Number(tk.no_leidos) > 0 && (
-                      <span className="min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full bg-red-600 text-white text-[10px] font-bold">
+                      <span className="min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full bg-danger-600 text-white text-[10px] font-bold">
                         {Number(tk.no_leidos)}
                       </span>
                     )}
@@ -105,7 +112,7 @@ export default function TicketsPage() {
                     <span className="text-[11px] text-gray-400">{t(TIPO_LABEL[tk.tipo])}</span>
                     <span className="text-[11px] text-gray-500 ml-auto">{fmt(tk.ultimo_mensaje_at)}</span>
                   </div>
-                  <p className="text-xs text-gray-500 mt-1 truncate">
+                  <p className="text-xs text-gray-400 mt-1 truncate" title={`${t('tickets.house')} ${tk.numero_casa} · ${tk.residente_nombre}`}>
                     {t('tickets.house')} {tk.numero_casa} · {tk.residente_nombre}
                   </p>
                 </button>
@@ -117,7 +124,7 @@ export default function TicketsPage() {
         {/* Chat — right column on desktop, stacks below the list on mobile */}
         <div className="min-h-0 h-[70vh] lg:h-auto">
           {selectedId ? (
-            <TicketChat key={selectedId} ticketId={selectedId} viewerRole="admin" onActivity={load} />
+            <TicketChat key={selectedId} ticketId={selectedId} viewerRole="admin" onActivity={() => { void refrescar().catch(() => {}); }} />
           ) : (
             <div className="sg-card flex h-full items-center justify-center p-6 text-center text-sm text-gray-500">
               {t('tickets.selectPrompt')}

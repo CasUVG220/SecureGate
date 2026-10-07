@@ -1,4 +1,5 @@
 import { Request, Response } from 'express';
+import { normalizarPlaca } from '../utils/placa';
 
 const VISION_URL = 'https://vision.googleapis.com/v1/images:annotate';
 
@@ -197,7 +198,8 @@ const parsePlaca = (text: string): string => {
   const upper = text.toUpperCase().replace(/[^A-Z0-9\-\s]/g, ' ');
   const matches = upper.match(/[A-Z]{1,3}[-\s]?[0-9A-Z]{3,6}/g);
   if (!matches || matches.length === 0) return '';
-  return matches.sort((a, b) => b.length - a.length)[0].trim().replace(/\s+/g, '-');
+  // Forma canónica (P123ABC): la pantalla la presenta como P-123ABC.
+  return normalizarPlaca(matches.sort((a, b) => b.length - a.length)[0]);
 };
 
 /** ~5 MB de imagen ≈ 7 M caracteres de base64. */

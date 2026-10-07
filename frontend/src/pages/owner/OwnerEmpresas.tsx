@@ -1,26 +1,28 @@
 import { useEffect, useState } from 'react';
 import {
-  getEmpresas, createEmpresa, updateEmpresa, deleteEmpresa, assignAdminEmpresa,
+  getEmpresas, updateEmpresa, deleteEmpresa, assignAdminEmpresa,
   suspenderEmpresa, reactivarEmpresa, eliminarEmpresaDefinitivo,
   getUsuarios, createUsuario,
-  type Empresa, type EmpresaInput, type Usuario,
+  type Empresa, type Usuario,
 } from '../../services/api';
-import { TableSkeleton, Spinner } from '../../components/Skeleton';
-import { Button, Input, Modal, ROW_ICON, RowActions, StatusText, Textarea } from '../../components/ui';
+import { TableSkeleton } from '../../components/Skeleton';
+import { Button, Input, Modal, PasswordInput, ROW_ICON, RowActions, Select, StatusText, Textarea, requisitosDeClave, useConfirmacion } from '../../components/ui';
 import { useToast } from '../../components/Toast';
 import InvitacionesPanel from '../../components/InvitacionesPanel';
+import InvitarAdminModal from '../../components/InvitarAdminModal';
+import EmpresaModal from '../../components/EmpresaModal';
 import { useTranslation } from '../../i18n/useTranslation';
 import { rellenar } from '../../components/charts/format';
 
-type Modal = 'none' | 'create' | 'edit' | 'assignAdmin';
+type Dialogo = 'none' | 'assignAdmin';
 type AssignMode = 'existing' | 'create';
 
-const EMPTY: EmpresaInput = { nombre: '', nit: '', logo_url: '' };
 const EMPTY_NEW_USER = { nombre: '', email: '', password: '' };
 
 export default function OwnerEmpresas() {
   const showToast = useToast();
   const { t } = useTranslation();
+  const { confirmar, dialogo } = useConfirmacion();
 
   const [empresas, setEmpresas] = useState<Empresa[]>([]);
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
@@ -28,13 +30,17 @@ export default function OwnerEmpresas() {
   const [error, setError]       = useState<string | null>(null);
   const [search, setSearch]     = useState('');
 
-  const [modal, setModal]               = useState<Modal>('none');
-  const [editTarget, setEditTarget]     = useState<Empresa | null>(null);
+  const [modal, setModal]               = useState<Dialogo>('none');
+  /** Alta/edición de empresa (un solo formulario, compartido con el panel del owner). */
+  const [empresaDlg, setEmpresaDlg]     = useState<{ abierto: boolean; empresa: Empresa | null }>({ abierto: false, empresa: null });
+  /** «Invitar administrador» (tras crear la empresa o desde la fila). */
+  const [invitarDlg, setInvitarDlg]     = useState<{ abierto: boolean; empresa: Empresa | null }>({ abierto: false, empresa: null });
+  /** Cambia cuando se envía una invitación: el panel de abajo vuelve a pedir su lista. */
+  const [panelKey, setPanelKey]         = useState(0);
   const [assignTarget, setAssignTarget] = useState<Empresa | null>(null);
   const [assignMode, setAssignMode]     = useState<AssignMode>('existing');
   const [selectedUserId, setSelectedUserId] = useState('');
   const [newUserForm, setNewUserForm]   = useState(EMPTY_NEW_USER);
-  const [form, setForm]                 = useState<EmpresaInput>(EMPTY);
   const [saving, setSaving]             = useState(false);
   const [formError, setFormError]       = useState<string | null>(null);
   /** Empresa a suspender (modal con motivo). */
@@ -55,19 +61,8 @@ export default function OwnerEmpresas() {
 
   useEffect(() => { cargar(); }, []);
 
-  const openCreate = () => {
-    setForm(EMPTY); setFormError(null); setEditTarget(null); setModal('create');
-  };
-
-  const openEdit = (emp: Empresa) => {
-    setEditTarget(emp);
-    setForm({ nombre: emp.nombre, nit: emp.nit ?? '', logo_url: emp.logo_url ?? '' });
-    setFormError(null);
-    setModal('edit');
-  };
-
   const closeModal = () => {
-    setModal('none'); setEditTarget(null); setAssignTarget(null);
+    setModal('none');
     setFormError(null); setSelectedUserId('');
     setAssignMode('existing'); setNewUserForm(EMPTY_NEW_USER);
   };
@@ -104,6 +99,10 @@ export default function OwnerEmpresas() {
       setFormError('Nombre, email y contraseña son requeridos');
       return;
     }
+    if (!requisitosDeClave(password).every(r => r.ok)) {
+      setFormError(t('owner.passwordRules'));
+      return;
+    }
     setSaving(true); setFormError(null);
     try {
       const newUser = await createUsuario({ nombre, email, password, rol: 'agente' });
@@ -112,40 +111,6 @@ export default function OwnerEmpresas() {
       showToast(t('owner.adminAssigned'));
     } catch (err) {
       setFormError(err instanceof Error ? err.message : 'Error al crear y asignar usuario');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) =>
-    setForm(prev => ({ ...prev, [e.target.name]: e.target.value }));
-
-  const handleCreate = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!form.nombre.trim()) { setFormError('El nombre es requerido'); return; }
-    setSaving(true); setFormError(null);
-    try {
-      await createEmpresa({ nombre: form.nombre, nit: form.nit || undefined, logo_url: form.logo_url || undefined });
-      closeModal(); cargar();
-      showToast(t('owner.companyCreated'));
-    } catch (err) {
-      setFormError(err instanceof Error ? err.message : 'Error al crear empresa');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleUpdate = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!editTarget) return;
-    if (!form.nombre.trim()) { setFormError('El nombre es requerido'); return; }
-    setSaving(true); setFormError(null);
-    try {
-      await updateEmpresa(editTarget.id, { nombre: form.nombre, nit: form.nit || undefined, logo_url: form.logo_url || undefined });
-      closeModal(); cargar();
-      showToast(t('owner.companyUpdated'));
-    } catch (err) {
-      setFormError(err instanceof Error ? err.message : 'Error al actualizar empresa');
     } finally {
       setSaving(false);
     }
@@ -207,7 +172,13 @@ export default function OwnerEmpresas() {
   };
 
   const handleDelete = async (emp: Empresa) => {
-    if (!window.confirm(`${t('owner.confirmDeleteEmpresa')} "${emp.nombre}"?`)) return;
+    const ok = await confirmar({
+      title: rellenar(t('confirm.deleteCompany.title'), { nombre: emp.nombre }),
+      message: t('confirm.deleteCompany.message'),
+      confirmLabel: t('confirm.deleteCompany.action'),
+      tone: 'danger',
+    });
+    if (!ok) return;
     try {
       await deleteEmpresa(emp.id);
       cargar();
@@ -216,12 +187,6 @@ export default function OwnerEmpresas() {
       showToast(err instanceof Error ? err.message : 'Error al eliminar empresa', 'error');
     }
   };
-
-  const fields: [keyof EmpresaInput, string, string][] = [
-    ['nombre',   `${t('common.name')} *`, 'text'],
-    ['nit',      t('owner.nit'),          'text'],
-    ['logo_url', t('owner.logoUrl'),      'url'],
-  ];
 
   const filtered = empresas.filter(emp => {
     const q = search.toLowerCase();
@@ -249,17 +214,14 @@ export default function OwnerEmpresas() {
             placeholder="Buscar por nombre o NIT…"
             className="sg-input w-full sm:w-60"
           />
-          <button
-            onClick={openCreate}
-            className="sg-btn sg-btn-primary flex items-center justify-center gap-2 text-sm"
-          >
-            <span className="text-lg leading-none">+</span> {t('empresas.new')}
-          </button>
+          <Button onClick={() => setEmpresaDlg({ abierto: true, empresa: null })}>
+            {t('empresas.new')}
+          </Button>
         </div>
       </div>
 
       {error && (
-        <div className="bg-red-900/40 border border-red-700 rounded-lg px-4 py-3 text-red-300 text-sm">{error}</div>
+        <div className="bg-danger-900/40 border border-danger-700 rounded-lg px-4 py-3 text-danger-300 text-sm">{error}</div>
       )}
 
       <div className="sg-card overflow-hidden">
@@ -287,10 +249,19 @@ export default function OwnerEmpresas() {
                 filtered.map(emp => (
                   <tr key={emp.id} className="border-b border-gray-700/40 last:border-0 hover:bg-gray-700/20 transition-colors">
                     <td className="px-4 py-3">
-                      <p className="font-medium text-white">{emp.nombre}</p>
-                      {emp.logo_url && (
-                        <p className="text-xs text-gray-500 truncate max-w-xs">{emp.logo_url}</p>
-                      )}
+                      <div className="flex items-center gap-3">
+                        {emp.logo_url && (
+                          <img src={emp.logo_url} alt="" className="h-9 w-9 shrink-0 rounded-md border border-gray-600 bg-white object-contain" />
+                        )}
+                        <div className="min-w-0">
+                          <p className="font-medium text-white">{emp.nombre}</p>
+                          {emp.activo && emp.tiene_admin === false && (
+                            <p className="mt-1">
+                              <StatusText kind="warn">{t(emp.invitacion_pendiente ? 'sinAdmin.invited' : 'sinAdmin.none')}</StatusText>
+                            </p>
+                          )}
+                        </div>
+                      </div>
                     </td>
                     <td className="px-4 py-3 text-gray-400">{emp.nit ?? '—'}</td>
                     <td className="px-4 py-3 text-center">{emp.total_sucursales}</td>
@@ -310,12 +281,19 @@ export default function OwnerEmpresas() {
                         align="start"
                         menuLabel={`${t('common.actions')}: ${emp.nombre}`}
                         actions={[
+                          ...(emp.activo && emp.tiene_admin === false ? [{
+                            id: 'invitar-admin',
+                            label: t('inv.action.inviteAdmin'),
+                            icon: ROW_ICON.user,
+                            tone: 'primary' as const,
+                            onClick: () => setInvitarDlg({ abierto: true, empresa: emp }),
+                          }] : []),
                           {
                             id: 'editar',
                             label: t('common.edit'),
                             icon: ROW_ICON.edit,
-                            tone: 'primary',
-                            onClick: () => openEdit(emp),
+                            tone: emp.activo && emp.tiene_admin === false ? undefined : 'primary',
+                            onClick: () => setEmpresaDlg({ abierto: true, empresa: emp }),
                           },
                           {
                             id: 'admin',
@@ -359,7 +337,23 @@ export default function OwnerEmpresas() {
       </div>
 
       {/* Aprovisionamiento en cascada: el owner invita al admin de cada empresa. */}
-      <InvitacionesPanel modo="owner" empresas={empresas} />
+      <InvitacionesPanel key={panelKey} modo="owner" empresas={empresas} />
+
+      <EmpresaModal
+        open={empresaDlg.abierto}
+        onClose={() => setEmpresaDlg(d => ({ ...d, abierto: false }))}
+        empresa={empresaDlg.empresa}
+        onSaved={() => cargar()}
+        onInvitar={emp => setInvitarDlg({ abierto: true, empresa: emp })}
+      />
+
+      <InvitarAdminModal
+        open={invitarDlg.abierto}
+        onClose={() => setInvitarDlg(d => ({ ...d, abierto: false }))}
+        modo="owner"
+        empresaFija={invitarDlg.empresa ? { id: invitarDlg.empresa.id, nombre: invitarDlg.empresa.nombre } : null}
+        onEnviada={() => { cargar(); setPanelKey(k => k + 1); }}
+      />
 
       {/* ── Modal: suspender operaciones ── */}
       <Modal
@@ -437,154 +431,69 @@ export default function OwnerEmpresas() {
         </form>
       </Modal>
 
-      {/* ── Modal: assign admin empresa ── */}
-      {modal === 'assignAdmin' && assignTarget && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-          <div className="bg-gradient-to-br from-gray-800 to-gray-900 rounded-2xl shadow-2xl w-full max-w-md p-6 space-y-4 border border-gray-700/30">
-            <div>
-              <h2 className="text-lg font-bold text-white">{t('owner.assignAdminModal')}</h2>
-              <p className="text-sm text-gray-400 mt-1">
-                {t('empresas.title')}: <span className="text-white font-medium">{assignTarget.nombre}</span>
-              </p>
-            </div>
+      {/* ── Modal: asignar administrador (usuario existente o cuenta nueva) ── */}
+      <Modal
+        open={modal === 'assignAdmin'}
+        onClose={closeModal}
+        dismissible={!saving}
+        title={t('owner.assignAdminModal')}
+        description={assignTarget ? `${t('empresas.title')}: ${assignTarget.nombre}` : undefined}
+        footer={
+          <>
+            <Button variant="secondary" onClick={closeModal} disabled={saving}>{t('common.cancel')}</Button>
+            <Button type="submit" form="form-asignar-admin" loading={saving}>
+              {assignMode === 'existing' ? t('owner.assignAdmin') : t('owner.createAndAssign')}
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <div className="flex gap-1 rounded-lg bg-gray-500/10 p-1" role="tablist">
+            {(['existing', 'create'] as AssignMode[]).map(m => (
+              <button
+                key={m}
+                type="button"
+                role="tab"
+                aria-selected={assignMode === m}
+                onClick={() => { setAssignMode(m); setFormError(null); }}
+                className={`flex-1 rounded-md py-1.5 text-xs font-semibold transition-colors ${
+                  assignMode === m ? 'bg-brand-500 text-brand-ink' : 'text-gray-400 hover:text-gray-200'
+                }`}
+              >
+                {m === 'existing' ? t('owner.existingUser') : t('owner.createNewUser')}
+              </button>
+            ))}
+          </div>
 
-            {/* Tabs */}
-            <div className="flex gap-1 bg-gray-700/40 rounded-lg p-1">
-              {(['existing', 'create'] as AssignMode[]).map(m => (
-                <button
-                  key={m}
-                  type="button"
-                  onClick={() => { setAssignMode(m); setFormError(null); }}
-                  className={`flex-1 text-xs font-medium py-1.5 rounded-md transition-colors ${
-                    assignMode === m
-                      ? 'bg-blue-600 text-white'
-                      : 'text-gray-400 hover:text-gray-200'
-                  }`}
-                >
-                  {m === 'existing' ? t('owner.existingUser') : t('owner.createNewUser')}
-                </button>
-              ))}
-            </div>
+          {formError && <p role="alert" className="rounded-lg border border-danger-500/30 bg-danger-500/10 px-4 py-3 text-sm font-medium text-danger-400">{formError}</p>}
 
-            {formError && (
-              <div className="bg-red-900/40 border border-red-700 rounded-lg px-3 py-2 text-red-300 text-sm">{formError}</div>
-            )}
-
+          <form
+            id="form-asignar-admin"
+            onSubmit={assignMode === 'existing' ? handleAssignExisting : handleCreateAndAssign}
+            className="space-y-4"
+            noValidate
+          >
             {assignMode === 'existing' ? (
-              <form onSubmit={handleAssignExisting} className="space-y-4">
-                <div>
-                  <label className="block text-xs font-medium text-gray-400 mb-1">{t('owner.selectUser')}</label>
-                  <select
-                    value={selectedUserId}
-                    onChange={e => setSelectedUserId(e.target.value)}
-                    className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    <option value="">— seleccionar —</option>
-                    {usuarios.map(u => (
-                      <option key={u.id} value={u.id}>
-                        {u.nombre} ({u.email}) — {u.rol}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="flex gap-3">
-                  <button
-                    type="submit"
-                    disabled={saving}
-                    className="flex-1 bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 disabled:opacity-50 text-white text-sm font-medium py-2 rounded-lg transition-all flex items-center justify-center gap-2 shadow-sm"
-                  >
-                    {saving && <Spinner size={14} />} {t('owner.assignAdmin')}
-                  </button>
-                  <button type="button" onClick={closeModal}
-                    className="px-4 py-2 text-sm text-gray-400 hover:text-gray-200 transition-colors">
-                    {t('common.cancel')}
-                  </button>
-                </div>
-              </form>
-            ) : (
-              <form onSubmit={handleCreateAndAssign} className="space-y-3">
-                {([
-                  ['nombre',   `${t('common.name')} *`,     'text'],
-                  ['email',    `${t('common.email')} *`,    'email'],
-                  ['password', `${t('common.password')} *`, 'password'],
-                ] as [keyof typeof newUserForm, string, string][]).map(([name, label, type]) => (
-                  <div key={name}>
-                    <label className="block text-xs font-medium text-gray-400 mb-1">{label}</label>
-                    <input
-                      name={name}
-                      type={type}
-                      value={newUserForm[name]}
-                      onChange={e => setNewUserForm(prev => ({ ...prev, [e.target.name]: e.target.value }))}
-                      className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
+              <Select label={t('owner.selectUser')} value={selectedUserId} onChange={e => setSelectedUserId(e.target.value)}>
+                <option value="">— seleccionar —</option>
+                {usuarios.map(u => (
+                  <option key={u.id} value={u.id}>{u.nombre} ({u.email}) — {u.rol}</option>
                 ))}
-                <div className="flex gap-3 pt-1">
-                  <button
-                    type="submit"
-                    disabled={saving}
-                    className="flex-1 bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 disabled:opacity-50 text-white text-sm font-medium py-2 rounded-lg transition-all flex items-center justify-center gap-2 shadow-sm"
-                  >
-                    {saving && <Spinner size={14} />} {t('owner.createAndAssign')}
-                  </button>
-                  <button type="button" onClick={closeModal}
-                    className="px-4 py-2 text-sm text-gray-400 hover:text-gray-200 transition-colors">
-                    {t('common.cancel')}
-                  </button>
-                </div>
-              </form>
+              </Select>
+            ) : (
+              <>
+                <Input name="nombre" label={t('common.name')} required value={newUserForm.nombre}
+                  onChange={e => setNewUserForm(prev => ({ ...prev, nombre: e.target.value }))} />
+                <Input name="email" type="email" label={t('common.email')} required value={newUserForm.email}
+                  onChange={e => setNewUserForm(prev => ({ ...prev, email: e.target.value }))} />
+                <PasswordInput name="password" label={t('common.password')} required value={newUserForm.password}
+                  onChange={e => setNewUserForm(prev => ({ ...prev, password: e.target.value }))} />
+              </>
             )}
-          </div>
+          </form>
         </div>
-      )}
-
-      {/* ── Modal: create / edit empresa ── */}
-      {(modal === 'create' || modal === 'edit') && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-          <div className="bg-gradient-to-br from-gray-800 to-gray-900 rounded-2xl shadow-2xl w-full max-w-md p-6 space-y-5 border border-gray-700/30">
-            <h2 className="text-lg font-bold text-white">
-              {modal === 'create' ? t('empresas.createTitle') : t('empresas.editTitle')}
-            </h2>
-
-            {formError && (
-              <div className="bg-red-900/40 border border-red-700 rounded-lg px-3 py-2 text-red-300 text-sm">{formError}</div>
-            )}
-
-            <form onSubmit={modal === 'create' ? handleCreate : handleUpdate} className="space-y-4">
-              {fields.map(([name, label, type]) => (
-                <div key={name}>
-                  <label className="block text-xs font-medium text-gray-400 mb-1">{label}</label>
-                  <input
-                    name={name}
-                    type={type}
-                    value={form[name] ?? ''}
-                    onChange={handleChange}
-                    className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-              ))}
-
-              <div className="flex gap-3 pt-2">
-                <button
-                  type="submit"
-                  disabled={saving}
-                  className="flex-1 bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 disabled:opacity-50 text-white text-sm font-medium py-2 rounded-lg transition-all flex items-center justify-center gap-2 shadow-sm"
-                >
-                  {saving && <Spinner size={14} />}
-                  {modal === 'create' ? t('empresas.create') : t('common.save')}
-                </button>
-                <button
-                  type="button"
-                  onClick={closeModal}
-                  className="px-4 py-2 text-sm text-gray-400 hover:text-gray-200 transition-colors"
-                >
-                  {t('common.cancel')}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      </Modal>
+      {dialogo}
     </div>
   );
 }

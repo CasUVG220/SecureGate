@@ -9,8 +9,8 @@
  * Datos: seed (empresas A y B, usuarios de A1 y B1, licencia activada de A1).
  * Resultado esperado (suspendida): login de sus usuarios → 423 (código empresa_suspendida);
  *   contraseña errada → 401 (no 423); heartbeat de la licencia → 423; access token vivo →
- *   401 "Sesión revocada"; refresh con la cookie previa → 401 (sus refresh tokens quedan revocados); la empresa B sigue operando.
- *   Tras reactivar: login → 200 y heartbeat → 200.
+ *   401 "Sesión revocada"; refresh con la cookie previa → 423 con el motivo (sus refresh tokens quedan revocados, pero el cliente debe
+ *   enterarse de por qué: S-11); la empresa B sigue operando. Tras reactivar: login → 200 y heartbeat → 200, y la cookie vieja → 401.
  */
 import request from 'supertest';
 import app from '../../app';
@@ -47,7 +47,7 @@ describe('R-3 suspensión de empresa', () => {
     expect((await heartbeat(licA1)).status).toBe(200);
   });
 
-  it('suspendida: login 423, contraseña errada 401, heartbeat 423, token vivo 401, refresh 401, B intacta', async () => {
+  it('suspendida: login 423, contraseña errada 401, heartbeat 423, token vivo 401, refresh 423, B intacta', async () => {
     const s = await request(app).patch(`/api/empresas/${fx.empresas.A}/suspender`).set(bearer(owner)).send({ motivo: 'Prueba de regresión' });
     expect(s.status).toBe(200);
     expect(s.body.suspendida).toBe(true);
@@ -68,9 +68,13 @@ describe('R-3 suspensión de empresa', () => {
     const vivo = await request(app).get('/api/accesos/activos').set(bearer(vivoA.token));
     expect(vivo.status).toBe(401);
 
-    // Suspender revoca todos los refresh tokens de la empresa en BD: la sesión no se puede renovar.
+    // Suspender revoca todos los refresh tokens de la empresa en BD: la sesión no se puede renovar, y el cliente debe
+    // enterarse POR QUÉ (S-11): 423 con el motivo, no un 401 mudo que lo manda al login sin explicación.
     const refresh = await request(app).post('/api/auth/refresh').set('Cookie', vivoA.cookie);
-    expect(refresh.status).toBe(401);
+    expect(refresh.status).toBe(423);
+    expect(refresh.body).toMatchObject({ codigo: 'empresa_suspendida', motivo: 'Prueba de regresión' });
+    expect(refresh.body.token).toBeUndefined();
+    expect(([] as string[]).concat(refresh.headers['set-cookie'] ?? []).join(';')).toMatch(/refresh_token=;/);   // la cookie se limpia
 
     // Otra empresa sin afectar
     expect((await login(app, fx.email.adminSucB1)).status).toBe(200);
@@ -87,5 +91,7 @@ describe('R-3 suspensión de empresa', () => {
     expect(l.status).toBe(200);
     expect((await request(app).get('/api/accesos/activos').set(bearer(l.token))).status).toBe(200);
     expect((await heartbeat(licA1)).status).toBe(200);
+    // Con la empresa en regla, el refresh token que la suspensión revocó sigue sin servir: 401 (hay que iniciar sesión).
+    expect((await request(app).post('/api/auth/refresh').set('Cookie', vivoA.cookie)).status).toBe(401);
   });
 });

@@ -10,6 +10,7 @@ import type { LangKey } from '../context/LanguageContext';
 import { Button, ErrorState, Skeleton, cx } from '../components/ui';
 import { useToast } from '../components/ui/Toast';
 import { useTranslation } from '../i18n/useTranslation';
+import { plural } from '../i18n/plural';
 import { calcularHallazgos, rellenar, type TonoHallazgo } from './estadisticas/hallazgos';
 import {
   PRESETS, rangoDePreset, validarRango, type Preset, type Rango,
@@ -309,7 +310,7 @@ export default function EstadisticasPage({ onNavigate }: { onNavigate?: (pagina:
               </div>
             )}
 
-            {/* ── Cifras del periodo: una manda, el resto se compara ── */}
+            {/* ── Cifras del periodo: cuatro, no más. Una manda (con su gráfico) y tres se comparan. ── */}
             <ResumenCifras
               ariaLabel={t('stats.summary')}
               principal={{
@@ -352,18 +353,6 @@ export default function EstadisticasPage({ onNavigate }: { onNavigate?: (pagina:
                     etiqueta: t('stats.kpi.upToDate'),
                   },
                   nota: rellenar(t('stats.kpi.upToDateNote'), { al_dia: n(d.cartera.al_dia), total: n(d.cartera.residentes), mora: n(d.cartera.mora) }),
-                },
-                {
-                  id: 'solicitudes',
-                  etiqueta: t('stats.kpi.ticketsResolved'),
-                  valor: rellenar(t('stats.kpi.ticketsValue'), { cerradas: n(d.solicitudes.por_estado.cerrado), total: n(d.solicitudes.total) }),
-                  barra: {
-                    tipo: 'proporcion',
-                    fraccion: d.solicitudes.total ? d.solicitudes.por_estado.cerrado / d.solicitudes.total : 0,
-                    tono: 'series',
-                    etiqueta: t('stats.kpi.ticketsResolved'),
-                  },
-                  nota: rellenar(t('stats.kpi.ticketsOpen'), { n: n(d.solicitudes.por_estado.abierto) }),
                 },
               ]}
             />
@@ -434,9 +423,9 @@ export default function EstadisticasPage({ onNavigate }: { onNavigate?: (pagina:
                 </header>
                 <dl className="mt-2 grid grid-cols-1 divide-y divide-[rgb(var(--c-hairline))] sm:grid-cols-2 sm:divide-y-0 lg:grid-cols-5 lg:divide-x">
                   <Celda etiqueta={t('stats.profile.unique')} valor={n(d.accesos.visitantes_unicos)}
-                         nota={d.accesos.total ? rellenar(t('stats.profile.uniqueNote'), { n: fmtNumero(d.accesos.total / Math.max(1, d.accesos.visitantes_unicos), lang) }) : undefined} />
+                         nota={d.accesos.total ? plural(t, 'stats.profile.uniqueNote', fmtNumero(d.accesos.total / Math.max(1, d.accesos.visitantes_unicos), lang), {}, d.accesos.total / Math.max(1, d.accesos.visitantes_unicos)) : undefined} />
                   <Celda etiqueta={t('stats.profile.vehicle')} valor={d.accesos.total ? pct(d.accesos.con_vehiculo / d.accesos.total) : '—'}
-                         nota={rellenar(t('stats.profile.vehicleNote'), { n: n(d.accesos.con_vehiculo) })}>
+                         nota={plural(t, 'stats.profile.vehicleNote', n(d.accesos.con_vehiculo), {}, d.accesos.con_vehiculo)}>
                     <Medidor fraccion={d.accesos.total ? d.accesos.con_vehiculo / d.accesos.total : 0} tono="series" etiqueta={t('stats.profile.vehicle')} />
                   </Celda>
                   <Celda etiqueta={t('stats.profile.duration')} valor={d.accesos.duracion_mediana_min == null ? '—' : fmtDuracion(d.accesos.duracion_mediana_min)}
@@ -529,6 +518,13 @@ export default function EstadisticasPage({ onNavigate }: { onNavigate?: (pagina:
             <Seccion id="stats-comunidad" titulo={t('stats.section.community')} pista={t('stats.section.communityHint')}>
               <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
                 <ChartCard titulo={t('stats.chart.ticketsTitle')} descripcion={t('stats.chart.ticketsDesc')}>
+                  <p className="mb-4 text-sm text-gray-300">
+                    <span className="font-semibold text-gray-50">
+                      {rellenar(t('stats.kpi.ticketsNote'), { cerradas: n(d.solicitudes.por_estado.cerrado), total: n(d.solicitudes.total) })}
+                    </span>
+                    <span className="mx-1.5" aria-hidden="true">·</span>
+                    {plural(t, 'stats.kpi.ticketsOpen', n(d.solicitudes.por_estado.abierto), {}, d.solicitudes.por_estado.abierto)}
+                  </p>
                   <SegmentedBar
                     lang={lang}
                     formato={n}

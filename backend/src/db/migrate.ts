@@ -60,7 +60,7 @@ export async function desactivarCuentasDemo(db: { query: (sql: string, p?: unkno
   );
   if (r.rows.length > 0) {
     await db.query(
-      'UPDATE refresh_tokens SET revoked = TRUE WHERE usuario_id = ANY($1::uuid[]) AND revoked = FALSE',
+      'UPDATE refresh_tokens SET revoked = TRUE, revoked_at = NOW() WHERE usuario_id = ANY($1::uuid[]) AND revoked = FALSE',
       [r.rows.map(x => x.id)],
     );
   }

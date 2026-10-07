@@ -2,12 +2,11 @@ import { useEffect, useState } from 'react';
 import { getMisAnuncios, marcarAnuncioLeido, type MiAnuncio, type AnuncioPrioridad } from '../services/api';
 import { Skeleton } from './Skeleton';
 import { useTranslation } from '../i18n/useTranslation';
+import { formatearFecha } from '../utils/fecha';
+import { alCambiarAnuncios, avisarAnunciosCambiaron } from '../utils/eventos';
+import { Badge, type BadgeTone } from './ui';
 
-const PRIORIDAD_BADGE: Record<AnuncioPrioridad, string> = {
-  normal:     'bg-gray-700 text-gray-300',
-  importante: 'bg-amber-900/50 text-amber-400',
-  urgente:    'bg-red-900/60 text-red-400',
-};
+const PRIORIDAD_TONE: Record<AnuncioPrioridad, BadgeTone> = { normal: 'neutral', importante: 'warning', urgente: 'danger' };
 
 const PRIORIDAD_LABEL: Record<AnuncioPrioridad, string> = {
   normal:     'announce.prioNormal',
@@ -15,7 +14,12 @@ const PRIORIDAD_LABEL: Record<AnuncioPrioridad, string> = {
   urgente:    'announce.prioUrgente',
 };
 
-export default function AnnouncementsBell() {
+interface Props {
+  /** Lleva a la página de anuncios (el pie del panel). */
+  onVerTodos?: () => void;
+}
+
+export default function AnnouncementsBell({ onVerTodos }: Props = {}) {
   const { t } = useTranslation();
   const [anuncios, setAnuncios] = useState<MiAnuncio[]>([]);
   const [open, setOpen]         = useState(false);
@@ -34,6 +38,9 @@ export default function AnnouncementsBell() {
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { load(); }, []);
 
+  // La página de anuncios también marca como leído: la campana se entera y recalcula sus pendientes.
+  useEffect(() => alCambiarAnuncios('campana', load), []);
+
   const unreadCount = anuncios.filter(a => a.leido_at === null).length;
 
   const togglePanel = () => {
@@ -49,6 +56,7 @@ export default function AnnouncementsBell() {
     ));
     try {
       await marcarAnuncioLeido(a.id);
+      avisarAnunciosCambiaron('campana');
     } catch {
       // Revert on failure
       setAnuncios(prev => prev.map(x =>
@@ -64,7 +72,7 @@ export default function AnnouncementsBell() {
   };
 
   const fmtDate = (d: string) =>
-    new Date(d).toLocaleDateString('es-GT', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    formatearFecha(d);
 
   return (
     <div className="relative">
@@ -72,14 +80,14 @@ export default function AnnouncementsBell() {
       <button
         onClick={togglePanel}
         aria-label={t('announcements.title')}
-        className="relative flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-gray-400 transition-colors hover:bg-white/10 hover:text-emerald-300"
+        className="relative flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-gray-400 transition-colors hover:bg-white/10 hover:text-success-300"
       >
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
           <path d="M13.73 21a2 2 0 0 1-3.46 0" />
         </svg>
         {unreadCount > 0 && (
-          <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-1 flex items-center justify-center rounded-full bg-red-600 text-white text-[10px] font-bold leading-none">
+          <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-1 flex items-center justify-center rounded-full bg-danger-600 text-white text-[10px] font-bold leading-none">
             {unreadCount > 9 ? '9+' : unreadCount}
           </span>
         )}
@@ -95,7 +103,7 @@ export default function AnnouncementsBell() {
             <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
               <h3 className="text-white font-semibold text-sm">{t('announcements.title')}</h3>
               {unreadCount > 0 && (
-                <span className="text-xs text-red-400 font-medium">
+                <span className="text-xs text-danger-400 font-medium">
                   {unreadCount} {t('announcements.unread')}
                 </span>
               )}
@@ -128,11 +136,10 @@ export default function AnnouncementsBell() {
                       }`}
                     >
                       <div className="flex items-center gap-2 mb-1">
-                        <span className={`inline-block text-[10px] font-semibold px-2 py-0.5 rounded-full ${PRIORIDAD_BADGE[a.prioridad]}`}>
-                          {t(PRIORIDAD_LABEL[a.prioridad])}
-                        </span>
+                        <Badge tone={PRIORIDAD_TONE[a.prioridad]}>{t(PRIORIDAD_LABEL[a.prioridad])}</Badge>
+                        {a.es_personal && <Badge tone="info">{t('announcements.personal')}</Badge>}
                         {unread && (
-                          <span className="inline-block text-[10px] font-bold text-red-400">● {t('announcements.newTag')}</span>
+                          <span className="inline-block text-[10px] font-bold text-danger-400">● {t('announcements.newTag')}</span>
                         )}
                         <span className="ml-auto text-[11px] text-gray-500">{fmtDate(a.created_at)}</span>
                       </div>
@@ -147,6 +154,18 @@ export default function AnnouncementsBell() {
                 })
               )}
             </div>
+
+            {onVerTodos && (
+              <div className="border-t border-white/10 px-4 py-2.5 text-center">
+                <button
+                  type="button"
+                  onClick={() => { setOpen(false); onVerTodos(); }}
+                  className="text-sm font-semibold text-brand-400 underline-offset-4 hover:underline"
+                >
+                  {t('announcements.seeAll')}
+                </button>
+              </div>
+            )}
           </div>
         </>
       )}

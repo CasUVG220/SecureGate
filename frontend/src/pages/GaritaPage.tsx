@@ -19,6 +19,10 @@ import {
 } from '../services/api';
 import { useTranslation } from '../i18n/useTranslation';
 import { Button, ErrorState } from '../components/ui';
+import { idDeCodigoManual } from '../utils/qr';
+import { formatearPlaca, normalizarPlaca, placaParaInput } from '../utils/placa';
+import PlacaInput from '../components/PlacaInput';
+import { formatearFecha, formatearHora } from '../utils/fecha';
 
 const QR_PREFIX = 'SGQR:';
 
@@ -57,7 +61,7 @@ export default function GaritaPage() {
   const [casaSearch, setCasaSearch]   = useState('');
   const [casaOpen, setCasaOpen]       = useState(false);
   const [blacklistBlock, setBlacklistBlock] = useState<{
-    razon: string; fecha_fin: string | null;
+    razon: string; fecha_fin: string | null; motivo: 'dpi' | 'placa';
   } | null>(null);
   const [dpiHistorial, setDpiHistorial]     = useState(false);
   const [dpiSugerencias, setDpiSugerencias] = useState<VisitanteFrecuente[]>([]);
@@ -74,6 +78,7 @@ export default function GaritaPage() {
 
   const dpiVideoRef   = useRef<HTMLVideoElement>(null);
   const placaVideoRef = useRef<HTMLVideoElement>(null);
+  const placaInputRef = useRef<HTMLInputElement>(null);
   const qrVideoRef    = useRef<HTMLVideoElement>(null);
   const canvasRef     = useRef<HTMLCanvasElement>(null);
   const qrCanvasRef   = useRef<HTMLCanvasElement>(null);
@@ -135,15 +140,15 @@ export default function GaritaPage() {
         numero_dpi:       datos.numero_dpi,
         residente_id:     datos.residente_id,
         agente_id:        payload.id as string,
-        placa:            datos.placa || undefined,
+        placa:            normalizarPlaca(datos.placa) || undefined,
         invitacion_qr_id: datos.invitacion_qr_id || undefined,
       });
       const residente = residentes.find(r => r.id === datos.residente_id);
       setUltimosIngresos(prev => [{
         id:        crypto.randomUUID(),
-        hora:      new Date().toLocaleTimeString('es-GT'),
+        hora:      formatearHora(new Date(), true),
         visitante: datos.nombre_visitante,
-        placa:     datos.placa || '—',
+        placa:     formatearPlaca(datos.placa) || '—',
         unidad:    residente ? `Casa ${residente.numero_casa}` : '—',
         estado:    'Autorizado' as const,
       }, ...prev].slice(0, 10));
@@ -165,7 +170,7 @@ export default function GaritaPage() {
       }
     } catch (err: unknown) {
       if (err instanceof BlacklistDenialError) {
-        setBlacklistBlock({ razon: err.razon, fecha_fin: err.fecha_fin });
+        setBlacklistBlock({ razon: err.razon, fecha_fin: err.fecha_fin, motivo: err.motivo });
       } else {
         setError(err instanceof Error ? err.message : 'Error al registrar');
       }
@@ -187,7 +192,7 @@ export default function GaritaPage() {
         ...(inv.tipo === 'individual'
           ? { nombre_visitante: inv.nombre_visitante ?? prev.nombre_visitante, numero_dpi: inv.numero_dpi ?? prev.numero_dpi }
           : {}),
-        ...(inv.placa ? { placa: inv.placa } : {}),
+        ...(inv.placa ? { placa: placaParaInput(inv.placa) } : {}),
       }));
 
       // Autorización automática: sólo para QR individuales completos (nombre
@@ -239,6 +244,16 @@ export default function GaritaPage() {
     return () => clearInterval(interval);
   }, [hasCamera, qrScanning, qrInvitacion, qrChecking, handleQrDecoded]);
 
+  /** Sin cámara (o con el QR dañado) el agente escribe o pega el código de la invitación. */
+  const [qrManual, setQrManual] = useState('');
+  const handleQrManual = (e: React.FormEvent) => {
+    e.preventDefault();
+    const id = idDeCodigoManual(qrManual);
+    if (!id) { setQrError(t('gate.qrManualInvalid')); return; }
+    setQrManual('');
+    void handleQrDecoded(id);
+  };
+
   const handleQrRescan = () => {
     setQrInvitacion(null);
     setQrError(null);
@@ -281,7 +296,7 @@ export default function GaritaPage() {
               ...prev,
               nombre_visitante: match.nombre_visitante || prev.nombre_visitante,
               numero_dpi:       match.numero_dpi || prev.numero_dpi,
-              placa:            match.placa || prev.placa,
+              placa:            match.placa ? placaParaInput(match.placa) : prev.placa,
               residente_id:     match.residente_id,
             }));
             setPreautorizado(true);
@@ -305,7 +320,7 @@ export default function GaritaPage() {
     try {
       const res = await scanPlaca(base64);
       if (res.placa) {
-        setForm(prev => ({ ...prev, placa: res.placa }));
+        setForm(prev => ({ ...prev, placa: placaParaInput(res.placa) }));
         setPlacaOcr(true);
         const match = await buscarPreautorizacion({ placa: res.placa });
         if (match) {
@@ -313,7 +328,7 @@ export default function GaritaPage() {
             ...prev,
             nombre_visitante: match.nombre_visitante || prev.nombre_visitante,
             numero_dpi:       match.numero_dpi || prev.numero_dpi,
-            placa:            match.placa || prev.placa,
+            placa:            match.placa ? placaParaInput(match.placa) : prev.placa,
             residente_id:     match.residente_id,
           }));
           setPreautorizado(true);
@@ -346,7 +361,7 @@ export default function GaritaPage() {
       ...prev,
       nombre_visitante: v.nombre,
       numero_dpi:       v.numero_dpi,
-      placa:            v.placa ?? prev.placa,
+      placa:            v.placa ? placaParaInput(v.placa) : prev.placa,
     }));
     setDpiHistorial(true);
     setDpiSugerencias([]);
@@ -385,9 +400,9 @@ export default function GaritaPage() {
     const residente = residentes.find(r => r.id === form.residente_id);
     setUltimosIngresos(prev => [{
       id:        crypto.randomUUID(),
-      hora:      new Date().toLocaleTimeString('es-GT'),
+      hora:      formatearHora(new Date(), true),
       visitante: form.nombre_visitante || 'Desconocido',
-      placa:     form.placa || '—',
+      placa:     formatearPlaca(form.placa) || '—',
       unidad:    residente ? `Casa ${residente.numero_casa}` : '—',
       estado:    'Denegado' as const,
     }, ...prev].slice(0, 10));
@@ -415,31 +430,33 @@ export default function GaritaPage() {
       {/* Blocking blacklist modal — must be dismissed before continuing */}
       {blacklistBlock && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-          <div className="sg-card w-full max-w-md rounded-3xl border-2 border-red-600 p-5 sm:p-6">
+          <div className="sg-card w-full max-w-md rounded-3xl border-2 border-danger-600 p-5 sm:p-6">
             <div className="flex items-center gap-3">
-              <div className="w-11 h-11 rounded-full bg-red-950 flex items-center justify-center shrink-0">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-red-500">
+              <div className="w-11 h-11 rounded-full bg-danger-950 flex items-center justify-center shrink-0">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-danger-500">
                   <circle cx="12" cy="12" r="10" /><line x1="4.9" y1="4.9" x2="19.1" y2="19.1" />
                 </svg>
               </div>
-              <h2 className="text-red-300 font-bold text-lg uppercase tracking-wide">
+              <h2 className="text-danger-300 font-bold text-lg uppercase tracking-wide">
                 {t('blacklist.blockedTitle')}
               </h2>
             </div>
-            <p className="text-red-200 text-sm">{t('blacklist.blockedAlert')}</p>
-            <div className="bg-red-950/60 border border-red-800 rounded-xl px-4 py-3 space-y-1">
-              <p className="text-red-200 text-sm">
+            <p className="text-danger-200 text-sm">
+              {t(blacklistBlock.motivo === 'placa' ? 'blacklist.blockedByPlate' : 'blacklist.blockedAlert')}
+            </p>
+            <div className="bg-danger-950/60 border border-danger-800 rounded-xl px-4 py-3 space-y-1">
+              <p className="text-danger-200 text-sm">
                 <span className="font-semibold">{t('blacklist.reason')}:</span> {blacklistBlock.razon}
               </p>
-              <p className="text-red-300 text-sm">
+              <p className="text-danger-300 text-sm">
                 {blacklistBlock.fecha_fin
-                  ? `${t('blacklist.expiresOn')} ${new Date(blacklistBlock.fecha_fin).toLocaleDateString('es-GT')}`
+                  ? `${t('blacklist.expiresOn')} ${formatearFecha(blacklistBlock.fecha_fin)}`
                   : t('blacklist.permanent')}
               </p>
             </div>
             <button
               onClick={resetForm}
-              className="w-full bg-red-700 hover:bg-red-600 text-white font-semibold py-2.5 rounded-xl transition-colors"
+              className="w-full bg-danger-700 hover:bg-danger-600 text-white font-semibold py-2.5 rounded-xl transition-colors"
             >
               {t('blacklist.close')}
             </button>
@@ -459,6 +476,38 @@ export default function GaritaPage() {
             </svg>
             <p className="text-gray-400 text-sm font-medium">{t('gate.cameraUnavailable')}</p>
             <p className="text-gray-500 text-xs">{t('gate.httpsRequired')}</p>
+            <p className="text-gray-300 text-sm">{t('gate.noCameraHint')}</p>
+
+            <Button
+              variant="secondary"
+              onClick={() => { placaInputRef.current?.focus(); placaInputRef.current?.scrollIntoView?.({ block: 'center', behavior: 'smooth' }); }}
+            >
+              {t('gate.writePlate')}
+            </Button>
+
+            {/* Código de la invitación QR escrito a mano */}
+            <form onSubmit={handleQrManual} aria-label={t('gate.qrManualTitle')} className="w-full max-w-sm space-y-2 border-t border-gray-700 pt-4 text-left">
+              <label htmlFor="qr-manual" className="block text-xs font-semibold text-gray-300">{t('gate.qrManualTitle')}</label>
+              <input
+                id="qr-manual"
+                value={qrManual}
+                onChange={e => { setQrManual(e.target.value); setQrError(null); }}
+                placeholder={t('gate.qrManualPlaceholder')}
+                autoComplete="off"
+                spellCheck={false}
+                className="sg-input font-mono"
+              />
+              <Button type="submit" variant="secondary" fullWidth loading={qrChecking} disabled={!qrManual.trim()}>
+                {t('gate.qrManualVerify')}
+              </Button>
+              {qrInvitacion ? (
+                <p role="status" className="text-xs text-success-400">
+                  {t('gate.qrValid')} · {qrInvitacion.etiqueta || qrInvitacion.nombre_visitante || qrInvitacion.residente_nombre}
+                </p>
+              ) : qrError ? (
+                <p role="alert" className="text-xs text-danger-400">{qrError}</p>
+              ) : null}
+            </form>
           </div>
         ) : (
           <>
@@ -467,20 +516,20 @@ export default function GaritaPage() {
               <div className="flex items-center gap-2 px-4 py-2.5 border-b border-gray-700 shrink-0">
                 <span className="text-sm font-semibold text-gray-200">{t('gate.dpiScanner')}</span>
                 {dpiOcr && (
-                  <span className="text-xs bg-emerald-600 text-white px-2 py-0.5 rounded-full font-medium">OCR</span>
+                  <span className="text-xs bg-success-700 text-white px-2 py-0.5 rounded-full font-medium">OCR</span>
                 )}
               </div>
               <div className="flex-1 bg-gray-900 min-h-0 overflow-hidden">
                 <video ref={dpiVideoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
               </div>
               {ocrDpiMsg && (
-                <p className="px-4 py-1 text-xs text-red-400 border-t border-gray-700 shrink-0">{ocrDpiMsg}</p>
+                <p className="px-4 py-1 text-xs text-danger-400 border-t border-gray-700 shrink-0">{ocrDpiMsg}</p>
               )}
               <div className="p-3 border-t border-gray-700 shrink-0">
                 <button
                   onClick={handleCaptureDpi}
                   disabled={ocringDpi}
-                  className="w-full bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-semibold py-2 rounded-xl transition-colors text-sm"
+                  className="w-full bg-success-700 hover:bg-success-600 disabled:opacity-50 text-white font-semibold py-2 rounded-xl transition-colors text-sm"
                 >
                   {ocringDpi ? t('common.processing') : t('gate.scanDocument')}
                 </button>
@@ -492,20 +541,20 @@ export default function GaritaPage() {
               <div className="flex items-center gap-2 px-4 py-2.5 border-b border-gray-700 shrink-0">
                 <span className="text-sm font-semibold text-gray-200">{t('gate.plateScanner')}</span>
                 {placaOcr && (
-                  <span className="text-xs bg-emerald-600 text-white px-2 py-0.5 rounded-full font-medium">OCR</span>
+                  <span className="text-xs bg-success-700 text-white px-2 py-0.5 rounded-full font-medium">OCR</span>
                 )}
               </div>
               <div className="flex-1 bg-gray-900 min-h-0 overflow-hidden">
                 <video ref={placaVideoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
               </div>
               {ocrPlacaMsg && (
-                <p className="px-4 py-1 text-xs text-red-400 border-t border-gray-700 shrink-0">{ocrPlacaMsg}</p>
+                <p className="px-4 py-1 text-xs text-danger-400 border-t border-gray-700 shrink-0">{ocrPlacaMsg}</p>
               )}
               <div className="p-3 border-t border-gray-700 shrink-0">
                 <button
                   onClick={handleCapturePlaca}
                   disabled={ocringPlaca}
-                  className="w-full bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-semibold py-2 rounded-xl transition-colors text-sm"
+                  className="w-full bg-success-700 hover:bg-success-600 disabled:opacity-50 text-white font-semibold py-2 rounded-xl transition-colors text-sm"
                 >
                   {ocringPlaca ? t('common.processing') : t('gate.scanPlate')}
                 </button>
@@ -517,7 +566,7 @@ export default function GaritaPage() {
               <div className="flex items-center gap-2 px-4 py-2.5 border-b border-gray-700 shrink-0">
                 <span className="text-sm font-semibold text-gray-200">{t('gate.qrScanner')}</span>
                 {qrInvitacion && (
-                  <span className="text-xs bg-emerald-600 text-white px-2 py-0.5 rounded-full font-medium">
+                  <span className="text-xs bg-success-700 text-white px-2 py-0.5 rounded-full font-medium">
                     {t('gate.qrValid')}
                   </span>
                 )}
@@ -529,7 +578,7 @@ export default function GaritaPage() {
               <div className="px-4 py-2 border-t border-gray-700 shrink-0 space-y-1">
                 {qrInvitacion ? (
                   <div className="flex items-center justify-between gap-2">
-                    <p className="text-xs text-emerald-400 truncate">
+                    <p className="text-xs text-success-400 truncate">
                       {qrInvitacion.etiqueta || qrInvitacion.nombre_visitante || t('gate.qrValid')}
                       {' · '}{qrInvitacion.residente_nombre}
                     </p>
@@ -538,7 +587,7 @@ export default function GaritaPage() {
                     </Button>
                   </div>
                 ) : qrError ? (
-                  <p className="text-xs text-red-400">{qrError}</p>
+                  <p className="text-xs text-danger-400">{qrError}</p>
                 ) : qrChecking ? (
                   <p className="text-xs text-gray-400">{t('common.processing')}</p>
                 ) : (
@@ -558,7 +607,7 @@ export default function GaritaPage() {
           <h2 className="text-base font-bold text-white">{t('gate.visitorData')}</h2>
 
           {error && (
-            <div className="bg-red-900/40 border border-red-700 rounded-lg px-4 py-2 text-red-300 text-sm">
+            <div className="bg-danger-900/40 border border-danger-700 rounded-lg px-4 py-2 text-danger-300 text-sm">
               {error}
             </div>
           )}
@@ -582,10 +631,10 @@ export default function GaritaPage() {
               <div className="flex items-center gap-1.5 mb-1">
                 <label className="text-xs text-gray-400">{t('gate.dpi')} *</label>
                 {dpiOcr && (
-                  <span className="text-xs bg-emerald-700 text-white px-1.5 py-0.5 rounded font-medium">OCR</span>
+                  <span className="text-xs bg-success-700 text-white px-1.5 py-0.5 rounded font-medium">OCR</span>
                 )}
                 {dpiHistorial && !dpiOcr && (
-                  <span className="text-xs bg-blue-700 text-white px-1.5 py-0.5 rounded font-medium">Historial</span>
+                  <span className="text-xs bg-brand-500 text-brand-ink px-1.5 py-0.5 rounded font-medium">Historial</span>
                 )}
               </div>
               <input
@@ -610,7 +659,7 @@ export default function GaritaPage() {
                     >
                       <p className="text-white text-xs font-medium truncate">{v.nombre}</p>
                       <p className="text-gray-400 text-xs font-mono">{v.numero_dpi}
-                        {v.placa && <span className="ml-2 text-teal-400">{v.placa}</span>}
+                        {v.placa && <span className="ml-2 text-brand-400">{formatearPlaca(v.placa)}</span>}
                         <span className="ml-2 text-gray-500">{diasDesde(v.ultima_visita)}</span>
                       </p>
                     </button>
@@ -624,16 +673,16 @@ export default function GaritaPage() {
               <label className="block text-xs text-gray-400 mb-1">
                 {t('gate.plate')}{qrInvitacion && configQr?.requiere_placa ? ' *' : ''}
               </label>
-              <input
+              <PlacaInput
+                ref={placaInputRef}
                 name="placa"
                 value={form.placa}
-                onChange={handleChange}
+                onChange={placa => setForm(prev => ({ ...prev, placa }))}
                 disabled={!!qrInvitacion?.placa}
-                placeholder="P-123ABC"
-                className="sg-input disabled:opacity-60"
+                className="disabled:opacity-60"
               />
               {qrInvitacion && configQr?.requiere_placa && !form.placa && (
-                <p className="text-xs text-amber-400 mt-1">{t('gate.qrPlateRequired')}</p>
+                <p className="text-xs text-warning-400 mt-1">{t('gate.qrPlateRequired')}</p>
               )}
             </div>
 
@@ -668,7 +717,7 @@ export default function GaritaPage() {
                     >
                       <span>Casa {r.numero_casa} — {r.nombre}</span>
                       {r.estado_pago === 'mora' && (
-                        <span className="text-yellow-400 text-xs font-semibold">⚠ {t('gate.mora')}</span>
+                        <span className="text-warning-400 text-xs font-semibold">⚠ {t('gate.mora')}</span>
                       )}
                     </li>
                   ))}
@@ -680,37 +729,37 @@ export default function GaritaPage() {
 
         {/* Preauth banner */}
         {preautorizado && (
-          <div className="bg-emerald-900/60 border-2 border-emerald-500 rounded-2xl px-5 py-4 flex items-center gap-3 shrink-0 shadow-xl">
-            <span className="text-emerald-400 text-2xl font-black tracking-widest">✓ PREAUTORIZADO</span>
-            <p className="text-emerald-300 text-sm">Visitante con preautorización activa para hoy. Datos auto-completados.</p>
+          <div className="bg-success-900/60 border-2 border-success-500 rounded-2xl px-5 py-4 flex items-center gap-3 shrink-0 shadow-xl">
+            <span className="text-success-400 text-2xl font-black tracking-widest">✓ PREAUTORIZADO</span>
+            <p className="text-success-300 text-sm">Visitante con preautorización activa para hoy. Datos auto-completados.</p>
           </div>
         )}
 
         {/* Cargo alert banner */}
         {cargoAlert && (
-          <div className="bg-amber-900/60 border-2 border-amber-500 rounded-2xl px-5 py-4 space-y-1 shrink-0 shadow-xl">
+          <div className="bg-warning-900/60 border-2 border-warning-500 rounded-2xl px-5 py-4 space-y-1 shrink-0 shadow-xl">
             <div className="flex items-start justify-between gap-2">
-              <p className="text-amber-300 font-bold text-sm">
+              <p className="text-warning-300 font-bold text-sm">
                 ⚠ Cargo aplicado: Q{cargoAlert.monto} — {cargoAlert.nombre} ({cargoAlert.frecuencia})
               </p>
               <button
                 onClick={() => setCargoAlert(null)}
-                className="text-amber-400 hover:text-amber-200 text-lg leading-none shrink-0 transition-colors"
+                className="text-warning-400 hover:text-warning-200 text-lg leading-none shrink-0 transition-colors"
               >✕</button>
             </div>
-            <p className="text-amber-200 text-xs">Nuevo saldo pendiente: Q{cargoAlert.saldo}</p>
+            <p className="text-warning-200 text-xs">Nuevo saldo pendiente: Q{cargoAlert.saldo}</p>
           </div>
         )}
 
         {/* Extra charge for entering while in mora (T-S5-03) */}
         {extraMoraAlert && (
-          <div className="bg-red-900/60 border-2 border-red-500 rounded-2xl px-5 py-4 flex items-start justify-between gap-2 shrink-0 shadow-xl">
-            <p className="text-red-300 font-bold text-sm">
+          <div className="bg-danger-900/60 border-2 border-danger-500 rounded-2xl px-5 py-4 flex items-start justify-between gap-2 shrink-0 shadow-xl">
+            <p className="text-danger-300 font-bold text-sm">
               ⛔ Cargo extra de Q{extraMoraAlert.monto} aplicado por visita en mora
             </p>
             <button
               onClick={() => setExtraMoraAlert(null)}
-              className="text-red-400 hover:text-red-200 text-lg leading-none shrink-0 transition-colors"
+              className="text-danger-400 hover:text-danger-200 text-lg leading-none shrink-0 transition-colors"
             >✕</button>
           </div>
         )}
@@ -720,13 +769,13 @@ export default function GaritaPage() {
           <button
             onClick={handleAutorizar}
             disabled={loading || !!blacklistBlock || !!(qrInvitacion && configQr?.requiere_placa && !form.placa)}
-            className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-5 rounded-2xl transition-colors text-sm tracking-widest shadow-xl"
+            className="bg-success-700 hover:bg-success-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-5 rounded-2xl transition-colors text-sm tracking-widest shadow-xl"
           >
             {loading ? t('gate.registering') : t('gate.authorizeEntry')}
           </button>
           <button
             onClick={handleDenegar}
-            className="bg-red-600 hover:bg-red-500 text-white font-bold py-5 rounded-2xl transition-colors text-sm tracking-widest shadow-xl"
+            className="bg-danger-600 hover:bg-danger-500 text-white font-bold py-5 rounded-2xl transition-colors text-sm tracking-widest shadow-xl"
           >
             {t('gate.denyEntry')}
           </button>
@@ -763,8 +812,8 @@ export default function GaritaPage() {
                     <td className="px-4 py-2">
                       <span className={`inline-block px-2 py-0.5 rounded-full font-semibold ${
                         ing.estado === 'Autorizado'
-                          ? 'bg-emerald-900/60 text-emerald-400 border border-emerald-700'
-                          : 'bg-red-900/60 text-red-400 border border-red-700'
+                          ? 'bg-success-900/60 text-success-400 border border-success-700'
+                          : 'bg-danger-900/60 text-danger-400 border border-danger-700'
                       }`}>
                         {ing.estado === 'Autorizado' ? t('gate.authorized') : t('gate.denied')}
                       </span>

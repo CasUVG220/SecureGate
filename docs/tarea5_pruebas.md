@@ -33,7 +33,9 @@ El `globalSetup` **vacía el esquema `public`** de esa base, aplica `database/in
 algo falla con un mensaje claro (porque `runMigrations` nunca lanza).
 
 **Zona horaria:** Node con `TZ=America/Guatemala` y Postgres en UTC. R-2 lo comprueba y falla con mensaje claro
-si el entorno no es ese, para no pasar en vacío.
+si el entorno no es ese, para no pasar en vacío. *(Desde S-17, SCRUM-124, todas las columnas de fecha y hora son
+`TIMESTAMPTZ`: ese entorno ya no produce el desfase de 6 h, pero se mantiene porque es el que reproduce un retroceso —R-2 y
+I-20 fallan si una columna vuelve a ser `TIMESTAMP`—. Ver `docs/s17_timestamptz.md`.)*
 
 ## Las 6 pruebas
 | ID | Archivo | Componentes | Condición | Datos | Resultado esperado |
@@ -66,10 +68,20 @@ Las contraseñas del seed usan `crypt(..., gen_salt('bf', 4))` (producción usa 
 
 ## CI (GitHub Actions)
 Eventos: `push` (cualquier rama), `pull_request` a `main` y `workflow_dispatch`; permisos `contents: read`;
-`concurrency` por ref. Un job en `ubuntu-latest` con service container `postgres:15` (healthcheck `pg_isready`,
-base `securegate_test`), `TZ=America/Guatemala`, Node 20 con caché de npm, `npm ci`, y pasos separados
-**Pruebas de integración** y **Pruebas de regresión** (`if: always()`); sube `backend/reports/` como artefacto
-`reportes-junit` y escribe el resumen en `$GITHUB_STEP_SUMMARY`. El job queda rojo si falla cualquier prueba.
+`concurrency` por ref. Todos los jobs corren en **`ubuntu-24.04` fijo** (no `ubuntu-latest`: GitHub mueve ese alias de versión
+y una migración del runner no debe romper el CI; se sube a propósito, SCRUM-158).
+
+1. **`integracion-regresion`** — service container `postgres:15` (healthcheck `pg_isready`, base `securegate_test`),
+   `TZ=America/Guatemala`, Node 20 con caché de npm, `npm ci`, y pasos separados **Pruebas de integración** y **Pruebas de regresión**
+   (`if: always()`); sube `backend/reports/` como artefacto `reportes-junit` y escribe el resumen en `$GITHUB_STEP_SUMMARY`.
+2. **`unitarias`** (matriz: backend, frontend, desktop) — `npm ci`, `npm test` y la compilación de tipos (`tsc --noEmit` / `npm run build`);
+   sin base de datos. El backend corre con `TZ=America/Guatemala` (como en producción); el frontend y la parte web del escritorio, en **UTC**
+   (la del runner), para que una prueba que solo pase en la zona de Guatemala falle en el CI.
+3. **`desktop-rust`** — `cargo test --lib --locked` de la parte nativa del escritorio. Tauri compila contra GTK/WebKit en Linux y exige
+   tres cosas que no se versionan (`dist/`, el runtime de Node del sidecar y sus recursos): el job las crea vacías porque `cargo test` no las ejecuta.
+
+El workflow queda rojo si falla cualquier prueba de cualquiera de los jobs. Cómo se validó el workflow sin poder ejecutarlo en GitHub: `actionlint`
+(sin errores) y la réplica de cada job en contenedores Linux (Node 20 amd64 y Ubuntu 24.04); ver `docs/sprint9_noche.md`, SCRUM-117.
 
 ## Evidencia de regresión
 Ver "Fase D" y "Fase F" en `docs/tarea5_bitacora.md`: cada regresión se rompió a propósito, la prueba correspondiente

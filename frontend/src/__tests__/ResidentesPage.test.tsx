@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import ResidentesPage from '../pages/ResidentesPage';
 import { getResidentes, createResidente, deleteResidente } from '../services/api';
 
@@ -62,7 +62,9 @@ describe('ResidentesPage', () => {
     const { container } = render(<ResidentesPage />);
     await screen.findByText('No hay residentes registrados.');
 
-    fireEvent.click(screen.getByText('+ Nuevo residente'));
+    // Con la lista vacía el botón para crear es el del estado vacío (no se repite arriba).
+    expect(screen.queryByText('+ Nuevo residente')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '+ Agregar el primero' }));
 
     fireEvent.change(container.querySelector('input[name="nombre"]')!, { target: { value: 'Nuevo Residente' } });
     fireEvent.change(container.querySelector('input[name="email"]')!, { target: { value: 'nuevo@test.com' } });
@@ -81,13 +83,17 @@ describe('ResidentesPage', () => {
   it('eliminar: llama deleteResidente() después de confirmar', async () => {
     mockGetResidentes.mockResolvedValue([residente({ id: 'r1', numero_casa: '101' })]);
     mockDeleteResidente.mockResolvedValue(undefined);
-    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    const confirmNativo = vi.spyOn(window, 'confirm');
 
     render(<ResidentesPage />);
     await screen.findByText('101');
 
     fireEvent.click(screen.getByTitle('Eliminar'));
+    const dialogo = await screen.findByRole('dialog', { name: '¿Eliminar al residente de la casa 101?' });
+    expect(mockDeleteResidente).not.toHaveBeenCalled();
+    fireEvent.click(within(dialogo).getByRole('button', { name: 'Eliminar' }));
 
     await waitFor(() => expect(mockDeleteResidente).toHaveBeenCalledWith('r1'));
+    expect(confirmNativo).not.toHaveBeenCalled();
   });
 });

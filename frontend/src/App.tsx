@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import ResidentesPage         from './pages/ResidentesPage';
 import LoginPage              from './pages/LoginPage';
 import PagosPage              from './pages/PagosPage';
@@ -6,6 +6,7 @@ import PreautPage             from './pages/PreautPage';
 import DashboardPage          from './pages/DashboardPage';
 import ResidentePage          from './pages/ResidentePage';
 import ConfigCargosPage       from './pages/ConfigCargosPage';
+import ConfiguracionQrPage    from './pages/ConfiguracionQrPage';
 import VerificacionPage       from './pages/VerificacionPage';
 import AgentesPage            from './pages/AgentesPage';
 import LicenciasPage          from './pages/LicenciasPage';
@@ -23,12 +24,16 @@ import TicketsPage            from './pages/TicketsPage';
 import ReservasAdminPage      from './pages/ReservasAdminPage';
 import ReservasPage           from './pages/ReservasPage';
 import AnnouncementsBell      from './components/AnnouncementsBell';
+import MisAnunciosPage        from './pages/MisAnunciosPage';
+import MiCuentaPage           from './pages/MiCuentaPage';
 import { ToastProvider }      from './components/ui/Toast';
 import { cx }                 from './components/ui/cx';
-import { decodeTokenPayload, getTickets } from './services/api';
+import { decodeTokenPayload, getReservas, getTickets } from './services/api';
+import { usePolling } from './hooks/usePolling';
 import { ThemeProvider, useTheme } from './context/ThemeContext';
 import { LanguageProvider, useLanguage } from './context/LanguageContext';
 import { useTranslation }     from './i18n/useTranslation';
+import { plural }         from './i18n/plural';
 import { useRuta }            from './hooks/useRuta';
 import { RUTA_PORTAL, portalDeRol, portalDeRuta, tokenDeInvitacion } from './routing/portales';
 import type { PortalTab }     from './pages/ResidentePage';
@@ -39,10 +44,10 @@ import { Spinner }            from './components/ui/Skeleton';
 const EstadisticasPage = lazy(() => import('./pages/EstadisticasPage'));
 
 type Page =
-  | 'dashboard' | 'residentes' | 'pagos' | 'preaut' | 'reportes' | 'config' | 'verificacion' | 'agentes' | 'garitas' | 'blacklist' | 'anuncios' | 'tickets' | 'reservas'
-  | 'portal' | 'mis-reservas'
+  | 'dashboard' | 'residentes' | 'pagos' | 'preaut' | 'reportes' | 'config' | 'config-qr' | 'verificacion' | 'agentes' | 'garitas' | 'blacklist' | 'anuncios' | 'tickets' | 'reservas'
+  | 'portal' | 'mis-reservas' | 'mis-anuncios'
   | 'owner-dashboard' | 'owner-empresas' | 'owner-empresa-detail' | 'owner-audit'
-  | 'ae-dashboard' | 'ae-sucursales';
+  | 'ae-dashboard' | 'ae-sucursales' | 'cuenta';
 
 interface NavItem { key: Page; labelKey: string; d: string; }
 interface NavGroup { labelKey: string; items: NavItem[]; }
@@ -65,7 +70,17 @@ const ICON = {
   gate:       'M2 4h20v12H2zM8 20h8M12 16v4',
   qr:         'M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3zM14 14h3v3h-3zM18 18h3v3h-3z',
   audit:      'M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M9 5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2M9 5h6M9 12h6M9 16h4',
+  account:    'M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z',
 } as const;
+
+/**
+ * «Mi cuenta» (verificación en dos pasos) es de los tres roles de administración; el personal de garita y los residentes
+ * no la tienen. Se agrega al final de cada menú de administración.
+ */
+const CUENTA_NAV: NavGroup = {
+  labelKey: 'nav.group.account',
+  items: [{ key: 'cuenta', labelKey: 'nav.account', d: ICON.account }],
+};
 
 /**
  * La navegación se agrupa por intención, no por orden de implementación: el
@@ -89,6 +104,7 @@ const ADMIN_NAV: NavGroup[] = [
     { key: 'pagos',      labelKey: 'nav.payments',     d: ICON.payments },
     { key: 'reservas',   labelKey: 'nav.reservations', d: ICON.calendar },
     { key: 'config',     labelKey: 'nav.config',       d: ICON.config },
+    { key: 'config-qr',  labelKey: 'nav.qrRules',      d: ICON.qr },
   ]},
   { labelKey: 'nav.group.communication', items: [
     { key: 'anuncios', labelKey: 'nav.announcements', d: ICON.announce },
@@ -97,6 +113,7 @@ const ADMIN_NAV: NavGroup[] = [
   { labelKey: 'nav.group.analysis', items: [
     { key: 'reportes', labelKey: 'nav.reports', d: ICON.reports },
   ]},
+  CUENTA_NAV,
 ];
 
 /**
@@ -111,6 +128,7 @@ const RESIDENTE_NAV: NavGroup[] = [
   { labelKey: 'nav.group.portal', items: [
     { key: 'portal',       labelKey: 'nav.portal',       d: ICON.home },
     { key: 'mis-reservas', labelKey: 'nav.reservations', d: ICON.calendar },
+    { key: 'mis-anuncios',  labelKey: 'nav.announcements', d: ICON.announce },
   ]},
 ];
 
@@ -120,14 +138,17 @@ const OWNER_NAV: NavGroup[] = [
     { key: 'owner-empresas',  labelKey: 'nav.companies',      d: ICON.home },
     { key: 'owner-audit',     labelKey: 'nav.auditLogs',      d: ICON.audit },
   ]},
+  CUENTA_NAV,
 ];
 
 const ADMIN_EMPRESA_NAV: NavGroup[] = [
-  { labelKey: 'nav.group.global', items: [
+  // «Administración global» es del owner; el administrador de empresa solo ve la suya.
+  { labelKey: 'nav.group.company', items: [
     { key: 'ae-dashboard',  labelKey: 'nav.aeDashboard', d: ICON.dashboard },
     { key: 'ae-sucursales', labelKey: 'nav.aeBranches',  d: ICON.home },
     { key: 'garitas',       labelKey: 'nav.gates',       d: ICON.gate },
   ]},
+  CUENTA_NAV,
 ];
 
 /**
@@ -164,7 +185,9 @@ function resolveDefaultPage(rol: string): Page {
   return 'dashboard';
 }
 
-function navForRole(rol: string): NavGroup[] {
+/** Se exporta para poder probar qué rótulos ve cada rol (p. ej. «Administración global» es solo del owner). */
+// eslint-disable-next-line react-refresh/only-export-components
+export function navForRole(rol: string): NavGroup[] {
   if (rol === 'admin' || rol === 'admin_sucursal') return ADMIN_NAV;
   if (rol === 'admin_empresa') return ADMIN_EMPRESA_NAV;
   if (rol === 'residente') return RESIDENTE_NAV;
@@ -202,6 +225,7 @@ function AppShell() {
   });
   const [selectedEmpresaId, setSelectedEmpresaId] = useState<string | null>(null);
   const [ticketsUnread, setTicketsUnread] = useState(0);
+  const [reservasPendientes, setReservasPendientes] = useState(0);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   // Pestaña del portal del residente: la barra inferior de móvil entra directo a
@@ -231,15 +255,23 @@ function AppShell() {
         anchoEscritorio: '(min-width: 768px)',
       };
 
-  // Badge de tickets no leídos para el staff (se refresca al navegar)
+  // Insignias del menú para el staff: tickets sin leer y reservas por aprobar. Se refrescan al
+  // navegar y solas cada medio minuto (sondeo ligero, solo con la pestaña visible).
+  const esAdminSucursal = userRol === 'admin' || userRol === 'admin_sucursal';
+  const refrescarInsignias = useCallback(async () => {
+    const [tickets, reservas] = await Promise.all([
+      getTickets().catch(() => null),
+      getReservas({ estado: 'pendiente_aprobacion' }).catch(() => null),
+    ]);
+    if (tickets) setTicketsUnread(tickets.reduce((s, tk) => s + Number(tk.no_leidos || 0), 0));
+    if (reservas) setReservasPendientes(reservas.length);
+  }, []);
   useEffect(() => {
-    if (userRol !== 'admin' && userRol !== 'admin_sucursal') return;
-    let cancel = false;
-    getTickets()
-      .then(rows => { if (!cancel) setTicketsUnread(rows.reduce((s, tk) => s + Number(tk.no_leidos || 0), 0)); })
-      .catch(() => {});
-    return () => { cancel = true; };
-  }, [userRol, page]);
+    if (!esAdminSucursal) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void refrescarInsignias();
+  }, [esAdminSucursal, page, refrescarInsignias]);
+  usePolling(refrescarInsignias, 30_000, esAdminSucursal);
 
   // Cierra el drawer al pasar a escritorio: si no, queda un panel flotante.
   useEffect(() => {
@@ -322,17 +354,9 @@ function AppShell() {
   };
 
   const defaultPage: Page = resolveDefaultPage(userRol);
-  const roleLabel = userRol === 'owner'
-    ? 'Admin global'
-    : userRol === 'admin_empresa'
-    ? 'Admin empresa'
-    : userRol === 'admin_sucursal'
-    ? 'Admin sucursal'
-    : userRol === 'admin'
-    ? 'Administrador'
-    : userRol === 'residente'
-    ? 'Residente'
-    : '';
+  // Rótulo del rol en la barra superior: palabras completas, en el idioma elegido (nada de «Admin»).
+  const ROLES_CON_ROTULO = ['owner', 'admin_empresa', 'admin_sucursal', 'admin', 'residente'];
+  const roleLabel = ROLES_CON_ROTULO.includes(userRol) ? t(`role.${userRol}`) : '';
 
   const goToEmpresaDetail = (id: string) => {
     setSelectedEmpresaId(id);
@@ -384,15 +408,18 @@ function AppShell() {
           </Suspense>
         );
       case 'config':       return <ConfigCargosPage />;
+      case 'config-qr':    return <div className="sg-page"><ConfiguracionQrPage /></div>;
       case 'verificacion': return <VerificacionPage />;
       case 'blacklist':    return <BlacklistPage />;
       case 'anuncios':     return <AnunciosPage />;
       case 'tickets':      return <TicketsPage />;
       case 'reservas':     return <ReservasAdminPage />;
       case 'mis-reservas': return <ReservasPage />;
+      case 'mis-anuncios': return <MisAnunciosPage />;
       case 'portal':       return <ResidentePage requestedTab={portalTab} tabNonce={portalTabNonce} />;
       case 'ae-dashboard':   return <AdminEmpresaDashboard />;
       case 'ae-sucursales':  return <GestionSucursales />;
+      case 'cuenta':         return <MiCuentaPage />;
       case 'owner-dashboard':
         return <OwnerDashboard onSelectEmpresa={goToEmpresaDetail} />;
       case 'owner-empresas':
@@ -455,8 +482,16 @@ function AppShell() {
                     <NavIcon d={item.d} />
                     <span className="truncate">{t(item.labelKey)}</span>
                     {item.key === 'tickets' && ticketsUnread > 0 && (
-                      <span className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-danger-500 px-1 text-2xs font-bold leading-none text-white">
+                      <span className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-danger-600 px-1 text-2xs font-bold leading-none text-white">
                         {ticketsUnread > 9 ? '9+' : ticketsUnread}
+                      </span>
+                    )}
+                    {item.key === 'reservas' && reservasPendientes > 0 && (
+                      <span
+                        className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-warning-500 px-1 text-2xs font-bold leading-none text-black"
+                        title={plural(t, 'nav.badge.pendingReservations', reservasPendientes)}
+                      >
+                        {reservasPendientes > 9 ? '9+' : reservasPendientes}
                       </span>
                     )}
                   </button>
@@ -500,7 +535,7 @@ function AppShell() {
         </div>
 
         <div className="flex items-center gap-1 sm:gap-2">
-          {isResidente && <AnnouncementsBell />}
+          {isResidente && <AnnouncementsBell onVerTodos={() => navigate('mis-anuncios')} />}
 
           <button
             type="button"

@@ -5,6 +5,8 @@ import { checkBlacklist } from './blacklist.controller';
 import { getConfigQrEfectiva } from './configQr.controller';
 import { tenantFilter, ownershipClause, ownershipParams } from '../utils/tenant';
 import { serverError } from '../utils/http';
+import { normalizarPlaca, sqlPlacaNormalizada } from '../utils/placa';
+import { APP_TZ } from '../utils/reservas';
 
 /**
  * Marca de tiempo que reporta la garita offline. Se guarda tal cual en
@@ -22,6 +24,13 @@ export const resolverRegistradoEn = (raw: unknown, ahora: Date = new Date()): Da
   if (d.getTime() < minimo) return null;
   return d;
 };
+
+/**
+ * Día (AAAA-MM-DD) en que ocurrió una entrada, para medir contra él la vigencia de una invitación. `$2` = `registrado_en`
+ * (o NULL), `$3` = zona de la app. Acotado a NOW() como `timestamp_entrada`: un reloj adelantado no gana un día de vigencia.
+ */
+const SQL_DIA_DE_ENTRADA =
+  `(CASE WHEN $2::timestamptz IS NULL THEN CURRENT_DATE ELSE (LEAST($2::timestamptz, NOW()) AT TIME ZONE $3)::date END)`;
 
 export const registrarAcceso = async (req: Request, res: Response) => {
   const {
@@ -80,7 +89,7 @@ export const registrarAcceso = async (req: Request, res: Response) => {
   // resuelta más abajo (solo de numero_dpi/residente_id, ya en el body), así
   // que se resuelve antes de pedir un cliente del pool en vez de mientras
   // éste queda retenido sin usarse (hallazgo de carga: backend/loadtest/RESULTADOS-sprint7.md).
-  const preautorizado = await checkPreautorizacion(numero_dpi, residente_id);
+  const preautorizado = await checkPreautorizacion(numero_dpi, residente_id, normalizarPlaca(placa) || null);
 
   const client = await pool.connect();
   try {
@@ -120,13 +129,16 @@ export const registrarAcceso = async (req: Request, res: Response) => {
 
     // Blacklist check — antes del upsert de visitante para no escribir (y
     // luego revertir) esa fila cuando el registro se va a rechazar igual.
-    const ban = await checkBlacklist(numero_dpi, sucursal_id);
+    // Por DPI o por PLACA del vehículo: misma respuesta (403 «Visitante en blacklist») para
+    // que la web y la app de escritorio la traten igual; `motivo` dice cuál coincidió.
+    const ban = await checkBlacklist(numero_dpi, sucursal_id, placa);
     if (ban) {
       await client.query('ROLLBACK');
       return res.status(403).json({
         error:     'Visitante en blacklist',
         razon:     ban.razon,
         fecha_fin: ban.fecha_fin ?? null,
+        motivo:    ban.motivo ?? 'dpi',
       });
     }
 
@@ -157,14 +169,19 @@ export const registrarAcceso = async (req: Request, res: Response) => {
     // Locked with FOR UPDATE so two garitas scanning the same single-use code
     // at once can't both succeed (re-checks everything verificarInvitacion
     // already checked — that call is only advisory, this is authoritative).
+    //
+    // Las FECHAS de vigencia se miden al día en que ENTRÓ la persona (`registrado_en`, en la zona de la app), no al
+    // día en que llega el registro: una entrada hecha sin red con una invitación que vencía ese día se sincroniza
+    // al día siguiente y no por eso deja de ser válida (SCRUM-126). Sin `registrado_en` (la web) rige el día actual,
+    // como siempre. Lo que NO viaja en el tiempo es el estado: revocada, agotada o bloqueada se miden al sincronizar.
     if (invitacion_qr_id) {
       const invResult = await client.query(
         `SELECT id, sucursal_id, tipo, numero_dpi, placa, activo, usos_maximos, usos_actuales,
                 intentos_fallidos_dpi, bloqueado_hasta,
-                (fecha_inicio <= CURRENT_DATE) AS ya_vigente,
-                (fecha_fin IS NULL OR fecha_fin >= CURRENT_DATE) AS no_vencida
+                (fecha_inicio <= ${SQL_DIA_DE_ENTRADA}) AS ya_vigente,
+                (fecha_fin IS NULL OR fecha_fin >= ${SQL_DIA_DE_ENTRADA}) AS no_vencida
          FROM invitaciones_qr WHERE id = $1 FOR UPDATE`,
-        [invitacion_qr_id]
+        [invitacion_qr_id, registradoEn ?? null, APP_TZ]
       );
       if (invResult.rows.length === 0) {
         await client.query('ROLLBACK');
@@ -216,7 +233,7 @@ export const registrarAcceso = async (req: Request, res: Response) => {
           await client.query('ROLLBACK');
           return res.status(409).json({ error: 'Este QR requiere registrar la placa del vehículo' });
         }
-        if (inv.placa && inv.placa.trim().toUpperCase() !== String(placa).trim().toUpperCase()) {
+        if (inv.placa && normalizarPlaca(inv.placa) !== normalizarPlaca(placa)) {
           await client.query('ROLLBACK');
           return res.status(409).json({ error: 'La placa no coincide con la invitación' });
         }
@@ -230,12 +247,14 @@ export const registrarAcceso = async (req: Request, res: Response) => {
       );
     }
 
-    // Register vehicle if plate provided
+    // Register vehicle if plate provided. Se guarda en la forma canónica (P123ABC) aunque llegue
+    // como «p-123 abc»: así la búsqueda de salida, la lista negra y las preautorizaciones comparan igual.
     let vehiculo_id: string | null = null;
-    if (placa) {
+    const placaCanonica = normalizarPlaca(placa);
+    if (placaCanonica) {
       const vehiculoResult = await client.query(
         'INSERT INTO vehiculos (visitante_id, placa) VALUES ($1, $2) RETURNING id',
-        [visitante_id, placa]
+        [visitante_id, placaCanonica]
       );
       vehiculo_id = vehiculoResult.rows[0].id;
     }
@@ -419,6 +438,11 @@ export const getAccesoActivo = async (req: Request, res: Response) => {
   if (!placa) {
     return res.status(400).json({ error: 'Parámetro requerido: placa' });
   }
+  // «p-123 abc», «P123ABC» y «P-123ABC» son la misma placa; también contra filas guardadas antes de normalizar.
+  const placaCanonica = normalizarPlaca(placa);
+  if (!placaCanonica) {
+    return res.status(400).json({ error: 'Parámetro placa inválido' });
+  }
 
   const ts = tenantFilter(req.user!, 'ra');
   const placaOffset = ts.params.length + 1;
@@ -442,11 +466,11 @@ export const getAccesoActivo = async (req: Request, res: Response) => {
        JOIN vehiculos   veh ON ra.vehiculo_id   = veh.id
        ${ts.joinClause}
        WHERE ${ts.whereClause}
-         AND UPPER(veh.placa) = UPPER($${placaOffset})
+         AND ${sqlPlacaNormalizada('veh.placa')} = $${placaOffset}
          AND ra.timestamp_salida IS NULL
        ORDER BY ra.timestamp_entrada DESC
        LIMIT 1`,
-      [...ts.params, placa]
+      [...ts.params, placaCanonica]
     );
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'No hay acceso activo para esa placa' });

@@ -59,6 +59,9 @@ services:
       # sesiones y licencias de garita se invalidan al reiniciar). deploy.sh
       # crea uno persistente la primera vez.
       JWT_SECRET: ${JWT_SECRET:-}
+      # Opcional. Llave de los secretos de la verificación en dos pasos; vacía, se deriva de JWT_SECRET. Fíjala con el
+      # valor ACTUAL de JWT_SECRET antes de rotarlo (docs/verificacion_dos_pasos.md).
+      TWOFA_KEY: ${TWOFA_KEY:-}
       # Opcional. Vacío: en desarrollo el CORS refleja el origen del navegador.
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-}
       GOOGLE_CLOUD_API_KEY: ${GOOGLE_CLOUD_API_KEY:-}
