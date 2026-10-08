@@ -1,6 +1,6 @@
 /* Este módulo comparte mapas de etiquetas con las vistas de tickets. */
 /* eslint-disable react-refresh/only-export-components */
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   getTicketMensajes, addTicketMensaje, cerrarTicket,
   decodeTokenPayload,
@@ -9,6 +9,7 @@ import {
 import { Skeleton } from './Skeleton';
 import { Button } from './ui';
 import { useTranslation } from '../i18n/useTranslation';
+import { usePolling } from '../hooks/usePolling';
 
 export const TIPO_LABEL: Record<string, string> = {
   mantenimiento: 'tickets.tipoMantenimiento',
@@ -54,14 +55,34 @@ export default function TicketChat({ ticketId, viewerRole, onActivity }: Props) 
   const load = () => {
     setLoading(true);
     getTicketMensajes(ticketId)
-      .then(({ ticket, mensajes }) => { setTicket(ticket); setMensajes(mensajes); })
+      .then(({ ticket, mensajes }) => { firma.current = firmaDe(ticket, mensajes); setTicket(ticket); setMensajes(mensajes); })
       .catch(() => setError(t('tickets.errorLoad')))
       .finally(() => setLoading(false));
   };
 
   useEffect(() => { load(); /* opening the chat marks it read server-side */ onActivity?.(); }, [ticketId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [mensajes.length]);
+  /**
+   * Sondeo ligero: mientras el chat está abierto se vuelve a pedir la conversación cada 10 s para que
+   * el estado del encabezado (abierto → en proceso → cerrado) y los mensajes nuevos de la otra persona
+   * aparezcan solos, sin recargar. Es silencioso: no vuelve a mostrar el esqueleto de carga ni pisa lo
+   * que se está escribiendo.
+   */
+  const firma = useRef('');
+  const firmaDe = (tk: Ticket, ms: TicketMensaje[]) => `${tk.estado}|${tk.titulo}|${ms.length}|${ms.at(-1)?.id ?? ''}`;
+
+  const refrescar = useCallback(async () => {
+    const { ticket: nuevo, mensajes: nuevos } = await getTicketMensajes(ticketId);
+    const f = firmaDe(nuevo, nuevos);
+    if (f === firma.current) return;      // nada cambió: no se repinta ni se molesta al padre
+    firma.current = f;
+    setTicket(nuevo);
+    setMensajes(nuevos);
+    onActivity?.();
+  }, [ticketId, onActivity]);
+  usePolling(refrescar, 10_000, !loading && !error);
+
+  useEffect(() => { bottomRef.current?.scrollIntoView?.({ behavior: 'smooth' }); }, [mensajes.length]);
 
   const cerrado = ticket?.estado === 'cerrado';
   const inputBloqueado = cerrado && viewerRole === 'residente';

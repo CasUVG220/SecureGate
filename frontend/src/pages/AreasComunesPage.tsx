@@ -5,7 +5,7 @@ import {
 } from '../services/api';
 import { GridSkeleton, Spinner } from '../components/Skeleton';
 import { useToast } from '../components/Toast';
-import { Button, ROW_ICON, RowActions } from '../components/ui';
+import { Button, Modal, ROW_ICON, RowActions } from '../components/ui';
 import { useTranslation } from '../i18n/useTranslation';
 import { archivoADataUri, esImagenValida, ImagenError } from '../utils/imagen';
 
@@ -243,18 +243,21 @@ export default function AreasComunesPage() {
         </div>
       )}
 
-      {showModal && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="bg-gray-800 rounded-t-2xl sm:rounded-2xl shadow-2xl w-full sm:max-w-lg p-6 space-y-4 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between">
-              <h2 className="text-lg font-bold text-white">
-                {editTarget ? t('reservas.editArea') : t('reservas.createArea')}
-              </h2>
-              <button onClick={closeModal} className="text-gray-400 hover:text-white text-xl leading-none">
-                ✕
-              </button>
-            </div>
-
+      {/* Modal propio: el formulario es largo y «Guardar» queda fijo al pie (footer), a la vista. */}
+      <Modal
+        open={showModal}
+        onClose={closeModal}
+        dismissible={!saving}
+        size="md"
+        title={editTarget ? t('reservas.editArea') : t('reservas.createArea')}
+        footer={
+          <>
+            <Button variant="ghost" onClick={closeModal} disabled={saving}>{t('common.cancel')}</Button>
+            <Button onClick={handleSave} loading={saving}>{saving ? t('common.saving') : t('common.save')}</Button>
+          </>
+        }
+      >
+          <div className="space-y-4">
             {formError && (
               <div className="bg-red-900/40 border border-red-700 rounded-lg px-3 py-2 text-red-300 text-sm">
                 {formError}
@@ -387,17 +390,8 @@ export default function AreasComunesPage() {
               {t('reservas.areaActive')}
             </label>
 
-            <div className="flex gap-3 pt-1">
-              <Button onClick={handleSave} loading={saving} className="flex-1">
-                {saving ? t('common.saving') : t('common.save')}
-              </Button>
-              <Button variant="secondary" onClick={closeModal}>
-                {t('common.cancel')}
-              </Button>
-            </div>
           </div>
-        </div>
-      )}
+      </Modal>
     </div>
   );
 }

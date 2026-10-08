@@ -115,6 +115,16 @@ export default function DashboardPage({ onNavigate }: { onNavigate?: (pagina: st
                   ? { texto: t('dashboard.goVerify'), onClick: () => onNavigate('verificacion') }
                   : undefined,
               },
+              ...(data.reservas_pendientes !== undefined ? [{
+                id: 'reservas',
+                etiqueta: t('dashboard.pendingReservations'),
+                valor: n(data.reservas_pendientes),
+                nota: data.reservas_pendientes ? t('dashboard.pendingReservationsHint') : t('dashboard.pendingReservationsNone'),
+                atencion: data.reservas_pendientes > 0 ? ('warning' as const) : undefined,
+                accion: onNavigate && data.reservas_pendientes > 0
+                  ? { texto: t('dashboard.goReservations'), onClick: () => onNavigate('reservas') }
+                  : undefined,
+              }] : []),
               {
                 id: 'mora',
                 etiqueta: t('dashboard.residentsInDebt'),

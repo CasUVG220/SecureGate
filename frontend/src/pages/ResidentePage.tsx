@@ -6,6 +6,8 @@ import {
   deleteMisPreautorizacion,
   getMisAccesos,
   getMisPagos,
+  getEstadoTarjeta,
+  type EstadoTarjeta,
   getMiResumenMes,
   type ResumenMes,
   crearTransferencia,
@@ -29,6 +31,7 @@ import QrInviteModal from '../components/QrInviteModal';
 import PagoTarjetaModal from '../components/PagoTarjetaModal';
 import { Badge, Button, ErrorState, ESTADO_PAGO_TONE, ROW_ICON, RowActions } from '../components/ui';
 import { useIsHandheld } from '../hooks/useMediaQuery';
+import { usePolling } from '../hooks/usePolling';
 
 const TICKET_TIPOS: TicketTipo[] = ['mantenimiento', 'queja', 'seguridad', 'otro'];
 
@@ -95,6 +98,8 @@ export default function ResidentePage({ requestedTab, tabNonce = 0 }: ResidenteP
   const [enviando, setEnviando]           = useState(false);
   const [trfError, setTrfError]           = useState<string | null>(null);
   const [showTarjeta, setShowTarjeta]     = useState(false);
+  // Qué pasarela hay: los avisos de «pago simulado» solo se ven si el servidor dice que lo es.
+  const [estadoTarjeta, setEstadoTarjeta] = useState<EstadoTarjeta>({ disponible: true, simulada: false });
 
   // Invitados tab state
   const [preauths, setPreauths] = useState<MiPreautorizacion[]>([]);
@@ -142,6 +147,7 @@ export default function ResidentePage({ requestedTab, tabNonce = 0 }: ResidenteP
       .then(setData)
       .catch(() => setError('No se pudo cargar tu información.'))
       .finally(() => setLoading(false));
+    getEstadoTarjeta().then(setEstadoTarjeta);
     loadPagos();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -153,6 +159,10 @@ export default function ResidentePage({ requestedTab, tabNonce = 0 }: ResidenteP
   };
 
   const closeTicketChat = () => { setSelectedTicket(null); loadTickets(true); };
+
+  // El estado de cada solicitud (abierta → en proceso → cerrada) y los mensajes sin leer se
+  // actualizan solos cada 15 s mientras se mira la pestaña de solicitudes, sin recargar.
+  usePolling(async () => { setTickets(await getMisTickets()); }, 15_000, tab === 'solicitudes' && ticketsLoaded);
 
   useEffect(() => {
     if (!selectedTicket) return;
@@ -488,15 +498,21 @@ export default function ResidentePage({ requestedTab, tabNonce = 0 }: ResidenteP
 
             {!showTrf ? (
               <div className="space-y-3">
-                <button
-                  onClick={() => setShowTarjeta(true)}
-                    className="sg-btn sg-btn-primary flex w-full items-center justify-center gap-2"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
-                  </svg>
-                  {t('portal.payCard')}
-                </button>
+                {estadoTarjeta.disponible ? (
+                  <button
+                    onClick={() => setShowTarjeta(true)}
+                      className="sg-btn sg-btn-primary flex w-full items-center justify-center gap-2"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+                    </svg>
+                    {t('portal.payCard')}
+                  </button>
+                ) : (
+                  <p role="status" className="rounded-lg border border-gray-600 bg-gray-500/10 px-3 py-2.5 text-xs text-gray-300">
+                    {t('portal.cardUnavailable')}
+                  </p>
+                )}
                 <button
                   onClick={() => setShowTrf(true)}
                     className="sg-btn sg-btn-secondary flex w-full items-center justify-center gap-2"
@@ -589,11 +605,11 @@ export default function ResidentePage({ requestedTab, tabNonce = 0 }: ResidenteP
               <div className="flex items-center justify-center py-8">
                 <Spinner size={24} />
               </div>
-            ) : misPagos.length === 0 ? (
+            ) : misPagos.filter(p => p.estado !== 'rechazado').length === 0 ? (
               <p className="text-gray-400 text-sm text-center py-8">{t('portal.noPayments')}</p>
             ) : (
               <div className="space-y-3">
-                {misPagos.map(p => (
+                {misPagos.filter(p => p.estado !== 'rechazado').map(p => (
                   <div key={p.id} className="sg-card flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:gap-4">
                     <div className="w-10 h-10 bg-emerald-900/40 rounded-full flex items-center justify-center border border-emerald-700/40 shrink-0">
                       <svg className="w-5 h-5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -612,18 +628,38 @@ export default function ResidentePage({ requestedTab, tabNonce = 0 }: ResidenteP
                           {new Date(p.fecha_pago).toLocaleDateString('es-GT')} | {PAGO_METODO_LABEL[p.metodo] ?? p.metodo}
                           {p.tarjeta_ultimos4 && ` ···· ${p.tarjeta_ultimos4}`}
                         </span>
-                        {p.es_simulado && <Badge tone="warning">{t('card.simulated')}</Badge>}
+                        {p.es_simulado && estadoTarjeta.simulada && <Badge tone="warning">{t('card.simulated')}</Badge>}
                       </p>
                       {p.referencia && (
                         <p className="text-gray-500 text-xs mt-0.5 font-mono">{p.referencia}</p>
-                      )}
-                      {p.estado === 'rechazado' && p.comentario_rechazo && (
-                        <p className="text-xs text-red-400/80 italic mt-1">Motivo: "{p.comentario_rechazo}"</p>
                       )}
                     </div>
                   </div>
                 ))}
               </div>
+            )}
+
+            {/* Un comprobante rechazado no es un pago: no va en el historial, pero el motivo
+                sigue a la mano para poder corregirlo y volver a enviarlo. */}
+            {misPagos.some(p => p.estado === 'rechazado') && (
+              <details className="mt-4 rounded-xl border border-gray-700 bg-gray-500/[0.04] px-4 py-3">
+                <summary className="cursor-pointer text-sm font-semibold text-gray-200">
+                  {t('portal.rejectedReceipts')} ({misPagos.filter(p => p.estado === 'rechazado').length})
+                </summary>
+                <p className="mt-2 text-xs text-gray-400">{t('portal.rejectedReceiptsHint')}</p>
+                <ul className="mt-2 space-y-2">
+                  {misPagos.filter(p => p.estado === 'rechazado').map(p => (
+                    <li key={p.id} className="text-sm text-gray-300">
+                      <span className="font-semibold">Q{parseFloat(p.monto).toFixed(2)}</span>
+                      {' · '}{new Date(p.fecha_pago).toLocaleDateString('es-GT')}
+                      {p.referencia && <span className="font-mono text-xs text-gray-400"> · {p.referencia}</span>}
+                      {p.comentario_rechazo && (
+                        <span className="block text-xs italic text-danger-400">{t('portal.rejectedReason')}: "{p.comentario_rechazo}"</span>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </details>
             )}
           </div>
         </div>
@@ -1016,15 +1052,14 @@ export default function ResidentePage({ requestedTab, tabNonce = 0 }: ResidenteP
         open={showTarjeta}
         onClose={() => setShowTarjeta(false)}
         saldo={saldo}
-        onResultado={(pago, aprobado) => {
-          // El intento se guarda aprobado o rechazado: en ambos casos entra al
-          // historial, así que se recarga la pestaña de pagos.
+        simulada={estadoTarjeta.simulada}
+        onResultado={pago => {
+          // Solo llegan pagos APROBADOS (un rechazo no se guarda): entran al historial y
+          // el saldo queda al día.
           setMisPagos(prev => [pago, ...prev]);
-          if (aprobado) {
-            showToast(t('card.approved').replace('{monto}', parseFloat(pago.monto).toFixed(2)));
-            setData(prev => prev ? { ...prev, saldo_pendiente: '0.00', estado_pago: 'al_dia' } : prev);
-            getMiResumenMes().then(setResumenMes).catch(() => {});
-          }
+          showToast(t('card.approved').replace('{monto}', parseFloat(pago.monto).toFixed(2)));
+          setData(prev => prev ? { ...prev, saldo_pendiente: '0.00', estado_pago: 'al_dia' } : prev);
+          getMiResumenMes().then(setResumenMes).catch(() => {});
         }}
       />
     </main>

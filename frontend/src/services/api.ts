@@ -452,15 +452,49 @@ export interface PagoTarjetaInput {
  * se sustituirá por la integración real de Visanet en un sprint futuro. La
  * firma de esta función no debería cambiar cuando eso ocurra.
  */
+/** La pasarela rechazó la tarjeta (HTTP 402). No es un pago: el servidor no lo guarda. */
+export class PagoRechazadoError extends Error {
+  constructor(mensaje: string) {
+    super(mensaje);
+    this.name = 'PagoRechazadoError';
+  }
+}
+
 export const pagarConTarjeta = async (data: PagoTarjetaInput): Promise<Pago> => {
   const res = await apiFetch(`${BASE_URL}/api/pagos/tarjeta`, {
     method: 'POST',
     headers: authHeaders(),
     body: JSON.stringify(data),
   });
-  const body = await res.json();
+  const body = await res.json().catch(() => ({}));
+  if (res.status === 402) {
+    throw new PagoRechazadoError((body as { error?: string }).error || 'Pago rechazado');
+  }
   if (!res.ok) throw new Error((body as { error?: string }).error || 'Error al procesar el pago');
   return body as Pago;
+};
+
+export interface EstadoTarjeta {
+  /** El cobro con tarjeta está habilitado en este servidor. */
+  disponible: boolean;
+  /** La pasarela es la de prueba: solo entonces se muestran los avisos de «pago simulado». */
+  simulada: boolean;
+}
+
+/**
+ * Pregunta al servidor si hay pasarela y si es simulada. Si la consulta falla se asume que
+ * SÍ hay pasarela y que NO es simulada: no se esconde el botón por un fallo de red (el
+ * servidor responde con su propio mensaje si no está disponible) ni se muestra un aviso de
+ * «entorno de prueba» sin saberlo.
+ */
+export const getEstadoTarjeta = async (): Promise<EstadoTarjeta> => {
+  try {
+    const res = await apiFetch(`${BASE_URL}/api/pagos/tarjeta/estado`, { headers: authHeaders() });
+    if (!res.ok) throw new Error('estado');
+    return await res.json() as EstadoTarjeta;
+  } catch {
+    return { disponible: true, simulada: false };
+  }
 };
 
 export const getMisPagos = async (): Promise<Pago[]> => {
@@ -736,6 +770,8 @@ export interface DashboardData {
   accesos_hoy: number;
   residentes_mora: number;
   pagos_pendientes: number;
+  /** Reservas en estado «pendiente de aprobación» dentro del alcance del usuario. */
+  reservas_pendientes?: number;
   accesos_recientes: Array<{
     id: string;
     nombre_visitante: string;

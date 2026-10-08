@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { getConfigReservas, updateConfigReservas, type ConfigReservas } from '../services/api';
 import { FormSkeleton } from '../components/Skeleton';
-import { Button } from '../components/ui';
+import { Button, FormActions } from '../components/ui';
+import { useCambiosSinGuardar } from '../hooks/useCambiosSinGuardar';
 import { useToast } from '../components/Toast';
 import { useTranslation } from '../i18n/useTranslation';
 
@@ -43,12 +44,14 @@ export default function ConfiguracionReservasPage() {
     buffer_motivo: '',
   });
 
+  const { hayCambios, marcarGuardado } = useCambiosSinGuardar(form);
+
   useEffect(() => {
     getConfigReservas()
       .then(c => {
         setConfig(c);
         setEsDefault(!!c.es_default);
-        setForm({
+        const inicial = {
           permite_cancelacion: c.permite_cancelacion,
           horas_limite_cancelacion_completa: String(c.horas_limite_cancelacion_completa),
           horas_limite_cancelacion_parcial: String(c.horas_limite_cancelacion_parcial),
@@ -60,7 +63,9 @@ export default function ConfiguracionReservasPage() {
           requiere_aprobacion_admin: c.requiere_aprobacion_admin,
           buffer_minutos_entre_reservas: String(c.buffer_minutos_entre_reservas),
           buffer_motivo: c.buffer_motivo ?? '',
-        });
+        };
+        setForm(inicial);
+        marcarGuardado(inicial);
       })
       .catch(() => setError('No se pudo cargar la configuración de reservas.'))
       .finally(() => setLoading(false));
@@ -94,6 +99,7 @@ export default function ConfiguracionReservasPage() {
       });
       setConfig(saved);
       setEsDefault(false);
+      marcarGuardado(form);
       showToast(t('reservas.configSaved'));
     } catch (err) {
       setFormError(err instanceof Error ? err.message : t('common.error'));
@@ -235,9 +241,12 @@ export default function ConfiguracionReservasPage() {
           />
         </Campo>
 
-        <Button onClick={handleSave} loading={saving} className="px-6">
-          {saving ? t('common.saving') : t('common.save')}
-        </Button>
+        {/* «Guardar» fijo al pie: el formulario es largo y el botón no debe quedar fuera de vista. */}
+        <FormActions nota={hayCambios ? t('common.unsavedChanges') : undefined}>
+          <Button onClick={handleSave} loading={saving} className="px-6">
+            {saving ? t('common.saving') : t('common.save')}
+          </Button>
+        </FormActions>
       </div>
     </div>
   );

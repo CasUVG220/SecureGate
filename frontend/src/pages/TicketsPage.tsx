@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { getTickets, type Ticket, type TicketEstado, type TicketTipo } from '../services/api';
 import { Badge, CardSkeleton, EmptyState, Select } from '../components/ui';
 import { useTranslation } from '../i18n/useTranslation';
 import TicketChat, { TIPO_LABEL, ESTADO_LABEL } from '../components/TicketChat';
 import type { BadgeTone } from '../components/ui';
+import { usePolling } from '../hooks/usePolling';
 
 const ICON_TICKETS = 'M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z';
 
@@ -33,6 +34,11 @@ export default function TicketsPage() {
   // Carga inicial del módulo; el estado se actualiza al resolver la petición.
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { load(); }, []);
+
+  // Refresco silencioso (sin esqueleto): el estado y los no leídos de cada solicitud se actualizan
+  // solos cada 15 s mientras la pestaña está visible, y tras cada actividad del chat.
+  const refrescar = useCallback(async () => { setTickets(await getTickets()); }, []);
+  usePolling(refrescar, 15_000);
 
   const filtered = useMemo(() => tickets.filter(tk =>
     (!fEstado || tk.estado === fEstado) && (!fTipo || tk.tipo === fTipo)
@@ -117,7 +123,7 @@ export default function TicketsPage() {
         {/* Chat — right column on desktop, stacks below the list on mobile */}
         <div className="min-h-0 h-[70vh] lg:h-auto">
           {selectedId ? (
-            <TicketChat key={selectedId} ticketId={selectedId} viewerRole="admin" onActivity={load} />
+            <TicketChat key={selectedId} ticketId={selectedId} viewerRole="admin" onActivity={() => { void refrescar().catch(() => {}); }} />
           ) : (
             <div className="sg-card flex h-full items-center justify-center p-6 text-center text-sm text-gray-500">
               {t('tickets.selectPrompt')}

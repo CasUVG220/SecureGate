@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   getAreas, getDisponibilidad, crearReserva, getMisReservas,
   getPreviewCancelacion, cancelarReserva,
@@ -55,6 +55,19 @@ export default function ReservasPage() {
 
   const [misReservas, setMisReservas] = useState<Reserva[]>([]);
   const [loadingMis, setLoadingMis] = useState(true);
+  // Reserva recién creada, resaltada un momento en «Mis reservas».
+  const [resaltadaId, setResaltadaId] = useState<string | null>(null);
+  const temporizadorResalte = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => { if (temporizadorResalte.current) clearTimeout(temporizadorResalte.current); }, []);
+
+  const verReserva = (id: string) => {
+    setResaltadaId(id);
+    if (temporizadorResalte.current) clearTimeout(temporizadorResalte.current);
+    temporizadorResalte.current = setTimeout(() => setResaltadaId(null), 6000);
+    window.requestAnimationFrame(() => {
+      document.querySelector(`[data-reserva-id="${id}"]`)?.scrollIntoView?.({ block: 'center', behavior: 'smooth' });
+    });
+  };
 
   const [cancelTarget, setCancelTarget] = useState<Reserva | null>(null);
   const [preview, setPreview] = useState<PreviewCancelacion | null>(null);
@@ -119,9 +132,11 @@ export default function ReservasPage() {
     setFormError(null);
     try {
       const r = await crearReserva({ area_id: areaId, fecha, hora_inicio: horaInicio, hora_fin: horaFin });
+      // Confirmación que se queda hasta cerrarla y lleva a la reserva recién creada.
       showToast(
         r.estado === 'confirmada' ? t('reservas.confirmedMsg') : t('reservas.pendingMsg'),
-        r.estado === 'confirmada' ? 'success' : 'warning'
+        r.estado === 'confirmada' ? 'success' : 'warning',
+        { accion: { label: t('reservas.viewMine'), onClick: () => verReserva(r.id) } },
       );
       setHoraInicio('');
       setHoraFin('');
@@ -318,7 +333,11 @@ export default function ReservasPage() {
           <p className="text-sm text-gray-500">{t('reservas.noReservations')}</p>
         ) : (
           misReservas.map(r => (
-            <div key={r.id} className="sg-card flex flex-col justify-between gap-3 p-4">
+            <div
+              key={r.id}
+              data-reserva-id={r.id}
+              className={`sg-card flex flex-col justify-between gap-3 p-4 transition-shadow ${r.id === resaltadaId ? 'ring-2 ring-success-500/60' : ''}`}
+            >
               <div className="flex items-start justify-between gap-2">
                 <span className="font-semibold text-white">{r.area_nombre}</span>
                 <span

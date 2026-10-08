@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { pagarConTarjeta, type Pago } from '../services/api';
+import { pagarConTarjeta, PagoRechazadoError, type Pago } from '../services/api';
 import { Button, Input, Modal, cx } from './ui';
 import { useTranslation } from '../i18n/useTranslation';
 import {
@@ -12,8 +12,13 @@ interface Props {
   onClose: () => void;
   /** Saldo pendiente, que precarga el monto a cobrar. */
   saldo: number;
-  /** Se llama con el pago persistido, aprobado o rechazado, para refrescar el historial. */
-  onResultado: (pago: Pago, aprobado: boolean) => void;
+  /**
+   * ¿La pasarela es la de prueba? Solo entonces se muestran los avisos de «pago simulado».
+   * El residente de un entorno real jamás debe ver textos de implementación.
+   */
+  simulada?: boolean;
+  /** Se llama con el pago APROBADO, ya guardado, para refrescar saldo e historial. */
+  onResultado: (pago: Pago) => void;
 }
 
 const EMPTY: DatosTarjeta = { numero: '', titular: '', vencimiento: '', cvv: '' };
@@ -30,10 +35,12 @@ const ICON_LOCK = 'M19 11H5a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7a2 
  * PASARELA SIMULADA — no hay integración con Visanet todavía. El número, el CVV
  * y el vencimiento se validan aquí (formato + Luhn) y nunca salen del
  * navegador: al backend sólo viajan el monto y los últimos 4 dígitos, que es lo
- * que queda registrado en el historial. Cuando entre la integración real, el
- * único cambio en esta pantalla debería ser el mensaje de `card.mockNotice`.
+ * que queda registrado en el historial. Los avisos de «pago simulado» dependen de
+ * la prop `simulada` (que viene del servidor); cuando entre la integración real
+ * desaparecen solos. Una tarjeta rechazada NO es un pago: el servidor responde 402
+ * y no lo guarda, así que aquí solo se muestra el motivo.
  */
-export default function PagoTarjetaModal({ open, onClose, saldo, onResultado }: Props) {
+export default function PagoTarjetaModal({ open, onClose, saldo, simulada = false, onResultado }: Props) {
   const { t } = useTranslation();
   const [datos, setDatos]     = useState<DatosTarjeta>(EMPTY);
   const [monto, setMonto]     = useState(saldo > 0 ? saldo.toFixed(2) : '');
@@ -43,6 +50,11 @@ export default function PagoTarjetaModal({ open, onClose, saldo, onResultado }: 
   const [rechazo, setRechazo] = useState<string | null>(null);
 
   const marca = useMemo(() => detectarMarca(datos.numero), [datos.numero]);
+
+  // Advertencia (no bloqueo): un monto mayor que el saldo no se acredita como saldo a favor.
+  const importeActual = parseFloat(monto);
+  const supera = Number.isFinite(importeActual) && importeActual > 0 && importeActual > saldo + 0.004;
+  const sinSaldo = saldo <= 0 && Number.isFinite(importeActual) && importeActual > 0;
 
   const cerrar = () => {
     setDatos(EMPTY);
@@ -76,15 +88,10 @@ export default function PagoTarjetaModal({ open, onClose, saldo, onResultado }: 
         ultimos4: soloDigitos(datos.numero).slice(-4),
         titular: datos.titular.trim(),
       });
-      const aprobado = pago.estado === 'aprobado';
-      onResultado(pago, aprobado);
-      if (aprobado) {
-        cerrar();
-      } else {
-        setRechazo(t('card.declined'));
-      }
+      onResultado(pago);
+      cerrar();
     } catch (err: unknown) {
-      setRechazo(err instanceof Error ? err.message : t('common.error'));
+      setRechazo(err instanceof PagoRechazadoError ? t('card.declined') : err instanceof Error ? err.message : t('common.error'));
     } finally {
       setProcesando(false);
     }
@@ -97,16 +104,18 @@ export default function PagoTarjetaModal({ open, onClose, saldo, onResultado }: 
       open={open}
       onClose={cerrar}
       title={t('card.title')}
-      description={t('card.subtitle')}
+      description={simulada ? t('card.subtitle') : t('card.subtitleLive')}
       dismissible={!procesando}
     >
       <form onSubmit={handleSubmit} className="space-y-4" noValidate>
-        <p className="flex items-start gap-2 rounded-lg border border-warning-500/30 bg-warning-500/10 px-3 py-2.5 text-xs text-warning-400">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="mt-0.5 shrink-0" aria-hidden="true">
-            <path d="M12 9v4M12 17h.01M12 3a9 9 0 100 18 9 9 0 000-18z" />
-          </svg>
-          {t('card.mockNotice')}
-        </p>
+        {simulada && (
+          <p className="flex items-start gap-2 rounded-lg border border-warning-500/30 bg-warning-500/10 px-3 py-2.5 text-xs text-warning-400">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="mt-0.5 shrink-0" aria-hidden="true">
+              <path d="M12 9v4M12 17h.01M12 3a9 9 0 100 18 9 9 0 000-18z" />
+            </svg>
+            {t('card.mockNotice')}
+          </p>
+        )}
 
         {rechazo && (
           <p role="alert" className="rounded-lg border border-danger-500/30 bg-danger-500/10 px-3 py-2.5 text-sm font-medium text-danger-400">
@@ -175,6 +184,27 @@ export default function PagoTarjetaModal({ open, onClose, saldo, onResultado }: 
           onChange={e => { setMonto(e.target.value); if (enviado) setErrores(validarTarjeta(datos, parseFloat(e.target.value))); }}
           suffix="Q"
         />
+
+        {(supera || sinSaldo) && (
+          <div role="status" className="space-y-2 rounded-lg border border-warning-500/30 bg-warning-500/10 px-3 py-2.5 text-xs text-warning-400">
+            <p className="font-medium">
+              {sinSaldo
+                ? t('card.noBalance')
+                : t('card.amountExceeds')
+                    .replace('{monto}', importeActual.toFixed(2))
+                    .replace('{saldo}', saldo.toFixed(2))}
+            </p>
+            {!sinSaldo && (
+              <button
+                type="button"
+                onClick={() => { setMonto(saldo.toFixed(2)); if (enviado) setErrores(validarTarjeta(datos, saldo)); }}
+                className="font-semibold underline underline-offset-4 hover:text-warning-300"
+              >
+                {t('card.useBalance').replace('{saldo}', saldo.toFixed(2))}
+              </button>
+            )}
+          </div>
+        )}
 
         <div className={cx('flex flex-wrap justify-end gap-3 pt-2')}>
           <Button variant="ghost" onClick={cerrar} disabled={procesando}>{t('common.cancel')}</Button>
