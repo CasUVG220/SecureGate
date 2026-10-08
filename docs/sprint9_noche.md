@@ -14,6 +14,7 @@ Las pruebas de base de datos corrieron **solo** contra el Postgres desechable lo
 |---|---|---|
 | SCRUM-118 | Seguridad urgente (audit, deploy, nginx, documentos) | **HECHO** |
 | SCRUM-108 | H01 · contraste del botón principal en tema oscuro | **HECHO** |
+| SCRUM-109 | H02 · editar y dar de baja personal (PUT /usuarios/:id + AgentesPage) | **HECHO** |
 
 *(la tabla se completa ticket por ticket)*
 
@@ -140,3 +141,39 @@ Importa `tailwind.config.ts` dinámicamente para no arrastrarlo al `tsconfig` de
 **Suites tras el ticket:** frontend 177 (+12) y build OK; desktop 79 y build OK; backend sin cambios.
 **Pendiente:** confirmación visual humana en un equipo real (no hubo navegador con extensión conectado; la medición fue con
 `Google Chrome --headless --dump-dom` sobre una página de muestra con el CSS compilado).
+
+---
+
+## SCRUM-109 — H02 · Editar y dar de baja agentes · **HECHO**
+
+**Commits:** ver `git log --grep SCRUM-109` (backend, pruebas de integración, frontend).
+**Verificado contra el código:** el QA acertó: `DELETE /usuarios/:id` ya existía con control de alcance, auditoría
+(`USUARIO_DESACTIVADO`) y revocación de sesiones; faltaban la edición y toda la interfaz (ni `RowActions` ni funciones de API).
+
+**Backend (`usuarios.controller.ts`, `usuarios.routes.ts`, `audit.middleware.ts`)**
+- `PUT /api/usuarios/:id` con `nombre`, `email`, `rol` y `password` (todos opcionales, al menos uno). `requireAdminSucursal` +
+  `auditLog('USUARIO_EDITADO')`.
+- **Alcance idéntico al de la baja**: owner → cualquiera menos otro owner; admin de empresa → admin_sucursal/agente/residente de
+  SU empresa; admin de sucursal → los mismos roles de SU sucursal. Fuera de alcance → **404** (no confirma que el UUID exista).
+- **Decisiones:** (1) nadie se edita a sí mismo por esta ruta (mismo criterio que la baja: cambiar el propio rol/contraseña sin
+  pedir la actual sería una vía de escalada o de robo de sesión); (2) el rol solo se mueve entre `agente` ↔ `admin_sucursal`
+  (owner, admin_empresa y residente tienen su propio flujo; asignar cualquier otro → 400); (3) contraseña vacía = «no cambiar»;
+  (4) un usuario ya dado de baja puede corregirse pero **no** reactivarse (no hay campo `activo`; «reactivar» no estaba pedido).
+- **Sesiones:** cambiar la contraseña revoca todos los refresh tokens del usuario y su access token; cambiar el rol invalida el
+  access token (lleva el rol viejo) pero deja el refresh para que el siguiente `/auth/refresh` traiga el rol nuevo.
+  La baja ya revocaba los refresh tokens (verificado ahora con una prueba de integración).
+- **Auditoría:** el middleware acepta `res.locals.auditoria` y lo guarda en `datos_nuevos`; para este endpoint:
+  `{campos:[…], rol_anterior, rol_nuevo}` — nunca la contraseña. Los intentos rechazados (404) también quedan con su código HTTP.
+
+**Frontend:** `AgentesPage` gana la columna **Acciones** con el menú «···» (`RowActions`, `inline={0}`) con **Editar** (Modal:
+nombre, correo, rol, contraseña nueva opcional con mostrar/ocultar y requisitos) y **Dar de baja** (Modal de confirmación, tono
+de peligro). No aparece en la fila propia, en filas ya dadas de baja ni en owners. Solo se envía lo que cambió. Nuevo
+`PasswordInput` en el kit de UI (sincronizado con desktop), que reutilizarán SCRUM-114/115.
+
+**Pruebas:** integración **I-4** (`integration/usuarios.int.test.ts`, 30 pruebas, Postgres real): edición dentro del alcance,
+contraseña (revoca refresh/access), validaciones (400/404/409), **9 cruces entre empresas/sucursales/roles** (todos 404 y la
+fila no cambia), owner contra owner, 403 para agente/residente, auditoría con usuario/IP/código, y baja con revocación de
+refresh tokens. Además la ruta entró a la matriz de roles de `security.routes.contract.test.ts`. Frontend: `AgentesPage.test`
+(9) y `PasswordInput.test` (6).
+
+**Suites tras el ticket:** backend 631 unitarias, 55 integración/regresión, `tsc` limpio; frontend 192 y build; desktop 79 y build.
