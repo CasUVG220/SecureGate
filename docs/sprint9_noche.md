@@ -15,6 +15,7 @@ Las pruebas de base de datos corrieron **solo** contra el Postgres desechable lo
 | SCRUM-118 | Seguridad urgente (audit, deploy, nginx, documentos) | **HECHO** |
 | SCRUM-108 | H01 · contraste del botón principal en tema oscuro | **HECHO** |
 | SCRUM-109 | H02 · editar y dar de baja personal (PUT /usuarios/:id + AgentesPage) | **HECHO** |
+| SCRUM-110 | H03 · lista negra por placa | **HECHO** |
 
 *(la tabla se completa ticket por ticket)*
 
@@ -177,3 +178,47 @@ refresh tokens. Además la ruta entró a la matriz de roles de `security.routes.
 (9) y `PasswordInput.test` (6).
 
 **Suites tras el ticket:** backend 631 unitarias, 55 integración/regresión, `tsc` limpio; frontend 192 y build; desktop 79 y build.
+
+---
+
+## SCRUM-110 — H03 · Lista negra por placa · **HECHO**
+
+**Commits:** ver `git log --grep SCRUM-110` (backend, pruebas I-5, web + escritorio).
+**Verificado contra el código:** el QA tenía razón: `checkBlacklist` solo miraba `visitantes.numero_dpi`, la tabla colgaba de
+`visitante_id NOT NULL` y la página solo buscaba por DPI sin mensaje de «sin resultados».
+
+**Decisión de modelo (la más simple y segura):** NO se crea una tabla nueva. Una fila de `visitante_blacklist` identifica **al
+visitante (por DPI), a un vehículo (placa) o a ambos**: `visitante_id` pasa a admitir NULL, se agrega `placa` y un `CHECK` exige
+que haya al menos uno. Razones: (1) reutiliza vigencia, motivo, aislamiento por sucursal, auditoría (`BLACKLIST_AGREGADO/REMOVIDO`)
+y la pantalla que ya existen; (2) bloquear una placa que nunca pasó por la garita no exige inventar un visitante; (3) el bloqueo por
+DPI no cambia (mismo SQL y mismas pruebas). La placa se guarda **normalizada** (`P123ABC`, `CHECK ^[A-Z0-9]{3,20}$`) y se compara
+normalizada, así que `p-123 abc` y `P123ABC` son el mismo vehículo. Migración idempotente en `database/init.sql` (se aplica en cada
+arranque; probada contra el Postgres desechable).
+
+**Backend**
+- `checkBlacklist(dpi, sucursal, placa?)`: DPI de sucursal → DPI vetado por el residente → placa. Si no llega placa, las consultas y
+  parámetros son los de antes (los 3 tests unitarios existentes no cambiaron).
+- `registrarAcceso`: misma respuesta **403 «Visitante en blacklist»** + `razon`, `fecha_fin` y el nuevo `motivo: 'dpi' | 'placa'`;
+  se rechaza antes de crear el visitante, así que no deja filas.
+- `POST /blacklist` acepta `visitante_id` o `placa` (o ambos); valida (placa 4-12 alfanuméricos, razón obligatoria, UUID), y rechaza
+  duplicados vigentes con **409** (misma placa en otro formato, o el mismo visitante dos veces).
+- `GET /visitantes?placa=` (junto a `?dpi=`, nunca los dos) con **el mismo alcance** por sucursal/empresa que el DPI.
+- `GET /sync/garita` incluye los bloqueos por placa para el espejo offline del escritorio (antes el `INNER JOIN` los habría descartado).
+
+**Web:** `BlacklistPage` reescrita sobre el kit (Modal, Input, Select, RowActions): selector **DPI / Placa**, etiqueta **«Buscar
+visitante por DPI o placa»**, mensaje **«No se encontró ningún visitante con ese dato»** y, al buscar por placa sin resultados, el botón
+«Bloquear solo la placa P-123ABC». Si se elige un visitante hallado por placa se ofrece «Bloquear también la placa» (marcada). El
+bloqueo se quita con un Modal propio (ya no `window.confirm`) y el botón dejó de ser verde. Vocabulario «bloquear / quitar bloqueo».
+La garita web distingue «vehículo» de «visitante» en el aviso.
+
+**Escritorio (sin red):** `blacklist_local` gana `placa` (migración aditiva `ALTER TABLE` para bases existentes); el pull la guarda
+normalizada y `evaluar_visitante` bloquea por DPI o por placa antes de encolar. Salvaguarda: un DPI vacío **nunca** coincide con un
+bloqueo solo de vehículo (que se guarda con `numero_dpi = ''`), para no dar falsos positivos mientras el agente aún escribe.
+
+**Pruebas:** integración **I-5** (`integration/blacklist.int.test.ts`, 20 pruebas, Postgres real): normalización de placa, 403 por placa
+en 4 formatos sin escribir nada, vencidos/quitados, duplicados, CHECKs de la base, y **aislamiento** (A1≠B1≠A2, listado, DELETE ajeno
+= 404, `sucursal_id` del body ignorado/403, búsqueda por DPI y placa por alcance, snapshot de sync por sucursal). Rust +6 (71),
+frontend +16 (`BlacklistPage` 11, `placa` 5).
+
+**Suites tras el ticket:** backend 631 unitarias, 75 integración/regresión, `tsc` limpio; frontend 208 y build; desktop 79 + 71 de
+Rust y build.
