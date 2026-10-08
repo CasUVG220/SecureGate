@@ -5,6 +5,7 @@
  * lea igual en la tabla, en el tooltip y en el eje.
  */
 import type { LangKey } from '../../context/LanguageContext';
+import { formatearDiaMes, formatearDiaSemana, formatearRangoDias } from '../../utils/fecha';
 
 const LOCALE: Record<LangKey, string> = { es: 'es-GT', en: 'en-US' };
 
@@ -40,23 +41,14 @@ export const fechaLocal = (iso: string): Date => {
 export const isoLocal = (d: Date): string =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
-/** "3 sep" / "Sep 3". */
-export const fmtFechaCorta = (iso: string, lang: LangKey): string =>
-  fechaLocal(iso).toLocaleDateString(LOCALE[lang], { day: 'numeric', month: 'short' }).replace('.', '');
+/** "3 sep" / "Sep 3" (día de calendario: mismo formato en toda la app, ver utils/fecha). */
+export const fmtFechaCorta = (iso: string, lang: LangKey): string => formatearDiaMes(iso, lang);
 
 /** "mié, 3 sep" / "Wed, Sep 3". */
-export const fmtFechaLarga = (iso: string, lang: LangKey): string =>
-  fechaLocal(iso).toLocaleDateString(LOCALE[lang], { weekday: 'short', day: 'numeric', month: 'short' }).replace(/\./g, '');
+export const fmtFechaLarga = (iso: string, lang: LangKey): string => formatearDiaSemana(iso, lang);
 
 /** "3 sep – 2 oct 2026". El año sólo al final, y sólo una vez si coincide. */
-export const fmtRango = (desde: string, hasta: string, lang: LangKey): string => {
-  const a = fechaLocal(desde);
-  const b = fechaLocal(hasta);
-  const opts: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'short' };
-  const inicio = a.toLocaleDateString(LOCALE[lang], a.getFullYear() === b.getFullYear() ? opts : { ...opts, year: 'numeric' });
-  const fin = b.toLocaleDateString(LOCALE[lang], { ...opts, year: 'numeric' });
-  return (desde === hasta ? fin : `${inicio} – ${fin}`).replace(/\./g, '');
-};
+export const fmtRango = (desde: string, hasta: string, lang: LangKey): string => formatearRangoDias(desde, hasta, lang);
 
 /** 38 → "38 min"; 95 → "1 h 35 min". */
 export const fmtDuracion = (min: number): string => {

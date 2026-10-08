@@ -9,6 +9,7 @@ import {
 } from '../components/ui';
 import { useTranslation } from '../i18n/useTranslation';
 import { formatearPlaca, normalizarPlaca, PLACA_EJEMPLO } from '../utils/placa';
+import { formatearFecha } from '../utils/fecha';
 
 const DURACION_VALUES: { value: BlacklistDuracion; labelKey: string }[] = [
   { value: 'temporal_dias', labelKey: 'blacklist.durTemporal' },
@@ -196,7 +197,7 @@ export default function BlacklistPage() {
   );
 
   const formatDate = (d: string | null) =>
-    d ? new Date(d).toLocaleDateString('es-GT') : '—';
+    d ? formatearFecha(d) : '—';
 
   // Tipo de bloqueo derivado de fecha_fin: Permanente / 30 días / Temporal
   const banType = (e: Blacklist): string => {

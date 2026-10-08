@@ -7,13 +7,13 @@ import { Badge, Button, EmptyState, cx } from '../components/ui';
 import Skeleton from '../components/ui/Skeleton';
 import { useTranslation } from '../i18n/useTranslation';
 import { inicial, tiempoRelativo } from '../utils/tiempo';
+import { formatearFechaHora, formatearFechaLarga, formatearHora } from '../utils/fecha';
 
 const ICON = {
   dentro: 'M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2zM9 22V12h6v10',
   inbox:  'M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3',
 };
 
-const LOCALE = { es: 'es-GT', en: 'en-US' } as const;
 
 export default function DashboardPage({ onNavigate }: { onNavigate?: (pagina: string) => void } = {}) {
   const { t, language: lang } = useTranslation();
@@ -55,7 +55,7 @@ export default function DashboardPage({ onNavigate }: { onNavigate?: (pagina: st
   const n = (x: number) => fmtNumero(x, lang);
   // Sólo la inicial en mayúscula ("Jueves, 24 de septiembre"): `capitalize`
   // de CSS la pondría en cada palabra.
-  const fecha = new Date().toLocaleDateString(LOCALE[lang], { weekday: 'long', day: 'numeric', month: 'long' });
+  const fecha = formatearFechaLarga(new Date(), lang);
   const hoy = fecha.charAt(0).toUpperCase() + fecha.slice(1);
 
   return (
@@ -187,7 +187,7 @@ export default function DashboardPage({ onNavigate }: { onNavigate?: (pagina: st
                           {' · '}
                           <time
                             dateTime={a.timestamp_entrada}
-                            title={new Date(a.timestamp_entrada).toLocaleString('es-GT')}
+                            title={formatearFechaHora(a.timestamp_entrada, lang)}
                           >
                             {tiempoRelativo(a.timestamp_entrada, t)}
                           </time>
@@ -199,7 +199,7 @@ export default function DashboardPage({ onNavigate }: { onNavigate?: (pagina: st
                       ) : (
                         <span className="shrink-0 text-xs text-gray-400">
                           {t('dashboard.exit')}{' '}
-                          {new Date(a.timestamp_salida!).toLocaleTimeString('es-GT', { hour: '2-digit', minute: '2-digit' })}
+                          {formatearHora(a.timestamp_salida)}
                         </span>
                       )}
                     </li>

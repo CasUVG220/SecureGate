@@ -6,8 +6,11 @@ import {
 } from '../services/api';
 import { Spinner } from './Skeleton';
 import { useTranslation } from '../i18n/useTranslation';
+import { hoyEnZona } from '../utils/fecha';
+import { formatearPlaca, normalizarPlaca } from '../utils/placa';
+import PlacaInput from './PlacaInput';
 
-const today = () => new Date().toISOString().slice(0, 10);
+const today = hoyEnZona;
 
 const EMPTY_FORM = {
   tipo: 'individual' as InvitacionQrTipo,
@@ -70,7 +73,7 @@ export default function QrInviteModal({ invitacion, onClose, onCreated }: Props)
       setFormError(t('qr.errorIndividual'));
       return;
     }
-    if (placaRequerida && !form.placa.trim()) {
+    if (placaRequerida && !normalizarPlaca(form.placa)) {
       setFormError(t('qr.errorPlacaRequerida'));
       return;
     }
@@ -80,7 +83,7 @@ export default function QrInviteModal({ invitacion, onClose, onCreated }: Props)
       const payload: InvitacionQrInput = {
         tipo: form.tipo,
         etiqueta: form.etiqueta.trim() || undefined,
-        placa: form.placa.trim() || undefined,
+        placa: normalizarPlaca(form.placa) || undefined,
         fecha_inicio: form.fecha_inicio,
         fecha_fin: form.fecha_fin || undefined,
         usos_maximos: form.usos_maximos ? Number(form.usos_maximos) : undefined,
@@ -155,7 +158,7 @@ export default function QrInviteModal({ invitacion, onClose, onCreated }: Props)
                 </p>
               )}
               {created.placa && (
-                <p className="text-gray-400">{t('qr.plate')}: {created.placa}</p>
+                <p className="text-gray-400">{t('qr.plate')}: {formatearPlaca(created.placa)}</p>
               )}
               {created.usos_maximos != null && (
                 <p className="text-gray-400">{created.usos_actuales}/{created.usos_maximos} {t('qr.usesLabel')}</p>
@@ -259,12 +262,10 @@ export default function QrInviteModal({ invitacion, onClose, onCreated }: Props)
               <label className="block text-xs font-medium text-gray-400 mb-1">
                 {placaRequerida ? `${t('qr.plate')} *` : t('qr.plateOptional')}
               </label>
-              <input
+              <PlacaInput
                 name="placa"
                 value={form.placa}
-                onChange={handleChange}
-                placeholder="P123ABC"
-                className="sg-input"
+                onChange={placa => setForm(prev => ({ ...prev, placa }))}
               />
               <p className="text-xs text-gray-500 mt-1">{t('qr.plateHelp')}</p>
             </div>

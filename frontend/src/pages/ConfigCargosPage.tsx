@@ -14,6 +14,7 @@ import { Button, ROW_ICON, RowActions, StatusText } from '../components/ui';
 import { useToast } from '../components/Toast';
 import { useTranslation } from '../i18n/useTranslation';
 import ConfiguracionQrPage from './ConfiguracionQrPage';
+import { formatearFecha, formatearFechaHora } from '../utils/fecha';
 
 const FRECUENCIAS = [
   { value: 'mensual',   label: 'Mensual (una vez por mes)' },
@@ -482,7 +483,7 @@ export default function ConfigCargosPage() {
                     {historialModal.entries.map((h, i) => (
                       <tr key={i} className="border-b border-gray-700/50 last:border-0">
                         <td className="py-2.5 text-gray-200 text-xs">
-                          {new Date(h.applied_at).toLocaleString('es-GT', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                          {formatearFechaHora(h.applied_at)}
                         </td>
                         <td className="py-2.5 text-white font-medium text-xs text-center">{h.residentes}</td>
                         <td className="py-2.5 text-emerald-400 font-semibold text-xs">
@@ -678,7 +679,7 @@ export default function ConfigCargosPage() {
                         </td>
                         <td className="px-5 py-3 text-xs">
                           {cp.ultimo_aplicado
-                            ? <span className="text-gray-300">{new Date(cp.ultimo_aplicado).toLocaleDateString('es-GT', { day: '2-digit', month: '2-digit', year: 'numeric' })}</span>
+                            ? <span className="text-gray-300">{formatearFecha(cp.ultimo_aplicado)}</span>
                             : <span className="text-gray-600">Nunca</span>}
                         </td>
                         <td className="px-5 py-3 text-center text-gray-300 text-xs">

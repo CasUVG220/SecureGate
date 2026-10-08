@@ -32,10 +32,13 @@ import PagoTarjetaModal from '../components/PagoTarjetaModal';
 import { Badge, Button, ErrorState, ESTADO_PAGO_TONE, ROW_ICON, RowActions } from '../components/ui';
 import { useIsHandheld } from '../hooks/useMediaQuery';
 import { usePolling } from '../hooks/usePolling';
+import { formatearFecha, formatearFechaHoraCorta, hoyEnZona } from '../utils/fecha';
+import { formatearPlaca, normalizarPlaca } from '../utils/placa';
+import PlacaInput from '../components/PlacaInput';
 
 const TICKET_TIPOS: TicketTipo[] = ['mantenimiento', 'queja', 'seguridad', 'otro'];
 
-const today = () => new Date().toISOString().slice(0, 10);
+const today = hoyEnZona;
 
 const EMPTY_FORM = { nombre_visitante: '', numero_dpi: '', placa: '' };
 const EMPTY_TRF  = { monto: '', referencia: '', banco: '', fecha_transferencia: today() };
@@ -318,7 +321,7 @@ export default function ResidentePage({ requestedTab, tabNonce = 0 }: ResidenteP
       const created = await createMisPreautorizacion({
         nombre_visitante: form.nombre_visitante,
         numero_dpi:       form.numero_dpi || undefined,
-        placa:            form.placa || undefined,
+        placa:            normalizarPlaca(form.placa) || undefined,
         fecha_inicio:     today(),
       });
       setPreauths(prev => [created, ...prev].filter(p => p.fecha_fin === null));
@@ -338,7 +341,7 @@ export default function ResidentePage({ requestedTab, tabNonce = 0 }: ResidenteP
       await createMisPreautorizacion({
         nombre_visitante: p.nombre_visitante,
         numero_dpi:       p.numero_dpi || undefined,
-        placa:            p.placa || undefined,
+        placa:            p.placa ? normalizarPlaca(p.placa) : undefined,
         fecha_inicio:     today(),
         fecha_fin:        today(),
       });
@@ -625,7 +628,7 @@ export default function ResidentePage({ requestedTab, tabNonce = 0 }: ResidenteP
                       </div>
                       <p className="text-gray-400 text-xs mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-1">
                         <span>
-                          {new Date(p.fecha_pago).toLocaleDateString('es-GT')} | {PAGO_METODO_LABEL[p.metodo] ?? p.metodo}
+                          {formatearFecha(p.fecha_pago)} | {PAGO_METODO_LABEL[p.metodo] ?? p.metodo}
                           {p.tarjeta_ultimos4 && ` ···· ${p.tarjeta_ultimos4}`}
                         </span>
                         {p.es_simulado && estadoTarjeta.simulada && <Badge tone="warning">{t('card.simulated')}</Badge>}
@@ -651,7 +654,7 @@ export default function ResidentePage({ requestedTab, tabNonce = 0 }: ResidenteP
                   {misPagos.filter(p => p.estado === 'rechazado').map(p => (
                     <li key={p.id} className="text-sm text-gray-300">
                       <span className="font-semibold">Q{parseFloat(p.monto).toFixed(2)}</span>
-                      {' · '}{new Date(p.fecha_pago).toLocaleDateString('es-GT')}
+                      {' · '}{formatearFecha(p.fecha_pago)}
                       {p.referencia && <span className="font-mono text-xs text-gray-400"> · {p.referencia}</span>}
                       {p.comentario_rechazo && (
                         <span className="block text-xs italic text-danger-400">{t('portal.rejectedReason')}: "{p.comentario_rechazo}"</span>
@@ -729,12 +732,10 @@ export default function ResidentePage({ requestedTab, tabNonce = 0 }: ResidenteP
                             {t('portal.plate')}
                             <span className="ml-1 text-gray-500">(requerido si no hay DPI)</span>
                           </label>
-                          <input
+                          <PlacaInput
                             name="placa"
                             value={form.placa}
-                            onChange={handleFormChange}
-                            placeholder="P-123ABC"
-                            className="sg-input uppercase"
+                            onChange={placa => setForm(prev => ({ ...prev, placa }))}
                           />
                         </div>
                       </div>
@@ -770,7 +771,7 @@ export default function ResidentePage({ requestedTab, tabNonce = 0 }: ResidenteP
                         </div>
                         <div className="mt-2 space-y-0.5 text-xs text-gray-400">
                           {p.numero_dpi && <p>{t('portal.dpi')}: {p.numero_dpi}</p>}
-                          {p.placa      && <p>{t('portal.plate')}: {p.placa}</p>}
+                          {p.placa      && <p>{t('portal.plate')}: {formatearPlaca(p.placa)}</p>}
                         </div>
                         <div className="mt-3">
                           <RowActions
@@ -815,12 +816,12 @@ export default function ResidentePage({ requestedTab, tabNonce = 0 }: ResidenteP
                         <p className="font-semibold text-white text-sm">{v.nombre_visitante}</p>
                         <div className="mt-2 space-y-0.5 text-xs text-gray-400">
                           <p>{t('portal.dpi')}: {v.numero_dpi}</p>
-                          {v.placa && <p>{t('portal.plate')}: {v.placa}</p>}
+                          {v.placa && <p>{t('portal.plate')}: {formatearPlaca(v.placa)}</p>}
                           <p className="text-gray-300 mt-1">
-                            {t('portal.entry')}: {new Date(v.timestamp_entrada).toLocaleString('es-GT', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' })}
+                            {t('portal.entry')}: {formatearFechaHoraCorta(v.timestamp_entrada)}
                           </p>
                           {v.timestamp_salida ? (
-                            <p>{t('portal.exit')}: {new Date(v.timestamp_salida).toLocaleString('es-GT', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' })}</p>
+                            <p>{t('portal.exit')}: {formatearFechaHoraCorta(v.timestamp_salida)}</p>
                           ) : (
                             <span className="inline-block bg-blue-100 text-blue-700 text-xs font-semibold px-2 py-0.5 rounded-full mt-1">
                               {t('portal.active')}

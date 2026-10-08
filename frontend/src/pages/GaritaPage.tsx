@@ -20,6 +20,9 @@ import {
 import { useTranslation } from '../i18n/useTranslation';
 import { Button, ErrorState } from '../components/ui';
 import { idDeCodigoManual } from '../utils/qr';
+import { formatearPlaca, normalizarPlaca, placaParaInput } from '../utils/placa';
+import PlacaInput from '../components/PlacaInput';
+import { formatearFecha, formatearHora } from '../utils/fecha';
 
 const QR_PREFIX = 'SGQR:';
 
@@ -137,15 +140,15 @@ export default function GaritaPage() {
         numero_dpi:       datos.numero_dpi,
         residente_id:     datos.residente_id,
         agente_id:        payload.id as string,
-        placa:            datos.placa || undefined,
+        placa:            normalizarPlaca(datos.placa) || undefined,
         invitacion_qr_id: datos.invitacion_qr_id || undefined,
       });
       const residente = residentes.find(r => r.id === datos.residente_id);
       setUltimosIngresos(prev => [{
         id:        crypto.randomUUID(),
-        hora:      new Date().toLocaleTimeString('es-GT'),
+        hora:      formatearHora(new Date(), true),
         visitante: datos.nombre_visitante,
-        placa:     datos.placa || '—',
+        placa:     formatearPlaca(datos.placa) || '—',
         unidad:    residente ? `Casa ${residente.numero_casa}` : '—',
         estado:    'Autorizado' as const,
       }, ...prev].slice(0, 10));
@@ -189,7 +192,7 @@ export default function GaritaPage() {
         ...(inv.tipo === 'individual'
           ? { nombre_visitante: inv.nombre_visitante ?? prev.nombre_visitante, numero_dpi: inv.numero_dpi ?? prev.numero_dpi }
           : {}),
-        ...(inv.placa ? { placa: inv.placa } : {}),
+        ...(inv.placa ? { placa: placaParaInput(inv.placa) } : {}),
       }));
 
       // Autorización automática: sólo para QR individuales completos (nombre
@@ -293,7 +296,7 @@ export default function GaritaPage() {
               ...prev,
               nombre_visitante: match.nombre_visitante || prev.nombre_visitante,
               numero_dpi:       match.numero_dpi || prev.numero_dpi,
-              placa:            match.placa || prev.placa,
+              placa:            match.placa ? placaParaInput(match.placa) : prev.placa,
               residente_id:     match.residente_id,
             }));
             setPreautorizado(true);
@@ -317,7 +320,7 @@ export default function GaritaPage() {
     try {
       const res = await scanPlaca(base64);
       if (res.placa) {
-        setForm(prev => ({ ...prev, placa: res.placa }));
+        setForm(prev => ({ ...prev, placa: placaParaInput(res.placa) }));
         setPlacaOcr(true);
         const match = await buscarPreautorizacion({ placa: res.placa });
         if (match) {
@@ -325,7 +328,7 @@ export default function GaritaPage() {
             ...prev,
             nombre_visitante: match.nombre_visitante || prev.nombre_visitante,
             numero_dpi:       match.numero_dpi || prev.numero_dpi,
-            placa:            match.placa || prev.placa,
+            placa:            match.placa ? placaParaInput(match.placa) : prev.placa,
             residente_id:     match.residente_id,
           }));
           setPreautorizado(true);
@@ -358,7 +361,7 @@ export default function GaritaPage() {
       ...prev,
       nombre_visitante: v.nombre,
       numero_dpi:       v.numero_dpi,
-      placa:            v.placa ?? prev.placa,
+      placa:            v.placa ? placaParaInput(v.placa) : prev.placa,
     }));
     setDpiHistorial(true);
     setDpiSugerencias([]);
@@ -397,9 +400,9 @@ export default function GaritaPage() {
     const residente = residentes.find(r => r.id === form.residente_id);
     setUltimosIngresos(prev => [{
       id:        crypto.randomUUID(),
-      hora:      new Date().toLocaleTimeString('es-GT'),
+      hora:      formatearHora(new Date(), true),
       visitante: form.nombre_visitante || 'Desconocido',
-      placa:     form.placa || '—',
+      placa:     formatearPlaca(form.placa) || '—',
       unidad:    residente ? `Casa ${residente.numero_casa}` : '—',
       estado:    'Denegado' as const,
     }, ...prev].slice(0, 10));
@@ -447,7 +450,7 @@ export default function GaritaPage() {
               </p>
               <p className="text-red-300 text-sm">
                 {blacklistBlock.fecha_fin
-                  ? `${t('blacklist.expiresOn')} ${new Date(blacklistBlock.fecha_fin).toLocaleDateString('es-GT')}`
+                  ? `${t('blacklist.expiresOn')} ${formatearFecha(blacklistBlock.fecha_fin)}`
                   : t('blacklist.permanent')}
               </p>
             </div>
@@ -656,7 +659,7 @@ export default function GaritaPage() {
                     >
                       <p className="text-white text-xs font-medium truncate">{v.nombre}</p>
                       <p className="text-gray-400 text-xs font-mono">{v.numero_dpi}
-                        {v.placa && <span className="ml-2 text-teal-400">{v.placa}</span>}
+                        {v.placa && <span className="ml-2 text-teal-400">{formatearPlaca(v.placa)}</span>}
                         <span className="ml-2 text-gray-500">{diasDesde(v.ultima_visita)}</span>
                       </p>
                     </button>
@@ -670,14 +673,13 @@ export default function GaritaPage() {
               <label className="block text-xs text-gray-400 mb-1">
                 {t('gate.plate')}{qrInvitacion && configQr?.requiere_placa ? ' *' : ''}
               </label>
-              <input
+              <PlacaInput
                 ref={placaInputRef}
                 name="placa"
                 value={form.placa}
-                onChange={handleChange}
+                onChange={placa => setForm(prev => ({ ...prev, placa }))}
                 disabled={!!qrInvitacion?.placa}
-                placeholder="P-123ABC"
-                className="sg-input disabled:opacity-60"
+                className="disabled:opacity-60"
               />
               {qrInvitacion && configQr?.requiere_placa && !form.placa && (
                 <p className="text-xs text-amber-400 mt-1">{t('gate.qrPlateRequired')}</p>

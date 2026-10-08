@@ -9,6 +9,7 @@ import {
 } from '../components/ui';
 import { Skeleton } from '../components/Skeleton';
 import { useTranslation } from '../i18n/useTranslation';
+import { formatearFecha } from '../utils/fecha';
 
 const EMPTY_FORM = { residente_id: '', monto: '' };
 
@@ -136,7 +137,7 @@ export default function PagosPage() {
     },
     {
       key: 'fecha', header: t('common.date'), className: 'whitespace-nowrap text-gray-400',
-      cell: p => new Date(p.fecha_pago).toLocaleDateString('es-GT'),
+      cell: p => formatearFecha(p.fecha_pago),
     },
     {
       key: 'acciones', header: t('common.actions'), align: 'right', actions: true,

@@ -3,6 +3,7 @@ import { login, logout, tomarBloqueoGuardado, EmpresaBloqueadaError, PortalIncor
 import { Button, Input } from '../components/ui';
 import { useTranslation } from '../i18n/useTranslation';
 import { ENLACE_PORTAL, NOMBRE_PORTAL, RUTA_PORTAL, otroPortal, type Portal } from '../routing/portales';
+import { formatearFecha } from '../utils/fecha';
 
 interface LoginPageProps {
   onLogin: (token: string, rol: string, usuario: Record<string, unknown>) => void;
@@ -111,7 +112,7 @@ export default function LoginPage({ onLogin, portal = 'personal', onCambiarPorta
             {bloqueo.codigo === 'empresa_suspendida' && (
               <dl className="mt-2 space-y-0.5 pl-7 text-xs text-danger-400/90">
                 {bloqueo.motivo && <div><dt className="inline font-semibold">{t('login.suspensionMotivo')}: </dt><dd className="inline">{bloqueo.motivo}</dd></div>}
-                {bloqueo.desde && <div><dt className="inline font-semibold">{t('login.suspensionDesde')}: </dt><dd className="inline">{new Date(bloqueo.desde).toLocaleDateString()}</dd></div>}
+                {bloqueo.desde && <div><dt className="inline font-semibold">{t('login.suspensionDesde')}: </dt><dd className="inline">{formatearFecha(bloqueo.desde)}</dd></div>}
               </dl>
             )}
             <p className="mt-2 pl-7 text-xs text-gray-300">{t('login.suspensionContacto')}</p>

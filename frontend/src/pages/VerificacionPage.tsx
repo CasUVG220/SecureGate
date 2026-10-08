@@ -9,6 +9,7 @@ import { Spinner } from '../components/Skeleton';
 import { useToast } from '../components/Toast';
 import { Button } from '../components/ui';
 import { useTranslation } from '../i18n/useTranslation';
+import { formatearFecha } from '../utils/fecha';
 
 const RAZONES_RECHAZO = [
   { value: 'imagen_no_clara',        label: 'Imagen no clara o ilegible' },
@@ -123,7 +124,7 @@ export default function VerificacionPage() {
   const cubre   = monto >= saldo;
 
   const fmtFecha = (s: string | null) =>
-    s ? new Date(s).toLocaleDateString('es-GT', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '—';
+    s ? formatearFecha(s) : '—';
 
   return (
     <div className="sg-page text-gray-100">
@@ -422,7 +423,7 @@ export default function VerificacionPage() {
               <div className="flex items-center justify-between">
                 <span className="text-emerald-400 text-sm font-bold">Q{parseFloat(p.monto).toFixed(2)}</span>
                 <span className="text-gray-500 text-xs">
-                  {new Date(p.fecha_pago).toLocaleDateString('es-GT', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                  {formatearFecha(p.fecha_pago)}
                 </span>
               </div>
               {p.estado === 'rechazado' && p.comentario_rechazo && (
