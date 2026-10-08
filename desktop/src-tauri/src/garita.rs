@@ -144,6 +144,9 @@ pub struct AccesoPendiente {
     pub placa: Option<String>,
     pub residente_casa: Option<String>,
     pub capturado_manualmente: bool,
+    /// Id del registro en el servidor, una vez sincronizado: con él se puede dar la
+    /// salida desde la lista sin buscar por placa. `None` mientras siga pendiente.
+    pub registro_id: Option<String>,
 }
 
 // ── Consultas ───────────────────────────────────────────────────────────────
@@ -301,7 +304,7 @@ pub fn encolar_acceso(conn: &Connection, agente_id: &str, a: &NuevoAcceso) -> Ap
 pub fn listar_recientes(conn: &Connection, limite: usize) -> AppResult<Vec<AccesoPendiente>> {
     let mut st = conn.prepare(
         "SELECT id_cliente, registrado_en, estado, intentos, ultimo_error, sincronizado_en,
-                nombre_visitante, numero_dpi, placa, residente_casa, capturado_manualmente
+                nombre_visitante, numero_dpi, placa, residente_casa, capturado_manualmente, registro_id
          FROM accesos_pendientes ORDER BY registrado_en DESC LIMIT ?1",
     )?;
     let rows = st.query_map([limite as i64], |r| {
@@ -317,6 +320,7 @@ pub fn listar_recientes(conn: &Connection, limite: usize) -> AppResult<Vec<Acces
             placa: r.get(8)?,
             residente_casa: r.get(9)?,
             capturado_manualmente: r.get::<_, i64>(10)? != 0,
+            registro_id: r.get(11)?,
         })
     })?;
     Ok(rows.collect::<Result<_, _>>()?)
@@ -539,6 +543,30 @@ mod tests {
         assert!(err.mensaje.starts_with("Vehículo en lista negra"), "{}", err.mensaje);
         let n: i64 = c.query_row("SELECT count(*) FROM accesos_pendientes", [], |r| r.get(0)).unwrap();
         assert_eq!(n, 0, "nada se encola");
+    }
+
+    /// «Dar salida» desde la lista de recientes necesita el id del registro en el servidor,
+    /// que solo existe una vez sincronizado el acceso.
+    #[test]
+    fn los_recientes_exponen_el_registro_id_solo_cuando_ya_se_sincronizo() {
+        let c = db();
+        let nuevo = |dpi: &str| NuevoAcceso {
+            nombre_visitante: "Visita".into(), numero_dpi: dpi.into(), residente_id: "r1".into(),
+            placa: None, notas: None, capturado_manualmente: false, invitacion_qr_id: None,
+        };
+        let a = encolar_acceso(&c, "agente-1", &nuevo("5000000000001")).unwrap();
+        let _b = encolar_acceso(&c, "agente-1", &nuevo("5000000000002")).unwrap();
+        c.execute(
+            "UPDATE accesos_pendientes SET estado = 'sincronizado', registro_id = 'reg-srv-1' WHERE id_cliente = ?1",
+            [&a],
+        ).unwrap();
+
+        let lista = listar_recientes(&c, 10).unwrap();
+        let sincronizado = lista.iter().find(|x| x.id_cliente == a).unwrap();
+        assert_eq!(sincronizado.registro_id.as_deref(), Some("reg-srv-1"));
+        assert_eq!(lista.iter().filter(|x| x.registro_id.is_none()).count(), 1, "el pendiente no tiene registro_id");
+        let json = serde_json::to_value(sincronizado).unwrap();
+        assert_eq!(json["registro_id"], "reg-srv-1", "viaja al frontend con ese nombre");
     }
 
     #[test]

@@ -205,7 +205,7 @@ export default function SalidaPage() {
                   {cameraOpen ? 'Cerrar' : 'Escanear'}
                 </button>
               ) : (
-                <span className="text-xs text-gray-500 italic">Cámara no disponible</span>
+                <span className="text-xs text-gray-400 italic">Cámara no disponible</span>
               )}
             </div>
 
@@ -241,6 +241,7 @@ export default function SalidaPage() {
                 placeholder="P-123ABC"
                 className="sg-input uppercase"
               />
+              {!hasCamera && <p className="mt-1.5 text-xs text-gray-400">{t('exit.noCameraHint')}</p>}
             </div>
 
             <button

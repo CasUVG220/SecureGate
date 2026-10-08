@@ -17,8 +17,11 @@ import { VisitanteForm, type VisitanteFormHandle } from '../components/garita/Vi
 import { ThemeToggle } from '../context/ThemeContext';
 import { useCamarasLayout } from '../hooks/useCamarasLayout';
 import { mejorCandidato } from '../lib/placa';
-import type { Proposito } from '../lib/camaras';
-import { api, mensajeDe, onEstadoSync, type AccesoPendiente, type EstadoApp, type ResultadoApertura, type ResultadoOcr } from '../lib/tauri';
+import { esModoSalida, type Proposito } from '../lib/camaras';
+import {
+  api, mensajeDe, onEstadoSync,
+  type AccesoActivo, type AccesoPendiente, type EstadoApp, type ResultadoApertura, type ResultadoOcr,
+} from '../lib/tauri';
 
 interface Props {
   estado: EstadoApp;
@@ -40,8 +43,11 @@ export function GaritaPage({ estado, refrescar, onLogout }: Props) {
   const [qrOcupado, setQrOcupado] = useState(false);
   /** Tarea cuya captura se está procesando: bloquea sólo ese botón. */
   const [capturando, setCapturando] = useState<Proposito | null>(null);
-  /** Placa leída en el carril de salida, a confirmar en el diálogo. */
-  const [salida, setSalida] = useState<string | null>(null);
+  /**
+   * Salida en curso: la placa leída (o vacía, para escribirla a mano) y, si se eligió a
+   * alguien en «Registrados en este equipo», ese acceso ya identificado.
+   */
+  const [salida, setSalida] = useState<{ placa: string; acceso?: AccesoActivo } | null>(null);
   const { disposicion, cambiarLayout, cambiarPanel } = useCamarasLayout();
   const [abriendo, setAbriendo] = useState(false);
   const [configHardware, setConfigHardware] = useState(false);
@@ -71,7 +77,8 @@ export function GaritaPage({ estado, refrescar, onLogout }: Props) {
   };
 
   const cargarRecientes = useCallback(() => {
-    api.garita.recientes(30).then(setRecientes).catch(() => {});
+    // Se traen más de los que se muestran: la búsqueda de la lista recorre todo el turno.
+    api.garita.recientes(150).then(setRecientes).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -115,10 +122,10 @@ export function GaritaPage({ estado, refrescar, onLogout }: Props) {
     try {
       const r = await api.ocr.placa(jpeg);
       const candidato = mejorCandidato(r.items, r.texto);
-      setSalida(candidato.valida ? candidato.placa : '');
+      setSalida({ placa: candidato.valida ? candidato.placa : '' });
     } catch (e) {
       setAviso({ tone: 'warn', texto: `No se pudo leer la placa de salida (${mensajeDe(e)}). Escríbela a mano.` });
-      setSalida('');
+      setSalida({ placa: '' });
     }
   };
 
@@ -173,6 +180,29 @@ export function GaritaPage({ estado, refrescar, onLogout }: Props) {
   };
 
   const habilitado = (estado.licencia.estado === 'activa' || estado.licencia.estado === 'en_gracia') && !!estado.sesion.usuario;
+  const enLinea = estado.sync.en_linea;
+
+  /**
+   * Modo salida: con una sola vista de cámara y la tarea «Salida», el panel de la
+   * derecha deja de hablar de entradas. Con varias vistas la pantalla sigue siendo la
+   * de registro y la salida es una cámara más.
+   */
+  const modoSalida = esModoSalida(disposicion);
+
+  /** Salida desde «Registrados en este equipo»: el acceso ya está identificado. */
+  const salidaDeLista = (a: AccesoPendiente) => {
+    if (!a.registro_id) return;
+    setSalida({
+      placa: a.placa ?? '',
+      acceso: {
+        registro_id: a.registro_id,
+        timestamp_entrada: a.registrado_en,
+        visitante: { id: '', nombre: a.nombre_visitante, numero_dpi: a.numero_dpi },
+        residente: { id: '', numero_casa: a.residente_casa ?? '—', nombre: '' },
+        placa: a.placa,
+      },
+    });
+  };
 
   return (
     <div className="flex h-full flex-col">
@@ -257,20 +287,49 @@ export function GaritaPage({ estado, refrescar, onLogout }: Props) {
             onQr={capturaQr}
             qrPausado={qrOcupado}
             ocupado={capturando}
+            onEscribirPlaca={() => form.current?.enfocarPlaca()}
+            onSalidaManual={() => setSalida({ placa: '' })}
           />
         </div>
         <div className="min-h-0 space-y-4 overflow-y-auto">
-          <Card title="Registrar acceso" description="Todo lo de este formulario se decide con los datos locales; funciona sin internet.">
+          <Card
+            title={modoSalida ? 'Registrar salida' : 'Registrar acceso'}
+            description={modoSalida
+              ? 'Escribe la placa del vehículo que sale, o elige a la persona en «Registrados en este equipo». Se cierra el acceso que sigue abierto y requiere conexión con el servidor.'
+              : 'Todo lo de este formulario se decide con los datos locales; funciona sin internet.'}
+          >
             {aviso && <Alert tone={aviso.tone} className="mb-4">{aviso.texto}</Alert>}
-            <VisitanteForm
-              ref={form}
-              habilitado={habilitado}
-              onRegistrado={apertura => { cargarRecientes(); avisarApertura(apertura, 'Acceso registrado.'); }}
-            />
+            {modoSalida && (
+              <div className="space-y-3">
+                <Button
+                  size="lg"
+                  fullWidth
+                  disabled={!enLinea || !habilitado}
+                  onClick={() => setSalida({ placa: '' })}
+                >
+                  Escribir placa de salida
+                </Button>
+                {(!enLinea || !habilitado) && (
+                  <p role="status" className="text-xs font-medium text-warning-400">
+                    {!habilitado
+                      ? 'La licencia o la sesión no permiten registrar movimientos ahora.'
+                      : 'Sin conexión: la salida se registra en el servidor. Si hay que levantar la pluma, usa «Abrir talanquera».'}
+                  </p>
+                )}
+              </div>
+            )}
+            {/* Sigue montado (solo oculto) en modo salida: no se pierde lo que el agente ya escribió. */}
+            <div className={modoSalida ? 'hidden' : undefined}>
+              <VisitanteForm
+                ref={form}
+                habilitado={habilitado}
+                onRegistrado={apertura => { cargarRecientes(); avisarApertura(apertura, 'Acceso registrado.'); }}
+              />
+            </div>
           </Card>
         </div>
         <div className="min-h-0 space-y-4 overflow-y-auto">
-          <RecientesList accesos={recientes} />
+          <RecientesList accesos={recientes} enLinea={enLinea} onSalida={salidaDeLista} />
           <Card title="Equipo">
             <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-sm">
               <dt className="text-gray-400">Servidor</dt><dd className="truncate font-mono text-xs text-gray-200">{estado.api_url}</dd>
@@ -300,7 +359,8 @@ export function GaritaPage({ estado, refrescar, onLogout }: Props) {
 
       {salida !== null && (
         <SalidaDialog
-          placaInicial={salida}
+          placaInicial={salida.placa}
+          accesoInicial={salida.acceso}
           onCerrar={() => setSalida(null)}
           onRegistrada={(acceso, apertura) => {
             setSalida(null);

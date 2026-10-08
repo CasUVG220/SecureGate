@@ -46,6 +46,30 @@ otra garita o la web, y el espejo local sólo guarda lo que salió de ESTE
 equipo. Sin red, el camino manual (DPI + formulario) sigue funcionando
 offline como siempre, que es la promesa que sí se mantiene.
 
+**Decisión (SCRUM-111): la salida se queda en línea.** La cola offline
+(`accesos_pendientes`) solo guarda ENTRADAS: no hay un espejo de los accesos
+abiertos ni un endpoint idempotente para cerrar una salida pendiente, y una salida
+encolada contra un acceso que otra garita ya cerró (o que aún no se sincroniza)
+dejaría vehículos «dentro» para siempre o cerraría el acceso equivocado. Hacerla sin
+red exigiría ese espejo y esa idempotencia; mientras tanto, sin conexión el agente
+levanta la pluma con «Abrir talanquera» y registra la salida al volver la red. La
+pantalla lo dice con texto visible en vez de apagar el botón sin explicar.
+
+### Sin cámara
+
+Si la cámara falta, está ocupada o el permiso se negó, nada se bloquea:
+
+| Tarea | Alternativa manual |
+|---|---|
+| **QR** | «¿No se lee? Escribe el código»: acepta el texto que el residente ve bajo su QR (`SGQR:<id>`, o el id solo, con o sin guiones). Requiere conexión. |
+| **Placa** | «Escribir placa» lleva el cursor al campo de la placa del formulario. |
+| **DPI** | Se escribe en el formulario (13 dígitos); queda marcado «capturado manualmente». |
+| **Salida** | «Escribir placa» abre el diálogo de salida; o «Dar salida» en la lista **Registrados en este equipo**, que además se puede buscar por nombre, DPI, placa o casa. |
+
+Cada botón apagado muestra debajo el motivo («No hay cámara disponible…»,
+«Sin conexión…», «El OCR local no está disponible…»). Con la vista única en
+«Salida», el panel derecho pasa a «Registrar salida» y deja de hablar de entradas.
+
 ### Disposición: 1, 2 ó 4 vistas
 
 El agente elige cuántas vistas previas quiere a la vez con el selector

@@ -18,14 +18,19 @@ import { api, mensajeDe, type AccesoActivo, type ResultadoApertura } from '../..
 interface Props {
   /** Placa que propuso el OCR; vacía si el agente abrió el diálogo a mano. */
   placaInicial: string;
+  /**
+   * Acceso ya identificado (elegido en «Registrados en este equipo»): no se busca por
+   * placa, solo se confirma. Sirve para quien salió a pie o sin vehículo registrado.
+   */
+  accesoInicial?: AccesoActivo;
   onCerrar: () => void;
   onRegistrada: (acceso: AccesoActivo, apertura: ResultadoApertura) => void;
 }
 
-export function SalidaDialog({ placaInicial, onCerrar, onRegistrada }: Props) {
+export function SalidaDialog({ placaInicial, accesoInicial, onCerrar, onRegistrada }: Props) {
   const [placa, setPlaca] = useState(placaInicial);
   const [buscando, setBuscando] = useState(false);
-  const [acceso, setAcceso] = useState<AccesoActivo | null>(null);
+  const [acceso, setAcceso] = useState<AccesoActivo | null>(accesoInicial ?? null);
   const [sinResultado, setSinResultado] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
@@ -50,8 +55,8 @@ export function SalidaDialog({ placaInicial, onCerrar, onRegistrada }: Props) {
   // Con una placa reconocida se busca sola: el agente no debería tener que
   // pulsar dos veces con el carro esperando en el carril.
   useEffect(() => {
-    if (esValida(placaInicial)) void buscar(placaInicial);
-  }, [placaInicial, buscar]);
+    if (!accesoInicial && esValida(placaInicial)) void buscar(placaInicial);
+  }, [placaInicial, accesoInicial, buscar]);
 
   const registrar = async () => {
     if (!acceso) return;
@@ -74,7 +79,7 @@ export function SalidaDialog({ placaInicial, onCerrar, onRegistrada }: Props) {
       open
       onClose={onCerrar}
       title="Registrar salida"
-      description="Se cierra el acceso que sigue abierto para esta placa."
+      description={accesoInicial ? 'Confirma la salida de esta persona.' : 'Se cierra el acceso que sigue abierto para esta placa.'}
       footer={
         <>
           <Button variant="secondary" onClick={onCerrar}>Cancelar</Button>
@@ -85,17 +90,19 @@ export function SalidaDialog({ placaInicial, onCerrar, onRegistrada }: Props) {
       }
     >
       <div className="space-y-4">
-        <Input
-          label="Placa"
-          className="min-h-control-lg font-mono text-lg tracking-widest"
-          autoFocus
-          value={placa}
-          onChange={e => { setPlaca(e.target.value.toUpperCase()); setAcceso(null); setSinResultado(false); }}
-          onKeyDown={e => { if (e.key === 'Enter' && valida) { e.preventDefault(); void buscar(placa); } }}
-          error={placa && !valida ? 'Formato esperado: prefijo + 3 dígitos + 3 letras (ej. P123ABC)' : null}
-          hint={valida ? `Se buscará ${formatear(placa)}` : undefined}
-          spellCheck={false}
-        />
+        {!accesoInicial && (
+          <Input
+            label="Placa"
+            className="min-h-control-lg font-mono text-lg tracking-widest"
+            autoFocus
+            value={placa}
+            onChange={e => { setPlaca(e.target.value.toUpperCase()); setAcceso(null); setSinResultado(false); }}
+            onKeyDown={e => { if (e.key === 'Enter' && valida) { e.preventDefault(); void buscar(placa); } }}
+            error={placa && !valida ? 'Formato esperado: prefijo + 3 dígitos + 3 letras (ej. P123ABC)' : null}
+            hint={valida ? `Se buscará ${formatear(placa)}` : undefined}
+            spellCheck={false}
+          />
+        )}
 
         {error && <Alert tone="bad">{error}</Alert>}
 
@@ -113,11 +120,11 @@ export function SalidaDialog({ placaInicial, onCerrar, onRegistrada }: Props) {
               <dt className="text-gray-400">Visitante</dt>
               <dd className="font-medium text-gray-100">{acceso.visitante.nombre} · DPI {acceso.visitante.numero_dpi}</dd>
               <dt className="text-gray-400">Visitó</dt>
-              <dd className="text-gray-200">{acceso.residente.numero_casa} · {acceso.residente.nombre}</dd>
+              <dd className="text-gray-200">{acceso.residente.numero_casa}{acceso.residente.nombre ? ` · ${acceso.residente.nombre}` : ''}</dd>
               <dt className="text-gray-400">Entró</dt>
               <dd className="text-gray-200">{horaLocal(acceso.timestamp_entrada)}</dd>
               <dt className="text-gray-400">Placa</dt>
-              <dd className="font-mono text-gray-200">{formatear(acceso.placa ?? placa)}</dd>
+              <dd className="font-mono text-gray-200">{acceso.placa ?? placa ? formatear(acceso.placa ?? placa) : 'Sin vehículo'}</dd>
             </dl>
           </div>
         )}

@@ -161,6 +161,13 @@ export interface Disposicion {
   paneles: Proposito[];
 }
 
+/**
+ * ¿Está la garita en modo salida? Solo con UNA vista de cámara y la tarea «Salida»: el
+ * panel de la derecha deja de hablar de entradas. Con varias vistas la pantalla sigue
+ * siendo la de registro y la salida es una cámara más.
+ */
+export const esModoSalida = (d: Disposicion): boolean => d.layout === 1 && d.paneles[0] === 'salida';
+
 export const LAYOUT_STORAGE_KEY = 'sg_camaras_layout';
 
 /** Con un solo panel se arranca en QR, que es el camino rápido. */
@@ -208,6 +215,18 @@ export function guardarDisposicion(d: Disposicion, storage: Pick<Storage, 'setIt
 export const QR_PREFIX = 'SGQR:';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Código de invitación escrito o pegado A MANO (cuando la cámara no sirve). Acepta lo
+ * mismo que lee el escáner (`SGQR:<id>`) y también el id solo, con o sin guiones, con
+ * espacios y en mayúsculas o minúsculas. Devuelve el UUID canónico o `null`.
+ */
+export function idDeCodigoManual(texto: string): string | null {
+  const sinPrefijo = texto.trim().replace(/^sgqr:/i, '');
+  const hex = sinPrefijo.replace(/[\s-]/g, '').toLowerCase();
+  if (!/^[0-9a-f]{32}$/.test(hex)) return null;
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
 
 /**
  * Extrae el id de invitación de un QR. Devuelve `null` si el código no es de

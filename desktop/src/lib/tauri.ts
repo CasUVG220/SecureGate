@@ -211,6 +211,8 @@ export interface AccesoPendiente {
   placa: string | null;
   residente_casa: string | null;
   capturado_manualmente: boolean;
+  /** Id del registro en el servidor; vacío mientras el acceso siga pendiente de enviar. */
+  registro_id?: string | null;
 }
 
 export interface ItemOcr {

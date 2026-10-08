@@ -100,6 +100,19 @@ export default function QrInviteModal({ invitacion, onClose, onCreated }: Props)
 
   const canShareFiles = typeof navigator !== 'undefined' && !!navigator.canShare && !!navigator.share;
 
+  // El código de texto del QR: si la cámara de la garita no lo lee, el guardia puede escribirlo.
+  const [codigoCopiado, setCodigoCopiado] = useState(false);
+  const copiarCodigo = async () => {
+    if (!created) return;
+    try {
+      await navigator.clipboard.writeText(created.id);
+      setCodigoCopiado(true);
+      setTimeout(() => setCodigoCopiado(false), 2500);
+    } catch {
+      /* Sin permiso de portapapeles el código sigue a la vista para copiarlo a mano. */
+    }
+  };
+
   const handleShare = async () => {
     if (!qrDataUri || !created) return;
     try {
@@ -147,6 +160,14 @@ export default function QrInviteModal({ invitacion, onClose, onCreated }: Props)
               {created.usos_maximos != null && (
                 <p className="text-gray-400">{created.usos_actuales}/{created.usos_maximos} {t('qr.usesLabel')}</p>
               )}
+            </div>
+            <div className="rounded-lg border border-gray-700 bg-gray-500/[0.06] px-3 py-2.5 text-left">
+              <p className="text-2xs font-bold uppercase tracking-wider text-gray-400">{t('qr.codeLabel')}</p>
+              <p className="mt-1 break-all font-mono text-xs text-gray-100 select-all" data-testid="qr-codigo">{created.id}</p>
+              <p className="mt-1 text-xs text-gray-400">{t('qr.codeHint')}</p>
+              <button type="button" onClick={copiarCodigo} className="mt-1.5 text-xs font-semibold text-gray-300 underline underline-offset-4 hover:text-gray-50">
+                {codigoCopiado ? t('qr.codeCopied') : t('qr.copyCode')}
+              </button>
             </div>
             <div className="flex gap-3">
               <a
