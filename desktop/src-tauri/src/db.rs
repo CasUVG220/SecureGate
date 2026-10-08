@@ -110,7 +110,8 @@ pub fn aplicar_esquema(conn: &Connection) -> AppResult<()> {
           visitante_nombre TEXT,
           razon            TEXT NOT NULL,
           fecha_fin        TEXT,
-          residente_id     TEXT
+          residente_id     TEXT,
+          placa            TEXT
         );
         CREATE INDEX IF NOT EXISTS idx_blacklist_local_dpi ON blacklist_local(numero_dpi);
 
@@ -157,6 +158,22 @@ pub fn aplicar_esquema(conn: &Connection) -> AppResult<()> {
         );
         "#,
     )?;
+    migrar_blacklist_placa(conn)?;
+    Ok(())
+}
+
+/// SCRUM-110: el espejo de la lista negra incluye ahora bloqueos por PLACA (sin
+/// visitante). En equipos con una base anterior la columna no existe: se agrega sin
+/// tocar nada más (el espejo se reemplaza completo en cada sincronización, así que
+/// las filas viejas se rehacen solas en el siguiente pull). Idempotente.
+fn migrar_blacklist_placa(conn: &Connection) -> AppResult<()> {
+    let existe = conn
+        .prepare("SELECT 1 FROM pragma_table_info('blacklist_local') WHERE name = 'placa'")?
+        .exists([])?;
+    if !existe {
+        conn.execute("ALTER TABLE blacklist_local ADD COLUMN placa TEXT", [])?;
+    }
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_blacklist_local_placa ON blacklist_local(placa)", [])?;
     Ok(())
 }
 
@@ -239,6 +256,25 @@ mod tests {
         assert_eq!(abrir(&ruta, &vieja).unwrap_err().codigo, "db_clave");
         let conn = abrir(&ruta, &nueva).unwrap();
         assert_eq!(meta_leer(&conn, "k").unwrap().as_deref(), Some("v"));
+    }
+
+    #[test]
+    fn una_base_anterior_sin_columna_placa_se_migra_sin_perder_filas() {
+        let conn = Connection::open_in_memory().unwrap();
+        // Esquema de la versión anterior (sin `placa`).
+        conn.execute_batch(
+            "CREATE TABLE blacklist_local (
+               id TEXT PRIMARY KEY, numero_dpi TEXT NOT NULL, visitante_nombre TEXT,
+               razon TEXT NOT NULL, fecha_fin TEXT, residente_id TEXT);
+             INSERT INTO blacklist_local VALUES ('b1','111','Malo','Robo',NULL,NULL);",
+        ).unwrap();
+        aplicar_esquema(&conn).unwrap();
+        aplicar_esquema(&conn).unwrap(); // idempotente
+        let (dpi, placa): (String, Option<String>) = conn
+            .query_row("SELECT numero_dpi, placa FROM blacklist_local WHERE id = 'b1'", [], |r| Ok((r.get(0)?, r.get(1)?)))
+            .unwrap();
+        assert_eq!(dpi, "111");
+        assert_eq!(placa, None, "la fila anterior conserva su DPI y queda sin placa");
     }
 
     #[test]

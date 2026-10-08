@@ -179,7 +179,10 @@ export const VisitanteForm = forwardRef<VisitanteFormHandle, Props>(function Vis
 
       {evaluacion && (
         bloqueado
-          ? <Alert tone="bad"><strong>En lista negra:</strong> {evaluacion.razon_bloqueo}. No se puede registrar el acceso.</Alert>
+          ? <Alert tone="bad">
+              <strong>{evaluacion.motivo_bloqueo === 'placa' ? 'Vehículo en lista negra:' : 'En lista negra:'}</strong>{' '}
+              {evaluacion.razon_bloqueo}. No se puede registrar el acceso.
+            </Alert>
           : evaluacion.preautorizado
             ? <Alert tone="ok">Preautorizado por el residente{evaluacion.preautorizacion?.fecha_fin ? ` hasta ${evaluacion.preautorizacion.fecha_fin}` : ''}.</Alert>
             : null
