@@ -28,6 +28,9 @@ export type { StatusKind, StatusTextProps } from './StatusText';
 export { ROW_ICON } from './rowIcons';
 export type { RowAction, RowActionsProps, RowActionTone } from './RowActions';
 
+export { default as FormActions } from './FormActions';
+export type { FormActionsProps } from './FormActions';
+
 export { default as Modal } from './Modal';
 export type { ModalProps, ModalSize } from './Modal';
 
@@ -38,7 +41,8 @@ export { default as DataTable } from './Table';
 export type { Column, DataTableProps } from './Table';
 
 export { ToastProvider, useToast } from './Toast';
-export type { ToastItem, ToastType } from './Toast';
+export { TOAST_DURACION_MS } from './Toast';
+export type { ToastAction, ToastItem, ToastOptions, ToastType } from './Toast';
 
 
 export { cx } from './cx';
