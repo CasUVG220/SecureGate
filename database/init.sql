@@ -655,4 +655,32 @@ END $$;
 
 CREATE INDEX IF NOT EXISTS idx_audit_sucursal ON audit_logs(sucursal_id);
 
+-- ── Lista negra por placa (SCRUM-110 / H03) ────────────────────────────────
+-- Decisión de modelo (la más simple y segura): NO hay una tabla aparte. Una entrada
+-- de `visitante_blacklist` identifica al visitante (visitante_id, que ya viene del
+-- DPI) o, sin conocerlo, solo a un vehículo (placa). Así reutiliza vigencia, motivo,
+-- aislamiento por sucursal, auditoría y "quitar bloqueo" que ya tiene el DPI.
+-- La placa se guarda NORMALIZADA (mayúsculas, sin separadores: P123ABC) y se compara
+-- siempre normalizada, de modo que "p-123 abc" y "P123ABC" son el mismo vehículo.
+ALTER TABLE visitante_blacklist ALTER COLUMN visitante_id DROP NOT NULL;
+
+DO $$ BEGIN
+  ALTER TABLE visitante_blacklist ADD COLUMN placa VARCHAR(20);
+EXCEPTION WHEN duplicate_column THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  ALTER TABLE visitante_blacklist ADD CONSTRAINT visitante_blacklist_objetivo_chk
+    CHECK (visitante_id IS NOT NULL OR placa IS NOT NULL);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  ALTER TABLE visitante_blacklist ADD CONSTRAINT visitante_blacklist_placa_chk
+    CHECK (placa IS NULL OR placa ~ '^[A-Z0-9]{3,20}$');
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+CREATE INDEX IF NOT EXISTS idx_bl_placa ON visitante_blacklist(sucursal_id, placa) WHERE placa IS NOT NULL;
+
 SELECT 'SecureGate DB inicializada correctamente' AS mensaje;

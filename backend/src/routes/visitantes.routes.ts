@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import pool from '../db/pool';
 import { tenantFilter } from '../utils/tenant';
 import { serverError, esUuid } from '../utils/http';
+import { normalizarPlaca, sqlPlacaNormalizada } from '../utils/placa';
 
 const router = Router();
 
@@ -18,24 +19,50 @@ const escapeLike = (s: string): string => s.replace(/[\\%_]/g, m => `\\${m}`);
  * El acceso ya está restringido a personal en el montaje (routes/index.ts).
  */
 
-// GET /api/visitantes?dpi=X — usado por el modal de blacklist
+// GET /api/visitantes?dpi=X  |  GET /api/visitantes?placa=X — usado por el modal de blacklist
+// («Buscar visitante por DPI o placa»). La placa se compara normalizada (sin guiones ni
+// espacios, en mayúsculas) contra los vehículos del visitante, también los guardados antes
+// de que existiera la normalización.
 router.get('/', async (req: Request, res: Response) => {
-  const { dpi } = req.query as { dpi?: string };
-  if (!dpi || dpi.trim().length < 3) {
-    return res.status(400).json({ error: 'Parámetro dpi requerido (mínimo 3 caracteres)' });
+  const { dpi, placa } = req.query as { dpi?: string; placa?: string };
+  const porPlaca = placa !== undefined;
+  if (dpi !== undefined && porPlaca) {
+    return res.status(400).json({ error: 'Busca por dpi o por placa, no por las dos a la vez' });
   }
+  if (!porPlaca && (!dpi || dpi.trim().length < 3)) {
+    return res.status(400).json({ error: 'Indica dpi o placa (mínimo 3 caracteres)' });
+  }
+  const placaNorm = porPlaca ? normalizarPlaca(placa) : '';
+  if (porPlaca && placaNorm.length < 3) {
+    return res.status(400).json({ error: 'Indica dpi o placa (mínimo 3 caracteres)' });
+  }
+
   const ts = tenantFilter(req.user!, 'ra');
-  try {
-    const result = await pool.query(
-      `SELECT v.id, v.nombre, v.numero_dpi FROM visitantes v
-       WHERE v.numero_dpi ILIKE $${ts.params.length + 1}
-         AND EXISTS (
+  const alcance = `EXISTS (
            SELECT 1 FROM registros_acceso ra ${ts.joinClause}
             WHERE ra.visitante_id = v.id AND ${ts.whereClause}
-         )
-       LIMIT 10`,
-      [...ts.params, `%${escapeLike(dpi.trim())}%`]
-    );
+         )`;
+  try {
+    const result = porPlaca
+      ? await pool.query(
+          `SELECT v.id, v.nombre, v.numero_dpi,
+                  (SELECT veh.placa FROM vehiculos veh
+                    WHERE veh.visitante_id = v.id AND ${sqlPlacaNormalizada('veh.placa')} LIKE $${ts.params.length + 1}
+                    ORDER BY veh.created_at DESC LIMIT 1) AS placa
+             FROM visitantes v
+            WHERE EXISTS (SELECT 1 FROM vehiculos veh
+                           WHERE veh.visitante_id = v.id AND ${sqlPlacaNormalizada('veh.placa')} LIKE $${ts.params.length + 1})
+              AND ${alcance}
+            LIMIT 10`,
+          [...ts.params, `%${escapeLike(placaNorm)}%`]
+        )
+      : await pool.query(
+          `SELECT v.id, v.nombre, v.numero_dpi FROM visitantes v
+           WHERE v.numero_dpi ILIKE $${ts.params.length + 1}
+             AND ${alcance}
+           LIMIT 10`,
+          [...ts.params, `%${escapeLike((dpi as string).trim())}%`]
+        );
     res.json(result.rows);
   } catch (error) {
     serverError(res, error, 'Error al buscar visitantes');

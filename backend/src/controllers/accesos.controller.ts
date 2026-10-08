@@ -120,13 +120,16 @@ export const registrarAcceso = async (req: Request, res: Response) => {
 
     // Blacklist check — antes del upsert de visitante para no escribir (y
     // luego revertir) esa fila cuando el registro se va a rechazar igual.
-    const ban = await checkBlacklist(numero_dpi, sucursal_id);
+    // Por DPI o por PLACA del vehículo: misma respuesta (403 «Visitante en blacklist») para
+    // que la web y la app de escritorio la traten igual; `motivo` dice cuál coincidió.
+    const ban = await checkBlacklist(numero_dpi, sucursal_id, placa);
     if (ban) {
       await client.query('ROLLBACK');
       return res.status(403).json({
         error:     'Visitante en blacklist',
         razon:     ban.razon,
         fecha_fin: ban.fecha_fin ?? null,
+        motivo:    ban.motivo ?? 'dpi',
       });
     }
 
