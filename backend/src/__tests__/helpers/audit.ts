@@ -29,3 +29,26 @@ export const esperarAuditoria = async (
   } while (Date.now() < limite);
   return filas;
 };
+
+/** Como `esperarAuditoria`, pero para acciones sin `:id` en la ruta (altas): busca por acción y usuario, la más reciente primero. */
+export const esperarAuditoriaDe = async (
+  accion: string,
+  usuarioId: string,
+  opts: { desde?: Date; timeoutMs?: number } = {},
+): Promise<any[]> => {
+  const { timeoutMs = 3000 } = opts;
+  const limite = Date.now() + timeoutMs;
+  let filas: any[] = [];
+  do {
+    filas = await q(
+      `SELECT id, usuario_id, accion, tabla_afectada, registro_id, ip_address, status_code, datos_nuevos, created_at
+         FROM audit_logs
+        WHERE accion = $1 AND usuario_id = $2
+        ORDER BY created_at DESC, id DESC`,
+      [accion, usuarioId],
+    );
+    if (filas.length >= 1) return filas;
+    await new Promise(r => setTimeout(r, 50));
+  } while (Date.now() < limite);
+  return filas;
+};
