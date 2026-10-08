@@ -247,7 +247,8 @@ describe('I-5 «Buscar visitante por DPI o placa»', () => {
       const r = await buscar('adminSucA1', `placa=${encodeURIComponent(p)}`);
       expect([p, r.status]).toEqual([p, 200]);
       expect(r.body).toHaveLength(1);
-      expect(r.body[0]).toMatchObject({ nombre: 'Buscable Por Placa', numero_dpi: dpi, placa: placaTecleada });
+      // La placa se guardó en su forma canónica aunque el agente la tecleó con guion.
+      expect(r.body[0]).toMatchObject({ nombre: 'Buscable Por Placa', numero_dpi: dpi, placa: 'P777ZZZ' });
     }
   });
 

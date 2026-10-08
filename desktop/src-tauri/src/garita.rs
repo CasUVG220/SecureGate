@@ -204,14 +204,14 @@ pub fn evaluar_visitante(
         )
         .optional()?;
 
-    let placa_norm = placa.map(|p| p.trim().to_uppercase()).filter(|p| !p.is_empty());
+    let placa_norm = placa.map(crate::placa::normalizar).filter(|p| !p.is_empty());
     let pre: Option<Preautorizacion> = conn
         .query_row(
             "SELECT id, residente_id, nombre_visitante, numero_dpi, placa, fecha_inicio, fecha_fin
              FROM preautorizaciones_local
              WHERE fecha_inicio <= ?1 AND fecha_fin IS NOT NULL AND fecha_fin >= ?1
                AND (?2 = '' OR residente_id = ?2)
-               AND (numero_dpi = ?3 OR (?4 IS NOT NULL AND UPPER(placa) = ?4))
+               AND (numero_dpi = ?3 OR (?4 IS NOT NULL AND placa = ?4))
              LIMIT 1",
             params![hoy, residente_id.unwrap_or(""), dpi, placa_norm],
             |r| {
@@ -265,7 +265,8 @@ pub fn encolar_acceso(conn: &Connection, agente_id: &str, a: &NuevoAcceso) -> Ap
 
     let id_cliente = uuid::Uuid::new_v4().to_string();
     let registrado_en = Utc::now().to_rfc3339();
-    let placa = a.placa.as_deref().map(|p| p.trim().to_uppercase()).filter(|p| !p.is_empty());
+    // El servidor guarda y compara la placa en su forma canónica; se manda así desde el origen.
+    let placa = a.placa.as_deref().map(crate::placa::normalizar).filter(|p| !p.is_empty());
     let payload = json!({
         "id_cliente": id_cliente,
         "registrado_en": registrado_en,
@@ -499,6 +500,30 @@ mod tests {
     }
 
     #[test]
+    fn la_preautorizacion_por_placa_coincide_con_cualquier_formato_tecleado() {
+        let c = db();
+        for p in ["P123ABC", "p-123abc", " p 123 abc "] {
+            assert!(evaluar_visitante(&c, "9", Some(p), Some("r2"), HOY, AHORA).unwrap().preautorizado, "{p:?}");
+        }
+        assert!(!evaluar_visitante(&c, "9", Some("P124ABC"), Some("r2"), HOY, AHORA).unwrap().preautorizado);
+    }
+
+    #[test]
+    fn el_acceso_encolado_lleva_la_placa_canonica() {
+        let c = db();
+        let id = encolar_acceso(&c, "agente-1", &NuevoAcceso {
+            nombre_visitante: "Conductor".into(), numero_dpi: "8800000000001".into(), residente_id: "r1".into(),
+            placa: Some(" p-321 qwe ".into()), notas: None, capturado_manualmente: false, invitacion_qr_id: None,
+        }).unwrap();
+        let (payload, columna): (String, String) = c
+            .query_row("SELECT payload, placa FROM accesos_pendientes WHERE id_cliente = ?1", [&id], |r| Ok((r.get(0)?, r.get(1)?)))
+            .unwrap();
+        let json: serde_json::Value = serde_json::from_str(&payload).unwrap();
+        assert_eq!(json["placa"], "P321QWE");
+        assert_eq!(columna, "P321QWE");
+    }
+
+    #[test]
     fn blacklist_por_placa_bloquea_con_cualquier_formato_y_sin_visitante() {
         let c = db();
         for p in ["P999XYZ", "p-999 xyz", "P-999XYZ"] {
@@ -662,7 +687,7 @@ mod tests {
         assert_eq!(payload["id_cliente"], id);
         assert_eq!(payload["agente_id"], "agente-1");
         assert_eq!(payload["nombre_visitante"], "Juan");
-        assert_eq!(payload["placa"], "P 123ABC");
+        assert_eq!(payload["placa"], "P123ABC", "la placa viaja en su forma canónica (sin espacios ni guiones)");
         assert_eq!(payload["capturado_manualmente"], true);
         assert!(payload["registrado_en"].as_str().unwrap().contains('T'));
         // Sin QR el campo viaja nulo, no ausente: el backend distingue.
