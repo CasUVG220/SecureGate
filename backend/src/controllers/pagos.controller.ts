@@ -294,6 +294,17 @@ export const pagarConTarjeta = async (req: Request, res: Response) => {
     const { id: residente_id, sucursal_id } = residente.rows[0];
     const estado = simularAutorizacionTarjeta(String(ultimos4));
 
+    // Una tarjeta rechazada NO es un pago: no se guarda en `pagos`. Antes cada intento
+    // fallido quedaba como una fila 'rechazado' que ensuciaba el historial del residente
+    // y del administrador y se colaba en los reportes. El intento no se pierde: la ruta
+    // lleva auditoría (PAGO_TARJETA_SIMULADO) con usuario, IP y este código 402.
+    if (estado === 'rechazado') {
+      return res.status(402).json({
+        error: 'Pago rechazado por el emisor. Intenta con otra tarjeta.',
+        estado: 'rechazado',
+      });
+    }
+
     await client.query('BEGIN');
 
     const result = await client.query(
@@ -307,16 +318,14 @@ export const pagarConTarjeta = async (req: Request, res: Response) => {
        String(ultimos4), usuario_id]
     );
 
-    // Una autorización aprobada liquida igual que un pago en efectivo aprobado.
-    if (estado === 'aprobado') {
-      await liquidarCargosReserva(client, residente_id);
-      await client.query(
-        `UPDATE residentes
-            SET estado_pago = 'al_dia', saldo_pendiente = 0, fecha_ultimo_pago = NOW()
-          WHERE id = $1`,
-        [residente_id]
-      );
-    }
+    // La autorización aprobada liquida igual que un pago en efectivo aprobado.
+    await liquidarCargosReserva(client, residente_id);
+    await client.query(
+      `UPDATE residentes
+          SET estado_pago = 'al_dia', saldo_pendiente = 0, fecha_ultimo_pago = NOW()
+        WHERE id = $1`,
+      [residente_id]
+    );
 
     await client.query('COMMIT');
     res.status(201).json(result.rows[0]);
@@ -326,6 +335,17 @@ export const pagarConTarjeta = async (req: Request, res: Response) => {
   } finally {
     client.release();
   }
+};
+
+/**
+ * ¿Está disponible el pago con tarjeta y es simulado? Lo consulta el portal del residente
+ * para decidir si muestra el botón y, SOLO en entornos de prueba, el aviso de «pago
+ * simulado». En producción con Visanet real `simulada` será false y el residente jamás
+ * verá textos de implementación.
+ */
+export const getEstadoTarjeta = (_req: Request, res: Response) => {
+  const simulada = process.env.PAGOS_TARJETA_SIMULADA === 'true';
+  res.json({ disponible: simulada, simulada });
 };
 
 export const getPendientesVerificacion = async (req: Request, res: Response) => {
