@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react';
 import { rellenar } from '../../components/charts/format';
 import {
-  getEmpresaStats, getSucursales, createSucursal, deleteSucursal, assignAdminSucursal,
-  type EmpresaStats, type Sucursal, type SucursalInput,
+  getEmpresaStats, getSucursales, getUsuarios, createSucursal, deleteSucursal, assignAdminSucursal,
+  type EmpresaStats, type Sucursal, type SucursalInput, type Usuario,
 } from '../../services/api';
 import { Skeleton, TableSkeleton } from '../../components/Skeleton';
-import { Button, ROW_ICON, RowActions, StatusText, useConfirmacion } from '../../components/ui';
+import { Button, Input, Modal, ROW_ICON, RowActions, Select, StatusText, useConfirmacion } from '../../components/ui';
+import TipoSucursalSelect from '../../components/TipoSucursalSelect';
+import { etiquetaTipoSucursal } from '../../utils/sucursal';
 import { ResumenCifrasEsqueleto } from '../../components/charts';
 import ResumenEmpresa from '../admin_empresa/ResumenEmpresa';
 import { useToast } from '../../components/Toast';
@@ -27,6 +29,7 @@ export default function EmpresaDetail({ empresaId, onBack }: Props) {
 
   const [stats, setStats]           = useState<EmpresaStats | null>(null);
   const [sucursales, setSucursales] = useState<Sucursal[]>([]);
+  const [usuarios, setUsuarios]     = useState<Usuario[]>([]);
   const [loading, setLoading]       = useState(true);
   const [error, setError]           = useState<string | null>(null);
   const [search, setSearch]         = useState('');
@@ -40,10 +43,11 @@ export default function EmpresaDetail({ empresaId, onBack }: Props) {
 
   const cargar = () => {
     setLoading(true);
-    Promise.all([getEmpresaStats(empresaId), getSucursales()])
-      .then(([s, all]) => {
+    Promise.all([getEmpresaStats(empresaId), getSucursales(), getUsuarios()])
+      .then(([s, all, usr]) => {
         setStats(s);
         setSucursales(all.filter(su => su.empresa_id === empresaId));
+        setUsuarios(usr);
       })
       .catch(() => setError(t('empDetail.noStats')))
       .finally(() => setLoading(false));
@@ -83,7 +87,6 @@ export default function EmpresaDetail({ empresaId, onBack }: Props) {
 
   const closeModal = () => {
     setModal('none');
-    setAdminTarget(null);
     setModalError(null);
   };
 
@@ -113,7 +116,7 @@ export default function EmpresaDetail({ empresaId, onBack }: Props) {
 
   const handleAssignAdmin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!adminTarget || !adminUserId.trim()) { setModalError('ID de usuario requerido'); return; }
+    if (!adminTarget || !adminUserId.trim()) { setModalError(t('ae.selectUser')); return; }
     setSaving(true); setModalError(null);
     try {
       await assignAdminSucursal(adminTarget.id, adminUserId.trim());
@@ -148,7 +151,7 @@ export default function EmpresaDetail({ empresaId, onBack }: Props) {
       </div>
 
       {error && (
-        <div className="bg-red-900/40 border border-red-700 rounded-lg px-4 py-3 text-red-300 text-sm">{error}</div>
+        <div className="bg-danger-900/40 border border-danger-700 rounded-lg px-4 py-3 text-danger-300 text-sm">{error}</div>
       )}
 
       {loading ? <ResumenCifrasEsqueleto filas={3} /> : stats ? <ResumenEmpresa stats={stats} /> : null}
@@ -158,7 +161,7 @@ export default function EmpresaDetail({ empresaId, onBack }: Props) {
         <div className="px-6 py-4 border-b border-gray-700 space-y-3">
           <div className="flex items-center justify-between">
             <h2 className="text-base font-semibold text-white">{t('empDetail.branches')}</h2>
-            <Button size="sm" onClick={openSucModal} icon={<span className="text-base leading-none" aria-hidden="true">+</span>}>
+            <Button size="sm" onClick={openSucModal}>
               {t('empDetail.newBranch')}
             </Button>
           </div>
@@ -167,7 +170,7 @@ export default function EmpresaDetail({ empresaId, onBack }: Props) {
             value={search}
             onChange={e => setSearch(e.target.value)}
             placeholder="Buscar sucursal…"
-            className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white placeholder-gray-400 text-sm focus:outline-none focus:border-blue-500"
+            className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white placeholder-gray-400 text-sm focus:outline-none focus:border-brand-500"
           />
         </div>
         <div className="overflow-x-auto">
@@ -198,7 +201,7 @@ export default function EmpresaDetail({ empresaId, onBack }: Props) {
                       <p className="font-medium text-white">{suc.nombre}</p>
                       {suc.direccion && <p className="text-xs text-gray-500">{suc.direccion}</p>}
                     </td>
-                    <td className="px-4 py-3 text-gray-400">{suc.tipo ?? '—'}</td>
+                    <td className="px-4 py-3 text-gray-400">{etiquetaTipoSucursal(t, suc.tipo)}</td>
                     <td className="px-4 py-3 text-center">{suc.total_residentes}</td>
                     <td className="px-4 py-3 text-center">{suc.total_agentes}</td>
                     <td className="px-4 py-3 text-center">
@@ -237,77 +240,51 @@ export default function EmpresaDetail({ empresaId, onBack }: Props) {
       </div>
 
       {/* Modal nueva sucursal */}
-      {modal === 'sucursal' && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm">
-          <div className="bg-gray-800 rounded-t-2xl sm:rounded-2xl shadow-2xl w-full sm:max-w-md p-6 space-y-5">
-            <h2 className="text-lg font-bold text-white">{t('empDetail.createBranch')}</h2>
-            {modalError && (
-              <div className="bg-red-900/40 border border-red-700 rounded-lg px-3 py-2 text-red-300 text-sm">{modalError}</div>
-            )}
-            <form onSubmit={handleCreateSucursal} className="space-y-4">
-              {([
-                ['nombre',    `${t('common.name')} *`,  'text'],
-                ['tipo',      t('empDetail.tipo'),       'text'],
-                ['direccion', t('empDetail.direction'),  'text'],
-              ] as [keyof SucursalInput, string, string][]).map(([name, label, type]) => (
-                name !== 'empresa_id' && (
-                  <div key={name}>
-                    <label className="block text-xs font-medium text-gray-400 mb-1">{label}</label>
-                    <input
-                      name={name}
-                      type={type}
-                      value={(sucForm[name] as string) ?? ''}
-                      onChange={handleSucChange}
-                      className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-                )
-              ))}
-              <div className="flex gap-3 pt-2">
-                <Button type="submit" loading={saving} className="flex-1">
-                  {t('empDetail.createBranch')}
-                </Button>
-                <Button variant="ghost" onClick={closeModal}>
-                  {t('common.cancel')}
-                </Button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      <Modal
+        open={modal === 'sucursal'}
+        onClose={closeModal}
+        dismissible={!saving}
+        title={t('empDetail.createBranch')}
+        footer={
+          <>
+            <Button variant="secondary" onClick={closeModal} disabled={saving}>{t('common.cancel')}</Button>
+            <Button type="submit" form="form-sucursal-detalle" loading={saving}>{t('empDetail.createBranch')}</Button>
+          </>
+        }
+      >
+        <form id="form-sucursal-detalle" onSubmit={handleCreateSucursal} className="space-y-4" noValidate>
+          {modalError && <p role="alert" className="rounded-lg border border-danger-500/30 bg-danger-500/10 px-4 py-3 text-sm font-medium text-danger-400">{modalError}</p>}
+          <Input name="nombre" label={t('common.name')} required autoFocus value={sucForm.nombre} onChange={handleSucChange} />
+          <TipoSucursalSelect value={sucForm.tipo ?? ''} onChange={tipo => setSucForm(prev => ({ ...prev, tipo }))} />
+          <Input name="direccion" label={t('empDetail.direction')} value={sucForm.direccion ?? ''} onChange={handleSucChange} />
+        </form>
+      </Modal>
 
-      {/* Modal asignar admin */}
-      {modal === 'admin' && adminTarget && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm">
-          <div className="bg-gray-800 rounded-t-2xl sm:rounded-2xl shadow-2xl w-full sm:max-w-sm p-6 space-y-5">
-            <h2 className="text-lg font-bold text-white">{t('empDetail.assignAdmin')}</h2>
-            <p className="text-sm text-gray-400">{t('empDetail.branchLabel')} <span className="text-white font-medium">{adminTarget.nombre}</span></p>
-            {modalError && (
-              <div className="bg-red-900/40 border border-red-700 rounded-lg px-3 py-2 text-red-300 text-sm">{modalError}</div>
-            )}
-            <form onSubmit={handleAssignAdmin} className="space-y-4">
-              <div>
-                <label className="block text-xs font-medium text-gray-400 mb-1">{t('empDetail.userId')}</label>
-                <input
-                  type="text"
-                  value={adminUserId}
-                  onChange={e => setAdminUserId(e.target.value)}
-                  placeholder={t('empDetail.userUuid')}
-                  className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-              <div className="flex gap-3 pt-2">
-                <Button type="submit" loading={saving} className="flex-1">
-                  {t('empDetail.assign')}
-                </Button>
-                <Button variant="ghost" onClick={closeModal}>
-                  {t('common.cancel')}
-                </Button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      {/* Modal asignar admin: se elige a la persona de la lista, no se pega su identificador */}
+      <Modal
+        open={modal === 'admin'}
+        onClose={closeModal}
+        dismissible={!saving}
+        size="sm"
+        title={t('empDetail.assignAdmin')}
+        description={adminTarget ? `${t('empDetail.branchLabel')} ${adminTarget.nombre}` : undefined}
+        footer={
+          <>
+            <Button variant="secondary" onClick={closeModal} disabled={saving}>{t('common.cancel')}</Button>
+            <Button type="submit" form="form-admin-detalle" loading={saving}>{t('empDetail.assign')}</Button>
+          </>
+        }
+      >
+        <form id="form-admin-detalle" onSubmit={handleAssignAdmin} className="space-y-4" noValidate>
+          {modalError && <p role="alert" className="rounded-lg border border-danger-500/30 bg-danger-500/10 px-4 py-3 text-sm font-medium text-danger-400">{modalError}</p>}
+          <Select label={t('ae.selectUser')} value={adminUserId} onChange={e => setAdminUserId(e.target.value)}>
+            <option value="">{t('ae.selectUser')}</option>
+            {usuarios.filter(u => u.activo && u.rol !== 'owner' && u.rol !== 'residente').map(u => (
+              <option key={u.id} value={u.id}>{u.nombre} ({u.email})</option>
+            ))}
+          </Select>
+        </form>
+      </Modal>
       {dialogo}
     </div>
   );

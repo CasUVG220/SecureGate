@@ -233,9 +233,9 @@ export default function ResidentePage({ requestedTab, tabNonce = 0 }: ResidenteP
   };
 
   const QR_ESTADO_BADGE: Record<string, string> = {
-    active:    'bg-green-900/40 text-green-400',
+    active:    'bg-success-900/40 text-success-400',
     expired:   'bg-gray-700 text-gray-300',
-    exhausted: 'bg-amber-900/50 text-amber-400',
+    exhausted: 'bg-warning-900/50 text-warning-400',
   };
   const QR_ESTADO_LABEL: Record<string, string> = {
     active:    t('qr.statusActive'),
@@ -427,7 +427,7 @@ export default function ResidentePage({ requestedTab, tabNonce = 0 }: ResidenteP
         <div className="mt-5 grid grid-cols-1 gap-4 border-t border-white/10 pt-5 sm:grid-cols-2">
           <div>
             <p className="text-gray-400 text-xs">{t('portal.pendingBalance')}</p>
-            <p className={`text-xl font-semibold mt-0.5 ${saldo > 0 ? 'text-red-400' : 'text-green-400'}`}>
+            <p className={`text-xl font-semibold mt-0.5 ${saldo > 0 ? 'text-danger-400' : 'text-success-400'}`}>
               Q{saldo.toFixed(2)}
             </p>
             {saldo > 0 && (
@@ -462,7 +462,7 @@ export default function ResidentePage({ requestedTab, tabNonce = 0 }: ResidenteP
               ? t('qr.tabTitle')
               : t('tickets.myTickets')}
             {tabKey === 'solicitudes' && ticketsUnread > 0 && (
-              <span className="absolute top-1.5 right-2 min-w-[16px] h-4 px-1 flex items-center justify-center rounded-full bg-red-600 text-white text-[10px] font-bold leading-none">
+              <span className="absolute top-1.5 right-2 min-w-[16px] h-4 px-1 flex items-center justify-center rounded-full bg-danger-600 text-white text-[10px] font-bold leading-none">
                 {ticketsUnread > 9 ? '9+' : ticketsUnread}
               </span>
             )}
@@ -495,7 +495,7 @@ export default function ResidentePage({ requestedTab, tabNonce = 0 }: ResidenteP
                 </ul>
                 <div className="flex justify-between gap-3 text-sm border-t border-gray-700 pt-2">
                   <span className="font-semibold text-gray-300">{t('reservas.monthTotal')}</span>
-                  <span className="font-bold text-emerald-400">
+                  <span className="font-bold text-success-400">
                     Q{resumenMes.total_pendiente.toFixed(2)}
                   </span>
                 </div>
@@ -509,7 +509,7 @@ export default function ResidentePage({ requestedTab, tabNonce = 0 }: ResidenteP
               <h2 className="text-base font-semibold text-white">{t('portal.makePayment')}</h2>
               <p className="text-sm text-gray-400 mt-0.5">
                 {t('portal.pendingBalance')}:{' '}
-                <span className={`font-semibold ${parseFloat(data!.saldo_pendiente) > 0 ? 'text-red-400' : 'text-emerald-400'}`}>
+                <span className={`font-semibold ${parseFloat(data!.saldo_pendiente) > 0 ? 'text-danger-400' : 'text-success-400'}`}>
                   Q{parseFloat(data!.saldo_pendiente).toFixed(2)}
                 </span>
               </p>
@@ -550,7 +550,7 @@ export default function ResidentePage({ requestedTab, tabNonce = 0 }: ResidenteP
                     className="text-gray-400 hover:text-white text-xl leading-none">✕</button>
                 </div>
                 {trfError && (
-                  <p className="text-sm text-red-400 bg-red-900/30 border border-red-700/40 rounded-lg px-3 py-2">{trfError}</p>
+                  <p className="text-sm text-danger-400 bg-danger-900/30 border border-danger-700/40 rounded-lg px-3 py-2">{trfError}</p>
                 )}
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <div>
@@ -582,7 +582,7 @@ export default function ResidentePage({ requestedTab, tabNonce = 0 }: ResidenteP
                 {/* Image upload */}
                 <div>
                   <label className="block text-xs text-gray-400 mb-1">{t('portal.receiptImage')}</label>
-                  <label className="flex min-h-12 w-full cursor-pointer items-center gap-2 rounded-xl border border-dashed border-gray-500 bg-gray-700 px-3 py-2.5 transition-colors hover:border-emerald-400">
+                  <label className="flex min-h-12 w-full cursor-pointer items-center gap-2 rounded-xl border border-dashed border-gray-500 bg-gray-700 px-3 py-2.5 transition-colors hover:border-success-400">
                     <svg className="w-4 h-4 text-gray-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                     </svg>
@@ -595,7 +595,7 @@ export default function ResidentePage({ requestedTab, tabNonce = 0 }: ResidenteP
                     <div className="mt-2 relative">
                       <img src={imgPreview} alt="Vista previa" className="w-full max-h-40 object-contain rounded-lg border border-gray-600 bg-gray-900" />
                       <button type="button" onClick={() => { setImgBase64(null); setImgPreview(null); }}
-                        className="absolute top-1 right-1 bg-gray-900/80 hover:bg-red-900/80 text-gray-300 hover:text-red-300 rounded-full w-6 h-6 flex items-center justify-center text-xs transition-colors">
+                        className="absolute top-1 right-1 bg-gray-900/80 hover:bg-danger-900/80 text-gray-300 hover:text-danger-300 rounded-full w-6 h-6 flex items-center justify-center text-xs transition-colors">
                         ✕
                       </button>
                     </div>
@@ -630,8 +630,8 @@ export default function ResidentePage({ requestedTab, tabNonce = 0 }: ResidenteP
               <div className="space-y-3">
                 {misPagos.filter(p => p.estado !== 'rechazado').map(p => (
                   <div key={p.id} className="sg-card flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:gap-4">
-                    <div className="w-10 h-10 bg-emerald-900/40 rounded-full flex items-center justify-center border border-emerald-700/40 shrink-0">
-                      <svg className="w-5 h-5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <div className="w-10 h-10 bg-success-900/40 rounded-full flex items-center justify-center border border-success-700/40 shrink-0">
+                      <svg className="w-5 h-5 text-success-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                       </svg>
                     </div>
@@ -872,7 +872,7 @@ export default function ResidentePage({ requestedTab, tabNonce = 0 }: ResidenteP
                             {v.timestamp_salida ? (
                               <p>{t('portal.exit')}: {formatearFechaHoraCorta(v.timestamp_salida)}</p>
                             ) : (
-                              <span className="mt-1 inline-block rounded-full bg-blue-100 px-2 py-0.5 text-xs font-semibold text-blue-700">
+                              <span className="mt-1 inline-block rounded-full bg-brand-100 px-2 py-0.5 text-xs font-semibold text-brand-700">
                                 {t('portal.active')}
                               </span>
                             )}
@@ -905,7 +905,7 @@ export default function ResidentePage({ requestedTab, tabNonce = 0 }: ResidenteP
             </div>
             <button
               onClick={() => setShowQrCreate(true)}
-              className="bg-emerald-700 hover:bg-emerald-600 text-white font-semibold px-4 py-2 rounded-xl text-sm transition-colors"
+              className="bg-success-700 hover:bg-success-600 text-white font-semibold px-4 py-2 rounded-xl text-sm transition-colors"
             >
               {t('qr.newInvite')}
             </button>
@@ -925,7 +925,7 @@ export default function ResidentePage({ requestedTab, tabNonce = 0 }: ResidenteP
                   <div key={inv.id} className="sg-card flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
                     <div className="min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-semibold text-white truncate">
+                        <span className="font-semibold text-white truncate" title={inv.etiqueta || inv.nombre_visitante || undefined}>
                           {inv.etiqueta || (inv.tipo === 'individual' ? inv.nombre_visitante : t('qr.typeGroup'))}
                         </span>
                         <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${QR_ESTADO_BADGE[estado]}`}>
@@ -983,7 +983,7 @@ export default function ResidentePage({ requestedTab, tabNonce = 0 }: ResidenteP
             {!showTicketForm && (
               <button
                 onClick={() => { setShowTicketForm(true); setTicketError(null); }}
-                className="text-sm bg-emerald-700 hover:bg-emerald-600 text-white font-medium px-4 py-2 rounded-lg transition-colors"
+                className="text-sm bg-success-700 hover:bg-success-600 text-white font-medium px-4 py-2 rounded-lg transition-colors"
               >
                 {t('tickets.new')}
               </button>
@@ -995,7 +995,7 @@ export default function ResidentePage({ requestedTab, tabNonce = 0 }: ResidenteP
             <div className="sg-card space-y-4 p-5 sm:p-6">
               <h3 className="text-sm font-semibold text-white">{t('tickets.newTitle')}</h3>
               {ticketError && (
-                <div className="bg-red-900/40 border border-red-700 rounded-lg px-3 py-2 text-red-300 text-sm">{ticketError}</div>
+                <div className="bg-danger-900/40 border border-danger-700 rounded-lg px-3 py-2 text-danger-300 text-sm">{ticketError}</div>
               )}
               <div>
                 <label className="block text-xs text-gray-400 mb-1">{t('tickets.typeLabel')}</label>
@@ -1031,7 +1031,7 @@ export default function ResidentePage({ requestedTab, tabNonce = 0 }: ResidenteP
                 <button
                   onClick={handleCreateTicket}
                   disabled={ticketSaving}
-                  className="flex-1 bg-emerald-700 hover:bg-emerald-600 disabled:opacity-50 text-white font-semibold py-2 rounded-xl transition-colors flex items-center justify-center gap-2"
+                  className="flex-1 bg-success-700 hover:bg-success-600 disabled:opacity-50 text-white font-semibold py-2 rounded-xl transition-colors flex items-center justify-center gap-2"
                 >
                   {ticketSaving && <Spinner size={14} />}
                   {ticketSaving ? t('common.saving') : t('tickets.send')}
@@ -1057,12 +1057,12 @@ export default function ResidentePage({ requestedTab, tabNonce = 0 }: ResidenteP
                 <button
                   key={tk.id}
                   onClick={() => setSelectedTicket(tk.id)}
-                  className="sg-card w-full text-left p-4 transition hover:border-emerald-500/40 hover:bg-gray-700/60"
+                  className="sg-card w-full text-left p-4 transition hover:border-success-500/40 hover:bg-gray-700/60"
                 >
                   <div className="flex items-center gap-2">
-                    <span className="text-white font-medium text-sm flex-1 truncate">{tk.titulo}</span>
+                    <span className="text-white font-medium text-sm flex-1 truncate" title={tk.titulo}>{tk.titulo}</span>
                     {Number(tk.no_leidos) > 0 && (
-                      <span className="min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full bg-red-600 text-white text-[10px] font-bold">
+                      <span className="min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full bg-danger-600 text-white text-[10px] font-bold">
                         {Number(tk.no_leidos)}
                       </span>
                     )}
@@ -1074,7 +1074,7 @@ export default function ResidentePage({ requestedTab, tabNonce = 0 }: ResidenteP
                     <span className="text-[11px] text-gray-400">{t(TIPO_LABEL[tk.tipo])}</span>
                   </div>
                   {tk.ultimo_mensaje && (
-                    <p className="text-xs text-gray-500 mt-1 truncate">{tk.ultimo_mensaje}</p>
+                    <p className="text-xs text-gray-400 mt-1 truncate" title={tk.ultimo_mensaje}>{tk.ultimo_mensaje}</p>
                   )}
                 </button>
               ))}

@@ -197,7 +197,7 @@ export default function SalidaPage() {
                   onClick={handleToggleCamera}
                   className={`flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors ${
                     cameraOpen
-                      ? 'bg-red-700 hover:bg-red-600 text-white'
+                      ? 'bg-danger-700 hover:bg-danger-600 text-white'
                       : 'bg-gray-700 hover:bg-gray-600 text-gray-300'
                   }`}
                 >
@@ -220,7 +220,7 @@ export default function SalidaPage() {
                   <canvas ref={canvasRef} className="hidden" />
                 </div>
                 {ocrMsg && (
-                  <p className={`text-xs px-2 py-1 rounded ${ocrMsg.startsWith('Placa') ? 'text-green-400' : 'text-amber-400'}`}>
+                  <p className={`text-xs px-2 py-1 rounded ${ocrMsg.startsWith('Placa') ? 'text-success-400' : 'text-warning-400'}`}>
                     {ocrMsg}
                   </p>
                 )}
@@ -252,7 +252,7 @@ export default function SalidaPage() {
 
           {/* Error */}
           {error && (
-            <div className="bg-red-50 border border-red-300 rounded-xl px-5 py-4 text-red-700 text-sm">
+            <div className="bg-danger-50 border border-danger-300 rounded-xl px-5 py-4 text-danger-700 text-sm">
               {error}
             </div>
           )}
@@ -298,7 +298,7 @@ export default function SalidaPage() {
               </div>
 
               {error && (
-                <div className="bg-red-50 border border-red-300 rounded-lg px-4 py-3 text-red-700 text-sm">
+                <div className="bg-danger-50 border border-danger-300 rounded-lg px-4 py-3 text-danger-700 text-sm">
                   {error}
                 </div>
               )}
@@ -316,9 +316,9 @@ export default function SalidaPage() {
           {/* Success */}
           {salidaOk && (
             <div className="space-y-4">
-              <div className="bg-green-50 border border-green-300 rounded-xl p-6">
-                <h3 className="text-green-700 font-bold text-lg mb-1">{t('exit.exitOkTitle')}</h3>
-                <p className="text-green-600 text-sm">
+              <div className="bg-success-50 border border-success-300 rounded-xl p-6">
+                <h3 className="text-success-700 font-bold text-lg mb-1">{t('exit.exitOkTitle')}</h3>
+                <p className="text-success-600 text-sm">
                   {t('exit.exitOkDesc')} <strong className="uppercase">{formatearPlaca(placa)}</strong>
                 </p>
               </div>

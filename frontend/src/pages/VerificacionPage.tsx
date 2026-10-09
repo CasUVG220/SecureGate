@@ -148,7 +148,7 @@ export default function VerificacionPage() {
             {/* Navigation */}
             <div className="flex items-center justify-between px-5 py-3 border-b border-gray-700">
               <div className="flex items-center gap-2 text-sm text-gray-300">
-                <svg className="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-4 h-4 text-success-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                 </svg>
                 {t('verification.receipt')}
@@ -193,15 +193,15 @@ export default function VerificacionPage() {
                     </div>
                     <div className="flex justify-between">
                       <span className="text-gray-400">{t('common.amount')}:</span>
-                      <span className="text-emerald-400 font-bold">Q{monto.toFixed(2)}</span>
+                      <span className="text-success-400 font-bold">Q{monto.toFixed(2)}</span>
                     </div>
                   </div>
                 </div>
               ) : (
                 <div className="border-2 border-dashed border-gray-600 rounded-xl p-6 bg-gray-900/40 space-y-4">
                   <div className="flex flex-col items-center text-center gap-2">
-                    <div className="w-14 h-14 bg-emerald-900/40 rounded-full flex items-center justify-center border border-emerald-700/40">
-                      <svg className="w-7 h-7 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <div className="w-14 h-14 bg-success-900/40 rounded-full flex items-center justify-center border border-success-700/40">
+                      <svg className="w-7 h-7 text-success-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                       </svg>
                     </div>
@@ -221,7 +221,7 @@ export default function VerificacionPage() {
                     </div>
                     <div className="flex justify-between">
                       <span className="text-gray-400">{t('common.amount')}:</span>
-                      <span className="text-emerald-400 font-bold">Q{monto.toFixed(2)}</span>
+                      <span className="text-success-400 font-bold">Q{monto.toFixed(2)}</span>
                     </div>
                   </div>
                   <div className="text-center pt-2">
@@ -269,11 +269,11 @@ export default function VerificacionPage() {
             <div className="grid grid-cols-2 gap-4 border-t border-gray-700 pt-4">
               <div>
                 <p className="text-xs text-gray-400 mb-1">{t('verification.reportedAmount')}</p>
-                <p className="text-2xl font-bold text-emerald-400">Q{monto.toFixed(2)}</p>
+                <p className="text-2xl font-bold text-success-400">Q{monto.toFixed(2)}</p>
               </div>
               <div>
                 <p className="text-xs text-gray-400 mb-1">{t('verification.currentBalance')}</p>
-                <p className={`text-2xl font-bold ${saldo > 0 ? 'text-red-400' : 'text-emerald-400'}`}>
+                <p className={`text-2xl font-bold ${saldo > 0 ? 'text-danger-400' : 'text-success-400'}`}>
                   Q{saldo.toFixed(2)}
                 </p>
               </div>
@@ -312,14 +312,14 @@ export default function VerificacionPage() {
 
             {/* Coverage badge */}
             {cubre ? (
-              <div className="flex items-center gap-2 text-emerald-400 text-sm bg-emerald-900/30 border border-emerald-700/40 rounded-xl px-4 py-2.5">
+              <div className="flex items-center gap-2 text-success-400 text-sm bg-success-900/30 border border-success-700/40 rounded-xl px-4 py-2.5">
                 <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
                 {t('verification.coversSaldo')}
               </div>
             ) : (
-              <div className="flex items-center gap-2 text-amber-400 text-sm bg-amber-900/30 border border-amber-700/40 rounded-xl px-4 py-2.5">
+              <div className="flex items-center gap-2 text-warning-400 text-sm bg-warning-900/30 border border-warning-700/40 rounded-xl px-4 py-2.5">
                 <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                 </svg>
@@ -405,7 +405,7 @@ export default function VerificacionPage() {
               onClick={() => { setSelected(i); resetRechazo(); }}
               className={`shrink-0 w-48 rounded-xl p-3 text-left transition-colors border ${
                 i === selected
-                  ? 'border-blue-500 bg-blue-900/30'
+                  ? 'border-brand-500 bg-brand-900/30'
                   : 'border-gray-700 bg-gray-700/40 hover:bg-gray-700/60'
               }`}
             >
@@ -416,18 +416,18 @@ export default function VerificacionPage() {
                   </svg>
                 </div>
                 <div className="min-w-0">
-                  <p className="text-white text-xs font-medium truncate">{p.residente_nombre.split(' ').slice(0, 2).join(' ')}...</p>
+                  <p className="text-white text-xs font-medium truncate" title={p.residente_nombre}>{p.residente_nombre}</p>
                   <p className="text-gray-400 text-xs">{p.numero_casa}</p>
                 </div>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-emerald-400 text-sm font-bold">Q{parseFloat(p.monto).toFixed(2)}</span>
+                <span className="text-success-400 text-sm font-bold">Q{parseFloat(p.monto).toFixed(2)}</span>
                 <span className="text-gray-500 text-xs">
                   {formatearFecha(p.fecha_pago)}
                 </span>
               </div>
               {p.estado === 'rechazado' && p.comentario_rechazo && (
-                <p className="text-xs text-red-400/80 italic mt-1 truncate">"{p.comentario_rechazo}"</p>
+                <p className="text-xs text-danger-400/80 italic mt-1 truncate" title={p.comentario_rechazo}>"{p.comentario_rechazo}"</p>
               )}
             </button>
           ))}

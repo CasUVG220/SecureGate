@@ -19,7 +19,6 @@ const EMPTY_UPDATE: ResidenteUpdate = { numero_casa: '', estado_pago: '', telefo
 
 const ICON_SEARCH = 'M21 21l-4.35-4.35M11 19a8 8 0 1 1 0-16 8 8 0 0 1 0 16z';
 const ICON_RESIDENTS = 'M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M9 7a4 4 0 1 0 0-8 4 4 0 0 0 0 8z';
-const ICON_PLUS = 'M12 5v14M5 12h14';
 const ICON_EDIT = 'M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z';
 const ICON_TRASH = 'M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M10 11v6M14 11v6';
 
@@ -196,12 +195,12 @@ export default function ResidentesPage() {
                 : <p>{`${filtered.length} / ${residentes.length}`}</p>}
             </div>
           </div>
-          <Button
-            icon={<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" aria-hidden="true"><path d={ICON_PLUS} /></svg>}
-            onClick={() => { setFormMode('create'); setFormError(null); }}
-          >
-            {t('residents.new')}
-          </Button>
+          {/* Con la lista vacía el botón vive en el estado vacío: no se repite arriba. */}
+          {(loading || filtrando || residentes.length > 0) && (
+            <Button onClick={() => { setFormMode('create'); setFormError(null); }}>
+              {t('residents.new')}
+            </Button>
+          )}
         </header>
 
         {error && (

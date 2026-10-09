@@ -20,7 +20,7 @@ function Campo({
 }
 
 const INPUT =
-  'w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-blue-500';
+  'w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-brand-500';
 
 export default function ConfiguracionReservasPage() {
   const { t } = useTranslation();
@@ -111,7 +111,7 @@ export default function ConfiguracionReservasPage() {
   if (loading) return <div className="sg-page-inner"><FormSkeleton fields={5} /></div>;
   if (error && !config) {
     return (
-      <div className="bg-red-900/40 border border-red-700 rounded-lg px-4 py-3 text-red-300 text-sm">
+      <div className="bg-danger-900/40 border border-danger-700 rounded-lg px-4 py-3 text-danger-300 text-sm">
         {error}
       </div>
     );
@@ -125,13 +125,13 @@ export default function ConfiguracionReservasPage() {
       </div>
 
       {esDefault && (
-        <div className="bg-blue-900/30 border border-blue-700/50 rounded-lg px-4 py-3 text-blue-300 text-sm">
+        <div className="bg-brand-900/30 border border-brand-700/50 rounded-lg px-4 py-3 text-brand-300 text-sm">
           {t('reservas.usingDefaults')}
         </div>
       )}
 
       {formError && (
-        <div className="bg-red-900/40 border border-red-700 rounded-lg px-4 py-3 text-red-300 text-sm">
+        <div className="bg-danger-900/40 border border-danger-700 rounded-lg px-4 py-3 text-danger-300 text-sm">
           {formError}
         </div>
       )}

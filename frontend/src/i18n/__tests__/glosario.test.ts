@@ -12,6 +12,7 @@ import { translations } from '../translations';
  *   - «Estadísticas»  → Reportes
  *   - «preautorización» → aviso de visita («Avisar de una visita», «Visitas avisadas»)   (SCRUM-114 / H10)
  *   - «admin» abreviado → administrador                                                 (SCRUM-114 / H09)
+ *   - «Logo URL»      → el logo se sube como archivo, no se escribe una URL                 (SCRUM-115 / H12)
  *   - «ingreso(s)»    → entrada(s) para las visitas; el dinero es «cobrado» / «recaudado»  (SCRUM-115 / H11)
  */
 const entradas = (idioma: 'es' | 'en') => Object.entries(translations[idioma]);
@@ -26,6 +27,8 @@ describe('glosario: términos descartados en la interfaz', () => {
     ['en', /\bstatistics\b/i, 'Statistics → Reports'],
     ['es', /preautoriz/i, 'preautorización → aviso de visita'],
     ['en', /pre-?authori[sz]/i, 'preauthorization → announced visit'],
+    ['es', /logo\s*url/i, 'Logo URL → Logo (se sube como archivo)'],
+    ['en', /logo\s*url/i, 'Logo URL → Logo (uploaded as a file)'],
     ['es', /\bingresos?\b/i, 'ingreso(s) → entrada(s) / cobrado'],
     ['es', /\badmins?\b/i, 'admin → administrador'],
     ['en', /\badmins?\b/i, 'admin → administrator'],

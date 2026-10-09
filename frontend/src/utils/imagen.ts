@@ -78,3 +78,59 @@ export function esImagenValida(valor: string | null | undefined): boolean {
   if (!valor) return false;
   return /^(https?:\/\/|data:image\/)/i.test(valor.trim());
 }
+
+// ── Logo de la empresa ──────────────────────────────────────────────────────
+
+/** Lado mayor del logo guardado: de sobra para una cabecera, y pesa unas decenas de KB. */
+export const LOGO_LADO = 256;
+/** Lo mismo que acepta el servidor (`LOGO_MAX_BYTES` del backend). */
+export const LOGO_MAX_BYTES = 200 * 1024;
+
+/** Bytes que ocupa una imagen dentro de un data URI en base64. */
+export const bytesDeDataUri = (dataUri: string): number => {
+  const base64 = dataUri.slice(dataUri.indexOf(',') + 1);
+  const relleno = base64.match(/=+$/)?.[0].length ?? 0;
+  return Math.floor((base64.length * 3) / 4) - relleno;
+};
+
+/**
+ * Convierte el archivo elegido en un logo listo para guardar: lo reescala a `LOGO_LADO` px y conserva la transparencia
+ * (PNG) salvo que el original sea JPG. Falla con un mensaje claro si no es una imagen aceptada o si aun reducida
+ * pesa más de lo que admite el servidor.
+ */
+export async function archivoALogo(file: File): Promise<string> {
+  if (!TIPOS_ACEPTADOS.includes(file.type)) throw new ImagenError('El logo debe ser JPG, PNG o WebP.');
+  if (file.size > MAX_BYTES) throw new ImagenError('El archivo no debe superar 5 MB.');
+  const original = await leerComoDataUrl(file);
+  let logo: string;
+  try {
+    logo = await reescalarLogo(original, file.type === 'image/jpeg' ? 'image/jpeg' : 'image/png');
+  } catch {
+    logo = original;      // sin canvas (tests con jsdom) se manda tal cual; el servidor decide
+  }
+  if (bytesDeDataUri(logo) > LOGO_MAX_BYTES) {
+    throw new ImagenError('El logo pesa demasiado, incluso reducido. Usa una imagen más sencilla (hasta 200 KB).');
+  }
+  return logo;
+}
+
+function reescalarLogo(dataUrl: string, salida: 'image/png' | 'image/jpeg'): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const escala = Math.min(1, LOGO_LADO / Math.max(img.width, img.height));
+      const w = Math.max(1, Math.round(img.width * escala));
+      const h = Math.max(1, Math.round(img.height * escala));
+      const canvas = document.createElement('canvas');
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return reject(new ImagenError('Canvas no disponible.'));
+      if (salida === 'image/jpeg') { ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, w, h); }
+      ctx.drawImage(img, 0, 0, w, h);
+      resolve(canvas.toDataURL(salida, salida === 'image/jpeg' ? CALIDAD_JPEG : undefined));
+    };
+    img.onerror = () => reject(new ImagenError('No se pudo procesar la imagen.'));
+    img.src = dataUrl;
+  });
+}

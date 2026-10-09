@@ -14,6 +14,7 @@ import { TableSkeleton, Spinner } from '../components/Skeleton';
 import { Button, ROW_ICON, RowActions, StatusText, useConfirmacion } from '../components/ui';
 import { useToast } from '../components/Toast';
 import { useTranslation } from '../i18n/useTranslation';
+import { plural } from '../i18n/plural';
 import { formatearFecha, formatearFechaHora } from '../utils/fecha';
 
 const FRECUENCIAS = [
@@ -23,9 +24,9 @@ const FRECUENCIAS = [
 ] as const;
 
 const FRECUENCIA_BADGE: Record<string, string> = {
-  mensual:   'bg-blue-900/50 text-blue-400',
-  quincenal: 'bg-amber-900/50 text-amber-400',
-  unica_vez: 'bg-green-900/50 text-green-400',
+  mensual:   'bg-brand-900/50 text-brand-400',
+  quincenal: 'bg-warning-900/50 text-warning-400',
+  unica_vez: 'bg-success-900/50 text-success-400',
 };
 
 const FRECUENCIA_LABEL: Record<string, string> = {
@@ -243,7 +244,7 @@ export default function ConfigCargosPage() {
       setCargosProg(prev => prev.map(c => c.id === confirmApply.id
         ? { ...c, ultimo_aplicado: new Date().toISOString(), veces_aplicado: c.veces_aplicado + 1 }
         : c));
-      showToast(`Cargo aplicado a ${result.aplicado_a} residentes — Total: Q${result.monto_total}`, 'success');
+      showToast(plural(t, 'config.appliedTo', result.aplicado_a, { monto: result.monto_total }), 'success');
       setConfirmApply(null);
     } catch (err: unknown) {
       if (err instanceof PeriodConflictError) {
@@ -313,19 +314,19 @@ export default function ConfigCargosPage() {
               </h3>
               <button onClick={closeMoraModal} className="text-gray-400 hover:text-white text-xl leading-none">✕</button>
             </div>
-            {moraFormError && <p className="text-sm text-red-400">{moraFormError}</p>}
+            {moraFormError && <p className="text-sm text-danger-400">{moraFormError}</p>}
             <div>
               <label className="block text-sm text-gray-400 mb-1">{t('config.nameLabel')} *</label>
               <input type="text" value={moraForm.nombre}
                 onChange={e => setMoraForm(p => ({ ...p, nombre: e.target.value }))}
                 placeholder={t('config.namePlaceholder')}
-                className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white placeholder-gray-400 focus:outline-none focus:border-blue-500 transition-colors" />
+                className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white placeholder-gray-400 focus:outline-none focus:border-brand-500 transition-colors" />
             </div>
             <div>
               <label className="block text-sm text-gray-400 mb-1">Frecuencia de cobro</label>
               <select value={moraForm.frecuencia}
                 onChange={e => setMoraForm(p => ({ ...p, frecuencia: e.target.value as 'mensual' | 'quincenal' | 'unica_vez' }))}
-                className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-blue-500 transition-colors">
+                className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-brand-500 transition-colors">
                 {FRECUENCIAS.map(f => <option key={f.value} value={f.value}>{f.label}</option>)}
               </select>
             </div>
@@ -334,7 +335,7 @@ export default function ConfigCargosPage() {
               <input type="number" min="1" step="0.01" value={moraForm.monto}
                 onChange={e => setMoraForm(p => ({ ...p, monto: e.target.value }))}
                 placeholder={t('config.amountPlaceholder')}
-                className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white placeholder-gray-400 focus:outline-none focus:border-blue-500 transition-colors" />
+                className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white placeholder-gray-400 focus:outline-none focus:border-brand-500 transition-colors" />
             </div>
 
             {/* Restringir visitas en mora */}
@@ -346,7 +347,7 @@ export default function ConfigCargosPage() {
                 aria-checked={moraForm.restringir_visitas_mora}
                 onClick={() => setMoraForm(p => ({ ...p, restringir_visitas_mora: !p.restringir_visitas_mora }))}
                 className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${
-                  moraForm.restringir_visitas_mora ? 'bg-blue-600' : 'bg-gray-600'
+                  moraForm.restringir_visitas_mora ? 'bg-brand-600' : 'bg-gray-600'
                 }`}
               >
                 <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
@@ -365,7 +366,7 @@ export default function ConfigCargosPage() {
                 disabled={!moraForm.restringir_visitas_mora}
                 onChange={e => setMoraForm(p => ({ ...p, costo_extra_visita_mora: e.target.value }))}
                 placeholder="0.00"
-                className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white placeholder-gray-400 focus:outline-none focus:border-blue-500 transition-colors disabled:opacity-40 disabled:cursor-not-allowed" />
+                className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white placeholder-gray-400 focus:outline-none focus:border-brand-500 transition-colors disabled:opacity-40 disabled:cursor-not-allowed" />
             </div>
 
             <div className="flex gap-3 pt-1">
@@ -390,13 +391,13 @@ export default function ConfigCargosPage() {
               </h3>
               <button onClick={closeProgModal} className="text-gray-400 hover:text-white text-xl leading-none">✕</button>
             </div>
-            {progFormError && <p className="text-sm text-red-400">{progFormError}</p>}
+            {progFormError && <p className="text-sm text-danger-400">{progFormError}</p>}
             <div>
               <label className="block text-sm text-gray-400 mb-1">Nombre *</label>
               <input type="text" value={progForm.nombre}
                 onChange={e => setProgForm(p => ({ ...p, nombre: e.target.value }))}
                 placeholder="Ej: Cuota de seguridad — Mayo 2026"
-                className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white placeholder-gray-400 focus:outline-none focus:border-blue-500 transition-colors" />
+                className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white placeholder-gray-400 focus:outline-none focus:border-brand-500 transition-colors" />
             </div>
             <div>
               <label className="block text-sm text-gray-400 mb-1">
@@ -405,13 +406,13 @@ export default function ConfigCargosPage() {
               <input type="text" value={progForm.descripcion}
                 onChange={e => setProgForm(p => ({ ...p, descripcion: e.target.value }))}
                 placeholder="Descripción del cargo"
-                className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white placeholder-gray-400 focus:outline-none focus:border-blue-500 transition-colors" />
+                className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white placeholder-gray-400 focus:outline-none focus:border-brand-500 transition-colors" />
             </div>
             <div>
               <label className="block text-sm text-gray-400 mb-1">Frecuencia</label>
               <select value={progForm.frecuencia}
                 onChange={e => setProgForm(p => ({ ...p, frecuencia: e.target.value as 'mensual' | 'quincenal' | 'unica_vez' }))}
-                className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-blue-500 transition-colors">
+                className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-brand-500 transition-colors">
                 {FRECUENCIAS.map(f => <option key={f.value} value={f.value}>{f.label}</option>)}
               </select>
             </div>
@@ -420,7 +421,7 @@ export default function ConfigCargosPage() {
               <input type="number" min="1" step="0.01" value={progForm.monto}
                 onChange={e => setProgForm(p => ({ ...p, monto: e.target.value }))}
                 placeholder="850.00"
-                className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white placeholder-gray-400 focus:outline-none focus:border-blue-500 transition-colors" />
+                className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white placeholder-gray-400 focus:outline-none focus:border-brand-500 transition-colors" />
             </div>
             <div className="flex gap-3 pt-1">
               <Button onClick={handleProgSave} loading={savingProg} className="flex-1">
@@ -439,11 +440,11 @@ export default function ConfigCargosPage() {
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
           <div className="bg-gray-800 rounded-2xl p-6 w-full max-w-sm space-y-4 shadow-2xl">
             <h3 className="text-white font-semibold">Confirmar aplicación</h3>
-            <div className="bg-amber-900/30 border border-amber-700/50 rounded-xl px-4 py-3 space-y-1.5">
+            <div className="bg-warning-900/30 border border-warning-700/50 rounded-xl px-4 py-3 space-y-1.5">
               <p className="text-warning-300 text-sm font-medium">
                 ¿Aplicar Q{parseFloat(confirmApply.monto).toFixed(2)} a todos los residentes activos?
               </p>
-              <p className="text-amber-300/80 text-xs">
+              <p className="text-warning-300/80 text-xs">
                 Esto sumará Q{parseFloat(confirmApply.monto).toFixed(2)} al saldo pendiente de cada residente y cambiará su estado a mora.
               </p>
             </div>
@@ -499,7 +500,7 @@ export default function ConfigCargosPage() {
                           {formatearFechaHora(h.applied_at)}
                         </td>
                         <td className="py-2.5 text-white font-medium text-xs text-center">{h.residentes}</td>
-                        <td className="py-2.5 text-emerald-400 font-semibold text-xs">
+                        <td className="py-2.5 text-success-400 font-semibold text-xs">
                           Q{parseFloat(h.monto_total).toFixed(2)}
                         </td>
                         <td className="py-2.5 text-gray-300 text-xs">{h.aplicado_por_nombre}</td>
@@ -520,7 +521,7 @@ export default function ConfigCargosPage() {
           <h1 className="mt-1 text-2xl font-bold tracking-tight text-white sm:text-3xl">{t('config.title')}</h1>
           <p className="mt-1 text-sm text-gray-400">{t('config.pageDescription')}</p>
         </div>
-        <span className="sg-status bg-emerald-500/10 text-emerald-400">Configuración activa</span>
+        <span className="sg-status bg-success-500/10 text-success-400">Configuración activa</span>
       </div>
 
       {/* ── Tab bar ───────────────────────────────────────────────────────── */}
@@ -552,7 +553,7 @@ export default function ConfigCargosPage() {
             <div>
               <h2 className="text-base font-semibold text-white">{t('config.subtitle')}</h2>
               <p className="text-xs text-gray-400 mt-0.5">Se aplican automáticamente al registrar acceso con mora</p>
-              <p className="text-xs text-blue-400 mt-1 flex items-center gap-1">
+              <p className="text-xs text-brand-400 mt-1 flex items-center gap-1">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
                 {t('config.autoChargeNote')}
               </p>
@@ -564,7 +565,7 @@ export default function ConfigCargosPage() {
           </div>
 
           {error && (
-            <div className="bg-red-900/40 border border-red-700 rounded-lg px-4 py-3 text-red-300 text-sm">{error}</div>
+            <div className="bg-danger-900/40 border border-danger-700 rounded-lg px-4 py-3 text-danger-300 text-sm">{error}</div>
           )}
 
           <div className="sg-card overflow-hidden max-w-3xl">
@@ -644,7 +645,7 @@ export default function ConfigCargosPage() {
           </div>
 
           {progError && (
-            <div className="bg-red-900/40 border border-red-700 rounded-lg px-4 py-3 text-red-300 text-sm">{progError}</div>
+            <div className="bg-danger-900/40 border border-danger-700 rounded-lg px-4 py-3 text-danger-300 text-sm">{progError}</div>
           )}
 
           <div className="sg-card overflow-hidden">
@@ -674,7 +675,7 @@ export default function ConfigCargosPage() {
                       <tr key={cp.id} className={`border-b border-gray-700/50 last:border-0 ${i % 2 === 0 ? '' : 'bg-gray-700/20'}`}>
                         <td className="px-5 py-3">
                           <p className={`font-medium ${cp.activo ? 'text-white' : 'text-gray-500 line-through'}`}>{cp.nombre}</p>
-                          {cp.descripcion && <p className="text-gray-500 text-xs mt-0.5 truncate max-w-[200px]">{cp.descripcion}</p>}
+                          {cp.descripcion && <p className="text-gray-400 text-xs mt-0.5 truncate max-w-[200px]" title={cp.descripcion}>{cp.descripcion}</p>}
                         </td>
                         <td className="px-5 py-3 text-gray-200 font-medium">Q{parseFloat(cp.monto).toFixed(2)}</td>
                         <td className="px-5 py-3">

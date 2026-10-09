@@ -20,8 +20,8 @@ export const TIPO_LABEL: Record<string, string> = {
 };
 
 export const ESTADO_BADGE: Record<string, string> = {
-  abierto:    'bg-blue-900/50 text-blue-400',
-  en_proceso: 'bg-amber-900/50 text-amber-400',
+  abierto:    'bg-brand-900/50 text-brand-400',
+  en_proceso: 'bg-warning-900/50 text-warning-400',
   cerrado:    'bg-gray-700 text-gray-400',
 };
 
@@ -131,7 +131,7 @@ export default function TicketChat({ ticketId, viewerRole, onActivity }: Props) 
       {/* Header */}
       <div className="px-4 py-3 border-b border-gray-700 flex items-center justify-between gap-2 shrink-0">
         <div className="min-w-0">
-          <p className="text-white font-semibold text-sm truncate">{ticket?.titulo ?? '…'}</p>
+          <p className="text-white font-semibold text-sm truncate" title={ticket?.titulo}>{ticket?.titulo ?? '…'}</p>
           {ticket && (
             <div className="flex items-center gap-2 mt-0.5">
               <span className="text-xs text-gray-400">{t(TIPO_LABEL[ticket.tipo] ?? 'tickets.tipoOtro')}</span>
@@ -145,7 +145,7 @@ export default function TicketChat({ ticketId, viewerRole, onActivity }: Props) 
           <button
             onClick={handleClose}
             disabled={closing}
-            className="text-xs bg-gray-700 hover:bg-red-900/60 hover:text-red-300 text-gray-300 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50 shrink-0"
+            className="text-xs bg-gray-700 hover:bg-danger-900/60 hover:text-danger-300 text-gray-300 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50 shrink-0"
           >
             {closing ? '…' : t('tickets.close')}
           </button>
@@ -181,7 +181,7 @@ export default function TicketChat({ ticketId, viewerRole, onActivity }: Props) 
                     <p className="text-[11px] font-semibold text-gray-300 mb-0.5">{m.autor_nombre}</p>
                   )}
                   <p className="text-sm whitespace-pre-line break-words">{m.mensaje}</p>
-                  <p className={`text-[10px] mt-1 ${mine ? 'text-blue-200' : 'text-gray-400'}`}>{fmt(m.created_at)}</p>
+                  <p className={`text-[10px] mt-1 ${mine ? 'text-brand-200' : 'text-gray-400'}`}>{fmt(m.created_at)}</p>
                 </div>
               </div>
             );
@@ -192,7 +192,7 @@ export default function TicketChat({ ticketId, viewerRole, onActivity }: Props) 
 
       {/* Input */}
       <div className="border-t border-gray-700 p-3 shrink-0">
-        {error && <p className="text-xs text-red-400 mb-2">{error}</p>}
+        {error && <p className="text-xs text-danger-400 mb-2">{error}</p>}
         {inputBloqueado ? (
           <p className="text-xs text-gray-500 text-center py-2">{t('tickets.closedNotice')}</p>
         ) : (
@@ -203,7 +203,7 @@ export default function TicketChat({ ticketId, viewerRole, onActivity }: Props) 
               onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
               rows={1}
               placeholder={t('tickets.messagePlaceholder')}
-              className="flex-1 bg-gray-700 border border-gray-600 rounded-xl px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 resize-none max-h-28"
+              className="flex-1 bg-gray-700 border border-gray-600 rounded-xl px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-brand-500 resize-none max-h-28"
             />
             <Button onClick={handleSend} disabled={!texto.trim()} loading={sending}>
               {t('tickets.send')}

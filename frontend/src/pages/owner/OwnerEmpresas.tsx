@@ -221,7 +221,7 @@ export default function OwnerEmpresas() {
       </div>
 
       {error && (
-        <div className="bg-red-900/40 border border-red-700 rounded-lg px-4 py-3 text-red-300 text-sm">{error}</div>
+        <div className="bg-danger-900/40 border border-danger-700 rounded-lg px-4 py-3 text-danger-300 text-sm">{error}</div>
       )}
 
       <div className="sg-card overflow-hidden">
@@ -249,15 +249,19 @@ export default function OwnerEmpresas() {
                 filtered.map(emp => (
                   <tr key={emp.id} className="border-b border-gray-700/40 last:border-0 hover:bg-gray-700/20 transition-colors">
                     <td className="px-4 py-3">
-                      <p className="font-medium text-white">{emp.nombre}</p>
-                      {emp.logo_url && (
-                        <p className="text-xs text-gray-500 truncate max-w-xs">{emp.logo_url}</p>
-                      )}
-                      {emp.activo && emp.tiene_admin === false && (
-                        <p className="mt-1">
-                          <StatusText kind="warn">{t(emp.invitacion_pendiente ? 'sinAdmin.invited' : 'sinAdmin.none')}</StatusText>
-                        </p>
-                      )}
+                      <div className="flex items-center gap-3">
+                        {emp.logo_url && (
+                          <img src={emp.logo_url} alt="" className="h-9 w-9 shrink-0 rounded-md border border-gray-600 bg-white object-contain" />
+                        )}
+                        <div className="min-w-0">
+                          <p className="font-medium text-white">{emp.nombre}</p>
+                          {emp.activo && emp.tiene_admin === false && (
+                            <p className="mt-1">
+                              <StatusText kind="warn">{t(emp.invitacion_pendiente ? 'sinAdmin.invited' : 'sinAdmin.none')}</StatusText>
+                            </p>
+                          )}
+                        </div>
+                      </div>
                     </td>
                     <td className="px-4 py-3 text-gray-400">{emp.nit ?? '—'}</td>
                     <td className="px-4 py-3 text-center">{emp.total_sucursales}</td>

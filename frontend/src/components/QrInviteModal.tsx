@@ -199,7 +199,7 @@ export default function QrInviteModal({ invitacion, onClose, onCreated }: Props)
         ) : (
           <form onSubmit={handleCrear} className="space-y-4">
             {formError && (
-              <div className="bg-red-900/40 border border-red-700 rounded-lg px-3 py-2 text-red-300 text-sm">
+              <div className="bg-danger-900/40 border border-danger-700 rounded-lg px-3 py-2 text-danger-300 text-sm">
                 {formError}
               </div>
             )}

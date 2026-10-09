@@ -135,7 +135,7 @@ export default function PreautPage() {
           <h1 className="text-xl font-bold text-white">{t('aviso.list.title')}</h1>
           <p className="mt-1 text-sm text-gray-400">{t('aviso.list.subtitle')}</p>
         </div>
-        <Button onClick={abrirNuevo}>{t('aviso.title')}</Button>
+        {(loading || visibles.length > 0) && <Button onClick={abrirNuevo}>{t('aviso.title')}</Button>}
       </div>
 
       {error && (

@@ -13,11 +13,11 @@ import { esImagenValida } from '../utils/imagen';
 import { formatearDia, formatearHora, hoyEnZona } from '../utils/fecha';
 
 const ESTADO_CLASS: Record<EstadoReserva, string> = {
-  pendiente_aprobacion: 'bg-yellow-900/40 text-yellow-400 border-yellow-700/40',
-  confirmada:           'bg-green-900/40 text-green-400 border-green-700/40',
+  pendiente_aprobacion: 'bg-warning-900/40 text-warning-400 border-warning-700/40',
+  confirmada:           'bg-success-900/40 text-success-400 border-success-700/40',
   cancelada:            'bg-gray-800 text-gray-400 border-gray-700',
-  rechazada:            'bg-red-900/40 text-red-400 border-red-700/40',
-  completada:           'bg-blue-900/40 text-blue-400 border-blue-700/40',
+  rechazada:            'bg-danger-900/40 text-danger-400 border-danger-700/40',
+  completada:           'bg-brand-900/40 text-brand-400 border-brand-700/40',
 };
 
 const ESTADO_LABEL_KEY: Record<EstadoReserva, string> = {
@@ -191,7 +191,7 @@ export default function ReservasPage() {
         </div>
         <div className="sg-card-muted px-4 py-3 text-sm text-gray-300">
           <span className="text-gray-500">{t('reservas.myReservations')}</span>
-          <span className="ml-2 font-bold text-emerald-300">{misReservas.length}</span>
+          <span className="ml-2 font-bold text-success-300">{misReservas.length}</span>
         </div>
       </div>
 
@@ -278,7 +278,7 @@ export default function ReservasPage() {
                     {fmtHora(o.hora_inicio)} – {fmtHora(o.hora_fin)}
                   </span>
                   {disp.buffer_minutos > 0 && (
-                    <span className="text-amber-400">
+                    <span className="text-warning-400">
                       {t('reservas.blocked')} {fmtHoraTs(o.bloqueo_desde)} – {fmtHoraTs(o.bloqueo_hasta)}
                     </span>
                   )}
@@ -287,7 +287,7 @@ export default function ReservasPage() {
             </ul>
           )}
           {disp && disp.buffer_minutos > 0 && (
-            <p className="text-xs text-amber-400/80 border-t border-gray-700 pt-2">
+            <p className="text-xs text-warning-400/80 border-t border-gray-700 pt-2">
               {t('reservas.bufferNotice')} {disp.buffer_minutos} {t('reservas.bufferNoticeMin')}
               {disp.buffer_motivo ? ` ${disp.buffer_motivo}` : ''}
             </p>
@@ -296,7 +296,7 @@ export default function ReservasPage() {
 
         <div className="flex items-center justify-between rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm">
           <span className="text-gray-400">{t('reservas.cost')}</span>
-          <span className="font-bold text-emerald-400">
+          <span className="font-bold text-success-400">
             {costoActual === null
               ? '—'
               : costoActual === 0
@@ -306,7 +306,7 @@ export default function ReservasPage() {
         </div>
 
         {formError && (
-          <div className="bg-red-900/40 border border-red-700 rounded-lg px-3 py-2 text-red-300 text-sm">
+          <div className="bg-danger-900/40 border border-danger-700 rounded-lg px-3 py-2 text-danger-300 text-sm">
             {formError}
           </div>
         )}
@@ -354,7 +354,7 @@ export default function ReservasPage() {
                   ? `Q${parseFloat(r.monto_cargo).toFixed(2)}`
                   : t('reservas.free')}
                 {r.reembolso_aplicado !== null && (
-                  <span className="text-emerald-400">
+                  <span className="text-success-400">
                     {' '}· {t('reservas.refund')} {parseFloat(r.reembolso_aplicado)}%
                   </span>
                 )}
@@ -395,15 +395,15 @@ export default function ReservasPage() {
             {previewLoading ? (
               <SkeletonText lines={2} />
             ) : preview && !preview.permite_cancelacion ? (
-              <div className="bg-red-900/40 border border-red-700 rounded-lg px-3 py-2 text-red-300 text-sm">
+              <div className="bg-danger-900/40 border border-danger-700 rounded-lg px-3 py-2 text-danger-300 text-sm">
                 {t('reservas.cancelDisabled')}
               </div>
             ) : preview ? (
               <div
                 className={`rounded-lg px-3 py-2 text-sm border ${
                   preview.reembolso_aplicado > 0
-                    ? 'bg-emerald-900/30 border-emerald-700/50 text-emerald-300'
-                    : 'bg-amber-900/30 border-amber-700/50 text-amber-300'
+                    ? 'bg-success-900/30 border-success-700/50 text-success-300'
+                    : 'bg-warning-900/30 border-warning-700/50 text-warning-300'
                 }`}
               >
                 {preview.reembolso_aplicado > 0

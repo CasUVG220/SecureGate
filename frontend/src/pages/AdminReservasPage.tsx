@@ -13,11 +13,11 @@ import { usePolling } from '../hooks/usePolling';
 import { formatearDia } from '../utils/fecha';
 
 export const ESTADO_BADGE: Record<EstadoReserva, string> = {
-  pendiente_aprobacion: 'bg-amber-900/50 text-amber-400',
-  confirmada:           'bg-green-900/40 text-green-400',
+  pendiente_aprobacion: 'bg-warning-900/50 text-warning-400',
+  confirmada:           'bg-success-900/40 text-success-400',
   cancelada:            'bg-gray-700 text-gray-300',
-  rechazada:            'bg-red-900/60 text-red-400',
-  completada:           'bg-blue-900/50 text-blue-400',
+  rechazada:            'bg-danger-900/60 text-danger-400',
+  completada:           'bg-brand-900/50 text-brand-400',
 };
 
 export const ESTADO_LABEL_KEY: Record<EstadoReserva, string> = {
@@ -174,7 +174,7 @@ export default function AdminReservasPage() {
       </div>
 
       {error && (
-        <div className="bg-red-900/40 border border-red-700 rounded-lg px-4 py-3 text-red-300 text-sm">
+        <div className="bg-danger-900/40 border border-danger-700 rounded-lg px-4 py-3 text-danger-300 text-sm">
           {error}
         </div>
       )}
@@ -221,7 +221,7 @@ export default function AdminReservasPage() {
                         ? `Q${parseFloat(r.monto_cargo).toFixed(2)}`
                         : t('reservas.free')}
                       {r.reembolso_aplicado !== null && (
-                        <span className="block text-xs text-emerald-400">
+                        <span className="block text-xs text-success-400">
                           {t('reservas.refund')}: {parseFloat(r.reembolso_aplicado)}%
                         </span>
                       )}
@@ -233,7 +233,7 @@ export default function AdminReservasPage() {
                         {t(ESTADO_LABEL_KEY[r.estado])}
                       </span>
                       {r.motivo_cancelacion && (
-                        <span className="block text-xs text-gray-500 mt-0.5 max-w-[180px] truncate">
+                        <span className="block text-xs text-gray-400 mt-0.5 max-w-[180px] truncate" title={r.motivo_cancelacion}>
                           {r.motivo_cancelacion}
                         </span>
                       )}

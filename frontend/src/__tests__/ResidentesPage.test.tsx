@@ -62,7 +62,9 @@ describe('ResidentesPage', () => {
     const { container } = render(<ResidentesPage />);
     await screen.findByText('No hay residentes registrados.');
 
-    fireEvent.click(screen.getByText('+ Nuevo residente'));
+    // Con la lista vacía el botón para crear es el del estado vacío (no se repite arriba).
+    expect(screen.queryByText('+ Nuevo residente')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '+ Agregar el primero' }));
 
     fireEvent.change(container.querySelector('input[name="nombre"]')!, { target: { value: 'Nuevo Residente' } });
     fireEvent.change(container.querySelector('input[name="email"]')!, { target: { value: 'nuevo@test.com' } });

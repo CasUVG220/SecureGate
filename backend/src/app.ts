@@ -100,9 +100,12 @@ app.use(generalLimiter);
 const RUTAS_CON_IMAGEN = ['/api/ocr', '/api/areas', '/api/pagos/transferencia'];
 const jsonPequeno = express.json({ limit: '100kb' });
 const jsonConImagen = express.json({ limit: '8mb' });
+// Logo de empresa: una imagen de hasta 200 KB en base64 (~270 KB de texto). Margen propio, mucho menor que el de las fotos.
+const jsonConLogo = express.json({ limit: '400kb' });
 app.use((req, res, next) => {
   const conImagen = RUTAS_CON_IMAGEN.some(p => req.path === p || req.path.startsWith(`${p}/`));
-  return (conImagen ? jsonConImagen : jsonPequeno)(req, res, next);
+  const conLogo = req.path === '/api/empresas' || /^\/api\/empresas\/[^/]+$/.test(req.path);
+  return (conImagen ? jsonConImagen : conLogo ? jsonConLogo : jsonPequeno)(req, res, next);
 });
 app.use(express.urlencoded({ limit: '100kb', extended: false }));
 
