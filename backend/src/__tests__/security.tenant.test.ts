@@ -340,7 +340,7 @@ describe('preautorizaciones', () => {
     mockPool.query.mockResolvedValueOnce({ rows: [] });
     const res = makeRes();
     await createPreautorizacion(
-      req({ user: ADM_SUC, body: { residente_id: UUID_B, nombre_visitante: 'X', numero_dpi: '1', fecha_inicio: '2026-01-01' } }),
+      req({ user: ADM_SUC, body: { residente_id: UUID_B, nombre_visitante: 'X', numero_dpi: '1', fecha_inicio: '2026-01-01', fecha_fin: '2026-01-02' } }),
       res,
     );
     expect(res.status).toHaveBeenCalledWith(404);

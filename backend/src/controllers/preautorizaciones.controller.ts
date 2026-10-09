@@ -7,6 +7,56 @@ import { normalizarPlaca, placaPlausible, sqlPlacaNormalizada, PLACA_MIN, PLACA_
 const ERROR_PLACA = `La placa debe tener entre ${PLACA_MIN} y ${PLACA_MAX} letras o números`;
 
 /**
+ * Qué es una fila de `preautorizaciones` (SCRUM-114 / H10; en pantalla se llama «aviso de visita»):
+ *   - con `fecha_fin`: una visita avisada, vale para entrar entre `fecha_inicio` y `fecha_fin`;
+ *   - SIN `fecha_fin`: un «visitante guardado» de la libreta del residente (POST /mis). NO autoriza
+ *     entradas: ni `checkPreautorizacion`, ni `buscarPreautorizacion`, ni el padrón de la garita
+ *     (`/sync/garita`) ni la evaluación local del escritorio la toman en cuenta.
+ * Por eso el alta del administrador exige `fecha_fin`: sin ella la fila quedaría muerta sin avisar a nadie.
+ */
+const FECHA_RE = /^\d{4}-\d{2}-\d{2}$/;
+const esFecha = (v: unknown): v is string => {
+  if (typeof v !== 'string' || !FECHA_RE.test(v)) return false;
+  const d = new Date(`${v}T00:00:00Z`);
+  // `toISOString` lanza con una fecha imposible (2026-13-45); y «2026-02-31» se corre a marzo: se compara de vuelta.
+  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === v;
+};
+
+/** Devuelve el mensaje de error de las fechas del aviso, o null si están bien. */
+const errorDeFechas = (inicio: unknown, fin: unknown, finRequerida: boolean): string | null => {
+  if (!esFecha(inicio)) return 'fecha_inicio inválida: use el formato AAAA-MM-DD';
+  const hayFin = fin !== undefined && fin !== null && fin !== '';
+  if (!hayFin) return finRequerida ? 'fecha_fin es requerida: una visita sin fecha de fin no autoriza entradas' : null;
+  if (!esFecha(fin)) return 'fecha_fin inválida: use el formato AAAA-MM-DD';
+  if (fin < inicio) return 'La fecha de fin no puede ser anterior a la de inicio';
+  return null;
+};
+
+/**
+ * ¿Ya hay un aviso idéntico? Misma persona o vehículo (DPI y placa normalizada) y las mismas fechas.
+ * Dos visitantes distintos que llegan en el mismo carro no se pisan: tienen DPI distinto.
+ * Un visitante guardado (sin `fecha_fin`) se repite aunque se guarde otro día.
+ */
+const buscarDuplicada = async (
+  residenteId: string, dpi: string | null, placa: string, inicio: string, fin: string | null,
+): Promise<string | null> => {
+  const r = await pool.query(
+    `SELECT id FROM preautorizaciones
+      WHERE residente_id = $1 AND activo = TRUE
+        AND NULLIF(numero_dpi, '') IS NOT DISTINCT FROM NULLIF($2::text, '')
+        AND NULLIF(${sqlPlacaNormalizada('placa')}, '') IS NOT DISTINCT FROM NULLIF($3::text, '')
+        AND fecha_fin IS NOT DISTINCT FROM $4::date
+        AND ($4::date IS NULL OR fecha_inicio = $5::date)
+      LIMIT 1`,
+    [residenteId, dpi || null, placa || null, fin, inicio],
+  );
+  return r.rows[0]?.id ?? null;
+};
+
+const mensajeDuplicada = (fin: string | null) =>
+  fin ? 'Esa visita ya está avisada para esas fechas' : 'Ese visitante ya está guardado';
+
+/**
  * Verifica si existe una preautorización activa y vigente para el residente que
  * coincida con el DPI del visitante o, si la preautorización es sólo de placa,
  * con la placa.
@@ -119,6 +169,8 @@ export const createPreautorizacion = async (req: Request, res: Response) => {
   if (placa && !placaPlausible(placa)) {
     return res.status(400).json({ error: ERROR_PLACA });
   }
+  const errorFechas = errorDeFechas(fecha_inicio, fecha_fin, true);
+  if (errorFechas) return res.status(400).json({ error: errorFechas });
 
   try {
     // Get residente and their sucursal_id
@@ -132,6 +184,9 @@ export const createPreautorizacion = async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Residente no encontrado' });
     }
     const sucursal_id: string = residente.rows[0].sucursal_id;
+
+    const duplicada = await buscarDuplicada(residente_id, numero_dpi, placa, fecha_inicio, fecha_fin);
+    if (duplicada) return res.status(409).json({ error: mensajeDuplicada(fecha_fin), id: duplicada });
 
     const result = await pool.query(
       `INSERT INTO preautorizaciones
@@ -217,11 +272,17 @@ export const createMisPreautorizacion = async (req: Request, res: Response) => {
   if (placa && !placaPlausible(placa)) {
     return res.status(400).json({ error: ERROR_PLACA });
   }
+  // Sin fecha_fin se guarda el visitante en la libreta del residente (no autoriza entradas; ver arriba).
+  const errorFechas = errorDeFechas(fecha_inicio, fecha_fin, false);
+  if (errorFechas) return res.status(400).json({ error: errorFechas });
 
   const residente = await getResidenteIdFromUser(req.user!.id);
   if (!residente) return res.status(404).json({ error: 'Residente no encontrado' });
 
   try {
+    const duplicada = await buscarDuplicada(residente.id, numero_dpi, placa, fecha_inicio, fecha_fin || null);
+    if (duplicada) return res.status(409).json({ error: mensajeDuplicada(fecha_fin || null), id: duplicada });
+
     const result = await pool.query(
       `INSERT INTO preautorizaciones
          (sucursal_id, residente_id, nombre_visitante, numero_dpi, placa, fecha_inicio, fecha_fin)
