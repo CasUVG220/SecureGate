@@ -8,6 +8,7 @@
  * máquinas por huella de hardware; esto invita personas por correo.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { rellenar } from './charts/format';
 import {
   getInvitaciones, reenviarInvitacion, revocarInvitacion,
   type Empresa, type Invitacion, type InvitacionEstado, type Sucursal,
@@ -15,6 +16,7 @@ import {
 import {
   Badge, Button, DataTable, EmptyState, RowActions, ROW_ICON, useToast,
   type BadgeTone, type Column, type RowAction,
+  useConfirmacion,
 } from './ui';
 import InvitarAdminModal, { ICON_MAIL, type InvitacionesModo } from './InvitarAdminModal';
 import { useTranslation } from '../i18n/useTranslation';
@@ -43,6 +45,7 @@ const fecha = (iso: string, lang: string) =>
 export default function InvitacionesPanel({ modo, empresas = [], sucursales = [] }: Props) {
   const { t, language } = useTranslation();
   const showToast = useToast();
+  const { confirmar, dialogo } = useConfirmacion();
 
   const [invitaciones, setInvitaciones] = useState<Invitacion[]>([]);
   const [loading, setLoading] = useState(true);
@@ -68,7 +71,13 @@ export default function InvitacionesPanel({ modo, empresas = [], sucursales = []
   const abrir = () => { setReenviada(null); setOpen(true); };
 
   const revocar = async (inv: Invitacion) => {
-    if (!window.confirm(`${t('inv.confirmRevoke')} ${inv.email}?`)) return;
+    const ok = await confirmar({
+      title: rellenar(t('confirm.revokeInvitation.title'), { nombre: inv.email }),
+      message: t('confirm.revokeInvitation.message'),
+      confirmLabel: t('inv.action.revoke'),
+      tone: 'danger',
+    });
+    if (!ok) return;
     try {
       await revocarInvitacion(inv.id);
       showToast(t('inv.revoked'), 'warning');
@@ -147,6 +156,7 @@ export default function InvitacionesPanel({ modo, empresas = [], sucursales = []
         resultado={reenviada}
         onEnviada={cargar}
       />
+      {dialogo}
     </section>
   );
 }

@@ -437,7 +437,7 @@ export default function BlacklistPage() {
         </form>
       </Modal>
 
-      {/* Modal: quitar el bloqueo (sustituye a window.confirm) */}
+      {/* Modal: quitar el bloqueo */}
       <Modal
         open={quitando !== null}
         onClose={() => { if (!quitandoBusy) setQuitando(null); }}

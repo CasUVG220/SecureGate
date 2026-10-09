@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { rellenar } from '../components/charts/format';
 import {
   getResidentes, createResidente, updateResidente, deleteResidente,
   type Residente, type ResidenteInput, type ResidenteUpdate,
@@ -6,6 +7,7 @@ import {
 import {
   Badge, Button, DataTable, EmptyState, ESTADO_PAGO_TONE, Input, Modal, Select, useToast,
   type Column,
+  useConfirmacion,
 } from '../components/ui';
 import { Skeleton } from '../components/Skeleton';
 import { useTranslation } from '../i18n/useTranslation';
@@ -44,6 +46,7 @@ function IconButton({ path, label, tone, onClick }: { path: string; label: strin
 export default function ResidentesPage() {
   const showToast = useToast();
   const { t } = useTranslation();
+  const { confirmar, dialogo } = useConfirmacion();
 
   const BADGE_LABEL: Record<string, string> = {
     al_dia: t('residents.current'), mora: t('residents.inDebt'), pendiente: t('residents.pending'),
@@ -124,7 +127,13 @@ export default function ResidentesPage() {
   };
 
   const handleDelete = async (r: Residente) => {
-    if (!window.confirm(`${t('residents.confirmDelete')} ${r.numero_casa}?`)) return;
+    const ok = await confirmar({
+      title: rellenar(t('confirm.deleteResident.title'), { nombre: r.numero_casa }),
+      message: t('confirm.deleteResident.message'),
+      confirmLabel: t('common.delete'),
+      tone: 'danger',
+    });
+    if (!ok) return;
     try {
       await deleteResidente(r.id);
       cargar();
@@ -308,6 +317,7 @@ export default function ResidentesPage() {
           </div>
         </form>
       </Modal>
+      {dialogo}
     </div>
   );
 }

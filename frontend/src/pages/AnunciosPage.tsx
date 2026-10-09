@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { rellenar } from '../components/charts/format';
 import {
   getAnuncios, createAnuncio, updateAnuncio, deleteAnuncio,
   decodeTokenPayload,
   type Anuncio, type AnuncioPrioridad,
 } from '../services/api';
-import { Badge, Button, DataTable, EmptyState, Input, Modal, Textarea, useToast, type Column } from '../components/ui';
+import { Badge, Button, DataTable, EmptyState, Input, Modal, Textarea, useToast, type Column, useConfirmacion } from '../components/ui';
 import { useTranslation } from '../i18n/useTranslation';
 import { formatearDia, formatearFecha, hoyEnZona } from '../utils/fecha';
 
@@ -39,6 +40,7 @@ const EMPTY_FORM = {
 export default function AnunciosPage() {
   const showToast = useToast();
   const { t } = useTranslation();
+  const { confirmar, dialogo } = useConfirmacion();
 
   const sucursalId = (() => {
     const token = localStorage.getItem('token');
@@ -132,7 +134,13 @@ export default function AnunciosPage() {
   };
 
   const handleDelete = async (a: Anuncio) => {
-    if (!window.confirm(`${t('announce.confirmDelete')} "${a.titulo}"?`)) return;
+    const ok = await confirmar({
+      title: rellenar(t('confirm.deleteAnnouncement.title'), { nombre: a.titulo }),
+      message: t('confirm.deleteAnnouncement.message'),
+      confirmLabel: t('common.delete'),
+      tone: 'danger',
+    });
+    if (!ok) return;
     try {
       await deleteAnuncio(a.id);
       setAnuncios(prev => prev.filter(x => x.id !== a.id));
@@ -337,6 +345,7 @@ export default function AnunciosPage() {
           </div>
         </div>
       </Modal>
+      {dialogo}
     </div>
   );
 }

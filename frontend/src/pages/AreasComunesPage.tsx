@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
+import { rellenar } from '../components/charts/format';
 import {
   getAreas, createArea, updateArea, deleteArea,
   type AreaComun, type TarifaTipo,
 } from '../services/api';
 import { GridSkeleton, Spinner } from '../components/Skeleton';
 import { useToast } from '../components/Toast';
-import { Button, Modal, ROW_ICON, RowActions } from '../components/ui';
+import { Button, Modal, ROW_ICON, RowActions, useConfirmacion } from '../components/ui';
 import { useTranslation } from '../i18n/useTranslation';
 import { archivoADataUri, esImagenValida, ImagenError } from '../utils/imagen';
 
@@ -39,6 +40,7 @@ const EMPTY_FORM = {
 
 export default function AreasComunesPage() {
   const { t } = useTranslation();
+  const { confirmar, dialogo } = useConfirmacion();
   const showToast = useToast();
 
   const [areas, setAreas] = useState<AreaComun[]>([]);
@@ -141,7 +143,13 @@ export default function AreasComunesPage() {
   };
 
   const handleDelete = async (a: AreaComun) => {
-    if (!window.confirm(`${t('reservas.confirmDeleteArea')} "${a.nombre}"?`)) return;
+    const ok = await confirmar({
+      title: rellenar(t('confirm.deleteArea.title'), { nombre: a.nombre }),
+      message: t('confirm.deleteArea.message'),
+      confirmLabel: t('common.delete'),
+      tone: 'danger',
+    });
+    if (!ok) return;
     try {
       await deleteArea(a.id);
       setAreas(prev => prev.map(x => (x.id === a.id ? { ...x, activa: false } : x)));
@@ -392,6 +400,7 @@ export default function AreasComunesPage() {
 
           </div>
       </Modal>
+      {dialogo}
     </div>
   );
 }

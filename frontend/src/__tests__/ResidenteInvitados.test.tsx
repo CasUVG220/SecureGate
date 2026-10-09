@@ -116,12 +116,14 @@ describe('ResidentePage › Invitados', () => {
   });
 
   it('si no se puede eliminar, avisa en vez de callar', async () => {
-    m('deleteMisPreautorizacion').mockRejectedValue(new Error('Preautorización no encontrada'));
-    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    m('deleteMisPreautorizacion').mockRejectedValue(new Error('Aviso no encontrado'));
     const avisadas = await abrir();
     fireEvent.click(within(avisadas).getAllByRole('button', { name: 'Eliminar' })[0]);
+    const dialogo = await screen.findByRole('dialog', { name: '¿Eliminar la visita avisada de Taxi Don Beto?' });
+    expect(within(dialogo).getByText(/La garita ya no la esperará/)).toBeInTheDocument();
+    fireEvent.click(within(dialogo).getByRole('button', { name: 'Eliminar' }));
     await waitFor(() => expect(m('deleteMisPreautorizacion')).toHaveBeenCalledWith('a1'));
-    // La tarjeta se queda y no se pierde el mensaje (el aviso va al canal de avisos de la app).
+    // La tarjeta se queda (el error va al canal de avisos de la app, ya no se calla).
     expect(within(avisadas).getByText('Taxi Don Beto')).toBeInTheDocument();
   });
 });

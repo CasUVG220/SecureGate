@@ -21,7 +21,8 @@ export interface RowActionsProps {
   actions: RowAction[];
   /**
    * Cuántas acciones se muestran como botón antes de plegar el resto en el menú.
-   * El resto va al desplegable, siempre con su etiqueta escrita.
+   * El resto va al desplegable, siempre con su etiqueta escrita. Las de tono `danger`
+   * nunca se muestran en línea junto a otras: van siempre al menú.
    */
   inline?: number;
   /** Texto del menú para lectores de pantalla, p. ej. "Acciones de Residencial Demo". */
@@ -78,8 +79,13 @@ export default function RowActions({
   align = 'end',
   className,
 }: RowActionsProps) {
-  const visible  = actions.slice(0, inline);
-  const overflow = actions.slice(inline);
+  // Una acción destructiva nunca queda al lado de las rutinarias: si hay de las dos, las destructivas viven
+  // en el menú (separadas por una línea). Sola, o entre puras destructivas, se muestra como cualquier otra.
+  const destructivas = actions.filter(a => a.tone === 'danger');
+  const rutinarias   = actions.filter(a => a.tone !== 'danger');
+  const separar      = destructivas.length > 0 && rutinarias.length > 0;
+  const visible  = separar ? rutinarias.slice(0, inline) : actions.slice(0, inline);
+  const overflow = separar ? [...rutinarias.slice(inline), ...destructivas] : actions.slice(inline);
 
   const [open, setOpen] = useState(false);
   const [pos, setPos]   = useState<{ top: number; left: number } | null>(null);

@@ -125,28 +125,49 @@ describe('AdminReservasPage', () => {
     expect(screen.queryByText(/esperando tu aprobación/)).toBeNull();
   });
 
-  it('rechaza una reserva pendiente pasando el motivo que escribe el admin', async () => {
-    vi.spyOn(window, 'prompt').mockReturnValue('El salón está en mantenimiento');
+  /** «Rechazar» vive en el menú de la fila (lo destructivo no va al lado de «Aprobar»). */
+  const abrirRechazo = async () => {
+    fireEvent.click(await screen.findByRole('button', { name: 'Más acciones' }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Rechazar' }));
+    return screen.findByRole('dialog', { name: 'Rechazar la reserva' });
+  };
+
+  it('rechaza una reserva pendiente pasando el motivo que escribe el admin en el diálogo de la app', async () => {
+    const prompt = vi.spyOn(window, 'prompt');
     conPendientes([[reserva()], [reserva({ estado: 'rechazada' })]], [reserva()]);
     mockRechazar.mockResolvedValue(reserva({ estado: 'rechazada' }));
     renderPage();
 
-    fireEvent.click(await screen.findByText('Rechazar'));
+    const dialogo = await abrirRechazo();
+    expect(within(dialogo).getByText('Salón Social · A-01')).toBeInTheDocument();
+    fireEvent.change(within(dialogo).getByLabelText('Motivo del rechazo'), { target: { value: '  El salón está en mantenimiento ' } });
+    fireEvent.click(within(dialogo).getByRole('button', { name: 'Rechazar reserva' }));
 
     await waitFor(() =>
       expect(mockRechazar).toHaveBeenCalledWith('rsv1', 'El salón está en mantenimiento')
     );
     expect(await screen.findByText('Reserva rechazada')).toBeInTheDocument();
+    expect(prompt).not.toHaveBeenCalled();
   });
 
-  it('no rechaza nada si el admin cancela el prompt', async () => {
-    vi.spyOn(window, 'prompt').mockReturnValue(null);
+  it('el motivo es opcional: sin escribirlo se rechaza igual, sin motivo', async () => {
+    conPendientes([[reserva()], [reserva({ estado: 'rechazada' })]], [reserva()]);
+    mockRechazar.mockResolvedValue(reserva({ estado: 'rechazada' }));
+    renderPage();
+    const dialogo = await abrirRechazo();
+    fireEvent.click(within(dialogo).getByRole('button', { name: 'Rechazar reserva' }));
+    await waitFor(() => expect(mockRechazar).toHaveBeenCalledWith('rsv1', undefined));
+  });
+
+  it('no rechaza nada si el admin cancela el diálogo', async () => {
     mockGetReservas.mockResolvedValue([reserva()]);
     renderPage();
 
-    fireEvent.click(await screen.findByText('Rechazar'));
+    const dialogo = await abrirRechazo();
+    fireEvent.click(within(dialogo).getByRole('button', { name: 'Cancelar' }));
 
-    await waitFor(() => expect(mockRechazar).not.toHaveBeenCalled());
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(mockRechazar).not.toHaveBeenCalled();
   });
 
   it('no ofrece aprobar ni rechazar una reserva ya confirmada', async () => {

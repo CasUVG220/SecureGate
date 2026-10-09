@@ -4,7 +4,7 @@ import {
   type DashboardData, type Empresa,
 } from '../../services/api';
 import { TableSkeleton } from '../../components/Skeleton';
-import { Button, EmptyState, ROW_ICON, RowActions, StatusText } from '../../components/ui';
+import { Button, EmptyState, ROW_ICON, RowActions, StatusText, useConfirmacion } from '../../components/ui';
 import EmpresaModal from '../../components/EmpresaModal';
 import InvitarAdminModal from '../../components/InvitarAdminModal';
 import { AccesosPorHora, ResumenCifras, ResumenCifrasEsqueleto, comparar, fmtNumero, rellenar } from '../../components/charts';
@@ -20,6 +20,7 @@ interface Props {
 export default function OwnerDashboard({ onSelectEmpresa }: Props) {
   const showToast = useToast();
   const { t, language } = useTranslation();
+  const { confirmar, dialogo } = useConfirmacion();
 
   const [empresas, setEmpresas]   = useState<Empresa[]>([]);
   const [dash, setDash]           = useState<DashboardData | null>(null);
@@ -58,7 +59,13 @@ export default function OwnerDashboard({ onSelectEmpresa }: Props) {
   };
 
   const handleDeleteEmpresa = async (emp: Empresa) => {
-    if (!window.confirm(`${t('owner.confirmDeleteEmpresa')} "${emp.nombre}"?`)) return;
+    const ok = await confirmar({
+      title: rellenar(t('confirm.deleteCompany.title'), { nombre: emp.nombre }),
+      message: t('confirm.deleteCompany.message'),
+      confirmLabel: t('confirm.deleteCompany.action'),
+      tone: 'danger',
+    });
+    if (!ok) return;
     try {
       await deleteEmpresa(emp.id);
       cargar();
@@ -222,6 +229,7 @@ export default function OwnerDashboard({ onSelectEmpresa }: Props) {
         empresaFija={invitarDlg.empresa ? { id: invitarDlg.empresa.id, nombre: invitarDlg.empresa.nombre } : null}
         onEnviada={() => cargar()}
       />
+      {dialogo}
     </div>
   );
 }

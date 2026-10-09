@@ -15,6 +15,7 @@ import {
 import {
   Badge, Button, DataTable, EmptyState, Input, Modal, RowActions, Select, StatusText, useToast,
   type Column, type RowAction,
+  useConfirmacion,
 } from '../components/ui';
 import { useTranslation } from '../i18n/useTranslation';
 
@@ -42,6 +43,7 @@ function haceCuanto(iso: string | null, lang: string): string {
 
 export default function LicenciasPage() {
   const { t, language } = useTranslation();
+  const { confirmar, dialogo } = useConfirmacion();
   const showToast = useToast();
   const rol = useMemo(rolActual, []);
   // El admin de sucursal emite para la suya (la toma el backend del JWT);
@@ -99,12 +101,19 @@ export default function LicenciasPage() {
       await navigator.clipboard.writeText(codigo);
       showToast(t('lic.copied'), 'info');
     } catch {
-      window.prompt(t('lic.copy'), codigo);
+      // Sin permiso de portapapeles el código se deja a la vista, en un aviso que no se va solo, para copiarlo a mano.
+      showToast(`${t('lic.copyManually')} ${codigo}`, 'info', { persistente: true });
     }
   };
 
   const revocar = async (lic: Licencia) => {
-    if (!window.confirm(`${t('lic.confirmRevoke')} ${lic.etiqueta || lic.codigo_activacion}?`)) return;
+    const ok = await confirmar({
+      title: t('confirm.revokeLicense.title').replace('{nombre}', lic.etiqueta || lic.codigo_activacion),
+      message: t('confirm.revokeLicense.message'),
+      confirmLabel: t('lic.revoke'),
+      tone: 'danger',
+    });
+    if (!ok) return;
     try {
       await revocarLicencia(lic.id);
       showToast(t('lic.revoked'), 'warning');
@@ -244,6 +253,7 @@ export default function LicenciasPage() {
           </form>
         )}
       </Modal>
+      {dialogo}
     </div>
   );
 }

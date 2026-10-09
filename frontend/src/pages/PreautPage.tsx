@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { rellenar } from '../components/charts/format';
 import {
   getPreautorizaciones, deletePreautorizacion, getResidentes,
   type Preautorizacion, type Residente,
@@ -7,6 +8,7 @@ import { useToast } from '../components/Toast';
 import {
   Button, DataTable, EmptyState, ROW_ICON, RowActions, StatusText,
   type Column, type StatusKind,
+  useConfirmacion,
 } from '../components/ui';
 import AvisarVisitaModal, { type DatosVisita } from '../components/AvisarVisitaModal';
 import { useTranslation } from '../i18n/useTranslation';
@@ -35,6 +37,7 @@ const estadoDe = (p: Preautorizacion, hoy: string): Estado => {
 export default function PreautPage() {
   const showToast = useToast();
   const { t } = useTranslation();
+  const { confirmar, dialogo: dialogoConfirmar } = useConfirmacion();
   const [avisos, setAvisos]         = useState<Preautorizacion[]>([]);
   const [residentes, setResidentes] = useState<Residente[]>([]);
   const [loading, setLoading]       = useState(true);
@@ -60,11 +63,17 @@ export default function PreautPage() {
   const vencidas = useMemo(() => conFecha.filter(p => estadoDe(p, hoy) === 'vencida').length, [conFecha, hoy]);
   const visibles = verVencidas ? conFecha : conFecha.filter(p => estadoDe(p, hoy) !== 'vencida');
 
-  const handleEliminar = async (id: string) => {
-    if (!window.confirm(t('aviso.confirmDelete'))) return;
-    setDeletingId(id);
+  const handleEliminar = async (p: Preautorizacion) => {
+    const ok = await confirmar({
+      title: rellenar(t('confirm.deleteNotice.title'), { nombre: p.nombre_visitante }),
+      message: t('confirm.deleteNotice.message'),
+      confirmLabel: t('common.delete'),
+      tone: 'danger',
+    });
+    if (!ok) return;
+    setDeletingId(p.id);
     try {
-      await deletePreautorizacion(id);
+      await deletePreautorizacion(p.id);
       cargar();
       showToast(t('aviso.deleted'), 'warning');
     } catch (err: unknown) {
@@ -111,7 +120,7 @@ export default function PreautPage() {
             { id: 'otra-vez', label: t('aviso.again'), icon: ROW_ICON.clock, tone: 'primary', onClick: () => abrirOtraVez(p) },
             {
               id: 'eliminar', label: t('common.delete'), icon: ROW_ICON.trash, tone: 'danger',
-              loading: deletingId === p.id, onClick: () => handleEliminar(p.id),
+              loading: deletingId === p.id, onClick: () => handleEliminar(p),
             },
           ]}
         />
@@ -167,6 +176,7 @@ export default function PreautPage() {
         inicial={dialogo.inicial}
         onCreada={() => cargar()}
       />
+      {dialogoConfirmar}
     </div>
   );
 }

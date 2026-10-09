@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { rellenar } from '../components/charts/format';
 import {
   getConfigCargos, createConfigCargo, updateConfigCargo, deleteConfigCargo,
   getCargosProgramados, createCargoProgramado, updateCargoProgramado,
@@ -10,7 +11,7 @@ import {
   type HistorialAplicacion,
 } from '../services/api';
 import { TableSkeleton, Spinner } from '../components/Skeleton';
-import { Button, ROW_ICON, RowActions, StatusText } from '../components/ui';
+import { Button, ROW_ICON, RowActions, StatusText, useConfirmacion } from '../components/ui';
 import { useToast } from '../components/Toast';
 import { useTranslation } from '../i18n/useTranslation';
 import { formatearFecha, formatearFechaHora } from '../utils/fecha';
@@ -45,6 +46,7 @@ const EMPTY_PROG_FORM = { nombre: '', descripcion: '', monto: '', frecuencia: 'm
 export default function ConfigCargosPage() {
   const showToast = useToast();
   const { t } = useTranslation();
+  const { confirmar, dialogo } = useConfirmacion();
 
   const sucursalId = (() => {
     const token = localStorage.getItem('token');
@@ -171,7 +173,13 @@ export default function ConfigCargosPage() {
   };
 
   const handleMoraDelete = async (cfg: ConfigCargo) => {
-    if (!window.confirm(`${t('config.confirmDeactivate')} "${cfg.nombre}"?`)) return;
+    const ok = await confirmar({
+      title: rellenar(t('confirm.deactivateCharge.title'), { nombre: cfg.nombre }),
+      message: t('confirm.deactivateCharge.message'),
+      confirmLabel: t('common.deactivate'),
+      tone: 'danger',
+    });
+    if (!ok) return;
     try {
       await deleteConfigCargo(cfg.id);
       setConfigs(prev => prev.map(c => c.id === cfg.id ? { ...c, activo: false } : c));
@@ -262,7 +270,13 @@ export default function ConfigCargosPage() {
   };
 
   const handleProgDelete = async (cp: CargoProgramado) => {
-    if (!window.confirm(`¿Eliminar el cargo "${cp.nombre}"?`)) return;
+    const ok = await confirmar({
+      title: rellenar(t('confirm.deleteCharge.title'), { nombre: cp.nombre }),
+      message: t('confirm.deleteCharge.message'),
+      confirmLabel: t('common.delete'),
+      tone: 'danger',
+    });
+    if (!ok) return;
     try {
       await deleteCargoProgramado(cp.id);
       setCargosProg(prev => prev.map(c => c.id === cp.id ? { ...c, activo: false } : c));
@@ -710,6 +724,7 @@ export default function ConfigCargosPage() {
       {/* ════════════════════════════════════════════════════════════
           SECTION C — Reglas de uso del QR
       ════════════════════════════════════════════════════════════ */}
+      {dialogo}
     </div>
   );
 }
