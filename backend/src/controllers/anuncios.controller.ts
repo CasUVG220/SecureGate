@@ -21,7 +21,8 @@ export const getAnuncios = async (req: Request, res: Response) => {
               a.vigente_desde, a.vigente_hasta, a.creado_por, a.created_at,
               s.nombre AS sucursal_nombre,
               COALESCE(u.nombre, 'Sistema') AS creado_por_nombre,
-              (SELECT COUNT(*) FROM anuncio_lecturas al WHERE al.anuncio_id = a.id) AS total_lecturas
+              (SELECT COUNT(*) FROM anuncio_lecturas al WHERE al.anuncio_id = a.id)::int AS total_lecturas,
+              (SELECT COUNT(*) FROM residentes r WHERE r.sucursal_id = a.sucursal_id)::int AS total_residentes
        FROM anuncios a
        JOIN sucursales s ON a.sucursal_id = s.id
        LEFT JOIN usuarios u ON a.creado_por = u.id

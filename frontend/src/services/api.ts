@@ -1432,7 +1432,10 @@ export interface Anuncio {
   created_at: string;
   sucursal_nombre: string;
   creado_por_nombre: string;
+  /** Residentes que ya lo abrieron. */
   total_lecturas: number;
+  /** Residentes de la sucursal, que son quienes pueden verlo. Ausente en servidores anteriores. */
+  total_residentes?: number;
 }
 
 export interface AnuncioInput {
@@ -1454,6 +1457,8 @@ export interface MiAnuncio {
   created_at: string;
   leido: boolean;
   leido_at: string | null;
+  /** Aviso dirigido a este residente (no un comunicado para toda la comunidad). */
+  es_personal?: boolean;
 }
 
 export const getAnuncios = async (): Promise<Anuncio[]> => {
