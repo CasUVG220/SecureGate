@@ -118,6 +118,48 @@ describe('refresh con empresa suspendida', () => {
   });
 });
 
+describe('refresh: 423 también cuando suspender ya revocó el token (S-11)', () => {
+  const FILA = { id: 'rt-1', usuario_id: 'u-1', nombre: 'Ana', email: 'a@x.com', rol: 'residente', sucursal_id: 'suc-1', empresa_id: null, empresa_id_via_sucursal: 'emp-1', activo: true };
+  const llamar = async () => {
+    const res = mockRes();
+    await refresh({ cookies: { refresh_token: 'raw' }, headers: {}, ip: '1.1.1.1' } as any, res);
+    return res;
+  };
+
+  it('token revocado por la suspensión + empresa suspendida → 423 con el motivo, sin tocar nada más', async () => {
+    mockPool.query
+      .mockResolvedValueOnce({ rows: [{ ...FILA, revoked: true, vigente: true }] })
+      .mockResolvedValueOnce({ rows: [SUSPENDIDA] });
+    const res = await llamar();
+    expect(res.status).toHaveBeenCalledWith(HTTP_BLOQUEO);
+    expect((res.json as jest.Mock).mock.calls[0][0]).toEqual(expect.objectContaining({ codigo: 'empresa_suspendida', empresa: SUSPENDIDA.nombre }));
+    expect(res.clearCookie).toHaveBeenCalled();
+    expect(mockPool.query).toHaveBeenCalledTimes(2);   // ya estaba revocado: no vuelve a escribir
+  });
+
+  it('token revocado y empresa en regla (cierre de sesión, rotación vieja) → 401', async () => {
+    mockPool.query
+      .mockResolvedValueOnce({ rows: [{ ...FILA, revoked: true, vigente: true }] })
+      .mockResolvedValueOnce({ rows: [{ id: 'emp-1', nombre: 'Condominio', activo: true, suspendida: false, suspension_motivo: null, suspendida_en: null }] });
+    const res = await llamar();
+    expect(res.status).toHaveBeenCalledWith(401);
+    expect(mockPool.query.mock.calls.some(c => /INSERT INTO refresh_tokens/.test(c[0]))).toBe(false);
+  });
+
+  it('token vencido o usuario dado de baja → 401 sin revelar el estado de la empresa (ni consultarlo)', async () => {
+    mockPool.query.mockResolvedValueOnce({ rows: [{ ...FILA, revoked: true, vigente: false }] });
+    expect((await llamar()).status).toHaveBeenCalledWith(401);
+    mockPool.query.mockResolvedValueOnce({ rows: [{ ...FILA, revoked: false, vigente: true, activo: false }] });
+    expect((await llamar()).status).toHaveBeenCalledWith(401);
+    expect(mockPool.query).toHaveBeenCalledTimes(2);   // solo las dos búsquedas del token
+  });
+
+  it('token que no existe → 401', async () => {
+    mockPool.query.mockResolvedValueOnce({ rows: [] });
+    expect((await llamar()).status).toHaveBeenCalledWith(401);
+  });
+});
+
 describe('licencia de garita con empresa suspendida', () => {
   const token = firmarLicencia({ lic: 'lic-1', sucursal_id: 'suc-1', empresa_id: 'emp-1', fp: hashFingerprint(FP) });
   const fila = (emp: typeof EMPRESA) => ({

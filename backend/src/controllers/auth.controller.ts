@@ -157,37 +157,42 @@ export const refresh = async (req: Request, res: Response) => {
   }
 
   try {
+    // Se busca el token SIN filtrar por `revoked`: suspender una empresa revoca los refresh tokens de todos sus
+    // usuarios (así ninguna sesión sigue viva), y si aquí se descartaran como «inválidos» el cliente recibiría un 401
+    // mudo y nadie sabría por qué se cerró su sesión (hallazgo S-11). La vigencia y el usuario activo sí se exigen.
     const found = await pool.query(
-      `SELECT rt.id, rt.usuario_id,
-              u.nombre, u.email, u.rol, u.sucursal_id, u.empresa_id,
+      `SELECT rt.id, rt.usuario_id, rt.revoked, (rt.expires_at > NOW()) AS vigente,
+              u.nombre, u.email, u.rol, u.sucursal_id, u.empresa_id, u.activo,
               s.empresa_id AS empresa_id_via_sucursal
        FROM refresh_tokens rt
        JOIN  usuarios   u ON rt.usuario_id = u.id
        LEFT JOIN sucursales s ON s.id = u.sucursal_id
-       WHERE rt.token_hash = $1
-         AND rt.revoked    = FALSE
-         AND rt.expires_at > NOW()
-         AND u.activo      = TRUE`,
+       WHERE rt.token_hash = $1`,
       [hashToken(refreshRaw)],
     );
 
-    if (found.rows.length === 0) {
+    const row = found.rows[0];
+    const sinSesion = () => {
       res.clearCookie('refresh_token', { httpOnly: true, secure: cookieOpts.secure, sameSite: 'strict' });
       return res.status(401).json({ error: 'Refresh token inválido o expirado' });
-    }
+    };
+    if (!row || row.activo === false || row.vigente === false) return sinSesion();
 
-    const row = found.rows[0];
     const empresa_id:  string | null = row.empresa_id  ?? row.empresa_id_via_sucursal ?? null;
     const sucursal_id: string | null = row.sucursal_id ?? null;
 
-    // Una empresa suspendida corta también las sesiones vivas: el access
-    // token dura 1 h y aquí muere el refresh.
+    // Una empresa suspendida (o dada de baja) responde 423 con el motivo, tenga el token revocado o no: el cliente
+    // muestra el aviso en vez de caer al login sin explicación. Quien llega aquí tiene en la mano un refresh token
+    // propio de esa empresa, no un desconocido.
     const bloqueo = await bloqueoDeUsuario(pool, { rol: row.rol, empresa_id, sucursal_id });
     if (bloqueo) {
-      await pool.query('UPDATE refresh_tokens SET revoked = TRUE WHERE id = $1', [row.id]);
+      if (!row.revoked) await pool.query('UPDATE refresh_tokens SET revoked = TRUE WHERE id = $1', [row.id]);
       res.clearCookie('refresh_token', { httpOnly: true, secure: cookieOpts.secure, sameSite: 'strict' });
       return responderBloqueo(res, bloqueo);
     }
+
+    // Un token ya revocado (cierre de sesión, rotación anterior) no renueva nada.
+    if (row.revoked) return sinSesion();
 
     // Rotate: revoke old, issue new
     await pool.query('UPDATE refresh_tokens SET revoked = TRUE WHERE id = $1', [row.id]);

@@ -35,6 +35,8 @@ export interface SesionDto {
   usuario: Usuario | null;
   requiere_login: boolean;
   iniciada_en: string | null;
+  /** Texto del servidor si la sesión se cortó porque la empresa está suspendida o dada de baja (423). */
+  motivo_bloqueo?: string | null;
 }
 
 export interface EstadoSync {

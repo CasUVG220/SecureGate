@@ -98,8 +98,10 @@ export const revocarSesionesDeEmpresa = async (db: import('pg').PoolClient | imp
  * Desde este momento el login y las licencias de garita (activar, heartbeat,
  * sync) de la empresa responden 423 con el motivo; nada se borra ni se
  * desactiva. Las sesiones que YA estaban abiertas se cortan aquí mismo
- * (access tokens y refresh tokens revocados), así que su siguiente /auth/refresh
- * responde 401 y no 423: el cliente ve el motivo al volver a iniciar sesión.
+ * (access tokens y refresh tokens revocados). Su siguiente /auth/refresh responde
+ * 423 con el motivo (aunque el token ya esté revocado, S-11): el cliente muestra
+ * el aviso en vez de caer al login sin explicación. Con la empresa reactivada
+ * ese mismo token sigue revocado y responde 401: hay que iniciar sesión de nuevo.
  */
 export const suspenderEmpresa = async (req: Request, res: Response) => {
   const { id } = req.params;

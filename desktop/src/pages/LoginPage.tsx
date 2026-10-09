@@ -40,7 +40,10 @@ export function LoginPage({ estado, onLogin }: { estado: EstadoApp; onLogin: () 
       pie={<>Equipo activado · v{estado.version}</>}
     >
       {estado.sesion.requiere_login && (
-        <Alert tone="warn" className="mb-5">Tu sesión anterior venció. Vuelve a iniciar sesión para seguir sincronizando.</Alert>
+        estado.sesion.motivo_bloqueo
+          // La empresa se suspendió con la sesión abierta: se dice por qué, con las palabras del servidor.
+          ? <Alert tone="bad" className="mb-5">{estado.sesion.motivo_bloqueo} La garita puede seguir registrando entradas en este equipo.</Alert>
+          : <Alert tone="warn" className="mb-5">Tu sesión anterior venció. Vuelve a iniciar sesión para seguir sincronizando.</Alert>
       )}
       {!estado.sync.en_linea && (
         <Alert tone="info" className="mb-5">Iniciar sesión requiere conexión con el servidor. La licencia del equipo sigue activa.</Alert>
