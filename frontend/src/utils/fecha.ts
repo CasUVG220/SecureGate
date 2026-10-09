@@ -154,6 +154,15 @@ export function hoyEnZona(ahora: Date = new Date()): string {
 
 // ── Días de calendario (columnas DATE: no se mueven de día por la zona) ───────
 
+/**
+ * El día de calendario de un valor DATE como 'AAAA-MM-DD' (sin corrimiento de zona), o null si no es una fecha.
+ * Sirve para comparar días entre sí o con `hoyEnZona()`: las cadenas ISO de ese formato se ordenan como fechas.
+ */
+export function diaISO(v: ValorFecha): string | null {
+  const p = partesDeDia(v);
+  return p ? `${p.anio}-${dosDigitos(p.mes)}-${dosDigitos(p.dia)}` : null;
+}
+
 /** «10 dic 2026». */
 export function formatearDia(v: ValorFecha, lang: IdiomaFecha = idiomaActual()): string {
   const p = partesDeDia(v);

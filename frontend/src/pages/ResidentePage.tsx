@@ -29,12 +29,15 @@ import { useTranslation } from '../i18n/useTranslation';
 import TicketChat, { TIPO_LABEL, ESTADO_BADGE, ESTADO_LABEL } from '../components/TicketChat';
 import QrInviteModal from '../components/QrInviteModal';
 import PagoTarjetaModal from '../components/PagoTarjetaModal';
-import { Badge, Button, ErrorState, ESTADO_PAGO_TONE, ROW_ICON, RowActions } from '../components/ui';
+import { Badge, Button, EmptyState, ErrorState, ESTADO_PAGO_TONE, Input, ROW_ICON, RowActions, StatusText } from '../components/ui';
+import AvisarVisitaModal, { type DatosVisita } from '../components/AvisarVisitaModal';
 import { useIsHandheld } from '../hooks/useMediaQuery';
 import { usePolling } from '../hooks/usePolling';
-import { formatearFecha, formatearFechaHoraCorta, hoyEnZona } from '../utils/fecha';
+import { diaISO, formatearFecha, formatearFechaHoraCorta, formatearRangoDias, hoyEnZona } from '../utils/fecha';
 import { formatearPlaca, normalizarPlaca } from '../utils/placa';
 import PlacaInput from '../components/PlacaInput';
+
+const ICON_VISITA = 'M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75';
 
 const TICKET_TIPOS: TicketTipo[] = ['mantenimiento', 'queja', 'seguridad', 'otro'];
 
@@ -116,6 +119,8 @@ export default function ResidentePage({ requestedTab, tabNonce = 0 }: ResidenteP
   const [saving, setSaving]     = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  /** «Avisar de una visita»: vacío o con los datos de un visitante guardado. */
+  const [avisoDlg, setAvisoDlg] = useState<{ abierto: boolean; inicial: DatosVisita | null }>({ abierto: false, inicial: null });
 
   // Invitaciones QR tab state
   const [qrInvites, setQrInvites]   = useState<InvitacionQr[]>([]);
@@ -324,9 +329,10 @@ export default function ResidentePage({ requestedTab, tabNonce = 0 }: ResidenteP
         placa:            normalizarPlaca(form.placa) || undefined,
         fecha_inicio:     today(),
       });
-      setPreauths(prev => [created, ...prev].filter(p => p.fecha_fin === null));
+      setPreauths(prev => [created, ...prev]);
       setShowForm(false);
       setForm(EMPTY_FORM);
+      showToast(t('aviso.saved.save'), 'success');
     } catch (err) {
       setFormError(err instanceof Error ? err.message : 'Error al guardar');
     } finally {
@@ -334,37 +340,33 @@ export default function ResidentePage({ requestedTab, tabNonce = 0 }: ResidenteP
     }
   };
 
-  const handlePreautHoy = async (p: MiPreautorizacion) => {
-    setFormError(null);
-    setSaving(true);
-    try {
-      await createMisPreautorizacion({
-        nombre_visitante: p.nombre_visitante,
-        numero_dpi:       p.numero_dpi || undefined,
-        placa:            p.placa ? normalizarPlaca(p.placa) : undefined,
-        fecha_inicio:     today(),
-        fecha_fin:        today(),
-      });
-      showToast('Preautorización de hoy creada', 'success');
-    } catch (err) {
-      showToast(err instanceof Error ? err.message : 'Error al preautorizar', 'error');
-    } finally {
-      setSaving(false);
-    }
-  };
+  /** Avisar de la visita de alguien ya guardado: abre el mismo formulario, con sus datos puestos. */
+  const avisarDe = (p: MiPreautorizacion) => setAvisoDlg({
+    abierto: true,
+    inicial: { nombre_visitante: p.nombre_visitante, numero_dpi: p.numero_dpi, placa: p.placa },
+  });
 
-  const handleDelete = async (id: string, nombre: string) => {
-    if (!window.confirm(`¿Eliminar la preautorización de ${nombre}?`)) return;
+  const handleDelete = async (id: string, nombre: string, guardado: boolean) => {
+    const pregunta = guardado ? `¿Quitar a ${nombre} de tus visitantes guardados?` : `¿Eliminar la visita avisada de ${nombre}?`;
+    if (!window.confirm(pregunta)) return;
     setDeletingId(id);
     try {
       await deleteMisPreautorizacion(id);
       setPreauths(prev => prev.filter(p => p.id !== id));
-    } catch {
-      // silently ignore — the card stays
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'No se pudo eliminar', 'error');
     } finally {
       setDeletingId(null);
     }
   };
+
+  // Una fila sin fecha_fin es un visitante guardado (no autoriza nada); con fecha_fin es una visita avisada.
+  const hoyDia = today();
+  const estadoAviso = (p: MiPreautorizacion): 'hoy' | 'proxima' => ((diaISO(p.fecha_inicio) ?? '') > hoyDia ? 'proxima' : 'hoy');
+  const guardados = preauths.filter(p => p.fecha_fin === null);
+  const avisos = preauths
+    .filter(p => p.fecha_fin !== null && (diaISO(p.fecha_fin) ?? '') >= hoyDia)
+    .sort((a, b) => (diaISO(a.fecha_inicio) ?? '').localeCompare(diaISO(b.fecha_inicio) ?? ''));
 
   if (loading) {
     return (
@@ -670,130 +672,46 @@ export default function ResidentePage({ requestedTab, tabNonce = 0 }: ResidenteP
 
       {/* ── Tab: Invitados ── */}
       {tab === 'invitados' && (
-        <div className="space-y-8 lg:grid lg:grid-cols-2 lg:gap-8 lg:space-y-0">
+        <div className="space-y-8">
           {invLoading ? (
-            <CardSkeleton count={4} className="lg:col-span-2" />
+            <CardSkeleton count={4} />
           ) : (
             <>
-              {/* Visitantes guardados */}
-              <section>
-                <div className="flex items-center justify-between mb-4">
-                  <h2 className="text-base font-semibold text-white">Visitantes guardados</h2>
-                  {!showForm && (
-                    <button
-                      onClick={() => setShowForm(true)}
-                      className="sg-btn sg-btn-primary px-4 text-sm"
-                    >
-                      Guardar visitante
-                    </button>
-                  )}
+              {/* Visitas avisadas: lo que la garita está esperando */}
+              <section aria-labelledby="visitas-avisadas">
+                <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                  <h2 id="visitas-avisadas" className="text-base font-semibold text-white">{t('aviso.mine.title')}</h2>
+                  <Button onClick={() => setAvisoDlg({ abierto: true, inicial: null })}>{t('aviso.title')}</Button>
                 </div>
-
-                {/* Inline create form */}
-                {showForm && (
-                  <div ref={formRef}>
-                    <form onSubmit={handleSave} className="sg-card mb-4 space-y-4 p-5 sm:p-6">
-                      <h3 className="text-sm font-semibold text-white">Guardar datos del visitante</h3>
-                      <p className="text-xs text-gray-400">Guarda los datos para preautorizar con un clic en cualquier momento.</p>
-
-                      {formError && (
-                        <div role="alert" className="rounded-lg border border-danger-500/30 bg-danger-500/10 px-3 py-2 text-sm text-danger-400">
-                          {formError}
-                        </div>
-                      )}
-
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                        <div className="sm:col-span-3">
-                          <label className="block text-xs text-gray-400 mb-1">{t('portal.visitorName')} *</label>
-                          <input
-                            name="nombre_visitante"
-                            value={form.nombre_visitante}
-                            onChange={handleFormChange}
-                            required
-                            placeholder="Juan Pérez"
-                            className="sg-input"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-xs text-gray-400 mb-1">
-                            {t('portal.dpi')}
-                            <span className="ml-1 text-gray-500">(requerido si no hay placa)</span>
-                          </label>
-                          <input
-                            name="numero_dpi"
-                            value={form.numero_dpi}
-                            onChange={handleFormChange}
-                            placeholder="1234567890101"
-                            className="sg-input"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-xs text-gray-400 mb-1">
-                            {t('portal.plate')}
-                            <span className="ml-1 text-gray-500">(requerido si no hay DPI)</span>
-                          </label>
-                          <PlacaInput
-                            name="placa"
-                            value={form.placa}
-                            onChange={placa => setForm(prev => ({ ...prev, placa }))}
-                          />
-                        </div>
-                      </div>
-
-                      <div className="flex gap-3 pt-1">
-                        <Button type="submit" loading={saving} className="px-5">
-                          {saving ? t('common.saving') : t('common.save')}
-                        </Button>
-                        <Button
-                          variant="secondary"
-                          onClick={() => { setShowForm(false); setFormError(null); setForm(EMPTY_FORM); }}
-                          className="px-5"
-                        >
-                          {t('common.cancel')}
-                        </Button>
-                      </div>
-                    </form>
-                  </div>
-                )}
-
-                {/* Cards — only show saved data (fecha_fin === null) */}
-                {preauths.filter(p => p.fecha_fin === null).length === 0 ? (
-                  <p className="text-gray-400 text-sm text-center py-8">No hay visitantes guardados.</p>
+                {avisos.length === 0 ? (
+                  <EmptyState compact icon={ICON_VISITA} title={t('aviso.mine.empty')} description={t('aviso.mine.emptyHint')} />
                 ) : (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    {preauths.filter(p => p.fecha_fin === null).map(p => (
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                    {avisos.map(p => (
                       <div key={p.id} className="sg-card p-4">
                         <div className="flex items-start justify-between gap-2">
-                          <p className="font-semibold text-white text-sm">{p.nombre_visitante}</p>
-                          <span className="text-xs bg-gray-700 text-gray-300 px-2 py-0.5 rounded-full font-medium shrink-0">
-                            Guardado
-                          </span>
+                          <p className="text-sm font-semibold text-white">{p.nombre_visitante}</p>
+                          <StatusText kind={estadoAviso(p) === 'hoy' ? 'on' : 'warn'}>
+                            {t(estadoAviso(p) === 'hoy' ? 'aviso.state.current' : 'aviso.state.upcoming')}
+                          </StatusText>
                         </div>
                         <div className="mt-2 space-y-0.5 text-xs text-gray-400">
+                          <p className="text-gray-300">{formatearRangoDias(p.fecha_inicio, p.fecha_fin)}</p>
                           {p.numero_dpi && <p>{t('portal.dpi')}: {p.numero_dpi}</p>}
                           {p.placa      && <p>{t('portal.plate')}: {formatearPlaca(p.placa)}</p>}
                         </div>
                         <div className="mt-3">
                           <RowActions
                             align="start"
-                            inline={2}
                             menuLabel={`${t('common.actions')}: ${p.nombre_visitante}`}
                             actions={[
-                              {
-                                id: 'hoy',
-                                label: 'Preautorizar hoy',
-                                icon: ROW_ICON.clock,
-                                tone: 'primary',
-                                disabled: saving,
-                                onClick: () => handlePreautHoy(p),
-                              },
                               {
                                 id: 'eliminar',
                                 label: t('common.delete'),
                                 icon: ROW_ICON.trash,
                                 tone: 'danger',
                                 loading: deletingId === p.id,
-                                onClick: () => handleDelete(p.id, p.nombre_visitante),
+                                onClick: () => handleDelete(p.id, p.nombre_visitante, false),
                               },
                             ]}
                           />
@@ -804,37 +722,162 @@ export default function ResidentePage({ requestedTab, tabNonce = 0 }: ResidenteP
                 )}
               </section>
 
-              {/* Historial */}
-              <section>
-                <h2 className="text-base font-semibold text-white mb-4">{t('portal.visitHistory')}</h2>
-                {visitas.length === 0 ? (
-                  <p className="text-gray-400 text-sm text-center py-8">{t('portal.noVisits')}</p>
-                ) : (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    {visitas.map(v => (
-                      <div key={v.id} className="sg-card p-4">
-                        <p className="font-semibold text-white text-sm">{v.nombre_visitante}</p>
-                        <div className="mt-2 space-y-0.5 text-xs text-gray-400">
-                          <p>{t('portal.dpi')}: {v.numero_dpi}</p>
-                          {v.placa && <p>{t('portal.plate')}: {formatearPlaca(v.placa)}</p>}
-                          <p className="text-gray-300 mt-1">
-                            {t('portal.entry')}: {formatearFechaHoraCorta(v.timestamp_entrada)}
-                          </p>
-                          {v.timestamp_salida ? (
-                            <p>{t('portal.exit')}: {formatearFechaHoraCorta(v.timestamp_salida)}</p>
-                          ) : (
-                            <span className="inline-block bg-blue-100 text-blue-700 text-xs font-semibold px-2 py-0.5 rounded-full mt-1">
-                              {t('portal.active')}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    ))}
+              <div className="space-y-8 lg:grid lg:grid-cols-2 lg:gap-8 lg:space-y-0">
+                {/* Visitantes guardados: la libreta; guardar a alguien NO deja entrar a nadie */}
+                <section aria-labelledby="visitantes-guardados">
+                  <div className="mb-1 flex items-center justify-between">
+                    <h2 id="visitantes-guardados" className="text-base font-semibold text-white">{t('aviso.saved.title')}</h2>
+                    {!showForm && (
+                      <Button variant="secondary" onClick={() => setShowForm(true)}>{t('aviso.saved.save')}</Button>
+                    )}
                   </div>
-                )}
-              </section>
+                  <p className="mb-4 text-xs text-gray-400">{t('aviso.saved.hint')}</p>
+
+                  {/* Inline create form */}
+                  {showForm && (
+                    <div ref={formRef}>
+                      <form onSubmit={handleSave} className="sg-card mb-4 space-y-4 p-5 sm:p-6">
+                        <h3 className="text-sm font-semibold text-white">{t('aviso.saved.form')}</h3>
+                        <p className="text-xs text-gray-400">{t('aviso.saved.formHint')}</p>
+
+                        {formError && (
+                          <div role="alert" className="rounded-lg border border-danger-500/30 bg-danger-500/10 px-3 py-2 text-sm text-danger-400">
+                            {formError}
+                          </div>
+                        )}
+
+                        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                          <Input
+                            wrapperClassName="sm:col-span-2"
+                            name="nombre_visitante"
+                            label={t('portal.visitorName')}
+                            value={form.nombre_visitante}
+                            onChange={handleFormChange}
+                            required
+                            placeholder="Juan Pérez"
+                          />
+                          <Input
+                            name="numero_dpi"
+                            label={`${t('portal.dpi')} (${t('aviso.saved.orPlate')})`}
+                            value={form.numero_dpi}
+                            onChange={handleFormChange}
+                            placeholder="1234567890101"
+                            inputMode="numeric"
+                          />
+                          <div className="min-w-0">
+                            <label htmlFor="guardado-placa" className="mb-1.5 block text-xs font-semibold text-gray-300">
+                              {t('portal.plate')} ({t('aviso.saved.orDpi')})
+                            </label>
+                            <PlacaInput
+                              id="guardado-placa"
+                              name="placa"
+                              value={form.placa}
+                              onChange={placa => setForm(prev => ({ ...prev, placa }))}
+                            />
+                          </div>
+                        </div>
+
+                        <div className="flex gap-3 pt-1">
+                          <Button type="submit" loading={saving} className="px-5">
+                            {saving ? t('common.saving') : t('common.save')}
+                          </Button>
+                          <Button
+                            variant="secondary"
+                            onClick={() => { setShowForm(false); setFormError(null); setForm(EMPTY_FORM); }}
+                            className="px-5"
+                          >
+                            {t('common.cancel')}
+                          </Button>
+                        </div>
+                      </form>
+                    </div>
+                  )}
+
+                  {guardados.length === 0 ? (
+                    !showForm && <p className="py-8 text-center text-sm text-gray-400">{t('aviso.saved.empty')}</p>
+                  ) : (
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                      {guardados.map(p => (
+                        <div key={p.id} className="sg-card p-4">
+                          <div className="flex items-start justify-between gap-2">
+                            <p className="text-sm font-semibold text-white">{p.nombre_visitante}</p>
+                            <span className="shrink-0 rounded-full bg-gray-700 px-2 py-0.5 text-xs font-medium text-gray-300">
+                              {t('aviso.saved.badge')}
+                            </span>
+                          </div>
+                          <div className="mt-2 space-y-0.5 text-xs text-gray-400">
+                            {p.numero_dpi && <p>{t('portal.dpi')}: {p.numero_dpi}</p>}
+                            {p.placa      && <p>{t('portal.plate')}: {formatearPlaca(p.placa)}</p>}
+                          </div>
+                          <div className="mt-3">
+                            <RowActions
+                              align="start"
+                              inline={2}
+                              menuLabel={`${t('common.actions')}: ${p.nombre_visitante}`}
+                              actions={[
+                                {
+                                  id: 'avisar',
+                                  label: t('aviso.saved.notify'),
+                                  icon: ROW_ICON.clock,
+                                  tone: 'primary',
+                                  onClick: () => avisarDe(p),
+                                },
+                                {
+                                  id: 'eliminar',
+                                  label: t('common.delete'),
+                                  icon: ROW_ICON.trash,
+                                  tone: 'danger',
+                                  loading: deletingId === p.id,
+                                  onClick: () => handleDelete(p.id, p.nombre_visitante, true),
+                                },
+                              ]}
+                            />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </section>
+
+                {/* Historial */}
+                <section>
+                  <h2 className="mb-4 text-base font-semibold text-white">{t('portal.visitHistory')}</h2>
+                  {visitas.length === 0 ? (
+                    <p className="py-8 text-center text-sm text-gray-400">{t('portal.noVisits')}</p>
+                  ) : (
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                      {visitas.map(v => (
+                        <div key={v.id} className="sg-card p-4">
+                          <p className="text-sm font-semibold text-white">{v.nombre_visitante}</p>
+                          <div className="mt-2 space-y-0.5 text-xs text-gray-400">
+                            <p>{t('portal.dpi')}: {v.numero_dpi}</p>
+                            {v.placa && <p>{t('portal.plate')}: {formatearPlaca(v.placa)}</p>}
+                            <p className="mt-1 text-gray-300">
+                              {t('portal.entry')}: {formatearFechaHoraCorta(v.timestamp_entrada)}
+                            </p>
+                            {v.timestamp_salida ? (
+                              <p>{t('portal.exit')}: {formatearFechaHoraCorta(v.timestamp_salida)}</p>
+                            ) : (
+                              <span className="mt-1 inline-block rounded-full bg-blue-100 px-2 py-0.5 text-xs font-semibold text-blue-700">
+                                {t('portal.active')}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </section>
+              </div>
             </>
           )}
+
+          <AvisarVisitaModal
+            open={avisoDlg.abierto}
+            onClose={() => setAvisoDlg(d => ({ ...d, abierto: false }))}
+            inicial={avisoDlg.inicial}
+            onCreada={creada => setPreauths(prev => [creada as MiPreautorizacion, ...prev])}
+          />
         </div>
       )}
 
