@@ -6,6 +6,7 @@ import PreautPage             from './pages/PreautPage';
 import DashboardPage          from './pages/DashboardPage';
 import ResidentePage          from './pages/ResidentePage';
 import ConfigCargosPage       from './pages/ConfigCargosPage';
+import ConfiguracionQrPage    from './pages/ConfiguracionQrPage';
 import VerificacionPage       from './pages/VerificacionPage';
 import AgentesPage            from './pages/AgentesPage';
 import LicenciasPage          from './pages/LicenciasPage';
@@ -40,7 +41,7 @@ import { Spinner }            from './components/ui/Skeleton';
 const EstadisticasPage = lazy(() => import('./pages/EstadisticasPage'));
 
 type Page =
-  | 'dashboard' | 'residentes' | 'pagos' | 'preaut' | 'reportes' | 'config' | 'verificacion' | 'agentes' | 'garitas' | 'blacklist' | 'anuncios' | 'tickets' | 'reservas'
+  | 'dashboard' | 'residentes' | 'pagos' | 'preaut' | 'reportes' | 'config' | 'config-qr' | 'verificacion' | 'agentes' | 'garitas' | 'blacklist' | 'anuncios' | 'tickets' | 'reservas'
   | 'portal' | 'mis-reservas'
   | 'owner-dashboard' | 'owner-empresas' | 'owner-empresa-detail' | 'owner-audit'
   | 'ae-dashboard' | 'ae-sucursales';
@@ -90,6 +91,7 @@ const ADMIN_NAV: NavGroup[] = [
     { key: 'pagos',      labelKey: 'nav.payments',     d: ICON.payments },
     { key: 'reservas',   labelKey: 'nav.reservations', d: ICON.calendar },
     { key: 'config',     labelKey: 'nav.config',       d: ICON.config },
+    { key: 'config-qr',  labelKey: 'nav.qrRules',      d: ICON.qr },
   ]},
   { labelKey: 'nav.group.communication', items: [
     { key: 'anuncios', labelKey: 'nav.announcements', d: ICON.announce },
@@ -394,6 +396,7 @@ function AppShell() {
           </Suspense>
         );
       case 'config':       return <ConfigCargosPage />;
+      case 'config-qr':    return <div className="sg-page"><ConfiguracionQrPage /></div>;
       case 'verificacion': return <VerificacionPage />;
       case 'blacklist':    return <BlacklistPage />;
       case 'anuncios':     return <AnunciosPage />;

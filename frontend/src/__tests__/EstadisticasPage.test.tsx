@@ -97,7 +97,7 @@ describe('EstadisticasPage', () => {
   it('si la carga falla, ofrece reintentar', async () => {
     mockGet.mockRejectedValueOnce(new Error('boom'));
     renderPagina();
-    expect(await screen.findByText('No se pudieron cargar las estadísticas')).toBeInTheDocument();
+    expect(await screen.findByText('No se pudieron cargar los reportes')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Reintentar' }));
     expect(await screen.findByText('Lo más importante')).toBeInTheDocument();
     expect(mockGet).toHaveBeenCalledTimes(2);

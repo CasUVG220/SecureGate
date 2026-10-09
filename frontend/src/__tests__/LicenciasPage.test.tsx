@@ -38,8 +38,8 @@ describe('LicenciasPage (admin de sucursal)', () => {
 
     expect(await screen.findByText('SG-AAAA-BBBB-CCCC-DDDD')).toBeInTheDocument();
     expect(screen.getByText('Sin activar')).toBeInTheDocument();
-    expect(screen.getByText('Activa')).toBeInTheDocument();
-    expect(screen.getByText('Revocada')).toBeInTheDocument();
+    expect(screen.getByText('Activo')).toBeInTheDocument();
+    expect(screen.getByText('Revocado')).toBeInTheDocument();
     expect(screen.getByText('hace un momento')).toBeInTheDocument();
   });
 
