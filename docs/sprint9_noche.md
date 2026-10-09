@@ -20,6 +20,7 @@ Las pruebas de base de datos corrieron **solo** contra el Postgres desechable lo
 | SCRUM-112 | H05+H07 · pagos, avisos y confirmaciones | **HECHO** |
 | SCRUM-113 | H06+H08 · fechas, placa y glosario | **HECHO** |
 | SCRUM-114 | H09+H10 · pasos tras las altas y avisos de visita | **HECHO** |
+| SCRUM-115 | H11+H12 · reportes, anuncios y consistencia visual | **HECHO** (el logo se guarda dentro de la base como imagen pequeña: decisión documentada) |
 
 *(la tabla se completa ticket por ticket)*
 
@@ -391,3 +392,42 @@ ningún ojo de contraseña en `owner/` ni `admin_empresa/`, tabla de preautoriza
 
 **Pruebas:** backend integración **I-8** (5) e **I-9** (10), unitarias +1; frontend +24 (alta de empresa/sucursal, invitar, bienvenida, contraseña, navegación por rol, primeros pasos, aviso de visita, lista del administrador, pestaña del residente);
 desktop +2. **Suites tras el ticket:** backend 638 unitarias + 115 integración/regresión + `tsc`; frontend 325 + build; desktop 102 + Rust 74 + build. Todo verde.
+
+
+---
+
+## SCRUM-115 — H11 + H12 · Reportes, anuncios y consistencia visual · **HECHO**
+
+**Commits:** `cfe5774` (diálogos nativos y acciones destructivas · Jira SCRUM-151) · `467f5bb` (reportes, «entradas», Lecturas y anuncios del residente · SCRUM-152) · `1e46a19` (pulido visual · SCRUM-153).
+**Criterios de aceptación del ticket (leídos en Jira, solo lectura):** 3–4 cifras arriba en reportes, «entradas» por «ingresos», explicar LECTURAS; página de anuncios del residente; sustituir los diálogos nativos y separar las acciones
+destructivas; paleta uniforme, textos cortados, concordancia y botones duplicados; «Tipo» como lista y logo como archivo. **Verificado contra el código:** 19 sitios con `window.confirm`/`prompt` (el QA decía 20), «Logo URL» en pie, «1 sucursales»
+en `ae.managementCounts`, «+ + Nueva sucursal» en `EmpresaDetail` (icono y texto), `Editar` y `Eliminar` como botones hermanos en Anuncios, «Remover ban» ya estaba renombrado y no era verde.
+
+**SCRUM-151 — diálogos y acciones destructivas**
+- `ConfirmDialog` + `useConfirmacion()` en el kit de UI (sincronizado al escritorio): `if (!(await confirmar({ title, message, confirmLabel, tone })))`. El botón nombra la acción y lo destructivo va en rojo. Cada texto dice lo que **de verdad**
+  pasa (se leyó cada endpoint: baja suave de sucursal/área/cargo, borrado del residente solo si no tiene historial, la baja de empresa apaga sucursales, personal, equipos de garita y sesiones…).
+- 17 confirmaciones y 2 `prompt` migrados: el motivo del rechazo de una reserva es un `Modal` con campo opcional; si el portapapeles falla, el código de activación queda en un aviso persistente (no en un `prompt`).
+- **Separación visual:** `RowActions` ya no muestra una acción destructiva en línea junto a otras (va al menú, tras una línea); `Anuncios` pasa de dos botones hermanos a `RowActions`. Prueba `sinDialogosNativos` (parser de TypeScript).
+- Se corrigieron frases partidas («¿Eliminar esta sucursal? "Torre"?») y el «Preautorizar»/«Admin» de los diálogos.
+
+**SCRUM-152 — reportes y anuncios**
+- Reportes: arriba **cuatro** cifras (la que manda con su gráfico + tres filas); «solicitudes resueltas» pasó a Comunidad. Un periodo de **un solo día** ya no dibuja un gráfico vacío (área de un punto) sino una columna con la raya del periodo anterior.
+- «ingreso(s)» → «entrada(s)» / «cobrado» en reportes, lista negra y garita; «Registro de accesos» → «Reporte de entradas» (como dice el glosario). La prueba del glosario lo vigila.
+- Anuncios (administrador): **Lecturas** dice qué cuenta («3 de 45», residentes que lo abrieron) y un cero explica por qué (nadie lo ha abierto / aún no vigente / ya venció). `GET /api/anuncios` devuelve `total_residentes`.
+- **Anuncios del residente:** página propia (`MisAnunciosPage`) con comunicados de la comunidad separados de los avisos dirigidos a la persona (el endpoint ya traía `es_personal`), texto entero, marcar leído uno/todos, filtro «sin leer»; la campana rotula lo personal, enlaza
+  a la página y se mantiene sincronizada con ella (evento de ventana que cada lado ignora cuando es suyo).
+- Observación: la barra inferior móvil del residente queda en cinco columnas («no dan para más»); los anuncios se alcanzan por la campana y por el menú.
+
+**SCRUM-153 — pulido visual**
+- **Logo como archivo:** se elige una imagen (PNG/JPG/WebP), el navegador la reescala a 256 px (conserva transparencia en PNG), hay vista previa y «Quitar logo». **Decisión:** el proyecto no tiene almacenamiento de archivos (ni S3 ni multer) y ya guarda base64 en columnas TEXT
+  (comprobantes, fotos de áreas), así que el logo se guarda como *data URI* en `empresas.logo_url`. La columna pasa de `VARCHAR(500)` a `TEXT` con una migración idempotente (solo la primera vez) y un `CHECK` de tamaño; **se probó el salto contra el esquema viejo en el Postgres desechable**
+  (antes `character varying(500)`, después `text`, segunda corrida sin errores). El servidor acepta URL http(s) (las que ya existían) o imagen ≤ 200 KB, **sin SVG**; `PUT` puede quitar el logo; el margen de cuerpo es 400 KB solo para `/api/empresas`. Prueba **I-10**.
+- «Tipo» de sucursal es una lista; un tipo antiguo escrito a mano se conserva como opción (no se pierde al editar).
+- **Concordancia:** `plural()` con claves `.one`/`.other` («1 equipo activo», «1 sigue abierta», «Cargo aplicado a 1 residente»); los conteos de listas pasan a «Etiqueta: n». Pruebas que impiden claves sin pareja y que listan los casos sospechosos.
+- **Paleta:** ~290 clases heredadas (`red-`, `emerald-`, `amber-`, `blue-`…) pasan a los nombres de token; Tailwind ya las aliaba, así que **no hay cambio visual**. Prueba `sinPaletaSuelta`.
+- **Textos cortados:** todo texto truncado lleva su valor completo en un tooltip; la verificación de pagos dejó de pegar «...» a nombres de dos palabras.
+- **Botones duplicados:** con la lista vacía, el botón de crear vive en el estado vacío y no se repite en la cabecera (8 pantallas); se quitan los «+» dobles.
+- Detalle de empresa (owner): asignar administrador se elige de una lista de personas, ya no se pega un UUID; el rol de la barra superior se escribe completo.
+
+**Pruebas:** frontend +64 (confirmaciones, RowActions, ConfirmDialog, anuncios, reportes, gráfico de un punto, logo, tipo, plural, paleta, diálogos nativos); backend integración **I-10** (6). **Suites tras el ticket:** backend 638 unitarias + 121 integración/regresión + `tsc`;
+frontend 385 + build; desktop 102 + Rust 74 + build. Todo verde.
