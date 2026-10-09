@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { haceCuanto, horasATexto } from '../tiempo';
+import { diaCorto, haceCuanto, horasATexto } from '../tiempo';
 
 describe('haceCuanto', () => {
   const ahora = new Date('2026-09-19T12:00:00Z');
@@ -25,5 +25,16 @@ describe('horasATexto', () => {
     expect(horasATexto(0.5)).toBe('30 min');
     expect(horasATexto(2)).toBe('2 h');
     expect(horasATexto(47.9)).toBe('47 h 54 min');
+  });
+});
+
+describe('diaCorto', () => {
+  it('escribe el día de calendario sin moverlo por la zona', () => {
+    expect(diaCorto('2026-10-12')).toBe('12 oct 2026');
+    expect(diaCorto('2026-01-05T06:00:00.000Z')).toBe('5 ene 2026');
+  });
+
+  it('lo que no es fecha queda vacío', () => {
+    for (const v of [null, undefined, '', 'mañana', '2026-13-01']) expect(diaCorto(v)).toBe('');
   });
 });
