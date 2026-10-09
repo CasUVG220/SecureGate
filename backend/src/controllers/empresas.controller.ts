@@ -10,7 +10,14 @@ export const getEmpresas = async (_req: Request, res: Response) => {
     const result = await pool.query(
       // Sin filtrar por activo: es la vista del owner, que necesita ver (y
       // poder reactivar) las empresas dadas de baja o suspendidas.
-      `SELECT e.*, COUNT(s.id)::int AS total_sucursales
+      // `tiene_admin` / `invitacion_pendiente` alimentan el aviso «sin administrador»:
+      // una empresa recién creada no sirve de nada hasta que alguien la administre.
+      `SELECT e.*, COUNT(s.id)::int AS total_sucursales,
+              EXISTS (SELECT 1 FROM usuarios a
+                       WHERE a.empresa_id = e.id AND a.rol = 'admin_empresa' AND a.activo = TRUE) AS tiene_admin,
+              EXISTS (SELECT 1 FROM invitaciones i
+                       WHERE i.empresa_id = e.id AND i.rol_invitado = 'admin_empresa'
+                         AND i.estado = 'pendiente' AND i.expira_en > NOW()) AS invitacion_pendiente
        FROM empresas e
        LEFT JOIN sucursales s ON s.empresa_id = e.id AND s.activo = TRUE
        GROUP BY e.id
