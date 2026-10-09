@@ -5,14 +5,17 @@ import {
   type Sucursal, type SucursalInput, type Usuario,
 } from '../../services/api';
 import { TableSkeleton } from '../../components/Skeleton';
-import { Button, ROW_ICON, RowActions, StatusText } from '../../components/ui';
+import { Button, EmptyState, Input, Modal, PasswordInput, ROW_ICON, RowActions, Select, StatusText, requisitosDeClave } from '../../components/ui';
 import { useToast } from '../../components/Toast';
 import InvitacionesPanel from '../../components/InvitacionesPanel';
+import InvitarAdminModal from '../../components/InvitarAdminModal';
 import { decodeTokenPayload } from '../../services/api';
 import { useTranslation } from '../../i18n/useTranslation';
 import { rellenar } from '../../components/charts/format';
 
 type Modal = 'none' | 'sucursal' | 'admin' | 'usuario';
+
+const ICON_SUCURSAL = 'M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2zM9 22V12h6v10';
 
 const EMPTY_SUC: SucursalInput = { empresa_id: '', nombre: '', direccion: '', tipo: '' };
 
@@ -48,6 +51,11 @@ export default function GestionSucursales() {
   const [usrForm, setUsrForm]         = useState<UsuarioForm>(EMPTY_USR);
   const [saving, setSaving]           = useState(false);
   const [modalError, setModalError]   = useState<string | null>(null);
+  /** Sucursal recién creada: el diálogo pasa al paso «Invitar administrador». */
+  const [creada, setCreada]           = useState<Sucursal | null>(null);
+  const [invitarDlg, setInvitarDlg]   = useState<{ abierto: boolean; sucursal: Sucursal | null }>({ abierto: false, sucursal: null });
+  /** Cambia cuando se envía una invitación: el panel de abajo vuelve a pedir su lista. */
+  const [panelKey, setPanelKey]       = useState(0);
 
   const cargar = () => {
     setLoading(true);
@@ -66,8 +74,6 @@ export default function GestionSucursales() {
 
   const closeModal = () => {
     setModal('none');
-    setEditSuc(null);
-    setAdminTarget(null);
     setModalError(null);
   };
 
@@ -76,6 +82,7 @@ export default function GestionSucursales() {
   const openCreateSuc = () => {
     setSucForm({ ...EMPTY_SUC, empresa_id: empresaId });
     setEditSuc(null);
+    setCreada(null);
     setModalError(null);
     setModal('sucursal');
   };
@@ -83,6 +90,7 @@ export default function GestionSucursales() {
   const openEditSuc = (suc: Sucursal) => {
     setEditSuc(suc);
     setSucForm({ empresa_id: suc.empresa_id, nombre: suc.nombre, direccion: suc.direccion ?? '', tipo: suc.tipo ?? '' });
+    setCreada(null);
     setModalError(null);
     setModal('sucursal');
   };
@@ -102,16 +110,17 @@ export default function GestionSucursales() {
           tipo:      sucForm.tipo      || undefined,
         });
         showToast(t('ae.branchSaved'));
+        closeModal();
       } else {
-        await createSucursal({
+        const nueva = await createSucursal({
           empresa_id: empresaId,
           nombre:     sucForm.nombre,
           direccion:  sucForm.direccion || undefined,
           tipo:       sucForm.tipo      || undefined,
         });
-        showToast(t('ae.branchCreated'));
+        // No se cierra: una sucursal sin administrador no sirve de nada, y el siguiente paso es invitarlo.
+        setCreada(nueva);
       }
-      closeModal();
       cargar();
     } catch (err) {
       setModalError(err instanceof Error ? err.message : 'Error al guardar sucursal');
@@ -194,6 +203,10 @@ export default function GestionSucursales() {
       setModalError('Nombre, email y contraseña son requeridos');
       return;
     }
+    if (!requisitosDeClave(usrForm.password).every(r => r.ok)) {
+      setModalError(t('owner.passwordRules'));
+      return;
+    }
     setSaving(true); setModalError(null);
     try {
       await createUsuario({
@@ -238,18 +251,8 @@ export default function GestionSucursales() {
           </p>
         </div>
         <div className="flex gap-2">
-          <button
-            onClick={openUserModal}
-            className="sg-btn sg-btn-primary flex items-center gap-2 text-sm"
-          >
-            {t('ae.newUser')}
-          </button>
-          <button
-            onClick={openCreateSuc}
-            className="sg-btn sg-btn-secondary flex items-center gap-2 text-sm"
-          >
-            {t('ae.newBranch')}
-          </button>
+          <Button onClick={openUserModal}>{t('ae.newUser')}</Button>
+          <Button variant="secondary" onClick={openCreateSuc}>{t('ae.newBranch')}</Button>
         </div>
       </div>
 
@@ -284,6 +287,17 @@ export default function GestionSucursales() {
             <tbody>
               {loading ? (
                 <TableSkeleton rows={3} cols={6} />
+              ) : sucursales.length === 0 ? (
+                <tr>
+                  <td colSpan={6}>
+                    <EmptyState
+                      icon={ICON_SUCURSAL}
+                      title={t('ae.welcome.title')}
+                      description={t('ae.welcome.body')}
+                      action={<Button onClick={openCreateSuc}>{t('ae.welcome.cta')}</Button>}
+                    />
+                  </td>
+                </tr>
               ) : filteredSucursales.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="px-4 py-10 text-center text-gray-500">
@@ -296,6 +310,11 @@ export default function GestionSucursales() {
                     <td className="px-4 py-3">
                       <p className="font-medium text-white">{suc.nombre}</p>
                       {suc.direccion && <p className="text-xs text-gray-500">{suc.direccion}</p>}
+                      {suc.activo && suc.tiene_admin === false && (
+                        <p className="mt-1">
+                          <StatusText kind="warn">{t(suc.invitacion_pendiente ? 'sinAdmin.invited' : 'sinAdmin.none')}</StatusText>
+                        </p>
+                      )}
                     </td>
                     <td className="px-4 py-3 text-gray-400">{suc.tipo ?? '—'}</td>
                     <td className="px-4 py-3 text-center">{suc.total_residentes}</td>
@@ -310,11 +329,18 @@ export default function GestionSucursales() {
                         align="start"
                         menuLabel={`${t('common.actions')}: ${suc.nombre}`}
                         actions={[
+                          ...(suc.activo && suc.tiene_admin === false ? [{
+                            id: 'invitar-admin',
+                            label: t('inv.action.inviteAdmin'),
+                            icon: ROW_ICON.user,
+                            tone: 'primary' as const,
+                            onClick: () => setInvitarDlg({ abierto: true, sucursal: suc }),
+                          }] : []),
                           {
                             id: 'editar',
                             label: t('common.edit'),
                             icon: ROW_ICON.edit,
-                            tone: 'primary',
+                            tone: suc.activo && suc.tiene_admin === false ? undefined : 'primary',
                             onClick: () => openEditSuc(suc),
                           },
                           {
@@ -437,156 +463,105 @@ export default function GestionSucursales() {
       </div>
 
       {/* Aprovisionamiento en cascada: el admin de empresa invita al admin de cada sucursal. */}
-      <InvitacionesPanel modo="admin_empresa" sucursales={sucursales} />
+      <InvitacionesPanel key={panelKey} modo="admin_empresa" sucursales={sucursales} />
 
-      {/* ── Modal: create / edit sucursal ── */}
-      {modal === 'sucursal' && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-          <div className="bg-gray-800 rounded-2xl shadow-2xl w-full max-w-md p-6 space-y-5">
-            <h2 className="text-lg font-bold text-white">
-              {editSuc ? t('ae.editBranch') : t('ae.newBranchModal')}
-            </h2>
-            {modalError && (
-              <div className="bg-red-900/40 border border-red-700 rounded-lg px-3 py-2 text-red-300 text-sm">{modalError}</div>
-            )}
-            <form onSubmit={handleSucSubmit} className="space-y-4">
-              {([
-                ['nombre',    `${t('common.name')} *`,    'text'],
-                ['tipo',      t('empDetail.tipo'),         'text'],
-                ['direccion', t('empDetail.direction'),    'text'],
-              ] as [keyof SucursalInput, string, string][]).map(([name, label, type]) =>
-                name !== 'empresa_id' && (
-                  <div key={name}>
-                    <label className="block text-xs font-medium text-gray-400 mb-1">{label}</label>
-                    <input
-                      name={name}
-                      type={type}
-                      value={(sucForm[name] as string) ?? ''}
-                      onChange={handleSucChange}
-                      className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-                )
-              )}
-              <div className="flex gap-3 pt-2">
-                <Button type="submit" loading={saving} className="flex-1">
-                  {editSuc ? t('common.save') : t('ae.createBranch')}
-                </Button>
-                <Button variant="ghost" onClick={closeModal}>
-                  {t('common.cancel')}
-                </Button>
-              </div>
-            </form>
+      {/* ── Modal: crear / editar sucursal (al crear, paso siguiente: invitar administrador) ── */}
+      <Modal
+        open={modal === 'sucursal'}
+        onClose={closeModal}
+        dismissible={!saving}
+        title={creada ? t('ae.ready.title') : editSuc ? t('ae.editBranch') : t('ae.newBranchModal')}
+        footer={creada ? (
+          <>
+            <Button variant="secondary" onClick={closeModal}>{t('empresa.ready.later')}</Button>
+            <Button onClick={() => { setInvitarDlg({ abierto: true, sucursal: creada }); closeModal(); }}>{t('empresa.ready.invite')}</Button>
+          </>
+        ) : (
+          <>
+            <Button variant="secondary" onClick={closeModal} disabled={saving}>{t('common.cancel')}</Button>
+            <Button type="submit" form="form-sucursal" loading={saving}>{editSuc ? t('common.save') : t('ae.createBranch')}</Button>
+          </>
+        )}
+      >
+        {creada ? (
+          <div className="space-y-3">
+            <p className="text-sm text-gray-200">{rellenar(t('ae.ready.body'), { nombre: creada.nombre })}</p>
+            <p className="text-xs text-gray-400">{t('ae.ready.laterHint')}</p>
           </div>
-        </div>
-      )}
+        ) : (
+          <form id="form-sucursal" onSubmit={handleSucSubmit} className="space-y-4" noValidate>
+            {modalError && <p role="alert" className="rounded-lg border border-danger-500/30 bg-danger-500/10 px-4 py-3 text-sm font-medium text-danger-400">{modalError}</p>}
+            <Input name="nombre" label={t('common.name')} required autoFocus value={sucForm.nombre} onChange={handleSucChange} />
+            <Input name="tipo" label={t('empDetail.tipo')} value={sucForm.tipo ?? ''} onChange={handleSucChange} />
+            <Input name="direccion" label={t('empDetail.direction')} value={sucForm.direccion ?? ''} onChange={handleSucChange} />
+          </form>
+        )}
+      </Modal>
+
+      <InvitarAdminModal
+        open={invitarDlg.abierto}
+        onClose={() => setInvitarDlg(d => ({ ...d, abierto: false }))}
+        modo="admin_empresa"
+        sucursalFija={invitarDlg.sucursal ? { id: invitarDlg.sucursal.id, nombre: invitarDlg.sucursal.nombre } : null}
+        onEnviada={() => { cargar(); setPanelKey(k => k + 1); }}
+      />
 
       {/* ── Modal: asignar admin ── */}
-      {modal === 'admin' && adminTarget && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-          <div className="bg-gray-800 rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-5">
-            <h2 className="text-lg font-bold text-white">{t('ae.assignAdminModal')}</h2>
-            <p className="text-sm text-gray-400">
-              {t('ae.branchLabel')}: <span className="text-white font-medium">{adminTarget.nombre}</span>
-            </p>
-            {modalError && (
-              <div className="bg-red-900/40 border border-red-700 rounded-lg px-3 py-2 text-red-300 text-sm">{modalError}</div>
-            )}
-            <form onSubmit={handleAssignAdmin} className="space-y-4">
-              <div>
-                <label className="block text-xs font-medium text-gray-400 mb-1">{t('ae.selectUser')}</label>
-                <select
-                  value={adminUserId}
-                  onChange={e => setAdminUserId(e.target.value)}
-                  className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="">{t('ae.selectUser')}</option>
-                  {usuarios.map(u => (
-                    <option key={u.id} value={u.id}>
-                      {u.nombre} ({u.email})
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="flex gap-3 pt-2">
-                <Button type="submit" loading={saving} className="flex-1">
-                  {t('ae.assign')}
-                </Button>
-                <Button variant="ghost" onClick={closeModal}>
-                  {t('common.cancel')}
-                </Button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      <Modal
+        open={modal === 'admin'}
+        onClose={closeModal}
+        dismissible={!saving}
+        size="sm"
+        title={t('ae.assignAdminModal')}
+        description={adminTarget ? `${t('ae.branchLabel')}: ${adminTarget.nombre}` : undefined}
+        footer={
+          <>
+            <Button variant="secondary" onClick={closeModal} disabled={saving}>{t('common.cancel')}</Button>
+            <Button type="submit" form="form-asignar-admin-suc" loading={saving}>{t('ae.assign')}</Button>
+          </>
+        }
+      >
+        <form id="form-asignar-admin-suc" onSubmit={handleAssignAdmin} className="space-y-4" noValidate>
+          {modalError && <p role="alert" className="rounded-lg border border-danger-500/30 bg-danger-500/10 px-4 py-3 text-sm font-medium text-danger-400">{modalError}</p>}
+          <Select label={t('ae.selectUser')} value={adminUserId} onChange={e => setAdminUserId(e.target.value)}>
+            <option value="">{t('ae.selectUser')}</option>
+            {usuarios.map(u => (
+              <option key={u.id} value={u.id}>{u.nombre} ({u.email})</option>
+            ))}
+          </Select>
+        </form>
+      </Modal>
 
       {/* ── Modal: crear usuario ── */}
-      {modal === 'usuario' && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-          <div className="bg-gray-800 rounded-2xl shadow-2xl w-full max-w-md p-6 space-y-5">
-            <h2 className="text-lg font-bold text-white">{t('ae.newUserModal')}</h2>
-            {modalError && (
-              <div className="bg-red-900/40 border border-red-700 rounded-lg px-3 py-2 text-red-300 text-sm">{modalError}</div>
-            )}
-            <form onSubmit={handleCreateUsuario} className="space-y-4">
-              {([
-                ['nombre',   `${t('common.name')} *`,     'text'],
-                ['email',    `${t('common.email')} *`,    'email'],
-                ['password', `${t('common.password')} *`, 'password'],
-              ] as [keyof UsuarioForm, string, string][]).map(([name, label, type]) => (
-                <div key={name}>
-                  <label className="block text-xs font-medium text-gray-400 mb-1">{label}</label>
-                  <input
-                    name={name}
-                    type={type}
-                    value={usrForm[name]}
-                    onChange={handleUsrChange}
-                    className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-              ))}
-
-              <div>
-                <label className="block text-xs font-medium text-gray-400 mb-1">{t('common.role')} *</label>
-                <select
-                  name="rol"
-                  value={usrForm.rol}
-                  onChange={handleUsrChange}
-                  className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="agente">{t('ae.agentRole')}</option>
-                  <option value="admin_sucursal">{t('ae.adminSucRole')}</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium text-gray-400 mb-1">{t('ae.branchLabel')}</label>
-                <select
-                  name="sucursal_id"
-                  value={usrForm.sucursal_id}
-                  onChange={handleUsrChange}
-                  className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="">{t('ae.noAssigned')}</option>
-                  {sucursales.filter(s => s.activo).map(s => (
-                    <option key={s.id} value={s.id}>{s.nombre}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="flex gap-3 pt-2">
-                <Button type="submit" loading={saving} className="flex-1">
-                  {t('ae.createUser')}
-                </Button>
-                <Button variant="ghost" onClick={closeModal}>
-                  {t('common.cancel')}
-                </Button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      <Modal
+        open={modal === 'usuario'}
+        onClose={closeModal}
+        dismissible={!saving}
+        title={t('ae.newUserModal')}
+        footer={
+          <>
+            <Button variant="secondary" onClick={closeModal} disabled={saving}>{t('common.cancel')}</Button>
+            <Button type="submit" form="form-usuario" loading={saving}>{t('ae.createUser')}</Button>
+          </>
+        }
+      >
+        <form id="form-usuario" onSubmit={handleCreateUsuario} className="space-y-4" noValidate>
+          {modalError && <p role="alert" className="rounded-lg border border-danger-500/30 bg-danger-500/10 px-4 py-3 text-sm font-medium text-danger-400">{modalError}</p>}
+          <Input name="nombre" label={t('common.name')} required value={usrForm.nombre} onChange={handleUsrChange} />
+          <Input name="email" type="email" label={t('common.email')} required value={usrForm.email} onChange={handleUsrChange} />
+          <PasswordInput name="password" label={t('common.password')} required value={usrForm.password} onChange={handleUsrChange} />
+          <Select name="rol" label={t('common.role')} required value={usrForm.rol} onChange={handleUsrChange}>
+            <option value="agente">{t('ae.agentRole')}</option>
+            <option value="admin_sucursal">{t('ae.adminSucRole')}</option>
+          </Select>
+          <Select name="sucursal_id" label={t('ae.branchLabel')} value={usrForm.sucursal_id} onChange={handleUsrChange}>
+            <option value="">{t('ae.noAssigned')}</option>
+            {sucursales.filter(x => x.activo).map(x => (
+              <option key={x.id} value={x.id}>{x.nombre}</option>
+            ))}
+          </Select>
+        </form>
+      </Modal>
     </div>
   );
 }

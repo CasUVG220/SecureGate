@@ -126,7 +126,8 @@ const OWNER_NAV: NavGroup[] = [
 ];
 
 const ADMIN_EMPRESA_NAV: NavGroup[] = [
-  { labelKey: 'nav.group.global', items: [
+  // «Administración global» es del owner; el administrador de empresa solo ve la suya.
+  { labelKey: 'nav.group.company', items: [
     { key: 'ae-dashboard',  labelKey: 'nav.aeDashboard', d: ICON.dashboard },
     { key: 'ae-sucursales', labelKey: 'nav.aeBranches',  d: ICON.home },
     { key: 'garitas',       labelKey: 'nav.gates',       d: ICON.gate },
@@ -167,7 +168,9 @@ function resolveDefaultPage(rol: string): Page {
   return 'dashboard';
 }
 
-function navForRole(rol: string): NavGroup[] {
+/** Se exporta para poder probar qué rótulos ve cada rol (p. ej. «Administración global» es solo del owner). */
+// eslint-disable-next-line react-refresh/only-export-components
+export function navForRole(rol: string): NavGroup[] {
   if (rol === 'admin' || rol === 'admin_sucursal') return ADMIN_NAV;
   if (rol === 'admin_empresa') return ADMIN_EMPRESA_NAV;
   if (rol === 'residente') return RESIDENTE_NAV;
