@@ -769,6 +769,8 @@ export const getResidenteMe = async (): Promise<ResidenteMe> => {
 export interface DashboardData {
   accesos_hoy: number;
   residentes_mora: number;
+  /** Residentes registrados en el alcance; en 0 el panel enseña los primeros pasos. */
+  total_residentes?: number;
   pagos_pendientes: number;
   /** Reservas en estado «pendiente de aprobación» dentro del alcance del usuario. */
   reservas_pendientes?: number;

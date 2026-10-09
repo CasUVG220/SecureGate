@@ -1138,6 +1138,12 @@ export const translations: Record<string, Record<string, string>> = {
     'empresas.saveError': 'No se pudo guardar la empresa.',
     'empresas.nameRequired': 'El nombre de la empresa es requerido.',
     'owner.passwordRules': 'La contraseña debe cumplir los requisitos que aparecen bajo el campo.',
+    'dashboard.firstSteps.title': 'Primeros pasos',
+    'dashboard.firstSteps.intro': 'Esta sucursal todavía no tiene residentes registrados. Para dejarla lista:',
+    'dashboard.firstSteps.residents': 'Dar de alta a los residentes',
+    'dashboard.firstSteps.staff': 'Crear las cuentas del personal de garita',
+    'dashboard.firstSteps.gate': 'Activar la computadora de la garita',
+    'dashboard.firstSteps.go': 'Ir',
   },
 
   en: {
@@ -2278,5 +2284,11 @@ export const translations: Record<string, Record<string, string>> = {
     'empresas.saveError': 'The company could not be saved.',
     'empresas.nameRequired': 'The company name is required.',
     'owner.passwordRules': 'The password must meet the requirements shown below the field.',
+    'dashboard.firstSteps.title': 'First steps',
+    'dashboard.firstSteps.intro': 'This branch has no registered residents yet. To get it ready:',
+    'dashboard.firstSteps.residents': 'Register the residents',
+    'dashboard.firstSteps.staff': 'Create the gate staff accounts',
+    'dashboard.firstSteps.gate': 'Activate the gate computer',
+    'dashboard.firstSteps.go': 'Go',
   },
 };
