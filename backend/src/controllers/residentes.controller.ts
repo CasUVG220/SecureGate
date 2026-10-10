@@ -198,6 +198,7 @@ export const getResidenteMe = async (req: Request, res: Response) => {
       `SELECT id, monto, fecha_pago, metodo, estado
        FROM pagos
        WHERE residente_id = $1
+         AND estado <> 'rechazado'
        ORDER BY fecha_pago DESC
        LIMIT 10`,
       [r.rows[0].id]
@@ -231,6 +232,7 @@ export const getResidentePago = async (req: Request, res: Response) => {
       `SELECT id, monto, fecha_pago, metodo, estado
        FROM pagos
        WHERE residente_id = $1
+         AND estado <> 'rechazado'
        ORDER BY fecha_pago DESC
        LIMIT 5`,
       [id]

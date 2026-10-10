@@ -3,7 +3,7 @@
  * pagarConTarjeta() es la pasarela simulada del sprint 7 y toca dinero: al
  * aprobar deja el saldo del residente en 0 y liquida los cargos de reserva. Dos
  * cosas tienen que quedar blindadas antes de que entre Visanet:
- *   1. un cobro rechazado NO puede tocar el saldo, y
+ *   1. un cobro rechazado NO puede tocar el saldo ni guardarse como pago, y
  *   2. del instrumento sólo pueden persistirse los últimos 4 dígitos.
  * Si alguna se rompe, el residente aparece al día sin haber pagado o el número
  * completo de la tarjeta termina en la base.
@@ -14,7 +14,7 @@ jest.mock('../db/pool', () => ({
 }));
 
 import pool from '../db/pool';
-import { pagarConTarjeta, simularAutorizacionTarjeta } from '../controllers/pagos.controller';
+import { pagarConTarjeta, simularAutorizacionTarjeta, getEstadoTarjeta } from '../controllers/pagos.controller';
 import type { Request, Response } from 'express';
 
 const mockPool = pool as unknown as { connect: jest.Mock };
@@ -84,7 +84,7 @@ describe('pagarConTarjeta', () => {
     expect(insert[1]).toContain('aprobado');
   });
 
-  it('rechazado: guarda el intento pero NO toca el saldo del residente', async () => {
+  it('rechazado: responde 402, NO guarda ningún pago y NO toca el saldo del residente', async () => {
     const client = makeClient('rechazado');
     mockPool.connect.mockResolvedValue(client);
     const res = makeRes();
@@ -92,10 +92,15 @@ describe('pagarConTarjeta', () => {
     await pagarConTarjeta(reqCon({ monto: 850, ultimos4: '0001', titular: 'JUAN PEREZ' }), res);
 
     const sqls = client.query.mock.calls.map(c => c[0] as string);
-    expect(sqls.some(s => s.includes('INSERT INTO pagos'))).toBe(true);
+    // Un intento rechazado no es un pago: no ensucia el historial ni los reportes de ingresos.
+    // (Queda en la auditoría de la ruta con el código 402.)
+    expect(sqls.some(s => s.includes('INSERT INTO pagos'))).toBe(false);
+    expect(sqls).not.toContain('BEGIN');
     expect(sqls.some(s => s.includes('UPDATE residentes'))).toBe(false);
     expect(sqls.some(s => s.includes("metodo = 'reserva'"))).toBe(false);
-    expect(res.status).toHaveBeenCalledWith(201);
+    expect(res.status).toHaveBeenCalledWith(402);
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ estado: 'rechazado', error: expect.stringMatching(/rechazado/i) }));
+    expect(client.release).toHaveBeenCalled();
   });
 
   it('sólo persiste los últimos 4 dígitos del instrumento', async () => {
@@ -139,6 +144,29 @@ describe('pagarConTarjeta', () => {
     expect(res.status).toHaveBeenCalledWith(404);
     expect(client.query.mock.calls.map(c => c[0] as string)).not.toContain('BEGIN');
     expect(client.release).toHaveBeenCalled();
+  });
+});
+
+describe('getEstadoTarjeta — qué ve el residente', () => {
+  const previo = process.env.PAGOS_TARJETA_SIMULADA;
+  afterEach(() => {
+    if (previo === undefined) delete process.env.PAGOS_TARJETA_SIMULADA;
+    else process.env.PAGOS_TARJETA_SIMULADA = previo;
+  });
+
+  it('con la bandera de prueba: disponible y simulada (el portal muestra el aviso de entorno de prueba)', () => {
+    process.env.PAGOS_TARJETA_SIMULADA = 'true';
+    const res = makeRes();
+    getEstadoTarjeta({} as Request, res);
+    expect(res.json).toHaveBeenCalledWith({ disponible: true, simulada: true });
+  });
+
+  it.each([undefined, 'false', ''])('PAGOS_TARJETA_SIMULADA=%p: no disponible y sin textos de simulación', valor => {
+    if (valor === undefined) delete process.env.PAGOS_TARJETA_SIMULADA;
+    else process.env.PAGOS_TARJETA_SIMULADA = valor;
+    const res = makeRes();
+    getEstadoTarjeta({} as Request, res);
+    expect(res.json).toHaveBeenCalledWith({ disponible: false, simulada: false });
   });
 });
 

@@ -96,6 +96,9 @@ export const reportePagos = async (req: Request, res: Response) => {
   const ts = tenantFilter(req.user!, 'p');
   const desdeOffset = ts.params.length + 1;
   const hastaOffset = ts.params.length + 2;
+  const rechazadosOffset = ts.params.length + 3;
+  // Un pago rechazado no es un ingreso: fuera del reporte salvo que se pidan expresamente.
+  const incluirRechazados = req.query.incluir_rechazados === '1';
 
   try {
     const result = await pool.query(
@@ -111,8 +114,9 @@ export const reportePagos = async (req: Request, res: Response) => {
        WHERE ${ts.whereClause}
          AND p.fecha_pago >= $${desdeOffset}::date
          AND p.fecha_pago <  $${hastaOffset}::date + INTERVAL '1 day'
+         AND ($${rechazadosOffset}::boolean OR p.estado <> 'rechazado')
        ORDER BY p.fecha_pago DESC`,
-      [...ts.params, desde, hasta]
+      [...ts.params, desde, hasta, incluirRechazados]
     );
 
     const headers = ['fecha', 'numero_casa', 'monto', 'metodo', 'estado'];
