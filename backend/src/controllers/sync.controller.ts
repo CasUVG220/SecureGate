@@ -4,8 +4,8 @@ import { serverError } from '../utils/http';
 
 /**
  * GET /sync/garita — snapshot de lo que la app de escritorio necesita para
- * decidir accesos sin internet: residentes, blacklist vigente y
- * preautorizaciones vigentes de la sucursal de la LICENCIA (no del agente:
+ * decidir accesos sin internet: residentes, blacklist vigente, preautorizaciones
+ * vigentes e invitaciones QR de la sucursal de la LICENCIA (no del agente:
  * el dispositivo está fijo en una garita, la persona puede rotar).
  *
  * Es un pull completo, no incremental: son tablas pequeñas por sucursal
@@ -22,7 +22,7 @@ export const getSnapshotGarita = async (req: Request, res: Response) => {
     return res.status(403).json({ error: 'La sesión del agente no corresponde a la sucursal de esta licencia' });
   }
   try {
-    const [residentes, blacklist, blacklistResidente, preautorizaciones] = await Promise.all([
+    const [residentes, blacklist, blacklistResidente, preautorizaciones, invitacionesQr] = await Promise.all([
       pool.query(
         `SELECT r.id, r.numero_casa, r.estado_pago, r.telefono, u.nombre
          FROM residentes r
@@ -60,6 +60,26 @@ export const getSnapshotGarita = async (req: Request, res: Response) => {
            AND p.fecha_fin >= CURRENT_DATE`,
         [sucursal_id],
       ),
+      // Invitaciones QR (SCRUM-126): copia para validarlas SIN red. Entran las que aún pueden servir por fecha (con un día
+      // de margen: CURRENT_DATE es el día en UTC, que cambia a las 18:00 de Guatemala; la garita decide con su propia fecha)
+      // y, de las revocadas, solo las del último mes: así la garita puede decir «revocada» en vez de «no encontrada» sin que
+      // el espejo crezca para siempre. Las fechas viajan como texto AAAA-MM-DD (no como instantes) para no depender de la
+      // zona del servidor. Quedan fuera las ya vencidas de antes: sin red se rechazan igual («no está en la copia local»).
+      pool.query(
+        `SELECT i.id, i.tipo, i.etiqueta, i.nombre_visitante, i.numero_dpi, i.placa,
+                i.residente_id, r.numero_casa, u.nombre AS residente_nombre,
+                to_char(i.fecha_inicio, 'YYYY-MM-DD') AS fecha_inicio,
+                to_char(i.fecha_fin,    'YYYY-MM-DD') AS fecha_fin,
+                i.usos_maximos, i.usos_actuales, i.activo, i.bloqueado_hasta
+         FROM invitaciones_qr i
+         JOIN residentes r ON r.id = i.residente_id
+         JOIN usuarios   u ON u.id = r.usuario_id
+         WHERE i.sucursal_id = $1
+           AND (i.fecha_fin IS NULL OR i.fecha_fin >= CURRENT_DATE - 1)
+           AND (i.activo = TRUE OR i.created_at > NOW() - INTERVAL '30 days')
+         ORDER BY i.created_at DESC`,
+        [sucursal_id],
+      ),
     ]);
 
     res.json({
@@ -68,6 +88,7 @@ export const getSnapshotGarita = async (req: Request, res: Response) => {
       residentes: residentes.rows,
       blacklist: [...blacklist.rows, ...blacklistResidente.rows],
       preautorizaciones: preautorizaciones.rows,
+      invitaciones_qr: invitacionesQr.rows,
     });
   } catch (error) {
     serverError(res, error, 'Error al generar snapshot de sincronización');
