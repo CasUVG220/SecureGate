@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import pool from '../db/pool';
-import rateLimit from 'express-rate-limit';
+import { auditLog } from '../middleware/audit.middleware';
+import { crearLimitador } from '../middleware/limitadores';
 import authRouter from './auth.routes';
 import residentesRouter from './residentes.routes';
 import accesosRouter from './accesos.routes';
@@ -28,7 +29,7 @@ import syncRouter from './sync.routes';
 import invitacionesRouter from './invitaciones.routes';
 import { verifyToken, requireOwner, requireAdminEmpresa, requireAdminSucursal, requireStaff } from '../middleware/auth.middleware';
 import { getDashboard } from '../controllers/dashboard.controller';
-import { getAuditLogs } from '../controllers/audit.controller';
+import { getAuditLogs, getAuditAcciones } from '../controllers/audit.controller';
 import { revisarEstadosMora } from '../jobs/mora.job';
 import { enviarRecordatoriosReservas } from '../jobs/recordatoriosReservas.job';
 import { expirarInvitaciones } from '../jobs/invitaciones.job';
@@ -54,12 +55,14 @@ router.use('/pagos', pagosRouter);
 router.use('/preautorizaciones', preautorizacionesRouter);
 // Proxy hacia Google Vision con nuestra API key: sólo personal autenticado y
 // con límite propio (cuesta dinero por llamada). Antes era anónimo.
-const ocrLimiter = rateLimit({
+const ocrLimiter = crearLimitador({
+  nombre: 'ocr-usuario',
   windowMs: 60 * 1000,
   max: parseInt(process.env.RATE_LIMIT_OCR_MAX || '30', 10),
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { error: 'Demasiadas lecturas de documento, espera un momento' },
+  // Por usuario (antes por IP): varios agentes detrás del mismo NAT no se agotan el cupo entre sí. Los bloqueos quedan auditados.
+  porUsuario: true,
+  accion: 'OCR_ESCANEO',
+  mensaje: 'Demasiadas lecturas de documento, espera un momento',
 });
 router.use('/ocr', verifyToken, requireStaff, ocrLimiter, ocrRouter);
 // Los CSV traen DPI y nombre de todos los visitantes: administración.
@@ -84,10 +87,11 @@ router.use('/sync',               syncRouter);
 router.use('/invitaciones',       invitacionesRouter);
 
 router.get('/dashboard',   verifyToken, requireStaff, getDashboard);
+router.get('/audit-logs/acciones', verifyToken, requireOwner, getAuditAcciones);
 router.get('/audit-logs', verifyToken, requireOwner, getAuditLogs);
 
 // Dispara manualmente la revisión del ciclo de mora (demo/testing)
-router.post('/admin/ejecutar-revision-mora', verifyToken, requireOwner, async (_req, res) => {
+router.post('/admin/ejecutar-revision-mora', verifyToken, requireOwner, auditLog({ accion: 'JOB_MORA_EJECUTADO' }), async (_req, res) => {
   try {
     const resumen = await revisarEstadosMora();
     res.json({ ejecutado: true, ...resumen });
@@ -97,7 +101,7 @@ router.post('/admin/ejecutar-revision-mora', verifyToken, requireOwner, async (_
 });
 
 // Dispara manualmente los recordatorios de reservas (demo/testing)
-router.post('/admin/ejecutar-recordatorios-reservas', verifyToken, requireOwner, async (_req, res) => {
+router.post('/admin/ejecutar-recordatorios-reservas', verifyToken, requireOwner, auditLog({ accion: 'JOB_RECORDATORIOS_EJECUTADO' }), async (_req, res) => {
   try {
     const resumen = await enviarRecordatoriosReservas();
     res.json({ ejecutado: true, ...resumen });
@@ -107,7 +111,7 @@ router.post('/admin/ejecutar-recordatorios-reservas', verifyToken, requireOwner,
 });
 
 // Dispara manualmente la expiración de invitaciones (demo/testing)
-router.post('/admin/ejecutar-expiracion-invitaciones', verifyToken, requireOwner, async (_req, res) => {
+router.post('/admin/ejecutar-expiracion-invitaciones', verifyToken, requireOwner, auditLog({ accion: 'JOB_INVITACIONES_EJECUTADO' }), async (_req, res) => {
   try {
     const resumen = await expirarInvitaciones();
     res.json({ ejecutado: true, ...resumen });

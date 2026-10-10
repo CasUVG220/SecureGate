@@ -1,9 +1,10 @@
 import { Router } from 'express';
 import { body } from 'express-validator';
-import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
+import { ipKeyGenerator } from 'express-rate-limit';
 import { login, refresh, logout } from '../controllers/auth.controller';
 import { validateRequest } from '../middleware/validate.middleware';
 import { auditLog } from '../middleware/audit.middleware';
+import { crearLimitador } from '../middleware/limitadores';
 
 const router = Router();
 
@@ -24,35 +25,38 @@ const VENTANA = 15 * 60 * 1000;
  * Overrides (RATE_LIMIT_LOGIN_MAX / RATE_LIMIT_LOGIN_CUENTA_MAX) sólo para
  * pruebas de carga.
  */
-const loginPorIp = rateLimit({
+// Los intentos bloqueados por estos límites también quedan en audit_logs (acción LOGIN, status 429, con el correo
+// intentado y el límite que frenó), no sólo los que llegan a verificar la contraseña (RNF-10).
+const loginPorIp = crearLimitador({
+  nombre: 'login-ip',
   windowMs: VENTANA,
   max: parseInt(process.env.RATE_LIMIT_LOGIN_MAX || '20', 10),
-  skipSuccessfulRequests: true,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { error: 'Demasiados intentos de login' },
+  soloFallidos: true,
+  accion: 'LOGIN',
+  mensaje: 'Demasiados intentos de login',
 });
 
-const loginPorCuenta = rateLimit({
+const loginPorCuenta = crearLimitador({
+  nombre: 'login-cuenta',
   windowMs: VENTANA,
   max: parseInt(process.env.RATE_LIMIT_LOGIN_CUENTA_MAX || '10', 10),
-  skipSuccessfulRequests: true,
-  standardHeaders: true,
-  legacyHeaders: false,
-  keyGenerator: req => {
+  soloFallidos: true,
+  accion: 'LOGIN',
+  clave: req => {
     const email = typeof req.body?.email === 'string' ? req.body.email.trim().toLowerCase() : '';
     return email ? `cuenta:${email}` : ipKeyGenerator(req.ip ?? '');
   },
-  message: { error: 'Demasiados intentos para esta cuenta; espera 15 minutos' },
+  mensaje: 'Demasiados intentos para esta cuenta; espera 15 minutos',
 });
 
 /** refresh y logout ya no comparten el cupo del login (antes eran 10 por 15 min en total). */
-const sesionLimiter = rateLimit({
+const sesionLimiter = crearLimitador({
+  nombre: 'sesion-ip',
   windowMs: VENTANA,
   max: parseInt(process.env.RATE_LIMIT_SESION_MAX || '120', 10),
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { error: 'Demasiadas solicitudes de sesión' },
+  accion: 'LIMITE_SESION',
+  tabla: 'refresh_tokens',
+  mensaje: 'Demasiadas solicitudes de sesión',
 });
 
 router.post(
@@ -67,6 +71,6 @@ router.post(
 );
 
 router.post('/refresh', sesionLimiter, refresh);
-router.post('/logout',  sesionLimiter, logout);
+router.post('/logout',  sesionLimiter, auditLog({ accion: 'LOGOUT', tabla: 'refresh_tokens' }), logout);
 
 export default router;
