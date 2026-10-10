@@ -98,6 +98,8 @@ pub struct Residente {
 pub struct Evaluacion {
     pub bloqueado: bool,
     pub razon_bloqueo: Option<String>,
+    /// Qué coincidió con la lista negra: `"dpi"` o `"placa"` (None si no está bloqueado).
+    pub motivo_bloqueo: Option<String>,
     pub preautorizado: bool,
     pub preautorizacion: Option<Preautorizacion>,
     pub visitante_conocido: Option<String>,
@@ -178,16 +180,24 @@ pub fn evaluar_visitante(
     ahora_iso: &str,
 ) -> AppResult<Evaluacion> {
     let dpi = numero_dpi.trim();
-    // Blacklist de sucursal (residente_id NULL) o del residente destino.
-    let ban: Option<(String, Option<String>)> = conn
+    // Placa normalizada (P123ABC) para la lista negra: se compara sin guiones ni espacios.
+    let placa_bl = placa.map(crate::placa::normalizar).filter(|p| p.len() >= crate::placa::LARGO_MINIMO);
+    // Blacklist de sucursal (residente_id NULL) o del residente destino, por DPI o por
+    // PLACA del vehículo. Un DPI vacío jamás coincide (los bloqueos solo de vehículo se
+    // guardan con numero_dpi = ''), y la placa solo aplica a los bloqueos de sucursal.
+    let ban: Option<(String, Option<String>, String)> = conn
         .query_row(
-            "SELECT razon, visitante_nombre FROM blacklist_local
-             WHERE numero_dpi = ?1
+            "SELECT razon, visitante_nombre,
+                    CASE WHEN ?1 <> '' AND numero_dpi = ?1 THEN 'dpi' ELSE 'placa' END AS motivo
+             FROM blacklist_local
+             WHERE ((?1 <> '' AND numero_dpi = ?1)
+                    OR (?4 IS NOT NULL AND placa IS NOT NULL AND placa = ?4 AND residente_id IS NULL))
                AND (fecha_fin IS NULL OR fecha_fin > ?2)
                AND (residente_id IS NULL OR residente_id = ?3)
+             ORDER BY CASE WHEN ?1 <> '' AND numero_dpi = ?1 THEN 0 ELSE 1 END
              LIMIT 1",
-            params![dpi, ahora_iso, residente_id.unwrap_or("")],
-            |r| Ok((r.get(0)?, r.get(1)?)),
+            params![dpi, ahora_iso, residente_id.unwrap_or(""), placa_bl],
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
         )
         .optional()?;
 
@@ -226,6 +236,7 @@ pub fn evaluar_visitante(
     Ok(Evaluacion {
         bloqueado: ban.is_some(),
         razon_bloqueo: ban.as_ref().map(|b| b.0.clone()),
+        motivo_bloqueo: ban.as_ref().map(|b| b.2.clone()),
         preautorizado: pre.is_some(),
         visitante_conocido: conocido.or(ban.and_then(|b| b.1)).or(pre.as_ref().map(|p| p.nombre_visitante.clone())),
         preautorizacion: pre,
@@ -242,9 +253,10 @@ pub fn encolar_acceso(conn: &Connection, agente_id: &str, a: &NuevoAcceso) -> Ap
     let ahora = Utc::now().to_rfc3339();
     let ev = evaluar_visitante(conn, &a.numero_dpi, a.placa.as_deref(), Some(&a.residente_id), &hoy, &ahora)?;
     if ev.bloqueado {
+        let quien = if ev.motivo_bloqueo.as_deref() == Some("placa") { "Vehículo" } else { "Visitante" };
         return Err(AppError::new(
             "blacklist",
-            format!("Visitante en lista negra: {}", ev.razon_bloqueo.unwrap_or_default()),
+            format!("{quien} en lista negra: {}", ev.razon_bloqueo.unwrap_or_default()),
         ));
     }
 
@@ -451,9 +463,11 @@ mod tests {
         c.execute_batch(
             "INSERT INTO residentes_local VALUES ('r1','A-12','Ana López','al_dia',NULL);
              INSERT INTO residentes_local VALUES ('r2','B-3','Beto Ruiz','mora','5555');
-             INSERT INTO blacklist_local VALUES ('b1','1111111111111','Malo','Robo','2099-01-01T00:00:00Z',NULL);
-             INSERT INTO blacklist_local VALUES ('b2','2222222222222','Vencido','Viejo','2020-01-01T00:00:00Z',NULL);
-             INSERT INTO blacklist_local VALUES ('b3','3333333333333','SoloAna','No lo quiere',NULL,'r1');
+             INSERT INTO blacklist_local (id, numero_dpi, visitante_nombre, razon, fecha_fin, residente_id) VALUES ('b1','1111111111111','Malo','Robo','2099-01-01T00:00:00Z',NULL);
+             INSERT INTO blacklist_local (id, numero_dpi, visitante_nombre, razon, fecha_fin, residente_id) VALUES ('b2','2222222222222','Vencido','Viejo','2020-01-01T00:00:00Z',NULL);
+             INSERT INTO blacklist_local (id, numero_dpi, visitante_nombre, razon, fecha_fin, residente_id) VALUES ('b3','3333333333333','SoloAna','No lo quiere',NULL,'r1');
+             INSERT INTO blacklist_local (id, numero_dpi, visitante_nombre, razon, fecha_fin, residente_id, placa) VALUES ('b4','',NULL,'Vehículo robado',NULL,NULL,'P999XYZ');
+             INSERT INTO blacklist_local (id, numero_dpi, visitante_nombre, razon, fecha_fin, residente_id, placa) VALUES ('b5','',NULL,'Placa vencida','2020-01-01T00:00:00Z',NULL,'P111AAA');
              INSERT INTO preautorizaciones_local VALUES ('p1','r1','Primo Pérez','4444444444444',NULL,'2026-09-01','2026-09-30');
              INSERT INTO preautorizaciones_local VALUES ('p2','r2','Taxi','','P123ABC','2026-09-01','2026-09-30');",
         )
@@ -478,6 +492,53 @@ mod tests {
         assert!(e.bloqueado);
         assert_eq!(e.razon_bloqueo.as_deref(), Some("Robo"));
         assert!(!evaluar_visitante(&c, "2222222222222", None, None, HOY, AHORA).unwrap().bloqueado);
+    }
+
+    #[test]
+    fn blacklist_por_placa_bloquea_con_cualquier_formato_y_sin_visitante() {
+        let c = db();
+        for p in ["P999XYZ", "p-999 xyz", "P-999XYZ"] {
+            let e = evaluar_visitante(&c, "7777777777777", Some(p), Some("r1"), HOY, AHORA).unwrap();
+            assert!(e.bloqueado, "{p:?} debe bloquear");
+            assert_eq!(e.razon_bloqueo.as_deref(), Some("Vehículo robado"));
+            assert_eq!(e.motivo_bloqueo.as_deref(), Some("placa"));
+        }
+        // Otra placa, placa vencida y sin placa no bloquean.
+        assert!(!evaluar_visitante(&c, "7777777777777", Some("P000AAA"), Some("r1"), HOY, AHORA).unwrap().bloqueado);
+        assert!(!evaluar_visitante(&c, "7777777777777", Some("P111AAA"), Some("r1"), HOY, AHORA).unwrap().bloqueado);
+        assert!(!evaluar_visitante(&c, "7777777777777", None, Some("r1"), HOY, AHORA).unwrap().bloqueado);
+        assert!(!evaluar_visitante(&c, "7777777777777", Some("  "), Some("r1"), HOY, AHORA).unwrap().bloqueado);
+    }
+
+    #[test]
+    fn un_dpi_vacio_nunca_coincide_con_un_bloqueo_solo_de_vehiculo() {
+        // Los bloqueos por placa se guardan con numero_dpi = '': mientras el agente aún no
+        // escribe el DPI, la evaluación no puede dar un falso positivo contra esas filas.
+        let c = db();
+        let e = evaluar_visitante(&c, "", None, Some("r1"), HOY, AHORA).unwrap();
+        assert!(!e.bloqueado);
+        assert!(!evaluar_visitante(&c, "   ", Some("P000AAA"), None, HOY, AHORA).unwrap().bloqueado);
+    }
+
+    #[test]
+    fn el_dpi_tiene_prioridad_y_el_motivo_dice_cual_coincidio() {
+        let c = db();
+        let por_dpi = evaluar_visitante(&c, "1111111111111", Some("P999XYZ"), Some("r2"), HOY, AHORA).unwrap();
+        assert_eq!(por_dpi.motivo_bloqueo.as_deref(), Some("dpi"));
+        assert_eq!(por_dpi.razon_bloqueo.as_deref(), Some("Robo"));
+    }
+
+    #[test]
+    fn no_se_encola_un_acceso_con_placa_bloqueada() {
+        let c = db();
+        let err = encolar_acceso(&c, "agente-1", &NuevoAcceso {
+            nombre_visitante: "Conductor".into(), numero_dpi: "8888888888888".into(), residente_id: "r1".into(),
+            placa: Some("p-999xyz".into()), notas: None, capturado_manualmente: false, invitacion_qr_id: None,
+        }).unwrap_err();
+        assert_eq!(err.codigo, "blacklist");
+        assert!(err.mensaje.starts_with("Vehículo en lista negra"), "{}", err.mensaje);
+        let n: i64 = c.query_row("SELECT count(*) FROM accesos_pendientes", [], |r| r.get(0)).unwrap();
+        assert_eq!(n, 0, "nada se encola");
     }
 
     #[test]

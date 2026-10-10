@@ -74,8 +74,12 @@ fn aplicar_snapshot(conn: &Connection, snap: &Value) -> AppResult<(usize, usize,
     }
     let blacklist = snap["blacklist"].as_array().cloned().unwrap_or_default();
     for b in &blacklist {
+        // Un bloqueo solo de vehículo no trae DPI: se guarda '' y la evaluación local
+        // nunca lo compara contra un DPI vacío (ver `garita::evaluar_visitante`).
+        let placa = b["placa"].as_str().map(crate::placa::normalizar).filter(|p| !p.is_empty());
         tx.execute(
-            "INSERT INTO blacklist_local (id, numero_dpi, visitante_nombre, razon, fecha_fin, residente_id) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            "INSERT INTO blacklist_local (id, numero_dpi, visitante_nombre, razon, fecha_fin, residente_id, placa)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
             params![
                 b["id"].as_str().unwrap_or_default(),
                 b["numero_dpi"].as_str().unwrap_or_default(),
@@ -83,6 +87,7 @@ fn aplicar_snapshot(conn: &Connection, snap: &Value) -> AppResult<(usize, usize,
                 b["razon"].as_str().unwrap_or_default(),
                 parsear_fecha(&b["fecha_fin"]),
                 b["residente_id"].as_str(),
+                placa,
             ],
         )?;
     }
@@ -462,16 +467,24 @@ mod tests {
         c.execute("INSERT INTO residentes_local VALUES ('viejo','Z-9','Viejo','al_dia',NULL)", []).unwrap();
         let snap = json!({
             "residentes": [{"id": "r1", "numero_casa": "A-1", "nombre": "Ana", "estado_pago": "mora", "telefono": null}],
-            "blacklist": [{"id": "b1", "numero_dpi": "123", "visitante_nombre": "X", "razon": "R", "fecha_fin": null, "residente_id": null}],
+            "blacklist": [
+                {"id": "b1", "numero_dpi": "123", "visitante_nombre": "X", "razon": "R", "fecha_fin": null, "residente_id": null, "placa": null},
+                {"id": "b2", "numero_dpi": null, "visitante_nombre": null, "razon": "Vehículo", "fecha_fin": null, "residente_id": null, "placa": "p-123 abc"}
+            ],
             "preautorizaciones": [{"id": "p1", "residente_id": "r1", "nombre_visitante": "P", "numero_dpi": "9",
                                    "placa": null, "fecha_inicio": "2026-09-01T06:00:00.000Z", "fecha_fin": "2026-09-30T06:00:00.000Z"}]
         });
-        assert_eq!(aplicar_snapshot(&c, &snap).unwrap(), (1, 1, 1));
+        assert_eq!(aplicar_snapshot(&c, &snap).unwrap(), (1, 2, 1));
         let ids: Vec<String> = c.prepare("SELECT id FROM residentes_local").unwrap()
             .query_map([], |r| r.get(0)).unwrap().collect::<Result<_, _>>().unwrap();
         assert_eq!(ids, ["r1"], "el residente viejo desapareció");
         let fin: String = c.query_row("SELECT fecha_fin FROM preautorizaciones_local", [], |r| r.get(0)).unwrap();
         assert_eq!(fin, "2026-09-30");
+        // El bloqueo solo de vehículo llega con DPI vacío y la placa normalizada.
+        let (dpi, placa): (String, Option<String>) = c
+            .query_row("SELECT numero_dpi, placa FROM blacklist_local WHERE id = 'b2'", [], |r| Ok((r.get(0)?, r.get(1)?)))
+            .unwrap();
+        assert_eq!((dpi.as_str(), placa.as_deref()), ("", Some("P123ABC")));
         assert!(db::meta_leer(&c, "ultima_sync_ok").unwrap().is_some());
     }
 }

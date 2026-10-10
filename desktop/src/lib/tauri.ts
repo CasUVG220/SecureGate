@@ -153,6 +153,8 @@ export interface Preautorizacion {
 export interface Evaluacion {
   bloqueado: boolean;
   razon_bloqueo: string | null;
+  /** Qué coincidió con la lista negra: el DPI del visitante o la placa del vehículo. */
+  motivo_bloqueo?: 'dpi' | 'placa' | null;
   preautorizado: boolean;
   preautorizacion: Preautorizacion | null;
   visitante_conocido: string | null;

@@ -180,11 +180,14 @@ export const getResidentes = async (): Promise<Residente[]> => {
 export class BlacklistDenialError extends Error {
   razon: string;
   fecha_fin: string | null;
-  constructor(razon: string, fecha_fin: string | null) {
-    super('Visitante en lista negra');
+  /** Qué coincidió con la lista negra: el DPI del visitante o la placa del vehículo. */
+  motivo: 'dpi' | 'placa';
+  constructor(razon: string, fecha_fin: string | null, motivo: 'dpi' | 'placa' = 'dpi') {
+    super(motivo === 'placa' ? 'Vehículo en lista negra' : 'Visitante en lista negra');
     this.name = 'BlacklistDenialError';
     this.razon = razon;
     this.fecha_fin = fecha_fin;
+    this.motivo = motivo;
   }
 }
 
@@ -197,8 +200,8 @@ export const registrarAcceso = async (data: AccesoPayload): Promise<AccesoResult
   const body = await res.json();
   if (!res.ok) {
     if (res.status === 403 && (body as { razon?: string }).razon) {
-      const b = body as { razon: string; fecha_fin?: string | null };
-      throw new BlacklistDenialError(b.razon, b.fecha_fin ?? null);
+      const b = body as { razon: string; fecha_fin?: string | null; motivo?: 'dpi' | 'placa' };
+      throw new BlacklistDenialError(b.razon, b.fecha_fin ?? null, b.motivo === 'placa' ? 'placa' : 'dpi');
     }
     throw new Error((body as { error?: string }).error || 'Error al registrar acceso');
   }
@@ -1259,9 +1262,12 @@ export interface Blacklist {
   fecha_fin: string | null;
   activo: boolean;
   created_at: string;
-  visitante_id: string;
-  visitante_nombre: string;
-  numero_dpi: string;
+  /** Vacíos cuando se bloqueó solo un vehículo (placa) sin visitante conocido. */
+  visitante_id: string | null;
+  visitante_nombre: string | null;
+  numero_dpi: string | null;
+  /** Placa normalizada (P123ABC) si el bloqueo es por vehículo. */
+  placa: string | null;
   sucursal_nombre: string;
   creado_por_nombre: string;
 }
@@ -1272,7 +1278,9 @@ export type BlacklistEntry = Blacklist;
 export type BlacklistDuracion = 'temporal_dias' | '30_dias' | 'indefinido';
 
 export interface BlacklistInput {
-  visitante_id: string;
+  /** Se necesita `visitante_id` o `placa` (o las dos). */
+  visitante_id?: string;
+  placa?: string;
   razon: string;
   duracion: BlacklistDuracion;
   dias?: number;
@@ -1283,6 +1291,8 @@ export interface VisitanteBasico {
   id: string;
   nombre: string;
   numero_dpi: string;
+  /** Presente al buscar por placa: el vehículo que coincidió. */
+  placa?: string | null;
 }
 
 export interface VisitanteFrecuente {
@@ -1297,6 +1307,17 @@ export const buscarVisitantesPorDpi = async (dpi: string): Promise<VisitanteBasi
   if (dpi.length < 3) return [];
   const res = await apiFetch(
     `${BASE_URL}/api/visitantes?dpi=${encodeURIComponent(dpi)}`,
+    { headers: authHeaders() }
+  );
+  if (!res.ok) return [];
+  return res.json() as Promise<VisitanteBasico[]>;
+};
+
+/** «Buscar visitante por DPI o placa»: la placa se compara sin guiones ni espacios y sin importar mayúsculas. */
+export const buscarVisitantesPorPlaca = async (placa: string): Promise<VisitanteBasico[]> => {
+  if (placa.replace(/[^A-Za-z0-9]/g, '').length < 3) return [];
+  const res = await apiFetch(
+    `${BASE_URL}/api/visitantes?placa=${encodeURIComponent(placa)}`,
     { headers: authHeaders() }
   );
   if (!res.ok) return [];

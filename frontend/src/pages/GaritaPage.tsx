@@ -57,7 +57,7 @@ export default function GaritaPage() {
   const [casaSearch, setCasaSearch]   = useState('');
   const [casaOpen, setCasaOpen]       = useState(false);
   const [blacklistBlock, setBlacklistBlock] = useState<{
-    razon: string; fecha_fin: string | null;
+    razon: string; fecha_fin: string | null; motivo: 'dpi' | 'placa';
   } | null>(null);
   const [dpiHistorial, setDpiHistorial]     = useState(false);
   const [dpiSugerencias, setDpiSugerencias] = useState<VisitanteFrecuente[]>([]);
@@ -165,7 +165,7 @@ export default function GaritaPage() {
       }
     } catch (err: unknown) {
       if (err instanceof BlacklistDenialError) {
-        setBlacklistBlock({ razon: err.razon, fecha_fin: err.fecha_fin });
+        setBlacklistBlock({ razon: err.razon, fecha_fin: err.fecha_fin, motivo: err.motivo });
       } else {
         setError(err instanceof Error ? err.message : 'Error al registrar');
       }
@@ -426,7 +426,9 @@ export default function GaritaPage() {
                 {t('blacklist.blockedTitle')}
               </h2>
             </div>
-            <p className="text-red-200 text-sm">{t('blacklist.blockedAlert')}</p>
+            <p className="text-red-200 text-sm">
+              {t(blacklistBlock.motivo === 'placa' ? 'blacklist.blockedByPlate' : 'blacklist.blockedAlert')}
+            </p>
             <div className="bg-red-950/60 border border-red-800 rounded-xl px-4 py-3 space-y-1">
               <p className="text-red-200 text-sm">
                 <span className="font-semibold">{t('blacklist.reason')}:</span> {blacklistBlock.razon}
