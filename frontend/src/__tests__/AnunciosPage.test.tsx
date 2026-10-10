@@ -53,7 +53,7 @@ describe('AnunciosPage — publicar', () => {
     render_();
     const dialogo = await abrirNuevo();
     fireEvent.change(within(dialogo).getByLabelText(/Vigente hasta|Hasta/), { target: { value: '2099-12-31' } });
-    expect(within(dialogo).getByRole('note')).toHaveTextContent(/dejará de mostrarse el 31\/12\/2099|dejará de mostrarse el 31\/12\/2099/);
+    expect(within(dialogo).getByRole('note')).toHaveTextContent('dejará de mostrarse el 31 dic 2099');
     fireEvent.change(within(dialogo).getByLabelText(/Vigente desde|Desde/), { target: { value: '2099-01-05' } });
     expect(within(dialogo).getByRole('note')).toHaveTextContent('a partir del');
     fireEvent.click(within(dialogo).getByRole('radio', { name: 'Urgente' }));

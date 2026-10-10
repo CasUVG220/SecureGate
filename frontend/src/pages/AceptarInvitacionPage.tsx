@@ -10,6 +10,7 @@ import {
 } from '../services/api';
 import { Button, Card, ErrorState, Input, Spinner } from '../components/ui';
 import { useTranslation } from '../i18n/useTranslation';
+import { formatearFechaHora } from '../utils/fecha';
 
 interface Props {
   token: string;
@@ -113,7 +114,7 @@ export default function AceptarInvitacionPage({ token, onAceptada, onIrALogin }:
                   <p className="mt-1 text-xs text-gray-400">{t('inv.accept.willCreate')} <strong className="text-gray-200">{invitacion.empresa_nombre}</strong>.</p>
                 )}
                 <p className="mt-2 text-xs text-gray-400">
-                  {t('inv.accept.expiresOn')} {new Date(invitacion.expira_en).toLocaleString(language === 'en' ? 'en-US' : 'es-GT', { dateStyle: 'medium', timeStyle: 'short' })}
+                  {t('inv.accept.expiresOn')} {formatearFechaHora(invitacion.expira_en, language === 'en' ? 'en' : 'es')}
                 </p>
               </div>
 

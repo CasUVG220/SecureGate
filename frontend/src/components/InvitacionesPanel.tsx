@@ -17,6 +17,7 @@ import {
   type BadgeTone, type Column, type RowAction,
 } from './ui';
 import { useTranslation } from '../i18n/useTranslation';
+import { formatearFechaHoraCorta } from '../utils/fecha';
 
 export type InvitacionesModo = 'owner' | 'admin_empresa';
 
@@ -39,7 +40,7 @@ const ICON_MAIL = 'M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 
 const ICON_SEND = 'M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z';
 
 const fecha = (iso: string, lang: string) =>
-  new Date(iso).toLocaleDateString(lang === 'en' ? 'en-US' : 'es-GT', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+  formatearFechaHoraCorta(iso, lang === 'en' ? 'en' : 'es');
 
 export default function InvitacionesPanel({ modo, empresas = [], sucursales = [] }: Props) {
   const { t, language } = useTranslation();

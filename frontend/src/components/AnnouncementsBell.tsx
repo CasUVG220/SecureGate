@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { getMisAnuncios, marcarAnuncioLeido, type MiAnuncio, type AnuncioPrioridad } from '../services/api';
 import { Skeleton } from './Skeleton';
 import { useTranslation } from '../i18n/useTranslation';
+import { formatearFecha } from '../utils/fecha';
 
 const PRIORIDAD_BADGE: Record<AnuncioPrioridad, string> = {
   normal:     'bg-gray-700 text-gray-300',
@@ -64,7 +65,7 @@ export default function AnnouncementsBell() {
   };
 
   const fmtDate = (d: string) =>
-    new Date(d).toLocaleDateString('es-GT', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    formatearFecha(d);
 
   return (
     <div className="relative">

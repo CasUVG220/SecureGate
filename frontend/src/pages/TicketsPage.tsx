@@ -5,6 +5,7 @@ import { useTranslation } from '../i18n/useTranslation';
 import TicketChat, { TIPO_LABEL, ESTADO_LABEL } from '../components/TicketChat';
 import type { BadgeTone } from '../components/ui';
 import { usePolling } from '../hooks/usePolling';
+import { formatearFechaHoraCorta } from '../utils/fecha';
 
 const ICON_TICKETS = 'M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z';
 
@@ -45,7 +46,7 @@ export default function TicketsPage() {
   ), [tickets, fEstado, fTipo]);
 
   const fmt = (d: string | null) =>
-    d ? new Date(d).toLocaleDateString('es-GT', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '';
+    d ? formatearFechaHoraCorta(d) : '';
 
   return (
     <div className="sg-page text-gray-100 h-full flex flex-col">

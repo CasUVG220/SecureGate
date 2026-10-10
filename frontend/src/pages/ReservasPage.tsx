@@ -10,6 +10,7 @@ import { useToast } from '../components/Toast';
 import { ROW_ICON, RowActions } from '../components/ui';
 import { useTranslation } from '../i18n/useTranslation';
 import { esImagenValida } from '../utils/imagen';
+import { formatearDia, formatearHora, hoyEnZona } from '../utils/fecha';
 
 const ESTADO_CLASS: Record<EstadoReserva, string> = {
   pendiente_aprobacion: 'bg-yellow-900/40 text-yellow-400 border-yellow-700/40',
@@ -27,11 +28,10 @@ const ESTADO_LABEL_KEY: Record<EstadoReserva, string> = {
   completada:           'reservas.statusCompleted',
 };
 
-const hoy = () => new Date().toISOString().slice(0, 10);
-const fmtFecha = (f: string) => new Date(f).toLocaleDateString('es-GT', { timeZone: 'UTC' });
+const hoy = hoyEnZona;
+const fmtFecha = (f: string) => formatearDia(f);
 const fmtHora = (h: string) => h.slice(0, 5);
-const fmtHoraTs = (ts: string) =>
-  new Date(ts).toLocaleTimeString('es-GT', { hour: '2-digit', minute: '2-digit', hour12: false });
+const fmtHoraTs = (ts: string) => formatearHora(ts);
 
 const horaAMin = (h: string) => {
   const [hh, mm] = h.split(':').map(Number);

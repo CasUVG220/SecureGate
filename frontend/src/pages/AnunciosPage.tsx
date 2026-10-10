@@ -6,6 +6,7 @@ import {
 } from '../services/api';
 import { Badge, Button, DataTable, EmptyState, Input, Modal, Textarea, useToast, type Column } from '../components/ui';
 import { useTranslation } from '../i18n/useTranslation';
+import { formatearDia, formatearFecha, hoyEnZona } from '../utils/fecha';
 
 const PRIORIDADES: { value: AnuncioPrioridad; labelKey: string }[] = [
   { value: 'normal',     labelKey: 'announce.prioNormal' },
@@ -141,7 +142,7 @@ export default function AnunciosPage() {
     }
   };
 
-  const fmtDate = (d: string | null) => d ? new Date(d).toLocaleDateString('es-GT') : null;
+  const fmtDate = (d: string | null) => d ? formatearFecha(d) : null;
 
   const vigencia = (a: Anuncio): string => {
     const desde = fmtDate(a.vigente_desde) ?? '—';
@@ -155,9 +156,9 @@ export default function AnunciosPage() {
 
   /** Aviso, antes de publicar, de quién lo va a ver y desde/hasta cuándo. */
   const visibilidad = useMemo(() => {
-    const desde = form.vigente_desde ? new Date(`${form.vigente_desde}T12:00:00`).toLocaleDateString('es-GT') : null;
-    const hasta = form.vigente_hasta ? new Date(`${form.vigente_hasta}T12:00:00`).toLocaleDateString('es-GT') : null;
-    const empiezaHoy = !form.vigente_desde || form.vigente_desde <= new Date().toISOString().slice(0, 10);
+    const desde = form.vigente_desde ? formatearDia(form.vigente_desde) : null;
+    const hasta = form.vigente_hasta ? formatearDia(form.vigente_hasta) : null;
+    const empiezaHoy = !form.vigente_desde || form.vigente_desde <= hoyEnZona();
     return { desde, hasta, empiezaHoy };
   }, [form.vigente_desde, form.vigente_hasta]);
 

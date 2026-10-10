@@ -10,6 +10,9 @@ import {
 import { CardSkeleton } from '../components/Skeleton';
 import { Button, ROW_ICON, RowActions } from '../components/ui';
 import { useTranslation } from '../i18n/useTranslation';
+import { formatearFechaHora, formatearHora } from '../utils/fecha';
+import { formatearPlaca, normalizarPlaca, placaParaInput } from '../utils/placa';
+import PlacaInput from '../components/PlacaInput';
 
 export default function SalidaPage() {
   const { t } = useTranslation();
@@ -100,7 +103,7 @@ export default function SalidaPage() {
     resetBusqueda();
     setSearching(true);
     try {
-      const data = await getAccesoActivo(p.trim());
+      const data = await getAccesoActivo(normalizarPlaca(p));
       if (data === null) setNotFound(true);
       else setAccesoActivo(data);
     } catch (err: unknown) {
@@ -125,8 +128,8 @@ export default function SalidaPage() {
     try {
       const result = await scanPlaca(base64);
       if (result.placa) {
-        setPlaca(result.placa);
-        setOcrMsg(`Placa detectada: ${result.placa}`);
+        setPlaca(placaParaInput(result.placa));
+        setOcrMsg(`Placa detectada: ${formatearPlaca(result.placa)}`);
         stopCamera();
         setCameraOpen(false);
         void buscarPorPlaca(result.placa);
@@ -234,13 +237,7 @@ export default function SalidaPage() {
 
             <div>
               <label className="block text-sm text-gray-300 mb-1">{t('exit.plateLabel')} *</label>
-              <input
-                value={placa}
-                onChange={(e) => setPlaca(e.target.value)}
-                required
-                placeholder="P-123ABC"
-                className="sg-input uppercase"
-              />
+              <PlacaInput value={placa} onChange={setPlaca} required />
               {!hasCamera && <p className="mt-1.5 text-xs text-gray-400">{t('exit.noCameraHint')}</p>}
             </div>
 
@@ -263,7 +260,7 @@ export default function SalidaPage() {
           {/* Not found */}
           {notFound && (
             <div className="bg-gray-800 border border-gray-700 rounded-xl px-5 py-4 text-gray-400 text-sm text-center">
-              {t('exit.notFound')} <span className="font-semibold text-white">{placa}</span>.
+              {t('exit.notFound')} <span className="font-semibold text-white">{formatearPlaca(placa)}</span>.
             </div>
           )}
 
@@ -274,7 +271,7 @@ export default function SalidaPage() {
               <div className="space-y-2 text-sm">
                 <div className="flex justify-between border-b border-gray-700 pb-2">
                   <span className="text-gray-400">{t('exit.plateLabel')}</span>
-                  <span className="font-semibold text-white uppercase">{accesoActivo.placa}</span>
+                  <span className="font-semibold text-white uppercase">{formatearPlaca(accesoActivo.placa)}</span>
                 </div>
                 <div className="flex justify-between border-b border-gray-700 pb-2">
                   <span className="text-gray-400">{t('exit.visitor')}</span>
@@ -295,7 +292,7 @@ export default function SalidaPage() {
                 <div className="flex justify-between">
                   <span className="text-gray-400">{t('exit.entryTime')}</span>
                   <span className="text-white">
-                    {new Date(accesoActivo.timestamp_entrada).toLocaleString('es-GT')}
+                    {formatearFechaHora(accesoActivo.timestamp_entrada)}
                   </span>
                 </div>
               </div>
@@ -322,7 +319,7 @@ export default function SalidaPage() {
               <div className="bg-green-50 border border-green-300 rounded-xl p-6">
                 <h3 className="text-green-700 font-bold text-lg mb-1">{t('exit.exitOkTitle')}</h3>
                 <p className="text-green-600 text-sm">
-                  {t('exit.exitOkDesc')} <strong className="uppercase">{placa}</strong>
+                  {t('exit.exitOkDesc')} <strong className="uppercase">{formatearPlaca(placa)}</strong>
                 </p>
               </div>
               <Button size="lg" fullWidth onClick={handleNuevaBusqueda}>
@@ -372,9 +369,9 @@ export default function SalidaPage() {
                     <tr key={a.registro_id} className="border-b border-gray-700 last:border-0 hover:bg-gray-700/30 transition-colors">
                       <td className="px-5 py-3 text-white font-medium">{a.visitante.nombre}</td>
                       <td className="px-5 py-3 text-gray-300">{a.residente.numero_casa}</td>
-                      <td className="px-5 py-3 text-gray-400 uppercase">{a.placa ?? '—'}</td>
+                      <td className="px-5 py-3 text-gray-400 uppercase">{a.placa ? formatearPlaca(a.placa) : '—'}</td>
                       <td className="px-5 py-3 text-gray-400">
-                        {new Date(a.timestamp_entrada).toLocaleTimeString('es-GT', { hour: '2-digit', minute: '2-digit' })}
+                        {formatearHora(a.timestamp_entrada)}
                       </td>
                       <td className="px-5 py-3">
                         <RowActions

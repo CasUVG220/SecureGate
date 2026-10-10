@@ -10,6 +10,7 @@ import { Skeleton } from './Skeleton';
 import { Button } from './ui';
 import { useTranslation } from '../i18n/useTranslation';
 import { usePolling } from '../hooks/usePolling';
+import { formatearFechaHoraCorta } from '../utils/fecha';
 
 export const TIPO_LABEL: Record<string, string> = {
   mantenimiento: 'tickets.tipoMantenimiento',
@@ -117,7 +118,7 @@ export default function TicketChat({ ticketId, viewerRole, onActivity }: Props) 
   };
 
   const fmt = (d: string) =>
-    new Date(d).toLocaleString('es-GT', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+    formatearFechaHoraCorta(d);
 
   return (
     <div className="flex flex-col h-full bg-gray-800 rounded-2xl shadow-xl overflow-hidden">

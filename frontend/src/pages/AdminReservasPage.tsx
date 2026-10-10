@@ -10,6 +10,7 @@ import { useToast } from '../components/Toast';
 import { ROW_ICON, RowActions } from '../components/ui';
 import { useTranslation } from '../i18n/useTranslation';
 import { usePolling } from '../hooks/usePolling';
+import { formatearDia } from '../utils/fecha';
 
 export const ESTADO_BADGE: Record<EstadoReserva, string> = {
   pendiente_aprobacion: 'bg-amber-900/50 text-amber-400',
@@ -31,7 +32,7 @@ const ESTADOS: EstadoReserva[] = [
   'pendiente_aprobacion', 'confirmada', 'cancelada', 'rechazada', 'completada',
 ];
 
-const fmtFecha = (f: string) => new Date(f).toLocaleDateString('es-GT', { timeZone: 'UTC' });
+const fmtFecha = (f: string) => formatearDia(f);
 const fmtHora = (h: string) => h.slice(0, 5);
 
 const FILTRO = 'sg-input appearance-none';

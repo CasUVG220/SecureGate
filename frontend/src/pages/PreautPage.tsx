@@ -7,8 +7,11 @@ import { TableSkeleton } from '../components/Skeleton';
 import { useToast } from '../components/Toast';
 import { Button, ROW_ICON, RowActions } from '../components/ui';
 import { useTranslation } from '../i18n/useTranslation';
+import { formatearDia, hoyEnZona } from '../utils/fecha';
+import { normalizarPlaca, placaParaInput } from '../utils/placa';
+import PlacaInput from '../components/PlacaInput';
 
-const today = () => new Date().toISOString().slice(0, 10);
+const today = hoyEnZona;
 const EMPTY_FORM = { residente_id: '', nombre_visitante: '', numero_dpi: '', placa: '', fecha_inicio: '', fecha_fin: '' };
 
 export default function PreautPage() {
@@ -56,7 +59,7 @@ export default function PreautPage() {
         residente_id:     form.residente_id,
         nombre_visitante: form.nombre_visitante,
         numero_dpi:       form.numero_dpi   || undefined,
-        placa:            form.placa        || undefined,
+        placa:            normalizarPlaca(form.placa) || undefined,
         fecha_inicio:     form.fecha_inicio,
         fecha_fin:        form.fecha_fin    || undefined,
       });
@@ -89,7 +92,7 @@ export default function PreautPage() {
       residente_id:     p.residente_id,
       nombre_visitante: p.nombre_visitante,
       numero_dpi:       p.numero_dpi || '',
-      placa:            p.placa || '',
+      placa:            p.placa ? placaParaInput(p.placa) : '',
       fecha_inicio:     today(),
       fecha_fin:        today(),
     });
@@ -98,7 +101,7 @@ export default function PreautPage() {
   };
 
   const formatFecha = (iso: string | null) =>
-    iso ? new Date(iso).toLocaleDateString('es-GT') : '—';
+    iso ? formatearDia(iso) : '—';
 
   return (
     <div className="sg-page text-gray-100">
@@ -195,8 +198,7 @@ export default function PreautPage() {
                 </div>
                 <div>
                   <label className="block text-sm text-gray-300 mb-1">{t('gate.plate')} <span className="text-gray-500 text-xs">(o DPI)</span></label>
-                  <input name="placa" value={form.placa} onChange={handleFormChange} placeholder="P-123ABC"
-                    className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-white placeholder-gray-400 focus:outline-none focus:border-blue-500 transition-colors" />
+                  <PlacaInput name="placa" value={form.placa} onChange={placa => setForm(prev => ({ ...prev, placa }))} />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-3">
