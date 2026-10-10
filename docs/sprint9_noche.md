@@ -16,6 +16,7 @@ Las pruebas de base de datos corrieron **solo** contra el Postgres desechable lo
 | SCRUM-108 | H01 · contraste del botón principal en tema oscuro | **HECHO** |
 | SCRUM-109 | H02 · editar y dar de baja personal (PUT /usuarios/:id + AgentesPage) | **HECHO** |
 | SCRUM-110 | H03 · lista negra por placa | **HECHO** |
+| SCRUM-111 | H04 · garita sin cámara | **HECHO** (la salida sin red se deja en línea, decisión documentada) |
 
 *(la tabla se completa ticket por ticket)*
 
@@ -222,3 +223,36 @@ frontend +16 (`BlacklistPage` 11, `placa` 5).
 
 **Suites tras el ticket:** backend 631 unitarias, 75 integración/regresión, `tsc` limpio; frontend 208 y build; desktop 79 + 71 de
 Rust y build.
+
+---
+
+## SCRUM-111 — H04 · Garita sin cámara · **HECHO**
+
+**Commit:** `36d83c3`. **Verificado contra el código:** el QA acertó en todo: sin cámara el botón «Dar salida» quedaba apagado sin
+decir por qué (solo `title`), no había manera de llegar a `SalidaDialog` sin una captura, la entrada manual del QR no existía, y el
+panel derecho seguía mostrando «Registrar acceso / Registrar entrada» aunque la pestaña fuera Salida.
+
+**Escritorio (`desktop/`)**
+- **Escribir placa:** en el panel de *placa* enfoca el campo del formulario; en el de *salida* abre el diálogo de salida vacío.
+- **Código QR a mano:** formulario «¿No se lee? Escribe el código» que acepta `SGQR:<id>` o el id solo (con/sin guiones, espacios,
+  mayúsculas) → `idDeCodigoManual` (probado); formato inválido no llega al servidor.
+- **Motivo visible:** `motivoDeshabilitado()` escribe bajo el botón «No hay cámara disponible…», «Abriendo la cámara…», «El OCR local no
+  está disponible…» o «Sin conexión…»; «Registrar entrada» explica por qué está apagado (licencia/sesión o lista negra).
+- **«Registrados en este equipo»:** buscador (nombre, DPI, casa, placa en cualquier formato; sin búsqueda muestra los 30 últimos y con
+  búsqueda recorre los 150 que se traen) y **«Dar salida»** por fila usando el `registro_id` (ahora expuesto por Rust): no hace falta
+  placa ni cámara, y sirve para quien entró a pie. Pendientes de enviar: botón apagado con el motivo; rechazados: sin botón.
+- **Panel derecho en modo Salida** (`esModoSalida`: una vista + tarea Salida): título «Registrar salida», texto propio y botón
+  «Escribir placa de salida»; el formulario de entrada queda montado pero oculto (no se pierde lo escrito).
+- **Decisión sobre la salida SIN red: se deja EN LÍNEA.** La cola offline (`accesos_pendientes`) solo guarda **entradas**; no existe un
+  espejo de accesos abiertos ni un endpoint idempotente para cerrar una salida encolada. Encolarla contra un acceso que otra garita ya
+  cerró, o que aún no se sincroniza, dejaría vehículos «dentro» para siempre o cerraría el acceso equivocado. Hacerlo bien exige ese
+  espejo + idempotencia (trabajo propio, con riesgo). Mitigación implementada: sin red el agente levanta la pluma con «Abrir talanquera» y
+  la pantalla lo dice en texto; la salida se registra al volver la conexión. Documentado en `desktop/README.md`.
+
+**Web (`frontend/`)**: sin cámara la garita muestra el aviso «el registro sigue funcionando», «Escribir placa» (enfoca el campo) y la
+**entrada manual del código QR**. El modal de invitación del residente ahora **muestra y copia el código** bajo el QR (sin eso no hay
+nada que teclear). `SalidaPage` ya permitía teclear la placa y tenía la lista de visitantes dentro; se agregó el texto de ayuda sin cámara.
+
+**Pruebas:** desktop +21 (CameraPane manual, RecientesList, SalidaDialog con acceso conocido, `idDeCodigoManual`, `esModoSalida`),
+frontend +6 (`GaritaPage.sinCamara`, `qr`), Rust 72 (+1: `registro_id` en recientes).
+**Pendiente humano:** probar con una PC de garita real sin webcam y con el permiso de cámara denegado (Windows).
