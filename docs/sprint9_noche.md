@@ -24,6 +24,7 @@ Las pruebas de base de datos corrieron **solo** contra el Postgres desechable lo
 | SCRUM-129 | Deuda de seguridad S-11, S-13, S-14, S-15 | **HECHO** (S-15 revisada, Tauri 2.12 pendiente de validar en Windows) |
 | SCRUM-125 | RNF-10 · auditoría completa y límites de tasa | **HECHO** (los eventos de 2FA entraron con SCRUM-123) |
 | SCRUM-123 | Verificación en dos pasos (TOTP) para administradores | **HECHO** (opcional por persona; hacerla obligatoria queda como siguiente paso documentado) |
+| SCRUM-117 | Validación en Windows y deuda técnica mínima | **PARCIAL** (CI y revisión de `npm audit` hechos; la validación en Windows necesita un equipo y una persona) |
 
 *(la tabla se completa ticket por ticket)*
 
@@ -542,3 +543,31 @@ La `auditLog` de cada ruta iba **después** de los guards de rol y de los limita
 frontend **+33** → 436 (segundo paso del acceso, Mi cuenta, restablecer desde Personal, panel de auditoría, navegación por rol); escritorio vitest +1 (106), Rust +1 (78). **Todo verde** (backend, `tsc`, frontend + build, desktop + build, Rust). `npm run lint` del frontend: los mismos 6 avisos que ya existían, ninguno en archivos de este ticket.
 
 **Pendiente / límites conocidos:** (1) no es obligatoria; (2) sin aviso por correo al activar/desactivar/restablecer (la bitácora sí lo registra); (3) solo TOTP (llaves físicas/passkeys serían un segundo método); (4) el reloj del servidor debe estar sincronizado (NTP); (5) rotar `JWT_SECRET` exige fijar antes `TWOFA_KEY` (S-12).
+
+
+---
+
+## SCRUM-117 — Validación en Windows y deuda técnica mínima · **PARCIAL**
+
+**Commits:** `1369be8` (CI · subtarea Jira SCRUM-158). **Criterios de aceptación (Jira, solo lectura) y estado:**
+
+| Criterio | Estado |
+|---|---|
+| La app de escritorio se instala y corre en Windows 10/11 con 6–8 GB de RAM, webcam USB y OCR de placas (SCRUM-157) | **PENDIENTE DE HUMANOS** — no hay equipo Windows en esta sesión; ver «Pendientes para humanos» |
+| Se mide y registra el tiempo del OCR de placa y la RAM en ese equipo | **PENDIENTE DE HUMANOS** (depende del anterior) |
+| `npm audit --omit=dev` del backend revisado y corregido | **HECHO** — hoy: backend, frontend y escritorio `found 0 vulnerabilities` en producción. El hallazgo del QA (3 en backend, 1 crítica en `proxy-addr`) ya estaba cerrado por `npm audit fix` en SCRUM-118 y por `node-cron` 4.x en SCRUM-129. Con las de desarrollo: backend 38 · frontend 8 · escritorio 8 (herramientas de pruebas de carga y Tailwind 3; ver SCRUM-129) |
+| El CI fija `ubuntu-24.04` y suma un job con las pruebas unitarias (SCRUM-158) | **HECHO** |
+
+**CI (`.github/workflows/ci-integracion.yml`)**
+- **`ubuntu-24.04` fijo** en todos los jobs (`ubuntu-latest` es un alias que GitHub mueve de versión; el propio aviso de la Tarea 5 decía que pasaba a Ubuntu 26 el 19-oct-2026).
+- **`unitarias`** (matriz backend / frontend / desktop): `npm ci` → `npm test` → compilación de tipos (`tsc --noEmit` / `npm run build`). Un fallo en un paquete no oculta los otros (`fail-fast: false`).
+  El backend corre con `TZ=America/Guatemala` (producción); frontend y escritorio, en **UTC** (la del runner) a propósito: las pantallas no pueden depender de la zona del navegador.
+- **`desktop-rust`**: `cargo test --lib --locked` de la parte nativa del escritorio (78 pruebas). Tauri compila contra GTK/WebKit en Linux (paquetes de Tauri 2 para Ubuntu 24.04) y exige archivos que no se versionan (`dist/`, el runtime de Node del sidecar y sus recursos): el job los crea vacíos porque `cargo test` no los ejecuta.
+  **Solo corre en pull requests, a mano y en `main`:** compilar Tauri tarda (≈ 8 min con 8 núcleos) y este workflow ya se dispara por `push` *y* por `pull_request`, así que sin la condición cada PR lo pagaría dos veces.
+- **Cómo se validó sin poder correrlo en GitHub:** `actionlint` (sin errores) y **cada job réplicado en un contenedor Linux** con los mismos comandos: frontend (Node 20 amd64) 436 pruebas + build; escritorio web (amd64, UTC) 106 + build; backend (amd64, TZ Guatemala) 692 + `tsc`;
+  Rust (Ubuntu 24.04, Rust 1.99 estable) 78 pruebas. Los `package-lock.json` instalan sin problema en Linux.
+
+**Hallazgo que destapó el CI:** una prueba del frontend (`ReservasPage`, «horarios ocupados con el buffer») alimentaba un instante **sin zona** (`'2026-12-10T13:30:00'`) y solo pasaba si el proceso corría en `America/Guatemala` (en UTC mostraba 07:30). El servidor manda instantes con `Z`; la prueba ahora hace lo mismo
+y el frontend completo pasa en UTC, Guatemala y Tokio. No era un defecto de la pantalla (en producción siempre llega con zona), sino de la prueba.
+
+**Pendiente:** correr el workflow una vez en GitHub (el primer `desktop-rust` compila todo sin caché y puede acercarse a los 20–25 min del runner; el tiempo máximo del job es 40) y validar el instalador en Windows (SCRUM-157).
