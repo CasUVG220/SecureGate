@@ -64,8 +64,18 @@ export const validarEntorno = (): void => {
     if (/sgpassword123/.test(process.env.DATABASE_URL ?? '')) {
       throw new Error('DATABASE_URL usa la contraseña de desarrollo del repositorio; cámbiala en producción.');
     }
+    if (pagoSimuladoActivo()) {
+      throw new Error(
+        'PAGOS_TARJETA_SIMULADA está activada en producción: la pasarela simulada aprueba cualquier tarjeta ' +
+        'y liquida las deudas de los residentes. Quita la variable (solo es para desarrollo).',
+      );
+    }
   }
 };
+
+/** ¿Está encendida la pasarela de tarjeta simulada? Mismo criterio que scripts/deploy.sh. */
+export const pagoSimuladoActivo = (env: NodeJS.ProcessEnv = process.env): boolean =>
+  /^(true|1|yes|on|si|sí)$/i.test((env.PAGOS_TARJETA_SIMULADA ?? '').trim());
 
 /**
  * Saltos de proxy de confianza para `req.ip` (express `trust proxy`).
