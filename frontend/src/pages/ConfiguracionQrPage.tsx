@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { getConfigQr, updateConfigQr, type ConfigQr } from '../services/api';
 import { FormSkeleton } from '../components/Skeleton';
-import { Button } from '../components/ui';
+import { Button, FormActions } from '../components/ui';
+import { useCambiosSinGuardar } from '../hooks/useCambiosSinGuardar';
 import { useToast } from '../components/Toast';
 import { useTranslation } from '../i18n/useTranslation';
 
@@ -39,18 +40,22 @@ export default function ConfiguracionQrPage() {
     bloqueo_minutos: '15',
   });
 
+  const { hayCambios, marcarGuardado } = useCambiosSinGuardar(form);
+
   useEffect(() => {
     getConfigQr()
       .then(c => {
         setConfig(c);
         setEsDefault(!!c.es_default);
-        setForm({
+        const inicial = {
           dpi_obligatorio_individual: c.dpi_obligatorio_individual,
           requiere_placa: c.requiere_placa,
           autorizacion_automatica: c.autorizacion_automatica,
           max_intentos_fallidos: String(c.max_intentos_fallidos),
           bloqueo_minutos: String(c.bloqueo_minutos),
-        });
+        };
+        setForm(inicial);
+        marcarGuardado(inicial);
       })
       .catch(() => setError('No se pudo cargar la configuración de QR.'))
       .finally(() => setLoading(false));
@@ -80,6 +85,7 @@ export default function ConfiguracionQrPage() {
       });
       setConfig(saved);
       setEsDefault(false);
+      marcarGuardado(form);
       showToast(t('qr.configSaved'));
     } catch (err) {
       setFormError(err instanceof Error ? err.message : t('common.error'));
@@ -178,9 +184,12 @@ export default function ConfiguracionQrPage() {
           </Campo>
         </div>
 
-        <Button onClick={handleSave} loading={saving} className="px-6">
-          {saving ? t('common.saving') : t('common.save')}
-        </Button>
+        {/* «Guardar» fijo al pie: el formulario es largo y el botón no debe quedar fuera de vista. */}
+        <FormActions nota={hayCambios ? t('common.unsavedChanges') : undefined}>
+          <Button onClick={handleSave} loading={saving} className="px-6">
+            {saving ? t('common.saving') : t('common.save')}
+          </Button>
+        </FormActions>
       </div>
     </div>
   );

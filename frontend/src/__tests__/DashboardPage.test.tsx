@@ -57,3 +57,33 @@ describe('DashboardPage', () => {
     expect(screen.getByText('Nadie en mora')).toBeInTheDocument();
   });
 });
+
+describe('DashboardPage — reservas por aprobar (SCRUM-112)', () => {
+  beforeEach(() => { mockGet.mockReset(); });
+
+  it('avisa cuántas reservas esperan decisión y lleva a la pantalla de reservas', async () => {
+    mockGet.mockResolvedValue(datos({ reservas_pendientes: 3 }));
+    const onNavigate = vi.fn();
+    render(<DashboardPage onNavigate={onNavigate} />);
+    const resumen = await screen.findByRole('region', { name: 'Resumen de hoy' });
+    expect(within(resumen).getByText('Reservas por aprobar')).toBeInTheDocument();
+    expect(within(resumen).getByText('Los residentes esperan tu respuesta.')).toBeInTheDocument();
+    fireEvent.click(within(resumen).getByRole('button', { name: 'Revisar reservas' }));
+    expect(onNavigate).toHaveBeenCalledWith('reservas');
+  });
+
+  it('sin reservas pendientes no ofrece la acción', async () => {
+    mockGet.mockResolvedValue(datos({ reservas_pendientes: 0 }));
+    render(<DashboardPage onNavigate={vi.fn()} />);
+    await screen.findByRole('region', { name: 'Resumen de hoy' });
+    expect(screen.getByText('Nada por aprobar')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Revisar reservas' })).toBeNull();
+  });
+
+  it('un servidor que no manda el dato (versión anterior) no muestra la fila', async () => {
+    mockGet.mockResolvedValue(datos());
+    render(<DashboardPage onNavigate={vi.fn()} />);
+    await screen.findByRole('region', { name: 'Resumen de hoy' });
+    expect(screen.queryByText('Reservas por aprobar')).toBeNull();
+  });
+});

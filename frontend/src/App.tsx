@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import ResidentesPage         from './pages/ResidentesPage';
 import LoginPage              from './pages/LoginPage';
 import PagosPage              from './pages/PagosPage';
@@ -25,7 +25,8 @@ import ReservasPage           from './pages/ReservasPage';
 import AnnouncementsBell      from './components/AnnouncementsBell';
 import { ToastProvider }      from './components/ui/Toast';
 import { cx }                 from './components/ui/cx';
-import { decodeTokenPayload, getTickets } from './services/api';
+import { decodeTokenPayload, getReservas, getTickets } from './services/api';
+import { usePolling } from './hooks/usePolling';
 import { ThemeProvider, useTheme } from './context/ThemeContext';
 import { LanguageProvider, useLanguage } from './context/LanguageContext';
 import { useTranslation }     from './i18n/useTranslation';
@@ -202,6 +203,7 @@ function AppShell() {
   });
   const [selectedEmpresaId, setSelectedEmpresaId] = useState<string | null>(null);
   const [ticketsUnread, setTicketsUnread] = useState(0);
+  const [reservasPendientes, setReservasPendientes] = useState(0);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   // Pestaña del portal del residente: la barra inferior de móvil entra directo a
@@ -231,15 +233,23 @@ function AppShell() {
         anchoEscritorio: '(min-width: 768px)',
       };
 
-  // Badge de tickets no leídos para el staff (se refresca al navegar)
+  // Insignias del menú para el staff: tickets sin leer y reservas por aprobar. Se refrescan al
+  // navegar y solas cada medio minuto (sondeo ligero, solo con la pestaña visible).
+  const esAdminSucursal = userRol === 'admin' || userRol === 'admin_sucursal';
+  const refrescarInsignias = useCallback(async () => {
+    const [tickets, reservas] = await Promise.all([
+      getTickets().catch(() => null),
+      getReservas({ estado: 'pendiente_aprobacion' }).catch(() => null),
+    ]);
+    if (tickets) setTicketsUnread(tickets.reduce((s, tk) => s + Number(tk.no_leidos || 0), 0));
+    if (reservas) setReservasPendientes(reservas.length);
+  }, []);
   useEffect(() => {
-    if (userRol !== 'admin' && userRol !== 'admin_sucursal') return;
-    let cancel = false;
-    getTickets()
-      .then(rows => { if (!cancel) setTicketsUnread(rows.reduce((s, tk) => s + Number(tk.no_leidos || 0), 0)); })
-      .catch(() => {});
-    return () => { cancel = true; };
-  }, [userRol, page]);
+    if (!esAdminSucursal) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void refrescarInsignias();
+  }, [esAdminSucursal, page, refrescarInsignias]);
+  usePolling(refrescarInsignias, 30_000, esAdminSucursal);
 
   // Cierra el drawer al pasar a escritorio: si no, queda un panel flotante.
   useEffect(() => {
@@ -457,6 +467,14 @@ function AppShell() {
                     {item.key === 'tickets' && ticketsUnread > 0 && (
                       <span className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-danger-600 px-1 text-2xs font-bold leading-none text-white">
                         {ticketsUnread > 9 ? '9+' : ticketsUnread}
+                      </span>
+                    )}
+                    {item.key === 'reservas' && reservasPendientes > 0 && (
+                      <span
+                        className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-warning-500 px-1 text-2xs font-bold leading-none text-black"
+                        title={`${reservasPendientes} ${t('nav.badge.pendingReservations')}`}
+                      >
+                        {reservasPendientes > 9 ? '9+' : reservasPendientes}
                       </span>
                     )}
                   </button>

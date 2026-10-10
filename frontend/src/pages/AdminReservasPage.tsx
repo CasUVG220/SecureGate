@@ -1,6 +1,6 @@
 /* Las constantes exportadas también son consumidas por tests y pantallas relacionadas. */
 /* eslint-disable react-refresh/only-export-components */
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   getReservas, getAreas, aprobarReserva, rechazarReserva,
   type Reserva, type AreaComun, type EstadoReserva,
@@ -9,6 +9,7 @@ import { TableSkeleton } from '../components/Skeleton';
 import { useToast } from '../components/Toast';
 import { ROW_ICON, RowActions } from '../components/ui';
 import { useTranslation } from '../i18n/useTranslation';
+import { usePolling } from '../hooks/usePolling';
 
 export const ESTADO_BADGE: Record<EstadoReserva, string> = {
   pendiente_aprobacion: 'bg-amber-900/50 text-amber-400',
@@ -59,12 +60,30 @@ export default function AdminReservasPage() {
   useEffect(() => { load(); }, [filtros]);
   useEffect(() => { getAreas().then(setAreas).catch(() => {}); }, []);
 
+  // Aviso de reservas por aprobar: se consulta aparte de la lista (que puede estar filtrada) y
+  // se refresca solo cada minuto; si llega una nueva se avisa con un toast que lleva a ella.
+  const [pendientes, setPendientes] = useState(0);
+  const pendientesPrevios = useRef<number | null>(null);
+  const cargarPendientes = useCallback(async () => {
+    const rows = await getReservas({ estado: 'pendiente_aprobacion' });
+    setPendientes(rows.length);
+    if (pendientesPrevios.current !== null && rows.length > pendientesPrevios.current) {
+      showToast(t('reservas.newPendingToast'), 'info', {
+        accion: { label: t('reservas.reviewNow'), onClick: () => setFiltros(p => ({ ...p, estado: 'pendiente_aprobacion' })) },
+      });
+    }
+    pendientesPrevios.current = rows.length;
+  }, [showToast, t]);
+  useEffect(() => { void cargarPendientes().catch(() => {}); }, [cargarPendientes]);
+  usePolling(cargarPendientes, 60_000);
+
   const handleAprobar = async (r: Reserva) => {
     setActionId(r.id);
     try {
       await aprobarReserva(r.id);
       showToast(t('reservas.approved'));
       load();
+      void cargarPendientes().catch(() => {});
     } catch (err) {
       showToast(err instanceof Error ? err.message : t('common.error'), 'error');
     } finally {
@@ -80,6 +99,7 @@ export default function AdminReservasPage() {
       await rechazarReserva(r.id, motivo || undefined);
       showToast(t('reservas.rejected'), 'warning');
       load();
+      void cargarPendientes().catch(() => {});
     } catch (err) {
       showToast(err instanceof Error ? err.message : t('common.error'), 'error');
     } finally {
@@ -92,6 +112,22 @@ export default function AdminReservasPage() {
       <div>
         <h2 className="text-lg font-bold text-white">{t('reservas.allReservations')}</h2>
       </div>
+
+      {pendientes > 0 && filtros.estado !== 'pendiente_aprobacion' && (
+        <div role="status" className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-warning-500/40 bg-warning-500/10 px-4 py-3">
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-warning-400">{t('reservas.pendingBanner')}: {pendientes}</p>
+            <p className="text-xs text-gray-300">{t('reservas.pendingBannerHint')}</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setFiltros(p => ({ ...p, estado: 'pendiente_aprobacion' }))}
+            className="sg-btn sg-btn-secondary text-sm"
+          >
+            {t('reservas.showPendingOnly')}
+          </button>
+        </div>
+      )}
 
       <div className="flex flex-wrap gap-3">
         <select

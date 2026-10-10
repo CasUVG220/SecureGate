@@ -102,7 +102,7 @@ describe('PagosPage', () => {
     await waitFor(() => expect(container.querySelector('tbody span')?.textContent).toBe('Aprobado'));
   });
 
-  it('rechazar pago: llama rechazarPago() y cambia estado', async () => {
+  it('rechazar pago: llama rechazarPago(), sale de la vista normal y se ve con el filtro «Rechazado»', async () => {
     mockGetPagos
       .mockResolvedValueOnce([pago({ id: 'p1', estado: 'pendiente' })])
       .mockResolvedValueOnce([pago({ id: 'p1', estado: 'rechazado' })]);
@@ -114,6 +114,23 @@ describe('PagosPage', () => {
     fireEvent.click(screen.getByText('Rechazar'));
 
     await waitFor(() => expect(mockRechazarPago).toHaveBeenCalledWith('p1'));
+    // Un pago rechazado no es un ingreso: deja la lista normal (queda anotado cuántos hay ocultos)…
+    await waitFor(() => expect(container.querySelector('tbody')?.textContent ?? '').not.toContain('Juan Pérez'));
+    expect(screen.getByText(/1 rechazados ocultos/)).toBeInTheDocument();
+    // …y reaparece cuando se pide explícitamente.
+    fireEvent.change(screen.getByLabelText('Estado'), { target: { value: 'rechazado' } });
     await waitFor(() => expect(container.querySelector('tbody span')?.textContent).toBe('Rechazado'));
+    expect(screen.getByText('Juan Pérez')).toBeInTheDocument();
+  });
+
+  it('la vista «Todos» no incluye los rechazados', async () => {
+    mockGetPagos.mockResolvedValueOnce([
+      pago({ id: 'a', residente_nombre: 'Aprobado Uno', estado: 'aprobado' }),
+      pago({ id: 'r', residente_nombre: 'Rechazado Dos', estado: 'rechazado' }),
+    ]);
+    render(<PagosPage />);
+    expect(await screen.findByText('Aprobado Uno')).toBeInTheDocument();
+    expect(screen.queryByText('Rechazado Dos')).toBeNull();
+    expect(screen.getByText('Todos (sin rechazados)')).toBeInTheDocument();
   });
 });
