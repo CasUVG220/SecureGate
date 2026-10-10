@@ -4,7 +4,7 @@ import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import dotenv from 'dotenv';
 import helmet from 'helmet';
-import rateLimit from 'express-rate-limit';
+import { crearLimitador } from './middleware/limitadores';
 import apiRouter from './routes';
 import { trustProxyHops } from './config/env';
 import { esErrorDeDatos, esConflictoUnico, soloQueryTexto } from './utils/http';
@@ -78,14 +78,17 @@ app.use(cookieParser());
  * equipo trabajando. El límite estricto de credenciales sigue aparte, en
  * /api/auth (ver loginLimiter en routes/index.ts).
  */
-const generalLimiter = rateLimit({
+const generalLimiter = crearLimitador({
+  nombre: 'general-ip',
   windowMs: 15 * 60 * 1000,
   // Override sólo para pruebas de carga (RATE_LIMIT_GENERAL_MAX) — sin la env
   // var, el límite de producción sigue siendo 1000.
   max: parseInt(process.env.RATE_LIMIT_GENERAL_MAX || '1000', 10),
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { error: 'Demasiadas solicitudes, intenta mas tarde' },
+  mensaje: 'Demasiadas solicitudes, intenta mas tarde',
+  // Los intentos bloqueados quedan auditados (RNF-10), pero una fila por IP y minuto: este límite es anónimo y lo ve
+  // cualquiera, y una inundación no debe convertirse en una inundación de escrituras en la base.
+  accion: 'LIMITE_TASA_GENERAL',
+  coalescerAuditoriaMs: 60_000,
   // El health check lo consulta Docker cada pocos segundos y no debe consumir
   // el cupo de nadie.
   skip: req => req.path === '/health',

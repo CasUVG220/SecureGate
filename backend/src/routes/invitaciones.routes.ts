@@ -1,9 +1,9 @@
 import { Router } from 'express';
-import rateLimit from 'express-rate-limit';
 import { body } from 'express-validator';
 import { verifyToken, requireAdminEmpresa } from '../middleware/auth.middleware';
 import { validateRequest } from '../middleware/validate.middleware';
 import { auditLog } from '../middleware/audit.middleware';
+import { crearLimitador } from '../middleware/limitadores';
 import {
   crearInvitacion, getInvitaciones, getInvitacionPorToken, aceptarInvitacion,
   revocarInvitacion, reenviarInvitacion,
@@ -13,12 +13,13 @@ const router = Router();
 
 // Endpoints públicos (el invitado aún no tiene cuenta). El token tiene 256
 // bits, así que el límite no es contra fuerza bruta sino contra abuso.
-const publicoLimiter = rateLimit({
+const publicoLimiter = crearLimitador({
+  nombre: 'invitacion-publica-ip',
   windowMs: 15 * 60 * 1000,
   max: parseInt(process.env.RATE_LIMIT_INVITACION_MAX || '30', 10),
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { error: 'Demasiados intentos' },
+  accion: 'INVITACION_ACEPTADA',
+  tabla: 'invitaciones',
+  mensaje: 'Demasiados intentos',
 });
 
 // Administración. El guard fino (owner para admin_empresa, admin_empresa
