@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import pool from '../db/pool';
-import { ownershipParams, resolverSucursal } from '../utils/tenant';
+import { alcanceSobreUsuarios, ownershipParams, resolverSucursal } from '../utils/tenant';
 import { validarPassword, BCRYPT_COST } from '../utils/password';
 import { revocarAccesoDeUsuario } from '../utils/revocacion';
 import { revocarSesionesDeUsuario } from './auth.controller';
@@ -27,9 +27,11 @@ export const getUsuarios = async (req: Request, res: Response) => {
 
     const result = await pool.query(
       `SELECT u.id, u.nombre, u.email, u.rol, u.sucursal_id, u.empresa_id, u.activo, u.created_at,
-              s.nombre AS sucursal_nombre
+              s.nombre AS sucursal_nombre,
+              (f.usuario_id IS NOT NULL) AS dos_pasos
          FROM usuarios u
          LEFT JOIN sucursales s ON s.id = u.sucursal_id
+         LEFT JOIN usuario_2fa f ON f.usuario_id = u.id AND f.activado = TRUE
         WHERE ${whereClause}
           AND u.rol != 'residente'
         ORDER BY u.nombre`,
@@ -104,6 +106,46 @@ export const deleteUsuario = async (req: Request, res: Response) => {
     res.json(result.rows[0]);
   } catch (error) {
     serverError(res, error, 'Error al eliminar usuario');
+  }
+};
+
+/**
+ * DELETE /usuarios/:id/2fa — restablece la verificación en dos pasos de alguien que perdió el teléfono Y los códigos de
+ * recuperación (SCRUM-123). Mismo alcance que la baja (`alcanceSobreUsuarios`); fuera de él responde 404. Nadie restablece
+ * la propia: eso se hace con la contraseña y un código (POST /auth/2fa/desactivar).
+ *
+ * Cierra las sesiones de la persona: quien pide un restablecimiento a veces lo hace porque el teléfono se perdió o se lo
+ * robaron, y una sesión abierta no debe sobrevivir. La persona entra sólo con su contraseña y puede volver a activarla.
+ * Al owner no lo restablece nadie desde la aplicación (ver docs/verificacion_dos_pasos.md: se hace desde la consola).
+ */
+export const restablecerDosPasos = async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const user = req.user!;
+  if (!esUuid(id)) return res.status(400).json({ error: 'id de usuario inválido' });
+  if (id === user.id) {
+    return res.status(400).json({ error: 'Para desactivar la tuya usa tu cuenta: se pide tu contraseña y un código' });
+  }
+  try {
+    const r = await pool.query<{ id: string; tenia: boolean }>(
+      `WITH objetivo AS (
+         SELECT u.id FROM usuarios u WHERE u.id = $1 AND ${alcanceSobreUsuarios('u', 2)}
+       ), codigos AS (
+         DELETE FROM usuario_2fa_recuperacion c USING objetivo o WHERE c.usuario_id = o.id
+       ), borrada AS (
+         DELETE FROM usuario_2fa f USING objetivo o WHERE f.usuario_id = o.id RETURNING f.usuario_id
+       )
+       SELECT o.id, EXISTS (SELECT 1 FROM borrada) AS tenia FROM objetivo o`,
+      [id, ...ownershipParams(user)],
+    );
+    if (r.rows.length === 0) return res.status(404).json({ error: 'Usuario no encontrado o sin acceso' });
+    if (!r.rows[0].tenia) return res.status(409).json({ error: 'Esta persona no tiene la verificación en dos pasos activada' });
+
+    await revocarSesionesDeUsuario(pool, id);
+    revocarAccesoDeUsuario(id);
+    res.locals.auditoria = { sesiones_cerradas: true };
+    res.json({ restablecido: true });
+  } catch (error) {
+    serverError(res, error, 'Error al restablecer la verificación en dos pasos');
   }
 };
 

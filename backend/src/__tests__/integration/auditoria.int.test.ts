@@ -22,6 +22,7 @@ import app from '../../app';
 import { q, uno, cerrarPool } from '../helpers/db';
 import { sembrar, Fixtures } from '../helpers/seed';
 import { login, bearer, PASSWORD } from '../helpers/auth';
+import { adminNuevo, activarDosPasos, totp } from '../helpers/twofa';
 
 let fx: Fixtures;
 const previoTarjeta = process.env.PAGOS_TARJETA_SIMULADA;
@@ -126,6 +127,39 @@ const CASOS: Caso[] = [
 
   // Un residente pide una pantalla de administración: el guard de rol lo rechaza (403) y deja huella con su persona y su IP.
   { accion: 'ACCESO_DENEGADO', quien: 'resA1', exito: false, ejecutar: () => request(app).get('/api/dashboard').set(as('resA1')) },
+
+  // ── Verificación en dos pasos (SCRUM-123) ──
+  // Cada caso arma su propio administrador: activar el segundo factor de un usuario sembrado rompería los demás casos que inician sesión con él.
+  { accion: 'TWOFA_INICIADO', quien: null, persona: true, ejecutar: async () => {
+      const a = await adminNuevo(app, 'admin_sucursal', fx.sucursales.A1, null, fx.sufijo);
+      return request(app).post('/api/auth/2fa/iniciar').set(bearer(a.token)).send({});
+  } },
+  { accion: 'TWOFA_ACTIVADO', quien: null, persona: true, ejecutar: async () => {
+      const a = await adminNuevo(app, 'admin_sucursal', fx.sucursales.A1, null, fx.sufijo);
+      const ini = await request(app).post('/api/auth/2fa/iniciar').set(bearer(a.token)).send({});
+      return request(app).post('/api/auth/2fa/confirmar').set(bearer(a.token)).send({ codigo: totp(ini.body.secreto) });
+  } },
+  { accion: 'TWOFA_DESACTIVADO', quien: null, persona: true, ejecutar: async () => {
+      const a = await adminNuevo(app, 'admin_sucursal', fx.sucursales.A1, null, fx.sufijo);
+      const d = await activarDosPasos(app, a);
+      return request(app).post('/api/auth/2fa/desactivar').set(bearer(a.token)).send({ password: PASSWORD, codigo: totp(d.secreto) });
+  } },
+  { accion: 'TWOFA_CODIGOS_REGENERADOS', quien: null, persona: true, ejecutar: async () => {
+      const a = await adminNuevo(app, 'admin_sucursal', fx.sucursales.A1, null, fx.sufijo);
+      const d = await activarDosPasos(app, a);
+      return request(app).post('/api/auth/2fa/codigos-recuperacion').set(bearer(a.token)).send({ codigo: totp(d.secreto) });
+  } },
+  { accion: 'TWOFA_VERIFICACION', quien: null, persona: true, ejecutar: async () => {
+      const a = await adminNuevo(app, 'admin_sucursal', fx.sucursales.A1, null, fx.sufijo);
+      const d = await activarDosPasos(app, a);
+      const paso1 = await login(app, a.email);
+      return request(app).post('/api/auth/2fa/verificar').send({ desafio: paso1.body.desafio, codigo: totp(d.secreto) });
+  } },
+  { accion: 'TWOFA_RESTABLECIDO', quien: 'adminEmpA', ejecutar: async () => {
+      const a = await adminNuevo(app, 'admin_sucursal', fx.sucursales.A1, null, fx.sufijo);
+      await activarDosPasos(app, a);
+      return del('adminEmpA', `/api/usuarios/${a.id}/2fa`);
+  } },
 
   // ── Empresas (owner) ──
   { accion: 'EMPRESA_CREADA', quien: 'owner', ejecutar: () => post('owner', '/api/empresas', { nombre: `AUD Alta ${uid()}` }) },

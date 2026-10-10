@@ -94,3 +94,26 @@ export async function resolverSucursal(
   if (r.rows.length === 0) return { ok: false, status: 403, error: 'Sin acceso a esa sucursal' };
   return { ok: true, id: r.rows[0].id };
 }
+
+/**
+ * Sobre qué personas puede actuar quien llama cuando se trata de la cuenta de OTRA persona (hoy: restablecer su
+ * verificación en dos pasos; la baja y la edición de usuarios llevan la misma regla escrita en su consulta):
+ *
+ *   owner            → cualquiera menos otro owner
+ *   admin_empresa    → admin_sucursal / agente / residente de SU empresa
+ *   admin_sucursal   → admin_sucursal / agente / residente de SU sucursal
+ *
+ * `alias` es el de `usuarios` en la consulta; los tres parámetros que siguen a `offset` son `ownershipParams(user)`
+ * (rol, empresa, sucursal). Fuera de alcance equivale a «no existe»: el llamador responde 404.
+ */
+export function alcanceSobreUsuarios(alias: string, offset: number): string {
+  return `(
+    ($${offset}::text = 'owner' AND ${alias}.rol <> 'owner')
+    OR ($${offset}::text = 'admin_empresa'
+        AND ${alias}.rol IN ('admin_sucursal', 'agente', 'residente')
+        AND EXISTS (SELECT 1 FROM sucursales _as WHERE _as.id = ${alias}.sucursal_id AND _as.empresa_id = $${offset + 1}))
+    OR ($${offset}::text = 'admin_sucursal'
+        AND ${alias}.rol IN ('admin_sucursal', 'agente', 'residente')
+        AND ${alias}.sucursal_id = $${offset + 2})
+  )`;
+}
