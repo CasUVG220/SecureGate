@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   hoyEnZona, formatearDia, formatearDiaMes, formatearDiaSemana, formatearFecha, formatearFechaHora, formatearFechaHoraCorta,
-  formatearFechaLarga, formatearHora, formatearRangoDias, idiomaActual, ZONA_APP,
+  diaISO, formatearFechaLarga, formatearHora, formatearRangoDias, idiomaActual, ZONA_APP,
 } from '../fecha';
 
 afterEach(() => { vi.unstubAllEnvs(); try { localStorage.removeItem('language'); } catch { /* sin storage */ } });
@@ -93,6 +93,24 @@ describe('días de calendario (DATE): no se mueven de día por la zona', () => {
     expect(formatearRangoDias('2025-12-20', '2026-01-10')).toBe('20 dic 2025 – 10 ene 2026');
     expect(formatearRangoDias('2026-09-03', '2026-09-03')).toBe('3 sep 2026');
     expect(formatearRangoDias('2026-09-03', null)).toBe('—');
+  });
+});
+
+describe('diaISO', () => {
+  it('lee el día de calendario de un DATE sin moverlo por la zona', () => {
+    expect(diaISO('2026-09-03')).toBe('2026-09-03');
+    expect(diaISO('2026-09-03T06:00:00.000Z')).toBe('2026-09-03');    // medianoche de Guatemala serializada
+    expect(diaISO('2026-09-03T00:00:00.000Z')).toBe('2026-09-03');
+    expect(diaISO(new Date(Date.UTC(2026, 8, 3)))).toBe('2026-09-03');
+  });
+
+  it('sirve para comparar días como texto', () => {
+    expect(diaISO('2026-09-30T06:00:00.000Z')! >= '2026-09-30').toBe(true);
+    expect(diaISO('2026-09-29')! >= '2026-09-30').toBe(false);
+  });
+
+  it('lo que no es fecha da null', () => {
+    for (const v of [null, undefined, '', 'mañana', '2026-13-40']) expect(diaISO(v)).toBeNull();
   });
 });
 

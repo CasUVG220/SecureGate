@@ -22,6 +22,11 @@ Idioma de la interfaz: español de Guatemala, tuteo («tu sucursal», «escribe 
 | Reglas de validación de los códigos QR | Entrada propia del menú **Reglas de QR** | QR rules | «Config QR», una pestaña dentro de cargos | Menú de administración |
 | Cargos automáticos por atraso | Menú **Cargos y mora** (antes «Configuración») | Charges & late fees | «Configuración» a secas (ambigua) | Menú de administración |
 | Código para entrar sin escribir datos | **Invitación con QR**; el texto bajo el QR es **«código de la invitación»** | QR invitation, invitation code | «pase», «ticket de acceso» | Portal del residente, garita |
+| Avisarle a la garita que alguien va a llegar | **Aviso de visita**: botón **Avisar de una visita**; la lista es **Visitas avisadas**; cada una está *Hoy*, *Próxima* o *Vencida*. En la garita: «Visita avisada por el residente hasta el 12 oct 2026» | Announce a visitor · Announced visits | «preautorizar», «preautorización», «Preautorizar hoy» (en la base y la API sigue siendo `preautorizaciones`) | Menú, portal del residente, garita |
+| Datos de alguien que visita seguido | **Visitante guardado** (libreta del residente). **Guardar no deja entrar a nadie**: hay que **avisar de su visita** con fechas | Saved visitor | tratarlo como un aviso | Portal del residente |
+| Persona que administra una empresa o sucursal | **Administrador** («administrador de empresa», «administrador de sucursal») | Administrator | «Admin», «Admin Sucursal» abreviados | Menús, botones, avisos |
+| Empresa o sucursal recién creada | Se marca **Sin administrador** o **Invitación pendiente** y se ofrece **Invitar administrador** | No administrator · Invitation pending | — | Listas de empresas y sucursales |
+| Rótulo del menú del administrador de empresa | **Mi empresa** (el rótulo **Administración global** es solo del owner) | My company | «Administración global» para el administrador de empresa | Menú |
 | Lugar que visita la persona | **Casa** | House | «unidad» en pantallas de residentes | Todas |
 | Documento de identidad | **DPI** | National ID | «documento», «cédula» | Formularios |
 | Quién trabaja en la garita | **Agente de garita** (rol) · **Personal** (la lista) | Gate agent · Staff | «guardia» en rótulos, «terminal» | Menú, personal |
@@ -39,6 +44,19 @@ Idioma de la interfaz: español de Guatemala, tuteo («tu sucursal», «escribe 
 | «Hoy» | el día de Guatemala, no el de UTC | `hoyEnZona()` | idem |
 | Placa | se **escribe y se muestra** como `P-123ABC` y se **guarda y compara** como `P123ABC` (mayúsculas, sin separadores) | `P-123ABC` / `P123ABC` | `frontend/src/utils/placa.ts`, `backend/src/utils/placa.ts`, `desktop/src/lib/placa.ts` |
 | Dinero | quetzal pegado a la cifra, dos decimales | `Q850.00` | `fmtQuetzales` |
+
+## Aviso de visita: reglas (SCRUM-114)
+
+Una fila de `preautorizaciones` es de **uno de dos tipos**, según tenga o no `fecha_fin`:
+
+- **Con `fecha_fin`** → un **aviso de visita**: vale para entrar entre `fecha_inicio` y `fecha_fin` (ambas obligatorias en el
+  formulario; para una sola visita van las dos con el mismo día y empiezan en hoy).
+- **Sin `fecha_fin`** → un **visitante guardado** de la libreta del residente (`POST /api/preautorizaciones/mis`). **No
+  autoriza nada**: ni la verificación en línea, ni el padrón que baja la garita, ni la evaluación local del escritorio.
+
+El alta del administrador (`POST /api/preautorizaciones`) exige `fecha_fin` (antes el formulario la mostraba «opcional» y el
+servidor ignoraba la fila). Ambas altas validan `AAAA-MM-DD` y `fecha_fin ≥ fecha_inicio`, y rechazan con **409** un aviso idéntico
+(misma persona o vehículo —DPI y placa normalizada— y mismas fechas); dos visitantes distintos en el mismo carro no se pisan.
 
 ## Cómo se mantiene
 

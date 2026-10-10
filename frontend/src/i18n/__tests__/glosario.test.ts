@@ -10,6 +10,8 @@ import { translations } from '../translations';
  *   - «ban»           → bloquear / bloqueo
  *   - «ticket»        → solicitud            (el código y la API siguen llamándose `tickets`)
  *   - «Estadísticas»  → Reportes
+ *   - «preautorización» → aviso de visita («Avisar de una visita», «Visitas avisadas»)   (SCRUM-114 / H10)
+ *   - «admin» abreviado → administrador                                                 (SCRUM-114 / H09)
  */
 const entradas = (idioma: 'es' | 'en') => Object.entries(translations[idioma]);
 
@@ -21,6 +23,10 @@ describe('glosario: términos descartados en la interfaz', () => {
     ['en', /\bbans?\b|\bbanned\b/i, 'ban → block'],
     ['en', /\btickets?\b/i, 'ticket → request'],
     ['en', /\bstatistics\b/i, 'Statistics → Reports'],
+    ['es', /preautoriz/i, 'preautorización → aviso de visita'],
+    ['en', /pre-?authori[sz]/i, 'preauthorization → announced visit'],
+    ['es', /\badmins?\b/i, 'admin → administrador'],
+    ['en', /\badmins?\b/i, 'admin → administrator'],
   ] as const)('%s: ningún texto usa el término descartado (%s)', (idioma, patron, regla) => {
     const infracciones = entradas(idioma)
       .filter(([, valor]) => patron.test(valor))
@@ -42,11 +48,13 @@ describe('glosario: términos descartados en la interfaz', () => {
     expect(translations.es['nav.qrRules']).toBe('Reglas de QR');
     expect(translations.es['nav.gates']).toBe('Garitas');
     expect(translations.es['lic.title']).toBe('Garitas y códigos de activación');
+    expect(translations.es['nav.preauth']).toBe('Visitas avisadas');
+    expect(translations.es['aviso.title']).toBe('Avisar de una visita');
   });
 
   it('el glosario documentado menciona cada regla que esta prueba hace cumplir', () => {
     const doc = readFileSync(path.resolve(__dirname, '../../../../docs/glosario.md'), 'utf8');
-    for (const termino of ['ban', 'ticket', 'Estadísticas', 'Reglas de QR', 'Garitas y códigos de activación', 'Reportes', 'America/Guatemala', 'P-123ABC']) {
+    for (const termino of ['ban', 'ticket', 'Estadísticas', 'Reglas de QR', 'Garitas y códigos de activación', 'Reportes', 'America/Guatemala', 'P-123ABC', 'Avisar de una visita', 'Visitante guardado', 'Mi empresa']) {
       expect(doc, termino).toContain(termino);
     }
   });

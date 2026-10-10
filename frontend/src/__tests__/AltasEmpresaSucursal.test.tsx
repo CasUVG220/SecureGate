@@ -233,7 +233,7 @@ describe('GestionSucursales — bienvenida, siguiente paso y contraseña', () =>
   it('sin sucursales da la bienvenida con el primer paso', async () => {
     m('getSucursales').mockResolvedValue([]);
     render(<GestionSucursales />);
-    expect(await screen.findByText('Empecemos por su primera sucursal')).toBeInTheDocument();
+    expect(await screen.findByText('Empecemos por tu primera sucursal')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Crear la primera sucursal' }));
     expect(await screen.findByRole('dialog', { name: 'Nueva sucursal' })).toBeInTheDocument();
   });
