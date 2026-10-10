@@ -256,12 +256,19 @@ describe('migraciones y cuentas demo', () => {
 // ─────────────────────────────────────────────────────────────────────────────
 describe('refresh token', () => {
   it('un usuario DESACTIVADO ya no puede renovar sesión (antes conservaba 7 días de refresh)', async () => {
-    mockPool.query.mockResolvedValueOnce({ rows: [] });
+    // El usuario se trae con su estado (SCRUM-129 / S-11 dejó de filtrarlo en el WHERE para poder distinguir una
+    // empresa suspendida); si está dado de baja se responde 401 sin consultar nada más ni rotar el token.
+    mockPool.query.mockResolvedValueOnce({ rows: [{
+      id: 'rt-1', usuario_id: 'u-1', revoked: false, vigente: true, activo: false,
+      nombre: 'Ana', email: 'a@x.com', rol: 'agente', sucursal_id: 'suc-1', empresa_id: null, empresa_id_via_sucursal: 'emp-1',
+    }] });
     const res = Object.assign(makeRes(), { clearCookie: jest.fn() });
     await refresh({ cookies: { refresh_token: 'x'.repeat(128) }, ip: '1.1.1.1' } as unknown as Request, res);
 
-    expect(mockPool.query.mock.calls[0][0]).toContain('u.activo      = TRUE');
+    expect(mockPool.query.mock.calls[0][0]).toContain('u.activo');
     expect(res.status).toHaveBeenCalledWith(401);
+    expect(res.clearCookie).toHaveBeenCalled();
+    expect(mockPool.query).toHaveBeenCalledTimes(1);               // ni empresa, ni UPDATE, ni INSERT del token nuevo
   });
 });
 
