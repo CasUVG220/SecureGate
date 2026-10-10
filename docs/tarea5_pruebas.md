@@ -33,7 +33,9 @@ El `globalSetup` **vacía el esquema `public`** de esa base, aplica `database/in
 algo falla con un mensaje claro (porque `runMigrations` nunca lanza).
 
 **Zona horaria:** Node con `TZ=America/Guatemala` y Postgres en UTC. R-2 lo comprueba y falla con mensaje claro
-si el entorno no es ese, para no pasar en vacío.
+si el entorno no es ese, para no pasar en vacío. *(Desde S-17, SCRUM-124, todas las columnas de fecha y hora son
+`TIMESTAMPTZ`: ese entorno ya no produce el desfase de 6 h, pero se mantiene porque es el que reproduce un retroceso —R-2 y
+I-20 fallan si una columna vuelve a ser `TIMESTAMP`—. Ver `docs/s17_timestamptz.md`.)*
 
 ## Las 6 pruebas
 | ID | Archivo | Componentes | Condición | Datos | Resultado esperado |
