@@ -181,7 +181,7 @@ export default function AreasComunesPage() {
       </div>
 
       {error && (
-        <div className="bg-red-900/40 border border-red-700 rounded-lg px-4 py-3 text-red-300 text-sm">
+        <div className="bg-danger-900/40 border border-danger-700 rounded-lg px-4 py-3 text-danger-300 text-sm">
           {error}
         </div>
       )}
@@ -222,9 +222,9 @@ export default function AreasComunesPage() {
                   )}
                 </div>
                 {a.descripcion && (
-                  <p className="text-sm text-gray-400 line-clamp-2">{a.descripcion}</p>
+                  <p className="text-sm text-gray-400 line-clamp-2" title={a.descripcion}>{a.descripcion}</p>
                 )}
-                <p className="text-sm font-medium text-emerald-400">{tarifaTexto(a)}</p>
+                <p className="text-sm font-medium text-success-400">{tarifaTexto(a)}</p>
                 {a.requiere_aprobacion !== null && (
                   <p className="text-xs text-gray-500">
                     {a.requiere_aprobacion
@@ -267,7 +267,7 @@ export default function AreasComunesPage() {
       >
           <div className="space-y-4">
             {formError && (
-              <div className="bg-red-900/40 border border-red-700 rounded-lg px-3 py-2 text-red-300 text-sm">
+              <div className="bg-danger-900/40 border border-danger-700 rounded-lg px-3 py-2 text-danger-300 text-sm">
                 {formError}
               </div>
             )}
@@ -280,7 +280,7 @@ export default function AreasComunesPage() {
                 name="nombre"
                 value={form.nombre}
                 onChange={e => setForm(prev => ({ ...prev, nombre: e.target.value }))}
-                className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-blue-500"
+                className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-brand-500"
               />
             </div>
 
@@ -293,7 +293,7 @@ export default function AreasComunesPage() {
                 rows={2}
                 value={form.descripcion}
                 onChange={e => setForm(prev => ({ ...prev, descripcion: e.target.value }))}
-                className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 resize-none"
+                className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-brand-500 resize-none"
               />
             </div>
 
@@ -306,9 +306,9 @@ export default function AreasComunesPage() {
                 placeholder={t('reservas.imageUrl')}
                 value={form.imagen_url.startsWith('data:') ? '' : form.imagen_url}
                 onChange={e => setForm(prev => ({ ...prev, imagen_url: e.target.value }))}
-                className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 mb-2"
+                className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-brand-500 mb-2"
               />
-              <label className="flex items-center gap-2 w-full cursor-pointer bg-gray-700 border border-dashed border-gray-500 hover:border-blue-500 rounded-lg px-3 py-2.5 transition-colors text-sm text-gray-300">
+              <label className="flex items-center gap-2 w-full cursor-pointer bg-gray-700 border border-dashed border-gray-500 hover:border-brand-500 rounded-lg px-3 py-2.5 transition-colors text-sm text-gray-300">
                 <input
                   type="file"
                   accept="image/jpeg,image/png,image/webp"
@@ -349,7 +349,7 @@ export default function AreasComunesPage() {
                   onChange={e =>
                     setForm(prev => ({ ...prev, tarifa_tipo: e.target.value as TarifaTipo }))
                   }
-                  className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500 appearance-none"
+                  className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-500 appearance-none"
                 >
                   {TARIFAS.map(tf => (
                     <option key={tf.value} value={tf.value}>{t(tf.labelKey)}</option>
@@ -368,7 +368,7 @@ export default function AreasComunesPage() {
                   disabled={form.tarifa_tipo === 'gratis'}
                   value={form.tarifa_tipo === 'gratis' ? '' : form.tarifa_monto}
                   onChange={e => setForm(prev => ({ ...prev, tarifa_monto: e.target.value }))}
-                  className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 disabled:opacity-40"
+                  className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-brand-500 disabled:opacity-40"
                 />
               </div>
             </div>
@@ -381,7 +381,7 @@ export default function AreasComunesPage() {
                 name="aprobacion"
                 value={form.aprobacion}
                 onChange={e => setForm(prev => ({ ...prev, aprobacion: e.target.value }))}
-                className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500 appearance-none"
+                className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-500 appearance-none"
               >
                 {APROBACION.map(o => (
                   <option key={o.value} value={o.value}>{t(o.labelKey)}</option>

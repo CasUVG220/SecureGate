@@ -189,7 +189,7 @@ describe('OwnerDashboard — bienvenida y aviso «sin administrador»', () => {
     m('getEmpresas').mockResolvedValue([]);
     m('createEmpresa').mockResolvedValue({ ...EMPRESA, id: 'emp-9', nombre: 'Nueva SA' });
     render(<OwnerDashboard onSelectEmpresa={vi.fn()} />);
-    fireEvent.click(await screen.findByRole('button', { name: /Nueva Empresa/ }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Crear la primera empresa' }));
     const alta = await screen.findByRole('dialog', { name: 'Nueva empresa' });
     fireEvent.change(within(alta).getByLabelText(/Nombre/), { target: { value: 'Nueva SA' } });
     fireEvent.click(within(alta).getByRole('button', { name: 'Crear' }));
@@ -242,7 +242,7 @@ describe('GestionSucursales — bienvenida, siguiente paso y contraseña', () =>
     m('getSucursales').mockResolvedValue([]);
     m('createSucursal').mockResolvedValue({ ...SUCURSAL, id: 'suc-9', nombre: 'Torre Sur' });
     render(<GestionSucursales />);
-    fireEvent.click(await screen.findByRole('button', { name: '+ Nueva sucursal' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Crear la primera sucursal' }));
     const alta = await screen.findByRole('dialog', { name: 'Nueva sucursal' });
     fireEvent.change(within(alta).getByLabelText(/Nombre/), { target: { value: 'Torre Sur' } });
     fireEvent.click(within(alta).getByRole('button', { name: 'Crear sucursal' }));

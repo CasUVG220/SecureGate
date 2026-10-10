@@ -169,9 +169,11 @@ export default function PagosPage() {
                   </p>}
             </div>
           </div>
-          <Button onClick={() => { setForm(EMPTY_FORM); setFormError(null); setShowModal(true); }}>
-            {t('payments.registerCash')}
-          </Button>
+          {(loading || filtrando || pagos.length > 0) && (
+            <Button onClick={() => { setForm(EMPTY_FORM); setFormError(null); setShowModal(true); }}>
+              {t('payments.registerCash')}
+            </Button>
+          )}
         </header>
 
         {error && (

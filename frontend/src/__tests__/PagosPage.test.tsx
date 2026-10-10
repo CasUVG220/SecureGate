@@ -76,7 +76,9 @@ describe('PagosPage', () => {
     await screen.findByText('No hay pagos registrados.');
     await waitFor(() => expect(mockGetResidentes).toHaveBeenCalled());
 
-    fireEvent.click(screen.getByText('+ Registrar Pago en Efectivo'));
+    // Con la lista vacía el botón para crear es el del estado vacío (no se repite arriba).
+    expect(screen.queryByText('+ Registrar Pago en Efectivo')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '+ Agregar el primero' }));
 
     fireEvent.change(screen.getByDisplayValue('Seleccionar residente...'), { target: { value: 'r1' } });
     fireEvent.change(screen.getByPlaceholderText('0.00'), { target: { value: '150' } });

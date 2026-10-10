@@ -29,10 +29,27 @@ export const getEmpresas = async (_req: Request, res: Response) => {
   }
 };
 
-/** El logo se pinta como <img src>; sólo se aceptan URLs http(s) razonables. */
-const LOGO_RE = /^https?:\/\/[^\s"'<>]{4,500}$/i;
-const logoInvalido = (v: unknown): boolean =>
-  v !== undefined && v !== null && v !== '' && (typeof v !== 'string' || !LOGO_RE.test(v));
+/**
+ * El logo se pinta como <img src>. Se acepta:
+ *   - una URL http(s) razonable (las que ya existían), o
+ *   - una imagen subida como archivo: data URI PNG / JPEG / WebP en base64 de hasta 200 KB (el navegador la reescala
+ *     antes de enviarla). Nada de SVG: puede llevar scripts y aquí no hay motivo para aceptarlo.
+ */
+const LOGO_URL_RE = /^https?:\/\/[^\s"'<>]{4,500}$/i;
+const LOGO_DATA_RE = /^data:image\/(?:png|jpeg|webp);base64,([A-Za-z0-9+/]+={0,2})$/;
+export const LOGO_MAX_BYTES = 200 * 1024;
+
+const logoInvalido = (v: unknown): boolean => {
+  if (v === undefined || v === null || v === '') return false;
+  if (typeof v !== 'string') return true;
+  if (LOGO_URL_RE.test(v)) return false;
+  const m = LOGO_DATA_RE.exec(v);
+  if (!m) return true;
+  const relleno = (m[1].match(/=+$/)?.[0].length ?? 0);
+  return Math.floor((m[1].length * 3) / 4) - relleno > LOGO_MAX_BYTES;
+};
+
+const ERROR_LOGO = 'El logo debe ser una URL http(s) o una imagen PNG, JPG o WebP de hasta 200 KB';
 
 export const createEmpresa = async (req: Request, res: Response) => {
   const { nombre, nit, logo_url } = req.body;
@@ -40,7 +57,7 @@ export const createEmpresa = async (req: Request, res: Response) => {
     return res.status(400).json({ error: 'Campo requerido: nombre' });
   }
   if (logoInvalido(logo_url)) {
-    return res.status(400).json({ error: 'logo_url debe ser una URL http(s) válida' });
+    return res.status(400).json({ error: ERROR_LOGO });
   }
 
   try {
@@ -133,19 +150,22 @@ export const updateEmpresa = async (req: Request, res: Response) => {
   const { id } = req.params;
   const { nombre, nit, logo_url, activo } = req.body;
   if (logoInvalido(logo_url)) {
-    return res.status(400).json({ error: 'logo_url debe ser una URL http(s) válida' });
+    return res.status(400).json({ error: ERROR_LOGO });
   }
+
+  // `logo_url` ausente = no se toca; presente pero vacío / null = se quita el logo; con valor = se reemplaza.
+  const tocaLogo = Object.prototype.hasOwnProperty.call(req.body, 'logo_url');
 
   try {
     const result = await pool.query(
       `UPDATE empresas
        SET nombre   = COALESCE($1, nombre),
            nit      = COALESCE($2, nit),
-           logo_url = COALESCE($3, logo_url),
-           activo   = COALESCE($4, activo)
-       WHERE id = $5
+           logo_url = CASE WHEN $3::boolean THEN $4::text ELSE logo_url END,
+           activo   = COALESCE($5, activo)
+       WHERE id = $6
        RETURNING *`,
-      [nombre ?? null, nit ?? null, logo_url ?? null, activo ?? null, id]
+      [nombre ?? null, nit ?? null, tocaLogo, logo_url || null, activo ?? null, id]
     );
 
     if (result.rows.length === 0) {

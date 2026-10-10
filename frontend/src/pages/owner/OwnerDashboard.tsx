@@ -10,6 +10,7 @@ import InvitarAdminModal from '../../components/InvitarAdminModal';
 import { AccesosPorHora, ResumenCifras, ResumenCifrasEsqueleto, comparar, fmtNumero, rellenar } from '../../components/charts';
 import { useToast } from '../../components/Toast';
 import { useTranslation } from '../../i18n/useTranslation';
+import { plural } from '../../i18n/plural';
 
 const ICON_EMPRESA = 'M3 21h18M5 21V7l8-4v18M19 21V11l-6-4M9 9v.01M9 12v.01M9 15v.01M9 18v.01';
 
@@ -79,7 +80,7 @@ export default function OwnerDashboard({ onSelectEmpresa }: Props) {
     <div className="sg-page text-gray-100">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-bold text-white">{t('owner.panelTitle')}</h1>
-        <Button onClick={() => setCrearAbierto(true)}>{t('owner.newCompany')}</Button>
+        {(loading || empresas.length > 0) && <Button onClick={() => setCrearAbierto(true)}>{t('owner.newCompany')}</Button>}
       </div>
 
       {error && (
@@ -113,7 +114,7 @@ export default function OwnerDashboard({ onSelectEmpresa }: Props) {
               id: 'empresas',
               etiqueta: t('owner.activeCompanies'),
               valor: n(totalEmpresasActivas),
-              nota: rellenar(t('owner.ofRegistered'), { n: n(empresas.length) }),
+              nota: plural(t, 'owner.ofRegistered', n(empresas.length), {}, empresas.length),
               barra: empresas.length
                 ? { tipo: 'proporcion', fraccion: totalEmpresasActivas / empresas.length, tono: 'series', etiqueta: t('owner.activeCompanies') }
                 : undefined,

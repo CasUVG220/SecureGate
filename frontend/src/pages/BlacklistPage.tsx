@@ -250,17 +250,19 @@ export default function BlacklistPage() {
             <h1 className="text-2xl font-bold text-gray-50">{t('blacklist.title')}</h1>
             <p className="mt-1 text-sm text-gray-400">{t('blacklist.subtitle')}</p>
           </div>
-          <Button
-            variant="danger"
-            onClick={openModal}
-            icon={
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <path d={ICON_SHIELD} />
-              </svg>
-            }
-          >
-            {t('blacklist.add')}
-          </Button>
+          {(loading || !!search || entries.length > 0) && (
+            <Button
+              variant="danger"
+              onClick={openModal}
+              icon={
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d={ICON_SHIELD} />
+                </svg>
+              }
+            >
+              {t('blacklist.add')}
+            </Button>
+          )}
         </header>
 
         <Input

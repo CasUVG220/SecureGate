@@ -7,7 +7,7 @@ CREATE TABLE IF NOT EXISTS empresas (
   id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   nombre     VARCHAR(150) NOT NULL,
   nit        VARCHAR(20),
-  logo_url   VARCHAR(500),
+  logo_url   TEXT,
   activo     BOOLEAN NOT NULL DEFAULT TRUE,
   created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
@@ -682,5 +682,23 @@ EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 
 CREATE INDEX IF NOT EXISTS idx_bl_placa ON visitante_blacklist(sucursal_id, placa) WHERE placa IS NOT NULL;
+
+-- ── Logo de la empresa como archivo (SCRUM-115 / H12) ──────────────────────
+-- Antes el logo era una URL (VARCHAR(500)) que alguien tenía que alojar aparte. Ahora puede subirse como imagen
+-- (PNG/JPG/WebP reescalada en el navegador) y se guarda como data URI en la misma columna, como ya se hace con la
+-- foto de las áreas comunes. La columna pasa a TEXT (solo la primera vez: en cada arranque no se vuelve a tocar) y un
+-- CHECK acota el tamaño por si algo se salta la validación de la API.
+DO $$ BEGIN
+  IF (SELECT data_type FROM information_schema.columns
+       WHERE table_schema = current_schema() AND table_name = 'empresas' AND column_name = 'logo_url') <> 'text' THEN
+    ALTER TABLE empresas ALTER COLUMN logo_url TYPE TEXT;
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  ALTER TABLE empresas ADD CONSTRAINT empresas_logo_url_largo_chk
+    CHECK (logo_url IS NULL OR char_length(logo_url) <= 300000);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 SELECT 'SecureGate DB inicializada correctamente' AS mensaje;

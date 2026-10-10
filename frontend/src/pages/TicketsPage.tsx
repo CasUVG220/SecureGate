@@ -100,9 +100,9 @@ export default function TicketsPage() {
                   }`}
                 >
                   <div className="flex items-center gap-2">
-                    <span className="text-white font-medium text-sm truncate flex-1">{tk.titulo}</span>
+                    <span className="text-white font-medium text-sm truncate flex-1" title={tk.titulo}>{tk.titulo}</span>
                     {Number(tk.no_leidos) > 0 && (
-                      <span className="min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full bg-red-600 text-white text-[10px] font-bold">
+                      <span className="min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full bg-danger-600 text-white text-[10px] font-bold">
                         {Number(tk.no_leidos)}
                       </span>
                     )}
@@ -112,7 +112,7 @@ export default function TicketsPage() {
                     <span className="text-[11px] text-gray-400">{t(TIPO_LABEL[tk.tipo])}</span>
                     <span className="text-[11px] text-gray-500 ml-auto">{fmt(tk.ultimo_mensaje_at)}</span>
                   </div>
-                  <p className="text-xs text-gray-500 mt-1 truncate">
+                  <p className="text-xs text-gray-400 mt-1 truncate" title={`${t('tickets.house')} ${tk.numero_casa} · ${tk.residente_nombre}`}>
                     {t('tickets.house')} {tk.numero_casa} · {tk.residente_nombre}
                   </p>
                 </button>

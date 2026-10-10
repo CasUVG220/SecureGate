@@ -250,7 +250,7 @@ export default function AnunciosPage() {
             <h1 className="text-2xl font-bold text-gray-50">{t('announce.title')}</h1>
             <p className="mt-1 text-sm text-gray-400">{t('announce.subtitle')}</p>
           </div>
-          <Button onClick={openCreate}>{t('announce.new')}</Button>
+          {(loading || !!search || anuncios.length > 0) && <Button onClick={openCreate}>{t('announce.new')}</Button>}
         </header>
 
         <Input

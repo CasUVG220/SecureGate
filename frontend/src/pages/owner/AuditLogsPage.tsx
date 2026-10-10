@@ -21,16 +21,16 @@ const ACCIONES = [
 
 const ACCION_BADGE: Record<string, string> = {
   LOGIN:               'bg-gray-700 text-gray-300',
-  REGISTRO_ENTRADA:    'bg-blue-900/50 text-blue-400',
-  REGISTRO_SALIDA:     'bg-blue-900/50 text-blue-400',
-  PAGO_EFECTIVO:       'bg-green-900/50 text-green-400',
-  PAGO_APROBADO:       'bg-green-900/50 text-green-400',
-  PAGO_RECHAZADO:      'bg-red-900/50 text-red-400',
-  RESIDENTE_ELIMINADO: 'bg-red-950 text-red-300 border border-red-800',
-  EMPRESA_ELIMINADA:   'bg-red-950 text-red-300 border border-red-800',
-  EMPRESA_CREADA:      'bg-teal-900/50 text-teal-400',
-  BLACKLIST_AGREGADO:  'bg-red-900/50 text-red-400',
-  BLACKLIST_REMOVIDO:  'bg-green-900/50 text-green-400',
+  REGISTRO_ENTRADA:    'bg-brand-900/50 text-brand-400',
+  REGISTRO_SALIDA:     'bg-brand-900/50 text-brand-400',
+  PAGO_EFECTIVO:       'bg-success-900/50 text-success-400',
+  PAGO_APROBADO:       'bg-success-900/50 text-success-400',
+  PAGO_RECHAZADO:      'bg-danger-900/50 text-danger-400',
+  RESIDENTE_ELIMINADO: 'bg-danger-950 text-danger-300 border border-danger-800',
+  EMPRESA_ELIMINADA:   'bg-danger-950 text-danger-300 border border-danger-800',
+  EMPRESA_CREADA:      'bg-brand-900/50 text-brand-400',
+  BLACKLIST_AGREGADO:  'bg-danger-900/50 text-danger-400',
+  BLACKLIST_REMOVIDO:  'bg-success-900/50 text-success-400',
 };
 
 const fmtFecha = (iso: string): string => {
@@ -126,7 +126,7 @@ export default function AuditLogsPage() {
             <select
               value={accion}
               onChange={e => updateFilter(setAccion)(e.target.value)}
-              className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500 transition-colors"
+              className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-brand-500 transition-colors"
             >
               <option value="">Todas las acciones</option>
               {ACCIONES.map(a => (
@@ -142,7 +142,7 @@ export default function AuditLogsPage() {
               value={busqueda}
               onChange={e => setBusqueda(e.target.value)}
               placeholder="Buscar usuario..."
-              className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm placeholder-gray-400 focus:outline-none focus:border-blue-500 transition-colors"
+              className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm placeholder-gray-400 focus:outline-none focus:border-brand-500 transition-colors"
             />
           </div>
 
@@ -152,7 +152,7 @@ export default function AuditLogsPage() {
               type="date"
               value={desde}
               onChange={e => updateFilter(setDesde)(e.target.value)}
-              className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500 transition-colors"
+              className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-brand-500 transition-colors"
             />
           </div>
 
@@ -162,7 +162,7 @@ export default function AuditLogsPage() {
               type="date"
               value={hasta}
               onChange={e => updateFilter(setHasta)(e.target.value)}
-              className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500 transition-colors"
+              className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-brand-500 transition-colors"
             />
           </div>
         </div>
@@ -180,7 +180,7 @@ export default function AuditLogsPage() {
       </div>
 
       {error && (
-        <div className="bg-red-900/40 border border-red-700 rounded-lg px-4 py-3 text-red-300 text-sm">{error}</div>
+        <div className="bg-danger-900/40 border border-danger-700 rounded-lg px-4 py-3 text-danger-300 text-sm">{error}</div>
       )}
 
       {/* ── Tabla ── */}

@@ -32,6 +32,7 @@ import { usePolling } from './hooks/usePolling';
 import { ThemeProvider, useTheme } from './context/ThemeContext';
 import { LanguageProvider, useLanguage } from './context/LanguageContext';
 import { useTranslation }     from './i18n/useTranslation';
+import { plural }         from './i18n/plural';
 import { useRuta }            from './hooks/useRuta';
 import { RUTA_PORTAL, portalDeRol, portalDeRuta, tokenDeInvitacion } from './routing/portales';
 import type { PortalTab }     from './pages/ResidentePage';
@@ -339,17 +340,9 @@ function AppShell() {
   };
 
   const defaultPage: Page = resolveDefaultPage(userRol);
-  const roleLabel = userRol === 'owner'
-    ? 'Admin global'
-    : userRol === 'admin_empresa'
-    ? 'Admin empresa'
-    : userRol === 'admin_sucursal'
-    ? 'Admin sucursal'
-    : userRol === 'admin'
-    ? 'Administrador'
-    : userRol === 'residente'
-    ? 'Residente'
-    : '';
+  // Rótulo del rol en la barra superior: palabras completas, en el idioma elegido (nada de «Admin»).
+  const ROLES_CON_ROTULO = ['owner', 'admin_empresa', 'admin_sucursal', 'admin', 'residente'];
+  const roleLabel = ROLES_CON_ROTULO.includes(userRol) ? t(`role.${userRol}`) : '';
 
   const goToEmpresaDetail = (id: string) => {
     setSelectedEmpresaId(id);
@@ -481,7 +474,7 @@ function AppShell() {
                     {item.key === 'reservas' && reservasPendientes > 0 && (
                       <span
                         className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-warning-500 px-1 text-2xs font-bold leading-none text-black"
-                        title={`${reservasPendientes} ${t('nav.badge.pendingReservations')}`}
+                        title={plural(t, 'nav.badge.pendingReservations', reservasPendientes)}
                       >
                         {reservasPendientes > 9 ? '9+' : reservasPendientes}
                       </span>

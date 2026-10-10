@@ -9,6 +9,8 @@ import { Button, EmptyState, Input, Modal, PasswordInput, ROW_ICON, RowActions, 
 import { useToast } from '../../components/Toast';
 import InvitacionesPanel from '../../components/InvitacionesPanel';
 import InvitarAdminModal from '../../components/InvitarAdminModal';
+import TipoSucursalSelect from '../../components/TipoSucursalSelect';
+import { etiquetaTipoSucursal } from '../../utils/sucursal';
 import { decodeTokenPayload } from '../../services/api';
 import { useTranslation } from '../../i18n/useTranslation';
 import { rellenar } from '../../components/charts/format';
@@ -265,12 +267,12 @@ export default function GestionSucursales() {
         </div>
         <div className="flex gap-2">
           <Button onClick={openUserModal}>{t('ae.newUser')}</Button>
-          <Button variant="secondary" onClick={openCreateSuc}>{t('ae.newBranch')}</Button>
+          {(loading || sucursales.length > 0) && <Button variant="secondary" onClick={openCreateSuc}>{t('ae.newBranch')}</Button>}
         </div>
       </div>
 
       {error && (
-        <div className="bg-red-900/40 border border-red-700 rounded-lg px-4 py-3 text-red-300 text-sm">{error}</div>
+        <div className="bg-danger-900/40 border border-danger-700 rounded-lg px-4 py-3 text-danger-300 text-sm">{error}</div>
       )}
 
       {/* Sucursales table */}
@@ -329,7 +331,7 @@ export default function GestionSucursales() {
                         </p>
                       )}
                     </td>
-                    <td className="px-4 py-3 text-gray-400">{suc.tipo ?? '—'}</td>
+                    <td className="px-4 py-3 text-gray-400">{etiquetaTipoSucursal(t, suc.tipo)}</td>
                     <td className="px-4 py-3 text-center">{suc.total_residentes}</td>
                     <td className="px-4 py-3 text-center">{suc.total_agentes}</td>
                     <td className="px-4 py-3 text-center">
@@ -505,7 +507,7 @@ export default function GestionSucursales() {
           <form id="form-sucursal" onSubmit={handleSucSubmit} className="space-y-4" noValidate>
             {modalError && <p role="alert" className="rounded-lg border border-danger-500/30 bg-danger-500/10 px-4 py-3 text-sm font-medium text-danger-400">{modalError}</p>}
             <Input name="nombre" label={t('common.name')} required autoFocus value={sucForm.nombre} onChange={handleSucChange} />
-            <Input name="tipo" label={t('empDetail.tipo')} value={sucForm.tipo ?? ''} onChange={handleSucChange} />
+            <TipoSucursalSelect value={sucForm.tipo ?? ''} onChange={tipo => setSucForm(prev => ({ ...prev, tipo }))} />
             <Input name="direccion" label={t('empDetail.direction')} value={sucForm.direccion ?? ''} onChange={handleSucChange} />
           </form>
         )}

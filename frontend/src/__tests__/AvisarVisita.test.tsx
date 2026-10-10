@@ -179,7 +179,10 @@ describe('PreautPage — visitas avisadas', () => {
     m('getPreautorizaciones').mockResolvedValue([]);
     m('createPreautorizacion').mockResolvedValue({ id: 'nuevo' });
     render(<PreautPage />);
-    fireEvent.click((await screen.findAllByRole('button', { name: 'Avisar de una visita' }))[0]);
+    await screen.findByText('No hay visitas avisadas.');
+    // Vacía: el único botón es el del estado vacío (el de arriba no se repite).
+    expect(screen.getAllByRole('button', { name: 'Avisar de una visita' })).toHaveLength(1);
+    fireEvent.click(screen.getByRole('button', { name: 'Avisar de una visita' }));
     const d = await screen.findByRole('dialog', { name: 'Avisar de una visita' });
     fireEvent.change(within(d).getByLabelText(/Casa y residente/), { target: { value: 'r1' } });
     fireEvent.change(within(d).getByLabelText(/Nombre del visitante/), { target: { value: 'Juan' } });

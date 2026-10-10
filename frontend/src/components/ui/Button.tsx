@@ -32,7 +32,7 @@ const SIZE: Record<ButtonSize, string> = {
 const SPINNER_SIZE: Record<ButtonSize, number> = { sm: 12, md: 14, lg: 16 };
 
 /**
- * Botón base de SecureGate. Sustituye a los `<button className="bg-blue-600 …">`
+ * Botón base de SecureGate. Sustituye a los `<button className="bg-brand-600 …">`
  * que cada pantalla declaraba por su cuenta.
  */
 const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(

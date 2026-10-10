@@ -206,7 +206,7 @@ export default function DashboardPage({ onNavigate }: { onNavigate?: (pagina: st
                       </span>
 
                       <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-semibold text-gray-100">{a.nombre_visitante}</p>
+                        <p className="truncate text-sm font-semibold text-gray-100" title={a.nombre_visitante}>{a.nombre_visitante}</p>
                         <p className="mt-0.5 text-xs text-gray-400">
                           {t('dashboard.unit')} <span className="font-semibold text-gray-300">{a.numero_casa}</span>
                           {' · '}

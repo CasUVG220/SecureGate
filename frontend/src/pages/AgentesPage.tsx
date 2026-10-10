@@ -152,7 +152,7 @@ export default function AgentesPage() {
   return (
     <div className="sg-page text-gray-100">
       {error && (
-        <div className="bg-red-900/40 border border-red-700 rounded-lg px-4 py-3 text-red-300 text-sm">{error}</div>
+        <div className="bg-danger-900/40 border border-danger-700 rounded-lg px-4 py-3 text-danger-300 text-sm">{error}</div>
       )}
 
       <div className="sg-panel-heading">
@@ -161,7 +161,7 @@ export default function AgentesPage() {
           <h1 className="mt-1 text-2xl font-bold tracking-tight text-white sm:text-3xl">Personal y agentes</h1>
           <p className="mt-1 text-sm text-gray-400">Gestiona quién está listo para proteger la operación de tu comunidad.</p>
         </div>
-        {!loading && <span className="sg-status bg-emerald-500/10 text-emerald-400">{filtered.length} registrados</span>}
+        {!loading && <span className="sg-status bg-success-500/10 text-success-400">{filtered.length} registrados</span>}
       </div>
 
       {/* Create agent form */}
@@ -207,7 +207,7 @@ export default function AgentesPage() {
             value={search}
             onChange={e => setSearch(e.target.value)}
             placeholder="Buscar por nombre, email o rol…"
-            className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-white placeholder-gray-400 text-sm focus:outline-none focus:border-blue-500 transition-colors"
+            className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-white placeholder-gray-400 text-sm focus:outline-none focus:border-brand-500 transition-colors"
           />
         </div>
       )}
