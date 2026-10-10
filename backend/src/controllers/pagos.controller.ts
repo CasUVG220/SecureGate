@@ -419,7 +419,7 @@ export const getMiResumenMes = async (req: Request, res: Response) => {
          LEFT JOIN areas_comunes  a ON a.id = r.area_id
         WHERE p.residente_id = $1
           AND p.estado = 'pendiente'
-          AND date_trunc('month', p.fecha_pago) =
+          AND date_trunc('month', (p.fecha_pago AT TIME ZONE $2::text)) =
               date_trunc('month', (NOW() AT TIME ZONE $2::text))
         ORDER BY p.fecha_pago ASC`,
       [id, APP_TZ]

@@ -307,7 +307,7 @@ Severidad según el impacto real en este sistema (no la etiqueta de la herramien
 | S-11 | Baja | Sesión abierta + empresa suspendida: `/auth/refresh` responde 401, no 423. | `06` | ✅ Corregido en Sprint 9 (SCRUM-129): 423 con motivo en backend, web y escritorio |
 | S-14 | Baja | Backend: 4 avisos npm moderados (sin ruta explotable / solo dev). | `npm audit` | ✅ `node-cron` 4.6.0: producción sin avisos (SCRUM-129); queda solo desarrollo |
 | S-15 | Baja | Rust: 7 crates sin mantenimiento (transitivos de Tauri). | `cargo audit` | ⏳ Revisado (SCRUM-129): `yoke-derive` corregido; Tauri 2.12 quita 5 más, pendiente de validar en Windows |
-| S-17 | Baja | Desfase de 6 h en `TIMESTAMP` sin zona (raíz de S-02): `refresh_tokens` dura 6 d 18 h, no 7 d. | `04` + verificación en BD | ⏳ Deuda |
+| S-17 | Baja | Desfase de 6 h en `TIMESTAMP` sin zona (raíz de S-02): `refresh_tokens` dura 6 d 18 h, no 7 d. | `04` + verificación en BD | ✅ Corregido en el Sprint 9 (SCRUM-124): columnas `TIMESTAMPTZ`; ver `docs/s17_timestamptz.md` |
 | S-16 | Info | ZAP: «XSS persistente en JSON» (no explotable en la API). | ZAP | ⏳ Sin acción en backend |
 | S-18 | Info | `/health` muestra nombre y versión del servicio. | `08` | Aceptado |
 

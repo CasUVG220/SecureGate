@@ -354,9 +354,19 @@ END $$;
 -- widen date columns to TIMESTAMP, drop the single-ban unique constraint).
 ALTER TABLE visitante_blacklist DROP CONSTRAINT IF EXISTS visitante_blacklist_visitante_id_sucursal_id_key;
 ALTER TABLE visitante_blacklist DROP COLUMN IF EXISTS tipo;
-ALTER TABLE visitante_blacklist ALTER COLUMN fecha_inicio TYPE TIMESTAMP USING fecha_inicio::timestamp;
+-- Solo si todavía son DATE (el esquema original): en cada arranque esto volvía a dejarlas en TIMESTAMP y deshacía la
+-- conversión a TIMESTAMPTZ del final de este archivo (S-17).
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = current_schema()
+              AND table_name = 'visitante_blacklist' AND column_name = 'fecha_inicio' AND data_type = 'date') THEN
+    ALTER TABLE visitante_blacklist ALTER COLUMN fecha_inicio TYPE TIMESTAMP USING fecha_inicio::timestamp;
+  END IF;
+  IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = current_schema()
+              AND table_name = 'visitante_blacklist' AND column_name = 'fecha_fin' AND data_type = 'date') THEN
+    ALTER TABLE visitante_blacklist ALTER COLUMN fecha_fin TYPE TIMESTAMP USING fecha_fin::timestamp;
+  END IF;
+END $$;
 ALTER TABLE visitante_blacklist ALTER COLUMN fecha_inicio SET DEFAULT NOW();
-ALTER TABLE visitante_blacklist ALTER COLUMN fecha_fin    TYPE TIMESTAMP USING fecha_fin::timestamp;
 CREATE INDEX IF NOT EXISTS idx_bl_visitante_activo ON visitante_blacklist(visitante_id, activo);
 
 -- ── S6: Reservas de áreas comunes ─────────────────────────────────────────
@@ -748,5 +758,47 @@ CREATE TABLE IF NOT EXISTS usuario_2fa_recuperacion (
 );
 
 CREATE INDEX IF NOT EXISTS idx_2fa_recuperacion_usuario ON usuario_2fa_recuperacion(usuario_id);
+
+-- ── S-17 · TIMESTAMP → TIMESTAMPTZ (SCRUM-124 / SCRUM-177) ────────────────────────────────────────────
+-- Causa raíz del «desfase de 6 horas»: Postgres corre en UTC y el backend en America/Guatemala. Una columna TIMESTAMP guarda
+-- una hora de reloj SIN zona: lo que escribe `NOW()` es la hora UTC, pero `pg` la lee como si fuera hora local de Node, así
+-- que cada fecha llegaba 6 h corrida (la bitácora, la caducidad de las invitaciones, el bloqueo de un QR…). Con
+-- TIMESTAMPTZ la base guarda el INSTANTE y no hay nada que interpretar.
+--
+-- Cómo se convierten los datos que ya existen. Se conserva lo que Postgres ya hacía al COMPARAR contra NOW() (en una sesión
+-- UTC, la hora de reloj de una TIMESTAMP se leía como UTC), así que la regla general es `AT TIME ZONE 'UTC'`: ninguna
+-- comparación del SQL cambia de resultado. Las únicas columnas que NO escribió Postgres sino Node, con un `Date` serializado
+-- en hora de Guatemala, se leen con esa zona:
+--   · refresh_tokens.expires_at   (JS Date) — por eso un token duraba 6 d 18 h en vez de 7 d
+--   · visitante_blacklist.fecha_fin (JS Date)
+-- Desde aquí los `Date` de Node viajan con su zona y se guardan bien sin ninguna conversión.
+--
+-- La regla es general (todas las TIMESTAMP del esquema) para que ninguna se quede atrás, y es idempotente: solo toca lo que
+-- sigue siendo `timestamp without time zone`. Cada columna va en su propio sub-bloque: si una falla se avisa (WARNING) y las
+-- demás migraciones de este archivo —que corre como UNA transacción— no se pierden.
+DO $$
+DECLARE
+  c    RECORD;
+  zona TEXT;
+BEGIN
+  FOR c IN
+    SELECT col.table_name AS tabla, col.column_name AS columna
+      FROM information_schema.columns col
+      JOIN information_schema.tables t
+        ON t.table_schema = col.table_schema AND t.table_name = col.table_name AND t.table_type = 'BASE TABLE'
+     WHERE col.table_schema = current_schema()
+       AND col.data_type = 'timestamp without time zone'
+     ORDER BY col.table_name, col.ordinal_position
+  LOOP
+    zona := CASE WHEN (c.tabla, c.columna) IN (('refresh_tokens', 'expires_at'), ('visitante_blacklist', 'fecha_fin'))
+                 THEN 'America/Guatemala' ELSE 'UTC' END;
+    BEGIN
+      EXECUTE format('ALTER TABLE %I ALTER COLUMN %I TYPE TIMESTAMPTZ USING %I AT TIME ZONE %L',
+                     c.tabla, c.columna, c.columna, zona);
+    EXCEPTION WHEN OTHERS THEN
+      RAISE WARNING '[init] S-17: no se pudo convertir %.% a TIMESTAMPTZ (%): %', c.tabla, c.columna, zona, SQLERRM;
+    END;
+  END LOOP;
+END $$;
 
 SELECT 'SecureGate DB inicializada correctamente' AS mensaje;

@@ -60,19 +60,19 @@ interface FilaInvitacion {
   invitado_por_nombre?: string;
   /** Calculado por Postgres (`expira_en <= NOW()`): ver estadoEfectivo. */
   vencida?: boolean;
-  /** `expira_en` convertido desde UTC, para mostrarlo bien (ver SELECT_INVITACION). */
-  expira_en_utc?: Date;
 }
 
 /**
  * Estado efectivo: una pendiente cuya fecha ya pasó se reporta (y se trata)
  * como expirada aunque el job diario todavía no la haya marcado.
  *
- * La comparación la hace POSTGRES (`vencida`), no Node. `expira_en` es un
- * TIMESTAMP sin zona escrito con NOW() en UTC, pero el backend corre con
- * TZ=America/Guatemala y `pg` interpreta ese valor como hora local: lo leía 6 h
- * en el futuro y una invitación vencida seguía aceptándose hasta 6 h después
- * (hallazgo S-02 de backend/securitytest). Sólo si la fila no trae `vencida`
+ * La comparación la hace POSTGRES (`vencida`), no Node. Antes `expira_en` era un
+ * TIMESTAMP sin zona escrito con NOW() en UTC mientras el backend corre con
+ * TZ=America/Guatemala: `pg` lo interpretaba como hora local, lo leía 6 h en el
+ * futuro y una invitación vencida seguía aceptándose hasta 6 h después (hallazgo
+ * S-02 de backend/securitytest). Desde S-17 la columna es TIMESTAMPTZ y Node
+ * también la lee bien, pero decidir en SQL sigue siendo lo correcto (la hora
+ * del servidor de base de datos manda). Sólo si la fila no trae `vencida`
  * (tests, filas parciales) se cae a la comparación en JS.
  */
 export const estadoEfectivo = (
@@ -87,7 +87,6 @@ export const estadoEfectivo = (
 const SELECT_INVITACION = `
   SELECT i.*,
          (i.expira_en <= NOW())              AS vencida,
-         (i.expira_en AT TIME ZONE 'UTC')    AS expira_en_utc,
          e.nombre AS empresa_nombre_actual,
          s.nombre AS sucursal_nombre,
          u.nombre AS invitado_por_nombre
@@ -109,7 +108,7 @@ const dto = (i: FilaInvitacion) => ({
   invitado_por: i.invitado_por,
   invitado_por_nombre: i.invitado_por_nombre ?? null,
   estado: estadoEfectivo(i),
-  expira_en: i.expira_en_utc ?? i.expira_en,
+  expira_en: i.expira_en,
   created_at: i.created_at,
   aceptada_en: i.aceptada_en,
   revocada_en: i.revocada_en,
@@ -260,7 +259,7 @@ export const getInvitacionPorToken = async (req: Request, res: Response) => {
       empresa_nombre: inv.empresa_nombre_actual ?? inv.empresa_nombre,
       crea_empresa: inv.empresa_id === null,
       sucursal_nombre: inv.sucursal_nombre,
-      expira_en: inv.expira_en_utc ?? inv.expira_en,
+      expira_en: inv.expira_en,
     });
   } catch (error) {
     serverError(res, error, 'Error al consultar la invitación');
@@ -409,7 +408,7 @@ export const reenviarInvitacion = async (req: Request, res: Response) => {
     const r = await pool.query<FilaInvitacion>(
       `UPDATE invitaciones
        SET token_hash = $2, estado = 'pendiente', expira_en = NOW() + ($3 || ' hours')::interval
-       WHERE id = $1 RETURNING *, (expira_en AT TIME ZONE 'UTC') AS expira_en_utc`,
+       WHERE id = $1 RETURNING *`,
       [inv.id, hashToken(token), String(INVITACION_TTL_HORAS)],
     );
     // Recién renovada: el `vencida` de la fila vieja ya no vale.
