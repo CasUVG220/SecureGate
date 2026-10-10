@@ -7,7 +7,7 @@ import {
   type Ticket, type TicketMensaje,
 } from '../services/api';
 import { Skeleton } from './Skeleton';
-import { Button } from './ui';
+import { Button, useConfirmacion } from './ui';
 import { useTranslation } from '../i18n/useTranslation';
 import { usePolling } from '../hooks/usePolling';
 import { formatearFechaHoraCorta } from '../utils/fecha';
@@ -39,6 +39,7 @@ interface Props {
 
 export default function TicketChat({ ticketId, viewerRole, onActivity }: Props) {
   const { t } = useTranslation();
+  const { confirmar, dialogo } = useConfirmacion();
   const [ticket, setTicket]     = useState<Ticket | null>(null);
   const [mensajes, setMensajes] = useState<TicketMensaje[]>([]);
   const [loading, setLoading]   = useState(true);
@@ -104,7 +105,12 @@ export default function TicketChat({ ticketId, viewerRole, onActivity }: Props) 
   };
 
   const handleClose = async () => {
-    if (!window.confirm(t('tickets.confirmClose'))) return;
+    const ok = await confirmar({
+      title: t('tickets.confirmClose'),
+      message: t('confirm.closeTicket.message'),
+      confirmLabel: t('tickets.close'),
+    });
+    if (!ok) return;
     setClosing(true);
     try {
       const updated = await cerrarTicket(ticketId);
@@ -205,6 +211,7 @@ export default function TicketChat({ ticketId, viewerRole, onActivity }: Props) 
           </div>
         )}
       </div>
+      {dialogo}
     </div>
   );
 }

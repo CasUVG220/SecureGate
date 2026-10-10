@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
+import { rellenar } from '../../components/charts/format';
 import {
   getEmpresaStats, getSucursales, createSucursal, deleteSucursal, assignAdminSucursal,
   type EmpresaStats, type Sucursal, type SucursalInput,
 } from '../../services/api';
 import { Skeleton, TableSkeleton } from '../../components/Skeleton';
-import { Button, ROW_ICON, RowActions, StatusText } from '../../components/ui';
+import { Button, ROW_ICON, RowActions, StatusText, useConfirmacion } from '../../components/ui';
 import { ResumenCifrasEsqueleto } from '../../components/charts';
 import ResumenEmpresa from '../admin_empresa/ResumenEmpresa';
 import { useToast } from '../../components/Toast';
@@ -22,6 +23,7 @@ type Modal = 'none' | 'sucursal' | 'admin';
 export default function EmpresaDetail({ empresaId, onBack }: Props) {
   const showToast = useToast();
   const { t } = useTranslation();
+  const { confirmar, dialogo } = useConfirmacion();
 
   const [stats, setStats]           = useState<EmpresaStats | null>(null);
   const [sucursales, setSucursales] = useState<Sucursal[]>([]);
@@ -56,7 +58,13 @@ export default function EmpresaDetail({ empresaId, onBack }: Props) {
   };
 
   const handleDeleteSucursal = async (suc: Sucursal) => {
-    if (!window.confirm(`${t('ae.confirmDeleteSucursal')} "${suc.nombre}"?`)) return;
+    const ok = await confirmar({
+      title: rellenar(t('confirm.deleteBranch.title'), { nombre: suc.nombre }),
+      message: t('confirm.deleteBranch.message'),
+      confirmLabel: t('common.delete'),
+      tone: 'danger',
+    });
+    if (!ok) return;
     try {
       await deleteSucursal(suc.id);
       cargar();
@@ -300,6 +308,7 @@ export default function EmpresaDetail({ empresaId, onBack }: Props) {
           </div>
         </div>
       )}
+      {dialogo}
     </div>
   );
 }

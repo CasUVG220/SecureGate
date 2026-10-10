@@ -34,6 +34,11 @@ export type { FormActionsProps } from './FormActions';
 export { default as Modal } from './Modal';
 export type { ModalProps, ModalSize } from './Modal';
 
+export { default as ConfirmDialog } from './ConfirmDialog';
+export type { ConfirmDialogProps } from './ConfirmDialog';
+export { useConfirmacion } from './useConfirmacion';
+export type { PeticionConfirmacion } from './useConfirmacion';
+
 export { default as Skeleton, CardSkeleton, FormSkeleton, GridSkeleton, SkeletonText, Spinner, StatSkeleton, TableSkeleton } from './Skeleton';
 export type { SkeletonProps } from './Skeleton';
 

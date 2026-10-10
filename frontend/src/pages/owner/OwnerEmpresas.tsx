@@ -6,7 +6,7 @@ import {
   type Empresa, type Usuario,
 } from '../../services/api';
 import { TableSkeleton } from '../../components/Skeleton';
-import { Button, Input, Modal, PasswordInput, ROW_ICON, RowActions, Select, StatusText, Textarea, requisitosDeClave } from '../../components/ui';
+import { Button, Input, Modal, PasswordInput, ROW_ICON, RowActions, Select, StatusText, Textarea, requisitosDeClave, useConfirmacion } from '../../components/ui';
 import { useToast } from '../../components/Toast';
 import InvitacionesPanel from '../../components/InvitacionesPanel';
 import InvitarAdminModal from '../../components/InvitarAdminModal';
@@ -22,6 +22,7 @@ const EMPTY_NEW_USER = { nombre: '', email: '', password: '' };
 export default function OwnerEmpresas() {
   const showToast = useToast();
   const { t } = useTranslation();
+  const { confirmar, dialogo } = useConfirmacion();
 
   const [empresas, setEmpresas] = useState<Empresa[]>([]);
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
@@ -171,7 +172,13 @@ export default function OwnerEmpresas() {
   };
 
   const handleDelete = async (emp: Empresa) => {
-    if (!window.confirm(`${t('owner.confirmDeleteEmpresa')} "${emp.nombre}"?`)) return;
+    const ok = await confirmar({
+      title: rellenar(t('confirm.deleteCompany.title'), { nombre: emp.nombre }),
+      message: t('confirm.deleteCompany.message'),
+      confirmLabel: t('confirm.deleteCompany.action'),
+      tone: 'danger',
+    });
+    if (!ok) return;
     try {
       await deleteEmpresa(emp.id);
       cargar();
@@ -482,6 +489,7 @@ export default function OwnerEmpresas() {
           </form>
         </div>
       </Modal>
+      {dialogo}
     </div>
   );
 }

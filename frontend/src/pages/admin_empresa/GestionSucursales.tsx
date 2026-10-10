@@ -5,7 +5,7 @@ import {
   type Sucursal, type SucursalInput, type Usuario,
 } from '../../services/api';
 import { TableSkeleton } from '../../components/Skeleton';
-import { Button, EmptyState, Input, Modal, PasswordInput, ROW_ICON, RowActions, Select, StatusText, requisitosDeClave } from '../../components/ui';
+import { Button, EmptyState, Input, Modal, PasswordInput, ROW_ICON, RowActions, Select, StatusText, requisitosDeClave, useConfirmacion } from '../../components/ui';
 import { useToast } from '../../components/Toast';
 import InvitacionesPanel from '../../components/InvitacionesPanel';
 import InvitarAdminModal from '../../components/InvitarAdminModal';
@@ -31,6 +31,7 @@ const EMPTY_USR: UsuarioForm = { nombre: '', email: '', password: '', rol: 'agen
 export default function GestionSucursales() {
   const showToast = useToast();
   const { t } = useTranslation();
+  const { confirmar, dialogo } = useConfirmacion();
 
   const empresaId = (() => {
     const token = localStorage.getItem('token');
@@ -140,7 +141,13 @@ export default function GestionSucursales() {
   };
 
   const handleDeleteSucursal = async (suc: Sucursal) => {
-    if (!window.confirm(`${t('ae.confirmDeleteSucursal')} "${suc.nombre}"?`)) return;
+    const ok = await confirmar({
+      title: rellenar(t('confirm.deleteBranch.title'), { nombre: suc.nombre }),
+      message: t('confirm.deleteBranch.message'),
+      confirmLabel: t('common.delete'),
+      tone: 'danger',
+    });
+    if (!ok) return;
     try {
       await deleteSucursal(suc.id);
       cargar();
@@ -151,7 +158,13 @@ export default function GestionSucursales() {
   };
 
   const handleDeleteUsuario = async (u: Usuario) => {
-    if (!window.confirm(`${t('ae.confirmDeleteUser')} "${u.nombre}"?`)) return;
+    const ok = await confirmar({
+      title: rellenar(t('confirm.deactivateUser.title'), { nombre: u.nombre }),
+      message: t('confirm.deactivateUser.message'),
+      confirmLabel: t('confirm.deactivateUser.action'),
+      tone: 'danger',
+    });
+    if (!ok) return;
     try {
       await deleteUsuario(u.id);
       cargar();
@@ -562,6 +575,7 @@ export default function GestionSucursales() {
           </Select>
         </form>
       </Modal>
+      {dialogo}
     </div>
   );
 }

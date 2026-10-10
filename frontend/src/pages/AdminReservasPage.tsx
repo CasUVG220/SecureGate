@@ -7,7 +7,7 @@ import {
 } from '../services/api';
 import { TableSkeleton } from '../components/Skeleton';
 import { useToast } from '../components/Toast';
-import { ROW_ICON, RowActions } from '../components/ui';
+import { Button, Modal, ROW_ICON, RowActions, Textarea } from '../components/ui';
 import { useTranslation } from '../i18n/useTranslation';
 import { usePolling } from '../hooks/usePolling';
 import { formatearDia } from '../utils/fecha';
@@ -92,12 +92,18 @@ export default function AdminReservasPage() {
     }
   };
 
-  const handleRechazar = async (r: Reserva) => {
-    const motivo = window.prompt(t('reservas.rejectReason'));
-    if (motivo === null) return;
+  /** Rechazar pide el motivo (opcional) en un diálogo de la app; el rechazo se hace al confirmar. */
+  const [rechazando, setRechazando] = useState<Reserva | null>(null);
+  const [motivo, setMotivo] = useState('');
+  const handleRechazar = (r: Reserva) => { setMotivo(''); setRechazando(r); };
+
+  const confirmarRechazo = async () => {
+    const r = rechazando;
+    if (!r) return;
     setActionId(r.id);
     try {
-      await rechazarReserva(r.id, motivo || undefined);
+      await rechazarReserva(r.id, motivo.trim() || undefined);
+      setRechazando(null);
       showToast(t('reservas.rejected'), 'warning');
       load();
       void cargarPendientes().catch(() => {});
@@ -265,6 +271,30 @@ export default function AdminReservasPage() {
           </table>
         </div>
       </div>
+      <Modal
+        open={!!rechazando}
+        onClose={() => setRechazando(null)}
+        dismissible={!actionId}
+        size="sm"
+        title={t('reservas.rejectTitle')}
+        description={rechazando ? `${rechazando.area_nombre} · ${rechazando.numero_casa}` : undefined}
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setRechazando(null)} disabled={!!actionId}>{t('common.cancel')}</Button>
+            <Button variant="danger" onClick={() => void confirmarRechazo()} loading={!!actionId}>{t('reservas.rejectConfirm')}</Button>
+          </>
+        }
+      >
+        <Textarea
+          label={t('reservas.rejectReason')}
+          hint={t('reservas.rejectHint')}
+          rows={3}
+          maxLength={300}
+          autoFocus
+          value={motivo}
+          onChange={e => setMotivo(e.target.value)}
+        />
+      </Modal>
     </div>
   );
 }

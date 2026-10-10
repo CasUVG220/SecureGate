@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { rellenar } from '../components/charts/format';
 import {
   getResidenteMe,
   getMisPreautorizaciones,
@@ -29,7 +30,7 @@ import { useTranslation } from '../i18n/useTranslation';
 import TicketChat, { TIPO_LABEL, ESTADO_BADGE, ESTADO_LABEL } from '../components/TicketChat';
 import QrInviteModal from '../components/QrInviteModal';
 import PagoTarjetaModal from '../components/PagoTarjetaModal';
-import { Badge, Button, EmptyState, ErrorState, ESTADO_PAGO_TONE, Input, ROW_ICON, RowActions, StatusText } from '../components/ui';
+import { Badge, Button, EmptyState, ErrorState, ESTADO_PAGO_TONE, Input, ROW_ICON, RowActions, StatusText, useConfirmacion } from '../components/ui';
 import AvisarVisitaModal, { type DatosVisita } from '../components/AvisarVisitaModal';
 import { useIsHandheld } from '../hooks/useMediaQuery';
 import { usePolling } from '../hooks/usePolling';
@@ -59,6 +60,7 @@ interface ResidentePageProps {
 export default function ResidentePage({ requestedTab, tabNonce = 0 }: ResidentePageProps = {}) {
   const showToast = useToast();
   const { t } = useTranslation();
+  const { confirmar, dialogo } = useConfirmacion();
   // En teléfono y tablet la barra inferior del shell ya ofrece estas mismas
   // secciones, así que la barra de pestañas sobra: duplicaba la navegación y
   // se comía una franja de una pantalla que va justa de alto.
@@ -204,7 +206,13 @@ export default function ResidentePage({ requestedTab, tabNonce = 0 }: ResidenteP
   }, [requestedTab, tabNonce]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleRevokeQr = async (inv: InvitacionQr) => {
-    if (!window.confirm(t('qr.confirmRevoke'))) return;
+    const ok = await confirmar({
+      title: t('confirm.revokeQr.title'),
+      message: t('confirm.revokeQr.message'),
+      confirmLabel: t('qr.revoke'),
+      tone: 'danger',
+    });
+    if (!ok) return;
     setRevokingQrId(inv.id);
     try {
       await revocarInvitacionQr(inv.id);
@@ -347,8 +355,14 @@ export default function ResidentePage({ requestedTab, tabNonce = 0 }: ResidenteP
   });
 
   const handleDelete = async (id: string, nombre: string, guardado: boolean) => {
-    const pregunta = guardado ? `¿Quitar a ${nombre} de tus visitantes guardados?` : `¿Eliminar la visita avisada de ${nombre}?`;
-    if (!window.confirm(pregunta)) return;
+    const clave = guardado ? 'deleteSavedVisitor' : 'deleteNotice';
+    const ok = await confirmar({
+      title: rellenar(t(`confirm.${clave}.title`), { nombre }),
+      message: t(`confirm.${clave}.message`),
+      confirmLabel: guardado ? t('common.delete') : t('common.delete'),
+      tone: 'danger',
+    });
+    if (!ok) return;
     setDeletingId(id);
     try {
       await deleteMisPreautorizacion(id);
@@ -1106,6 +1120,7 @@ export default function ResidentePage({ requestedTab, tabNonce = 0 }: ResidenteP
           getMiResumenMes().then(setResumenMes).catch(() => {});
         }}
       />
+      {dialogo}
     </main>
   );
 }
