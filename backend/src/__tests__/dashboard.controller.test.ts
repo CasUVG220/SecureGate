@@ -31,7 +31,7 @@ const RESPUESTAS: Array<[string, Array<Record<string, unknown>>]> = [
   ['EXTRACT(HOUR', [{ hora: 8, total: 3 }, { hora: 18, total: 7 }]],
   ['CURRENT_DATE - 1', [{ total: 9 }]],
   ['timestamp_salida IS NULL', [{ total: 2 }]],
-  ['estado_pago', [{ total: 4 }]],
+  ['estado_pago', [{ total: 4, registrados: 120 }]],
   ["estado = 'pendiente'", [{ total: 6 }]],
   ["estado = 'pendiente_aprobacion'", [{ total: 5 }]],
   ['LIMIT 10', [{ id: 'a1', nombre_visitante: 'Luis', numero_casa: 'A-12', timestamp_entrada: '2026-09-24T10:00:00', timestamp_salida: null }]],
@@ -60,6 +60,15 @@ it('devuelve la serie de hoy por hora (24 posiciones) y la referencia de ayer', 
   expect(body.accesos_por_hora.reduce((a: number, b: number) => a + b, 0)).toBe(10);
   expect(body.accesos_ayer_misma_hora).toBe(9);
   expect(body.dentro_ahora).toBe(2);
+});
+
+it('trae el total de residentes del alcance para decidir si el panel muestra los primeros pasos', async () => {
+  const body = await pedir(ADM_SUC);
+  expect(body.residentes_mora).toBe(4);
+  expect(body.total_residentes).toBe(120);
+  const sql = mockPool.query.mock.calls.map(([s]) => s as string).find(s => s.includes('estado_pago'))!;
+  expect(sql).toMatch(/COUNT\(\*\) FILTER \(WHERE r\.estado_pago = 'mora'\)/);
+  expect(sql).toContain('r.sucursal_id  = $1');
 });
 
 it('"dentro ahora" se cuenta en la base (últimas 24 h), no con la lista de recientes', async () => {

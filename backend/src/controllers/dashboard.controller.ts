@@ -46,11 +46,13 @@ export const getDashboard = async (req: Request, res: Response) => {
            AND ${cond.accesos}`,
         cond.params
       ),
+      // Un solo recorrido da la mora y el padrón completo: con `registrados = 0` el panel
+      // enseña los primeros pasos en vez de un tablero de ceros.
       pool.query(
-        `SELECT COUNT(*)::int AS total
+        `SELECT COUNT(*) FILTER (WHERE r.estado_pago = 'mora')::int AS total,
+                COUNT(*)::int AS registrados
          FROM residentes r
-         WHERE r.estado_pago = 'mora'
-           AND ${cond.residentes}`,
+         WHERE ${cond.residentes}`,
         cond.params
       ),
       pool.query(
@@ -123,6 +125,7 @@ export const getDashboard = async (req: Request, res: Response) => {
     res.json({
       accesos_hoy:       accesosHoy.rows[0].total,
       residentes_mora:   residentesMora.rows[0].total,
+      total_residentes:  residentesMora.rows[0].registrados ?? 0,
       pagos_pendientes:  pagosPendientes.rows[0].total,
       reservas_pendientes: reservasPendientes.rows[0]?.total ?? 0,
       accesos_recientes: accesosRecientes.rows,

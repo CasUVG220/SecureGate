@@ -48,6 +48,30 @@ describe('DashboardPage', () => {
     expect(onNavigate.mock.calls).toEqual([['verificacion'], ['residentes']]);
   });
 
+  it('sin residentes registrados enseña los primeros pasos y cada uno lleva a su pantalla', async () => {
+    mockGet.mockResolvedValue(datos({ total_residentes: 0, accesos_recientes: [] }));
+    const onNavigate = vi.fn();
+    render(<DashboardPage onNavigate={onNavigate} />);
+    const pasos = await screen.findByRole('region', { name: 'Primeros pasos' });
+    expect(within(pasos).getAllByRole('listitem')).toHaveLength(3);
+    const ir = within(pasos).getAllByRole('button', { name: 'Ir' });
+    ir.forEach(b => fireEvent.click(b));
+    expect(onNavigate.mock.calls).toEqual([['residentes'], ['agentes'], ['garitas']]);
+  });
+
+  it('con residentes (o sin dato del servidor) no estorba con los primeros pasos', async () => {
+    mockGet.mockResolvedValue(datos({ total_residentes: 40 }));
+    const { unmount } = render(<DashboardPage onNavigate={vi.fn()} />);
+    await screen.findByRole('region', { name: 'Resumen de hoy' });
+    expect(screen.queryByRole('region', { name: 'Primeros pasos' })).not.toBeInTheDocument();
+    unmount();
+
+    mockGet.mockResolvedValue(datos());          // servidor anterior: sin total_residentes
+    render(<DashboardPage onNavigate={vi.fn()} />);
+    await screen.findByRole('region', { name: 'Resumen de hoy' });
+    expect(screen.queryByRole('region', { name: 'Primeros pasos' })).not.toBeInTheDocument();
+  });
+
   it('sin pendientes no ofrece acciones vacías', async () => {
     mockGet.mockResolvedValue(datos({ pagos_pendientes: 0, residentes_mora: 0 }));
     render(<DashboardPage onNavigate={vi.fn()} />);

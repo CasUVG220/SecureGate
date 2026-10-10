@@ -15,6 +15,13 @@ const ICON = {
 };
 
 
+/** Lo que le falta a una sucursal recién creada, en el orden en que conviene hacerlo. */
+const PRIMEROS_PASOS = [
+  { pagina: 'residentes', texto: 'dashboard.firstSteps.residents' },
+  { pagina: 'agentes',    texto: 'dashboard.firstSteps.staff' },
+  { pagina: 'garitas',    texto: 'dashboard.firstSteps.gate' },
+] as const;
+
 export default function DashboardPage({ onNavigate }: { onNavigate?: (pagina: string) => void } = {}) {
   const { t, language: lang } = useTranslation();
   const [data, setData]       = useState<DashboardData | null>(null);
@@ -74,6 +81,24 @@ export default function DashboardPage({ onNavigate }: { onNavigate?: (pagina: st
             <span>{t(errorKey)}</span>
             <Button variant="secondary" size="sm" onClick={cargar}>{t('dashboard.retry')}</Button>
           </div>
+        )}
+
+        {data && data.total_residentes === 0 && (
+          <section aria-labelledby="primeros-pasos" className="sg-card p-5 sm:p-6">
+            <h2 id="primeros-pasos" className="text-base font-semibold text-gray-50">{t('dashboard.firstSteps.title')}</h2>
+            <p className="mt-1 text-sm text-gray-400">{t('dashboard.firstSteps.intro')}</p>
+            <ol className="mt-4 space-y-3">
+              {PRIMEROS_PASOS.map((paso, i) => (
+                <li key={paso.pagina} className="flex flex-wrap items-center gap-3">
+                  <span aria-hidden="true" className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gray-500/15 text-xs font-bold text-gray-200">{i + 1}</span>
+                  <span className="min-w-0 flex-1 text-sm text-gray-200">{t(paso.texto)}</span>
+                  {onNavigate && (
+                    <Button variant="secondary" size="sm" onClick={() => onNavigate(paso.pagina)}>{t('dashboard.firstSteps.go')}</Button>
+                  )}
+                </li>
+              ))}
+            </ol>
+          </section>
         )}
 
         {loading && !data ? (
