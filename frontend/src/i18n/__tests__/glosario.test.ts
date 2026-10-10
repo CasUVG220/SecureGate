@@ -12,6 +12,7 @@ import { translations } from '../translations';
  *   - «Estadísticas»  → Reportes
  *   - «preautorización» → aviso de visita («Avisar de una visita», «Visitas avisadas»)   (SCRUM-114 / H10)
  *   - «admin» abreviado → administrador                                                 (SCRUM-114 / H09)
+ *   - «2FA» / «MFA» / «OTP» → verificación en dos pasos                                   (SCRUM-123)
  *   - «Logo URL»      → el logo se sube como archivo, no se escribe una URL                 (SCRUM-115 / H12)
  *   - «ingreso(s)»    → entrada(s) para las visitas; el dinero es «cobrado» / «recaudado»  (SCRUM-115 / H11)
  */
@@ -31,6 +32,8 @@ describe('glosario: términos descartados en la interfaz', () => {
     ['en', /logo\s*url/i, 'Logo URL → Logo (uploaded as a file)'],
     ['es', /\bingresos?\b/i, 'ingreso(s) → entrada(s) / cobrado'],
     ['es', /\badmins?\b/i, 'admin → administrador'],
+    ['es', /\b2fa\b|\bmfa\b|\botp\b|autenticaci[oó]n (de|en) dos factores/i, '2FA / MFA / OTP → verificación en dos pasos'],
+    ['en', /\b2fa\b|\bmfa\b|\botp\b|two-factor/i, '2FA / MFA / OTP / two-factor → two-step verification'],
     ['en', /\badmins?\b/i, 'admin → administrator'],
   ] as const)('%s: ningún texto usa el término descartado (%s)', (idioma, patron, regla) => {
     const infracciones = entradas(idioma)
@@ -59,7 +62,7 @@ describe('glosario: términos descartados en la interfaz', () => {
 
   it('el glosario documentado menciona cada regla que esta prueba hace cumplir', () => {
     const doc = readFileSync(path.resolve(__dirname, '../../../../docs/glosario.md'), 'utf8');
-    for (const termino of ['ban', 'ticket', 'Estadísticas', 'Reglas de QR', 'Garitas y códigos de activación', 'Reportes', 'America/Guatemala', 'P-123ABC', 'Avisar de una visita', 'Visitante guardado', 'Mi empresa']) {
+    for (const termino of ['ban', 'ticket', 'Estadísticas', 'Reglas de QR', 'Garitas y códigos de activación', 'Reportes', 'America/Guatemala', 'P-123ABC', 'Avisar de una visita', 'Visitante guardado', 'Mi empresa', 'Verificación en dos pasos', 'Mi cuenta']) {
       expect(doc, termino).toContain(termino);
     }
   });

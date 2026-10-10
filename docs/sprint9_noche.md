@@ -502,7 +502,7 @@ La `auditLog` de cada ruta iba **después** de los guards de rol y de los limita
   y cuántos bloqueos calló el límite general. Fechas con `utils/fecha`. Una prueba exige que cada acción documentada tenga nombre en ambos idiomas y grupo. Prueba **I-14**.
 
 **Observaciones:** (1) `registrarAuditoria` ahora nunca lanza, ni con un pool que falle de forma síncrona; (2) se corrigió que varias pruebas unitarias no simulaban `res.locals`/`req.headers`, que Express siempre trae;
-(3) las lecturas de alto volumen (listados, el padrón de la garita) siguen sin auditarse a propósito, como documenta la lista; (4) cuando se haga SCRUM-123, sus eventos de 2FA entran en la lista y en `auditoria.int.test.ts` (la prueba final lo obliga).
+(3) las lecturas de alto volumen (listados, el padrón de la garita) siguen sin auditarse a propósito, como documenta la lista; (4) los eventos de la verificación en dos pasos entraron en la lista y en `auditoria.int.test.ts` al hacer SCRUM-123 (la prueba final lo obliga).
 
 **Pruebas:** backend unitarias +9 (655), integración **I-11 a I-14** (+100: 216 en total); frontend +16 (403). **Suites tras el ticket:** backend 655 unitarias + 216 integración/regresión + `tsc`; frontend 403 + build; desktop 105 + Rust 77 + build. Todo verde.
 
