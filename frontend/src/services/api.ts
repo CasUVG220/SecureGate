@@ -992,6 +992,10 @@ export interface Empresa {
   suspendida_en: string | null;
   created_at: string;
   total_sucursales: number;
+  /** Hay un administrador de empresa activo. Ausente en respuestas de servidores anteriores. */
+  tiene_admin?: boolean;
+  /** Hay una invitación de administrador vigente (aún sin aceptar). */
+  invitacion_pendiente?: boolean;
 }
 
 export const suspenderEmpresa = async (id: string, motivo: string): Promise<Empresa> => {
@@ -1117,6 +1121,10 @@ export interface Sucursal {
   total_residentes: number;
   total_agentes: number;
   created_at: string;
+  /** Hay un administrador de sucursal activo. */
+  tiene_admin?: boolean;
+  /** Hay una invitación de administrador vigente (aún sin aceptar). */
+  invitacion_pendiente?: boolean;
 }
 
 export interface SucursalInput {
