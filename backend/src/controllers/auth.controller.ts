@@ -1,3 +1,4 @@
+import { registrarAuditoria } from '../middleware/audit.middleware';
 import { Request, Response } from 'express';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
@@ -124,6 +125,11 @@ export const login = async (req: Request, res: Response) => {
 
     const { password_hash: _hash, ...u } = candidato;
 
+    // La contraseña fue correcta: de aquí en adelante la fila de auditoría (LOGIN) lleva a la persona, aunque el
+    // portal sea el equivocado o su empresa esté suspendida. Con contraseña errada sólo queda el correo intentado.
+    res.locals.auditoriaUsuarioId = u.id;
+    res.locals.auditoriaSucursalId = u.sucursal_id ?? null;
+
     /**
      * Cada portal admite sólo a su público: las credenciales de un residente no
      * abren el portal de personal ni al revés. La comprobación va DESPUÉS de
@@ -172,11 +178,19 @@ export const refresh = async (req: Request, res: Response) => {
     );
 
     const row = found.rows[0];
-    const sinSesion = () => {
+    // Una renovación rechazada es un evento de seguridad (token robado o reutilizado, sesión cortada por una suspensión):
+    // queda en audit_logs con la persona a la que pertenecía el token, si se pudo saber. Las renovaciones buenas no
+    // se auditan: ocurren cada hora por sesión y no son una acción sensible.
+    const auditarRechazo = (status: number, motivo: string) =>
+      registrarAuditoria(req, { accion: 'REFRESH_RECHAZADO', tabla: 'refresh_tokens' }, status, { motivo }, { usuarioId: row?.usuario_id ?? null, sucursalId: row?.sucursal_id ?? null });
+    const sinSesion = (motivo = 'token_invalido') => {
+      auditarRechazo(401, motivo);
       res.clearCookie('refresh_token', { httpOnly: true, secure: cookieOpts.secure, sameSite: 'strict' });
       return res.status(401).json({ error: 'Refresh token inválido o expirado' });
     };
-    if (!row || row.activo === false || row.vigente === false) return sinSesion();
+    if (!row) return sinSesion('token_desconocido');
+    if (row.activo === false) return sinSesion('usuario_inactivo');
+    if (row.vigente === false) return sinSesion('token_vencido');
 
     const empresa_id:  string | null = row.empresa_id  ?? row.empresa_id_via_sucursal ?? null;
     const sucursal_id: string | null = row.sucursal_id ?? null;
@@ -188,11 +202,12 @@ export const refresh = async (req: Request, res: Response) => {
     if (bloqueo) {
       if (!row.revoked) await pool.query('UPDATE refresh_tokens SET revoked = TRUE WHERE id = $1', [row.id]);
       res.clearCookie('refresh_token', { httpOnly: true, secure: cookieOpts.secure, sameSite: 'strict' });
+      auditarRechazo(423, bloqueo.codigo);
       return responderBloqueo(res, bloqueo);
     }
 
     // Un token ya revocado (cierre de sesión, rotación anterior) no renueva nada.
-    if (row.revoked) return sinSesion();
+    if (row.revoked) return sinSesion('token_revocado');
 
     // Rotate: revoke old, issue new
     await pool.query('UPDATE refresh_tokens SET revoked = TRUE WHERE id = $1', [row.id]);
@@ -219,10 +234,12 @@ export const refresh = async (req: Request, res: Response) => {
 export const logout = async (req: Request, res: Response) => {
   const refreshRaw: string | undefined = req.cookies?.refresh_token;
   if (refreshRaw) {
-    await pool.query(
-      'UPDATE refresh_tokens SET revoked = TRUE WHERE token_hash = $1',
+    const cerrado = await pool.query(
+      'UPDATE refresh_tokens SET revoked = TRUE WHERE token_hash = $1 RETURNING usuario_id',
       [hashToken(refreshRaw)],
-    ).catch(() => {});
+    ).catch(() => null);
+    // La fila de auditoría (LOGOUT) lleva a quien cerró la sesión, aunque la ruta no exija JWT.
+    if (cerrado?.rows[0]?.usuario_id) res.locals.auditoriaUsuarioId = cerrado.rows[0].usuario_id;
   }
   res.clearCookie('refresh_token', { httpOnly: true, secure: cookieOpts.secure, sameSite: 'strict' });
   res.json({ message: 'Sesion cerrada' });

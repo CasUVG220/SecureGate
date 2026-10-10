@@ -37,6 +37,7 @@ const mockPool = pool as unknown as { query: jest.Mock; connect: jest.Mock };
 const makeRes = () => {
   const res: Partial<Response> = {};
   res.status = jest.fn().mockReturnValue(res);
+  res.locals = {};
   res.json = jest.fn().mockReturnValue(res);
   return res as Response;
 };
@@ -262,13 +263,16 @@ describe('refresh token', () => {
       id: 'rt-1', usuario_id: 'u-1', revoked: false, vigente: true, activo: false,
       nombre: 'Ana', email: 'a@x.com', rol: 'agente', sucursal_id: 'suc-1', empresa_id: null, empresa_id_via_sucursal: 'emp-1',
     }] });
+    mockPool.query.mockResolvedValue({ rows: [], rowCount: 0 });   // la fila de auditoría del rechazo
     const res = Object.assign(makeRes(), { clearCookie: jest.fn() });
-    await refresh({ cookies: { refresh_token: 'x'.repeat(128) }, ip: '1.1.1.1' } as unknown as Request, res);
+    await refresh({ cookies: { refresh_token: 'x'.repeat(128) }, headers: {}, ip: '1.1.1.1' } as unknown as Request, res);
 
     expect(mockPool.query.mock.calls[0][0]).toContain('u.activo');
     expect(res.status).toHaveBeenCalledWith(401);
     expect(res.clearCookie).toHaveBeenCalled();
-    expect(mockPool.query).toHaveBeenCalledTimes(1);               // ni empresa, ni UPDATE, ni INSERT del token nuevo
+    // ni empresa, ni UPDATE, ni INSERT del token nuevo: solo la búsqueda y la fila de auditoría
+    const otras = mockPool.query.mock.calls.filter(c => !/INSERT INTO audit_logs/.test(String(c[0])));
+    expect(otras).toHaveLength(1);
   });
 });
 

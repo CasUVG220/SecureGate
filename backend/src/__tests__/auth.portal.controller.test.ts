@@ -22,6 +22,7 @@ const mockPool = pool as unknown as { query: jest.Mock };
 function makeRes() {
   const res: Partial<Response> = {};
   res.status = jest.fn().mockReturnValue(res);
+  res.locals = {};
   res.json = jest.fn().mockReturnValue(res);
   res.cookie = jest.fn().mockReturnValue(res);
   return res as Response;

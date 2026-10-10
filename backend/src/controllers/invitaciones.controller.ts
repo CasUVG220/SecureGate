@@ -324,6 +324,9 @@ export const aceptarInvitacion = async (req: Request, res: Response) => {
       [nombreLimpio, inv.email, password, inv.rol_invitado, inv.sucursal_id, empresaId],
     );
     const u = usuario.rows[0];
+    // Ruta pública: la fila de auditoría (INVITACION_ACEPTADA) lleva a la persona que acaba de crear su cuenta.
+    res.locals.auditoriaUsuarioId = u.id;
+    res.locals.auditoriaSucursalId = u.sucursal_id ?? null;
 
     await client.query(
       `UPDATE invitaciones SET estado = 'aceptada', aceptada_en = NOW(), usuario_id = $2, empresa_id = COALESCE(empresa_id, $3)
