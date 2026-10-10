@@ -40,6 +40,7 @@ Sin tocar nunca una base real (solo el Postgres desechable local; el guardia exi
 
 Esta sesión no tocó Cloud SQL ni la VM. SCRUM-177 pide probar la migración sobre **una copia de la base real**; las pruebas de arriba usan datos sintéticos. Procedimiento sugerido:
 
+0. **Comprobar la zona de la base de producción:** `SHOW timezone;` debe responder `UTC` (el valor por omisión de Postgres y de Cloud SQL). La conversión interpreta la hora de reloj guardada como UTC; si la base estuviera en otra zona, los datos existentes se correrían de golpe y habría que ajustar la regla antes de migrar.
 1. `pg_dump` de la base de producción (o un respaldo de Cloud SQL) restaurado en un Postgres **local** descartable.
 2. Arrancar el backend de esta rama apuntando a esa copia (`DATABASE_URL` local) y leer el log: debe decir `Esquema al día.` y **ningún** `S-17: no se pudo convertir`.
 3. Comprobar: `SELECT table_name, column_name FROM information_schema.columns WHERE table_schema='public' AND data_type='timestamp without time zone';` → **0 filas**; la hora de la última fila de `audit_logs` en la pantalla de auditoría contra la hora real; un inicio de sesión y una renovación.
