@@ -6,13 +6,13 @@
  * entrada, mostrador y carril de salida; a cambio consume bus USB, y por eso
  * el agente puede bajar a dos o una desde la configuración.
  */
-import { useEffect } from 'react';
-import { Button, StatusText, cx } from '../ui';
+import { useEffect, useState } from 'react';
+import { Button, Input, StatusText, cx } from '../ui';
 import { useCamera } from '../../hooks/useCamera';
 import { useQrScanner } from '../../hooks/useQrScanner';
 import {
   GUIA_PROPOSITO, NOMBRE_PROPOSITO, PROPOSITOS, ROTULO_PROPOSITO,
-  asignacionHuerfana, resolverDispositivo,
+  asignacionHuerfana, idDeCodigoManual, resolverDispositivo,
   type AsignacionCamaras, type Camara, type Proposito,
 } from '../../lib/camaras';
 
@@ -55,12 +55,35 @@ interface Props {
   onConfigurar: () => void;
   /** Se llama al abrir la cámara, para releer los nombres de los dispositivos. */
   onCamaraLista: () => void;
+  /** Alternativa a la cámara de placa: lleva el cursor al campo de la placa del formulario. */
+  onEscribirPlaca?: () => void;
+  /** Alternativa a la cámara de salida: abre el diálogo de salida con la placa vacía. */
+  onSalidaManual?: () => void;
+}
+
+/**
+ * Por qué no se puede pulsar el botón de la cámara, escrito para el agente. Antes el
+ * botón se apagaba sin decir nada (el motivo solo estaba en el tooltip) y sin cámara
+ * no había otra manera de dar una salida o registrar una placa.
+ */
+export function motivoDeshabilitado(
+  p: { requiere: 'ocr' | 'red' | null },
+  e: { activa: boolean; iniciando: boolean; ocupado: boolean; ocrDisponible: boolean; enLinea: boolean },
+): string | null {
+  if (e.ocupado) return null;
+  if (!e.activa) return e.iniciando ? 'Abriendo la cámara…' : 'No hay cámara disponible en este panel.';
+  if (p.requiere === 'ocr' && !e.ocrDisponible) return 'El OCR local no está disponible en este equipo.';
+  if (p.requiere === 'red' && !e.enLinea) return 'Sin conexión: esta acción necesita el servidor.';
+  return null;
 }
 
 export function CameraPane({
   proposito, camaras, asignacion, ocrDisponible, enLinea, compacto, ocupado,
   onCaptura, onQr, qrPausado, onCambiarProposito, onConfigurar, onCamaraLista,
+  onEscribirPlaca, onSalidaManual,
 }: Props) {
+  const [codigo, setCodigo] = useState('');
+  const [errorCodigo, setErrorCodigo] = useState<string | null>(null);
   const deviceId = resolverDispositivo(proposito, asignacion, camaras);
   const cam = useCamera(true, deviceId);
   const activa = cam.estado === 'activa';
@@ -74,8 +97,21 @@ export function CameraPane({
     if (jpeg) await onCaptura(proposito, jpeg);
   };
 
+  const verificarCodigo = (e: React.FormEvent) => {
+    e.preventDefault();
+    const id = idDeCodigoManual(codigo);
+    if (!id) {
+      setErrorCodigo('El código no tiene el formato correcto. Cópialo completo, tal como aparece bajo el QR de la invitación.');
+      return;
+    }
+    setErrorCodigo(null);
+    setCodigo('');
+    void onQr(id);
+  };
+
   const accion = ACCION[proposito];
   const bloqueado = accion.requiere === 'ocr' ? !ocrDisponible : accion.requiere === 'red' ? !enLinea : false;
+  const motivo = motivoDeshabilitado(accion, { activa, iniciando: cam.estado === 'iniciando', ocupado, ocrDisponible, enLinea });
   const guia = GUIA_PROPOSITO[proposito];
   const huerfana = asignacionHuerfana(proposito, asignacion, camaras);
 
@@ -162,11 +198,40 @@ export function CameraPane({
       )}
 
       {proposito === 'qr' ? (
-        <p className={cx('text-gray-400', compacto ? 'mt-2 text-2xs' : 'mt-4 text-xs')}>
-          {enLinea
-            ? 'El código se lee solo y rellena el formulario. Verifica el DPI antes de registrar.'
-            : 'Verificar un QR necesita conexión: la vigencia y los usos viven en el servidor. Pulsa «Sincronizar» o registra con el DPI a mano.'}
-        </p>
+        <>
+          <p className={cx('text-gray-400', compacto ? 'mt-2 text-2xs' : 'mt-4 text-xs')}>
+            {enLinea
+              ? 'El código se lee solo y rellena el formulario. Verifica el DPI antes de registrar.'
+              : 'Verificar un QR necesita conexión: la vigencia y los usos viven en el servidor. Pulsa «Sincronizar» o registra con el DPI a mano.'}
+          </p>
+          {/* Sin cámara (o con el QR dañado) el código se escribe o se pega a mano. */}
+          <form onSubmit={verificarCodigo} className={cx('space-y-2', compacto ? 'mt-2' : 'mt-3')} aria-label="Código de la invitación">
+            <Input
+              label={activa ? '¿No se lee? Escribe el código' : 'Escribe el código de la invitación'}
+              value={codigo}
+              onChange={e => { setCodigo(e.target.value); setErrorCodigo(null); }}
+              placeholder="Pega o escribe el código bajo el QR"
+              autoComplete="off"
+              spellCheck={false}
+              className="font-mono"
+              error={errorCodigo}
+            />
+            <Button
+              type="submit"
+              variant="secondary"
+              size={compacto ? 'sm' : 'md'}
+              fullWidth
+              disabled={!enLinea || qrPausado || !codigo.trim()}
+            >
+              Verificar código
+            </Button>
+            {!enLinea && (
+              <p role="status" className="text-xs font-medium text-warning-400">
+                Sin conexión: verificar el código necesita el servidor.
+              </p>
+            )}
+          </form>
+        </>
       ) : (
         <>
           <Button
@@ -183,6 +248,35 @@ export function CameraPane({
           >
             {accion.rotulo}
           </Button>
+          {/* El motivo se ve en pantalla: un botón apagado sin explicación parece una avería. */}
+          {motivo && (
+            <p role="status" className="mt-2 text-xs font-medium text-warning-400">{motivo}</p>
+          )}
+          {proposito === 'placa' && onEscribirPlaca && (
+            <Button variant="secondary" size={compacto ? 'sm' : 'md'} fullWidth className="mt-2" onClick={onEscribirPlaca}>
+              Escribir placa
+            </Button>
+          )}
+          {proposito === 'salida' && onSalidaManual && (
+            <>
+              <Button
+                variant="secondary"
+                size={compacto ? 'sm' : 'md'}
+                fullWidth
+                className="mt-2"
+                disabled={!enLinea}
+                onClick={onSalidaManual}
+              >
+                Escribir placa
+              </Button>
+              {/* El botón manual también se apaga sin red: se explica aunque el motivo de la cámara sea otro. */}
+              {!enLinea && !motivo?.startsWith('Sin conexión') && (
+                <p role="status" className="mt-2 text-xs font-medium text-warning-400">
+                  Sin conexión: la salida se registra en el servidor. Usa «Abrir talanquera» si hay que levantar la pluma.
+                </p>
+              )}
+            </>
+          )}
           {!compacto && <p className="mt-3 text-xs text-gray-400">{accion.pista}</p>}
         </>
       )}

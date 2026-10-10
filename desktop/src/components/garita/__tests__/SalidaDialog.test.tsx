@@ -25,6 +25,41 @@ const ACCESO = {
 
 beforeEach(() => { buscar.mockReset(); registrar.mockReset(); });
 
+describe('SalidaDialog — acceso elegido en «Registrados en este equipo»', () => {
+  it('no busca por placa ni pide escribirla: confirma y registra la salida de esa persona', async () => {
+    const apertura = { abierta: false, driver: 'Sin hardware', error: null };
+    registrar.mockResolvedValue({ registro: {}, apertura });
+    const onRegistrada = vi.fn();
+    const conocido = {
+      registro_id: 'reg-9', timestamp_entrada: '2026-10-10T15:00:00Z',
+      visitante: { id: '', nombre: 'Persona a Pie', numero_dpi: '2999000040404' },
+      residente: { id: '', numero_casa: 'D-4', nombre: '' }, placa: null,
+    };
+    render(<SalidaDialog placaInicial="" accesoInicial={conocido} onCerrar={vi.fn()} onRegistrada={onRegistrada} />);
+
+    expect(screen.queryByLabelText('Placa')).toBeNull();
+    expect(screen.getByText('Confirma la salida de esta persona.')).toBeInTheDocument();
+    expect(screen.getByText(/Persona a Pie · DPI 2999000040404/)).toBeInTheDocument();
+    expect(screen.getByText('D-4')).toBeInTheDocument();      // sin « · » sobrante
+    expect(screen.getByText('Sin vehículo')).toBeInTheDocument();
+    expect(buscar).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Registrar salida' }));
+    await waitFor(() => expect(registrar).toHaveBeenCalledWith('reg-9'));
+    await waitFor(() => expect(onRegistrada).toHaveBeenCalledWith(conocido, apertura));
+  });
+
+  it('si el servidor dice que ya tenía salida, el mensaje queda a la vista', async () => {
+    registrar.mockRejectedValue({ codigo: 'conflicto', mensaje: 'La salida ya fue registrada para este acceso' });
+    render(<SalidaDialog placaInicial="" accesoInicial={{
+      registro_id: 'reg-9', timestamp_entrada: '2026-10-10T15:00:00Z',
+      visitante: { id: '', nombre: 'Ya Salió', numero_dpi: '1' }, residente: { id: '', numero_casa: 'D-4', nombre: '' }, placa: null,
+    }} onCerrar={vi.fn()} onRegistrada={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Registrar salida' }));
+    expect(await screen.findByText(/La salida ya fue registrada/)).toBeInTheDocument();
+  });
+});
+
 describe('SalidaDialog', () => {
   it('con la placa del OCR busca sola y muestra a quién pertenece el acceso abierto', async () => {
     buscar.mockResolvedValue(ACCESO);

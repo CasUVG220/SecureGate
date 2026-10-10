@@ -6,7 +6,7 @@
  * teclear el número y el agente puede forzarlo; viaja hasta el backend para
  * auditoría.
  */
-import { forwardRef, useEffect, useImperativeHandle, useState, type FormEvent } from 'react';
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState, type FormEvent } from 'react';
 import { Alert } from '../shared/Alert';
 import { Button, Input, Textarea } from '../ui';
 import { api, mensajeDe, type Evaluacion, type InvitacionQr, type Residente, type ResultadoApertura } from '../../lib/tauri';
@@ -19,6 +19,8 @@ export interface VisitanteFormHandle {
   setDesdeOcrDpi: (nombre: string, numeroDpi: string) => void;
   /** Rellena el formulario con una invitación QR ya verificada. */
   setDesdeQr: (inv: InvitacionQr) => void;
+  /** Lleva el cursor al campo de la placa (alternativa a la cámara: «Escribir placa»). */
+  enfocarPlaca: () => void;
 }
 
 interface Props {
@@ -48,9 +50,14 @@ export const VisitanteForm = forwardRef<VisitanteFormHandle, Props>(function Vis
   const [enviando, setEnviando] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [ok, setOk] = useState<string | null>(null);
+  const placaRef = useRef<HTMLInputElement>(null);
 
   useImperativeHandle(ref, () => ({
     setPlaca: p => setPlaca(p),
+    enfocarPlaca: () => {
+      placaRef.current?.focus();
+      placaRef.current?.scrollIntoView?.({ block: 'center', behavior: 'smooth' });
+    },
     setDesdeOcrDpi: (n, d) => {
       if (n) setNombre(n);
       if (d) { setDpi(d); setManual(false); }
@@ -155,6 +162,7 @@ export const VisitanteForm = forwardRef<VisitanteFormHandle, Props>(function Vis
           error={dpi && !DPI_RE.test(dpi) ? 'Debe tener 13 dígitos' : null}
         />
         <Input
+          ref={placaRef}
           label="Placa (opcional)"
           className={CAMPO_GRANDE}
           placeholder="P123ABC"
@@ -239,7 +247,15 @@ export const VisitanteForm = forwardRef<VisitanteFormHandle, Props>(function Vis
       {error && <Alert tone="bad">{error}</Alert>}
       {ok && <Alert tone="ok">{ok}</Alert>}
 
-      <div className="flex justify-end gap-3 pt-1">
+      <div className="flex flex-wrap items-center justify-end gap-3 pt-1">
+        {/* El motivo de un botón apagado se lee en pantalla, no solo en el tooltip. */}
+        {(!habilitado || bloqueado) && (
+          <p role="status" className="mr-auto text-xs font-medium text-warning-400">
+            {!habilitado
+              ? 'No se puede registrar: revisa la licencia o la sesión del agente.'
+              : 'No se puede registrar: el visitante o el vehículo está en la lista negra.'}
+          </p>
+        )}
         <Button variant="ghost" onClick={limpiar}>Limpiar</Button>
         <Button type="submit" size="lg" loading={enviando} disabled={!habilitado || bloqueado}>
           Registrar entrada

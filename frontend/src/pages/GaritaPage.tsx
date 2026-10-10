@@ -19,6 +19,7 @@ import {
 } from '../services/api';
 import { useTranslation } from '../i18n/useTranslation';
 import { Button, ErrorState } from '../components/ui';
+import { idDeCodigoManual } from '../utils/qr';
 
 const QR_PREFIX = 'SGQR:';
 
@@ -74,6 +75,7 @@ export default function GaritaPage() {
 
   const dpiVideoRef   = useRef<HTMLVideoElement>(null);
   const placaVideoRef = useRef<HTMLVideoElement>(null);
+  const placaInputRef = useRef<HTMLInputElement>(null);
   const qrVideoRef    = useRef<HTMLVideoElement>(null);
   const canvasRef     = useRef<HTMLCanvasElement>(null);
   const qrCanvasRef   = useRef<HTMLCanvasElement>(null);
@@ -238,6 +240,16 @@ export default function GaritaPage() {
     }, 350);
     return () => clearInterval(interval);
   }, [hasCamera, qrScanning, qrInvitacion, qrChecking, handleQrDecoded]);
+
+  /** Sin cámara (o con el QR dañado) el agente escribe o pega el código de la invitación. */
+  const [qrManual, setQrManual] = useState('');
+  const handleQrManual = (e: React.FormEvent) => {
+    e.preventDefault();
+    const id = idDeCodigoManual(qrManual);
+    if (!id) { setQrError(t('gate.qrManualInvalid')); return; }
+    setQrManual('');
+    void handleQrDecoded(id);
+  };
 
   const handleQrRescan = () => {
     setQrInvitacion(null);
@@ -461,6 +473,38 @@ export default function GaritaPage() {
             </svg>
             <p className="text-gray-400 text-sm font-medium">{t('gate.cameraUnavailable')}</p>
             <p className="text-gray-500 text-xs">{t('gate.httpsRequired')}</p>
+            <p className="text-gray-300 text-sm">{t('gate.noCameraHint')}</p>
+
+            <Button
+              variant="secondary"
+              onClick={() => { placaInputRef.current?.focus(); placaInputRef.current?.scrollIntoView?.({ block: 'center', behavior: 'smooth' }); }}
+            >
+              {t('gate.writePlate')}
+            </Button>
+
+            {/* Código de la invitación QR escrito a mano */}
+            <form onSubmit={handleQrManual} aria-label={t('gate.qrManualTitle')} className="w-full max-w-sm space-y-2 border-t border-gray-700 pt-4 text-left">
+              <label htmlFor="qr-manual" className="block text-xs font-semibold text-gray-300">{t('gate.qrManualTitle')}</label>
+              <input
+                id="qr-manual"
+                value={qrManual}
+                onChange={e => { setQrManual(e.target.value); setQrError(null); }}
+                placeholder={t('gate.qrManualPlaceholder')}
+                autoComplete="off"
+                spellCheck={false}
+                className="sg-input font-mono"
+              />
+              <Button type="submit" variant="secondary" fullWidth loading={qrChecking} disabled={!qrManual.trim()}>
+                {t('gate.qrManualVerify')}
+              </Button>
+              {qrInvitacion ? (
+                <p role="status" className="text-xs text-emerald-400">
+                  {t('gate.qrValid')} · {qrInvitacion.etiqueta || qrInvitacion.nombre_visitante || qrInvitacion.residente_nombre}
+                </p>
+              ) : qrError ? (
+                <p role="alert" className="text-xs text-red-400">{qrError}</p>
+              ) : null}
+            </form>
           </div>
         ) : (
           <>
@@ -627,6 +671,7 @@ export default function GaritaPage() {
                 {t('gate.plate')}{qrInvitacion && configQr?.requiere_placa ? ' *' : ''}
               </label>
               <input
+                ref={placaInputRef}
                 name="placa"
                 value={form.placa}
                 onChange={handleChange}
