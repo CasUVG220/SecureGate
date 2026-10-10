@@ -125,6 +125,27 @@ describe('I-18 reutilizar un token ya rotado cierra la sesión', () => {
     expect((await refrescar(otraSesion.cookie!)).status).toBe(200);                 // la otra sigue renovando
   });
 
+  it('una familia ya cerrada NO emite tokens nuevos ni dentro de la gracia de un token hermano rotado hace un instante', async () => {
+    const { a, cookie: t1 } = await sesion();
+    const r1 = await refrescar(t1);                                                 // T1 → T2
+    const t2 = nuevaCookie(r1)!;
+    const r2 = await refrescar(t2);                                                 // T2 → T3 (T2 queda rotado hace un instante: dentro de la gracia)
+    expect(r2.status).toBe(200);
+    // T1 se rotó hace rato (fuera de la gracia); T2 se acaba de rotar (dentro de ella).
+    await q(`UPDATE refresh_tokens SET rotado_en = NOW() - interval '5 minutes' WHERE token_hash = $1`, [hash(t1)]);
+
+    expect((await refrescar(t1)).status).toBe(401);                                 // la copia vieja de T1 cierra la familia (y T3)
+    const antes = (await q('SELECT 1 FROM refresh_tokens WHERE usuario_id = $1', [a.id])).length;
+
+    const hermano = await refrescar(t2);                                            // T2 sigue «en gracia», pero la familia ya está cerrada
+    expect(hermano.status).toBe(401);
+    expect(hermano.body.codigo).toBe('sesion_comprometida');
+    expect(nuevaCookie(hermano)).toBe('refresh_token=');                            // solo limpia la cookie: no entrega ningún token
+    expect((await q('SELECT 1 FROM refresh_tokens WHERE usuario_id = $1', [a.id])).length).toBe(antes);   // no nació ningún token
+    const f = (await fila(t2)).familia_id;
+    expect(await q('SELECT 1 FROM refresh_tokens WHERE familia_id = $1 AND revoked = FALSE', [f])).toHaveLength(0);
+  });
+
   it('cada vez que se presenta el token viejo queda auditado; la segunda ya no tiene nada que cerrar', async () => {
     const { a, cookie: t1 } = await sesion();
     await refrescar(t1);
