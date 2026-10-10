@@ -13,6 +13,7 @@ Las pruebas de base de datos corrieron **solo** contra el Postgres desechable lo
 | Ticket | Tema | Estado |
 |---|---|---|
 | SCRUM-118 | Seguridad urgente (audit, deploy, nginx, documentos) | **HECHO** |
+| SCRUM-108 | H01 · contraste del botón principal en tema oscuro | **HECHO** |
 
 *(la tabla se completa ticket por ticket)*
 
@@ -100,3 +101,42 @@ frontend 165 + build; desktop 79 + build. Todo verde.
 - **Verificado hoy:** `git diff ca9e7a2~1 ba5de8d` está **vacío**; el código actual de `main` es idéntico al anterior a
   la regresión y las pruebas R-1/R-2/R-3 pasan. **El estado actual es correcto.** Lo único a tener presente es que el
   historial publicado contiene esa regresión intencional durante ~3 minutos de commits; no hay que reescribirlo.
+
+---
+
+## SCRUM-108 — H01 · Botón principal ilegible en tema oscuro · **HECHO**
+
+**Commits:** `4c9816f` (red de seguridad global + prueba) · `1370260` (migración de los sitios).
+**Verificado contra el código:** el QA tenía razón en la causa: en oscuro `brand-300…800` son grises claros
+(`index.css` ~137-138) y `tailwind.config.ts` mapea `blue/teal/cyan/indigo/purple → brand`. Había 24 sitios con
+`bg-blue-600 … text-white` (el QA decía ≈35 coincidencias contando `hover:` y `from-`), más 3 botones con degradado
+`from-blue-600` en `OwnerEmpresas`.
+
+**Solución global (`frontend/src/index.css`):** en `html.dark`, cualquier elemento con un relleno **sólido** (sin `/alfa`) de
+la familia de marca —`bg-*` o `from-*`, tonos 300-800, alias heredados incluidos— y `text-white` toma `--c-brand-ink`.
+Es la misma tinta que usa `<Button>`. Como `desktop/src/index.css` importa el CSS del frontend, la app de escritorio la
+hereda sin cambios.
+
+**Medición real (Chrome headless, no solo cálculo):** `bg-blue-600 text-white` heredado pasó de ≈1.1:1 a **16.1:1** en oscuro;
+`bg-brand-500 text-brand-ink` 14.0:1 (oscuro) y 14.9:1 (claro); botón de peligro 4.83:1 (oscuro) y 6.47:1 (claro).
+
+**Migración:** AreasComunes, ConfiguracionQr, ConfiguracionReservas, ConfigCargos (×3), Preaut (×2), ReservasAdmin (pestañas),
+TicketChat (burbuja propia y «Enviar»), QrInviteModal, ResidentePage, SalidaPage, OwnerDashboard, OwnerEmpresas (×3 + pestañas),
+EmpresaDetail (×3), GestionSucursales (×3 + filtro) y la insignia «Historial» de GaritaPage pasan a `<Button>` o a
+`bg-brand-500 text-brand-ink`. Los botones de «cancelar» con texto gris sin forma pasan a `<Button variant="ghost">`.
+
+**Decisiones**
+- Los verdes de acción con texto blanco (`bg-emerald-600`: 3.77:1 en oscuro) suben a `emerald-700` (5.48:1) y su hover a 600;
+  la insignia de tickets sin leer (`bg-danger-500`) y el `Button` de peligro pasan a `danger-600/700` (4.83:1 en oscuro).
+  `active:` del botón de peligro usa 700 (no 800: en claro el 800 es un tinte pálido).
+- La prueba mide las 3 familias de estado (éxito/peligro/advertencia): ≥ 4.5:1 en reposo y ≥ 3:1 en hover (en oscuro el hover
+  aclara).
+
+**Prueba automática (`frontend/src/styles/__tests__/contraste.test.ts`, 12 pruebas):** razón WCAG de los pares del sistema
+en ambos temas; existe la red de seguridad y cubre toda la familia; y un recorrido con el parser de TypeScript que **falla**
+si alguien escribe otra vez «relleno sólido de marca + `text-white`» (o un verde/rojo que no llegue a AA).
+Importa `tailwind.config.ts` dinámicamente para no arrastrarlo al `tsconfig` de la app.
+
+**Suites tras el ticket:** frontend 177 (+12) y build OK; desktop 79 y build OK; backend sin cambios.
+**Pendiente:** confirmación visual humana en un equipo real (no hubo navegador con extensión conectado; la medición fue con
+`Google Chrome --headless --dump-dom` sobre una página de muestra con el CSS compilado).
