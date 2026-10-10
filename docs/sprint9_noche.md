@@ -22,7 +22,8 @@ Las pruebas de base de datos corrieron **solo** contra el Postgres desechable lo
 | SCRUM-114 | H09+H10 · pasos tras las altas y avisos de visita | **HECHO** |
 | SCRUM-115 | H11+H12 · reportes, anuncios y consistencia visual | **HECHO** (el logo se guarda dentro de la base como imagen pequeña: decisión documentada) |
 | SCRUM-129 | Deuda de seguridad S-11, S-13, S-14, S-15 | **HECHO** (S-15 revisada, Tauri 2.12 pendiente de validar en Windows) |
-| SCRUM-125 | RNF-10 · auditoría completa y límites de tasa | **HECHO** (se agregan los eventos de 2FA cuando se haga SCRUM-123) |
+| SCRUM-125 | RNF-10 · auditoría completa y límites de tasa | **HECHO** (los eventos de 2FA entraron con SCRUM-123) |
+| SCRUM-123 | Verificación en dos pasos (TOTP) para administradores | **HECHO** (opcional por persona; hacerla obligatoria queda como siguiente paso documentado) |
 
 *(la tabla se completa ticket por ticket)*
 
@@ -502,3 +503,42 @@ La `auditLog` de cada ruta iba **después** de los guards de rol y de los limita
 (3) las lecturas de alto volumen (listados, el padrón de la garita) siguen sin auditarse a propósito, como documenta la lista; (4) cuando se haga SCRUM-123, sus eventos de 2FA entran en la lista y en `auditoria.int.test.ts` (la prueba final lo obliga).
 
 **Pruebas:** backend unitarias +9 (655), integración **I-11 a I-14** (+100: 216 en total); frontend +16 (403). **Suites tras el ticket:** backend 655 unitarias + 216 integración/regresión + `tsc`; frontend 403 + build; desktop 105 + Rust 77 + build. Todo verde.
+
+
+---
+
+## SCRUM-123 — Verificación en dos pasos (TOTP) para administradores · **HECHO**
+
+**Commits:** `37a512f` (backend) · `a146c85` (web) · `630d7c4` (escritorio). **Criterios de aceptación (Jira, solo lectura):** activar escaneando un QR con una app de autenticación y confirmando un código; el login de los administradores pide el segundo factor cuando está activo
+(el equipo decide y documenta si es obligatorio); códigos de recuperación de un solo uso guardados con hash; intentos limitados por usuario y cada evento en `audit_logs`; pruebas de integración. Diseño, operación y límites en **`docs/verificacion_dos_pasos.md`**.
+
+**Cómo queda**
+- **Quién:** owner, administrador de empresa y de sucursal (rutas `/api/auth/2fa/*` con `requireAdminSucursal`; el personal de garita y los residentes reciben 403 auditado). **Opcional por persona.**
+- **Activar:** *Mi cuenta* (menú nuevo para los tres roles) → QR + clave en texto → primer código → quedan activos y se muestran **una sola vez** 10 códigos de recuperación (copiar, descargar `.txt`, y no se puede cerrar sin confirmar que se guardaron).
+- **Entrar:** la contraseña correcta responde `200 { requiere_2fa, desafio }` **sin sesión**; la pantalla de acceso pide el código (o uno de recuperación) y `POST /api/auth/2fa/verificar` canjea el desafío (JWT de 5 min con `typ: '2fa'`, que `verifyToken` rechaza como sesión) por la sesión completa.
+  Se vuelve a comprobar que la cuenta y la empresa siguen vigentes (423/401) y se exige aunque la persona cambie de rol después.
+- **Desactivar** pide contraseña **y** código; **regenerar códigos** pide un código de la app y anula los anteriores.
+- **Perdió el teléfono y los códigos:** su superior se la restablece desde *Personal* (acción nueva en el menú de la fila, con confirmación; borra el segundo factor y cierra sus sesiones; mismo alcance que la baja → `DELETE /api/usuarios/:id/2fa`). El **owner** no tiene superior en la
+  aplicación: `npm run cuenta:restablecer-2fa` en el servidor (deja la misma fila de auditoría con `via: consola`).
+
+**Decisiones (todas tomadas sin consultar, como pedía la noche)**
+1. **TOTP propio sobre `crypto`, sin librería.** Se instaló `otplib` 13.5 (mantenida, 0 vulnerabilidades) y se comprobó que **no carga en Jest**: depende de `@scure/base`, un paquete solo-ESM que Node 20.20 deja `require`ar pero Jest no, y no quise
+  depender de ese comportamiento en la imagen Docker ni tocar la configuración de transformación de pruebas. El RFC 6238 cabe en ~40 líneas: se probó con **los vectores oficiales** del RFC 4226 (apéndice D) y RFC 6238 (apéndice B) y contra `otplib` con **900 comparaciones aleatorias sin una diferencia**
+  (códigos y verificación, en los dos sentidos), y luego se quitó la dependencia (`package-lock.json` de vuelta a su estado, `npm audit --omit=dev`: `found 0 vulnerabilities`). Menos superficie de cadena de suministro y ninguna dependencia nueva.
+2. **Opcional, no obligatoria.** Obligarla exige una *sesión restringida* («solo para configurar el segundo factor») que cambia cómo se emiten y validan las sesiones en toda la API, y activarla de golpe a quien ya trabaja dejaría gente fuera el primer día. Siguiente paso recomendado: `TWOFA_OBLIGATORIO` + esa sesión + plazo de gracia.
+3. **Secreto cifrado en reposo** (AES-256-GCM con el usuario como dato autenticado) con la llave de `TWOFA_KEY` si existe y, si no, derivada de `JWT_SECRET` (HKDF): **no exige variable nueva**. Para rotar `JWT_SECRET` sin perder los secretos se fija antes `TWOFA_KEY` con el valor actual (misma llave derivada). `TWOFA_KEY` se agregó, vacía, a los dos
+  `docker-compose` y a los `.env.example`, y el arranque la valida (≥ 32 caracteres). *(Los compose de la VM tienen cambios locales: ver «Pendientes para humanos».)*
+4. **Códigos de recuperación como HMAC-SHA256 con llave del servidor** (son de 50 bits: un hash sin llave se adivinaría fuera de línea con la base filtrada) y consumo atómico (`UPDATE … WHERE usado_en IS NULL`).
+5. **Intentos limitados por PERSONA en la base** (5 fallos en 15 min → 15 min bloqueada, con `Retry-After`), con la misma cuenta para ingreso, confirmar, desactivar y regenerar, más límites de tasa por IP y por usuario (`crearLimitador`, bloqueos auditados). Un código TOTP vale una sola vez (`ultimo_paso`, reclamado de forma atómica: dos
+   peticiones simultáneas con el mismo código no entran las dos; hay una prueba). Una contraseña errada al desactivar no gasta intentos del segundo factor. Solo alcanza a quien ya conoce la contraseña, así que no sirve para bloquear cuentas ajenas a ciegas (compensación de S-10).
+6. **Las rutas con sesión responden 400, nunca 401**, ante un código o contraseña errados: el cliente trata todo 401 como «sesión vencida», refresca y manda a la pantalla de acceso.
+7. **Tablas nuevas con `TIMESTAMPTZ`** (`usuario_2fa`, `usuario_2fa_recuperacion`): lo correcto desde el inicio, sin heredar la deuda S-17 del resto del esquema.
+8. **Escritorio:** la app de la garita no tiene segundo paso (los agentes no la usan). Si un administrador con la verificación activa entra allí, ve «Tu cuenta tiene la verificación en dos pasos, que esta app no admite. Inicia sesión desde la versión web» en vez de un error de formato.
+
+**Auditoría (RNF-10):** 6 acciones nuevas —`TWOFA_INICIADO`, `TWOFA_ACTIVADO`, `TWOFA_DESACTIVADO`, `TWOFA_CODIGOS_REGENERADOS`, `TWOFA_VERIFICACION`, `TWOFA_RESTABLECIDO`— en `docs/acciones_sensibles.md`, con nombre en español e inglés y detalle legible en el panel del owner
+(«Contraseña correcta; falta el código de dos pasos», «Entró con un código de recuperación», «Motivo: persona bloqueada por demasiados intentos»; de paso, el panel ya explica también los motivos de `REFRESH_RECHAZADO`). Cada una tiene su caso en la prueba I-11 (la prueba final lo exige) y **ningún secreto, código ni contraseña** llega a la bitácora (hay una prueba que lo busca).
+
+**Pruebas:** backend unitarias **+37** (`twofa.test.ts`: vectores del RFC, tolerancia de reloj, anti-reutilización, cifrado, códigos, desafío; `validarTwofaKey`) → 692; integración **+50** → 266 (**I-15**: 42 casos —activar, ingreso, códigos de recuperación, bloqueo por persona, desactivar, roles, restablecer, secretos fuera de la bitácora—; **I-16**: 2 casos de límites de tasa; 6 casos nuevos en I-11);
+frontend **+33** → 436 (segundo paso del acceso, Mi cuenta, restablecer desde Personal, panel de auditoría, navegación por rol); escritorio vitest +1 (106), Rust +1 (78). **Todo verde** (backend, `tsc`, frontend + build, desktop + build, Rust). `npm run lint` del frontend: los mismos 6 avisos que ya existían, ninguno en archivos de este ticket.
+
+**Pendiente / límites conocidos:** (1) no es obligatoria; (2) sin aviso por correo al activar/desactivar/restablecer (la bitácora sí lo registra); (3) solo TOTP (llaves físicas/passkeys serían un segundo método); (4) el reloj del servidor debe estar sincronizado (NTP); (5) rotar `JWT_SECRET` exige fijar antes `TWOFA_KEY` (S-12).
