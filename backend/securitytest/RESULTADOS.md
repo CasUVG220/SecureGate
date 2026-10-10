@@ -303,7 +303,7 @@ Severidad según el impacto real en este sistema (no la etiqueta de la herramien
 | S-07 | Baja | `eliminar-definitivo`: límite por IP y los intentos bloqueados no se auditan. | `05` | ✅ Corregido |
 | S-08 | Baja | Respuestas con datos personales y el JWT sin `Cache-Control: no-store`. | `08`, ZAP 10049 | ✅ Corregido |
 | S-09 | Baja | 404 HTML de Express que además pisa el CSP; `Permissions-Policy` ausente. | `08`, ZAP 10055/10063 | ✅ Corregido |
-| S-10 | Baja | Bloqueo de login por cuenta: cualquiera que conozca el correo deja sin acceso al titular 15 min. | `09` | ⏳ Deuda (trade-off) |
+| S-10 | Baja | Bloqueo de login por cuenta: cualquiera que conozca el correo deja sin acceso al titular 15 min. | `09` | ✅ Decidido en el Sprint 9 (SCRUM-125): se mantiene, con bloqueos auditados y filtrables, y 2FA para administradores (ver `DEUDA_TECNICA.md`) |
 | S-11 | Baja | Sesión abierta + empresa suspendida: `/auth/refresh` responde 401, no 423. | `06` | ✅ Corregido en Sprint 9 (SCRUM-129): 423 con motivo en backend, web y escritorio |
 | S-14 | Baja | Backend: 4 avisos npm moderados (sin ruta explotable / solo dev). | `npm audit` | ✅ `node-cron` 4.6.0: producción sin avisos (SCRUM-129); queda solo desarrollo |
 | S-15 | Baja | Rust: 7 crates sin mantenimiento (transitivos de Tauri). | `cargo audit` | ⏳ Revisado (SCRUM-129): `yoke-derive` corregido; Tauri 2.12 quita 5 más, pendiente de validar en Windows |
@@ -387,7 +387,10 @@ sustituye el CSP de helmet por `default-src 'none'` solo (ZAP 10055); sin `Permi
 
 **S-10 — Bloqueo por cuenta.** Con 10 fallos contra un correo, el titular con la **contraseña correcta** también recibe
 429 durante 15 min. Sin límite por cuenta se pierde la defensa contra fuerza bruta distribuida, y las
-alternativas cambian la política de seguridad → deuda.
+alternativas cambian la política de seguridad → deuda. *(Sprint 9, SCRUM-125: **decidido, se mantiene** con compensaciones: cada bloqueo
+queda en `audit_logs` con el correo, la IP y el límite, el owner los filtra en el panel de auditoría, el bloqueo sólo cuenta fallos y
+no corta sesiones abiertas, y los administradores podrán activar la verificación en dos pasos. Detalle y alternativas descartadas en
+`DEUDA_TECNICA.md`.)*
 
 **S-11 — Refresh 401 vs 423.** Sesiones abiertas antes de suspender: `/auth/refresh` → 401 porque suspender
 revoca los refresh tokens; el contrato documentado decía 423. El acceso se corta correctamente; solo se pierde
