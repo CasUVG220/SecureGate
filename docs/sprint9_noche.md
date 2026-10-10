@@ -646,3 +646,41 @@ Dos pruebas que **afirmaban que el QR exigía red** (`CameraPanelTabs`, `CameraP
   Con `TIMESTAMPTZ` el arreglo es de una línea por consulta, o de una vez fijando la zona de sesión del pool; se dejó fuera para no cambiar de golpe tableros y reportes. `S-17` pasa a ✅ en `DEUDA_TECNICA.md`.
 
 **Suites tras el ticket:** backend **699** unitarias + **311** integración/regresión + `tsc`; frontend **439** + build; escritorio **109** + build + Rust **97**. Todo verde. (Una corrida completa cayó en tiempos de espera de vitest de 5 s mientras otra aplicación de la máquina saturaba la CPU —carga 13—; con el tiempo de espera ampliado y la máquina más libre las mismas suites pasan completas.)
+
+
+---
+
+## Pendientes para humanos
+
+Lo que **no se pudo hacer** esta noche y por qué. Casi todo necesita un equipo, una cuenta o una decisión que una sesión autónoma no tiene. Ordenado por lo que conviene hacer primero.
+
+### Antes de desplegar (riesgo si se omite)
+
+1. **Probar la migración S-17 sobre una copia de la base de producción** (SCRUM-177). Se probó sobre una copia del *esquema* con datos sintéticos (I-19), no sobre datos reales: no se toca Cloud SQL. Procedimiento corto en `docs/s17_timestamptz.md`: restaurar un `pg_dump` en un Postgres local, arrancar el backend de esta rama contra él y comprobar que el log diga
+   `Esquema al día.` sin ningún `S-17: no se pudo convertir`. Tomar un respaldo de producción antes de desplegar.
+2. **Cambios locales de la VM en `docker-compose.yml` / `nginx.conf`:** esta rama agrega la línea `TWOFA_KEY` a los dos `docker-compose` (SCRUM-123) y quita el literal `DOMINIO` de nginx (SCRUM-118). Si la VM tiene esos archivos modificados a mano, un `git pull` va a chocar: revisar con `git status` y `git stash`/resolver **antes** de hacer pull ahí.
+3. **Rotación de secretos (S-12):** sigue pendiente. Si se rota `JWT_SECRET`, **primero** hay que fijar `TWOFA_KEY` con el valor *actual* de `JWT_SECRET`; si no, los administradores con la verificación en dos pasos activa dejan de poder entrar hasta que alguien les restablezca el segundo factor.
+4. **Correr la suite de seguridad en vivo** (`cd backend && npm run securitytest`): `securitytest/03-jwt.js` se actualizó para la gracia y la detección de reutilización del refresh token, pero **no se ejecutó**: esa suite reinicia el contenedor `securegate-backend` y siembra la base `securegate-db` del stack local de docker-compose, que es entorno de la persona. Después regenerar `RESULTADOS.md`.
+
+### Necesitan un equipo o una persona
+
+5. **Windows (SCRUM-157):** instalar y correr la app de escritorio en Windows 10/11 de 6–8 GB con webcam USB y OCR de placas; medir el tiempo del OCR de placa y la RAM; compilar el instalador (`nsis`/`msi`). Sin equipo Windows no se puede. De paso validar `tauri 2.12.2` (revisado en SCRUM-129, **no aplicado**: cambia la capa WebView2 y elimina los cinco avisos `unic-*`).
+6. **Hardware real:** probar la garita **sin webcam** y con el permiso de cámara denegado (SCRUM-111), el **QR sin red** con cámara real (SCRUM-126: la lógica está probada, el escáner con la cámara no se puede ejercitar sin hardware) y mirar el **tema oscuro** del botón principal en un navegador real (SCRUM-108: se midió el contraste, pero no hubo navegador con extensión conectado).
+7. **Primera corrida del CI en GitHub** (SCRUM-158): el workflow se validó con `actionlint` y replicando cada job en contenedores Linux, pero nunca corrió en GitHub. El primer `desktop-rust` compila Tauri sin caché y puede acercarse a los 20–25 min (el máximo del job es 40).
+
+### Decisiones de producto que quedaron abiertas
+
+8. **Verificación en dos pasos obligatoria** (SCRUM-123): se dejó opcional por persona. Hacerla obligatoria necesita una sesión restringida «solo para configurar el segundo factor» y un plazo de gracia; también falta un aviso por correo al activar, desactivar o restablecer (cuando haya correo transaccional en producción).
+9. **Entradas por QR que el servidor rechaza al sincronizar** (SCRUM-126): hoy no se registran (igual que los rechazos por lista negra). Recomendación documentada en `docs/qr_sin_conexion.md`: registrarlas igual con una marca «revisar» y listar los rechazos de la cola en el panel de administración.
+10. **Salida sin red** (SCRUM-111): se dejó en línea a propósito (hace falta un espejo de accesos abiertos y un endpoint idempotente para cerrarla). Diseño y razones en la sección de ese ticket.
+11. **Horas UTC en tableros y reportes** (consecuencia de S-17): las agregaciones por día/hora y la hora del CSV siguen en la zona de la sesión de Postgres (UTC), 6 h adelantadas respecto a Guatemala; ya era así. Con `TIMESTAMPTZ` se arregla en una línea por consulta o fijando la zona de sesión del pool (`docs/s17_timestamptz.md`).
+12. **Normalización de placas ya guardadas** (SCRUM-110): hay un `UPDATE` único opcional descrito en la sección del ticket para dejar en su forma canónica las placas anteriores.
+
+### Fuera de alcance por instrucción (necesitan personas o credenciales)
+
+Cámaras IP, teléfono como cámara, OCR de DPI local, auto-actualización de la app, Visanet (pasarela de pago real), repetir las pruebas de usabilidad con personas, pruebas en Windows, landing y el despliegue real. Solo se escribieron los documentos y diseños de lo que sí cabía en `docs/`.
+
+### Dos observaciones del repositorio
+
+- Hay un `git stash` **antiguo y ajeno** en este repositorio (`stash@{0}: WIP on main: 44eba69 feat: Pre-authorization of visitors`). Esta sesión no lo creó ni lo tocó; conviene decidir si todavía hace falta.
+- `npm run lint` del frontend tiene **6 avisos que ya existían** (2 errores de reglas de React 19 en `ConfirmDialog.test.tsx` y `OwnerDashboard.tsx`, y 4 advertencias); ninguno está en archivos de este trabajo.
