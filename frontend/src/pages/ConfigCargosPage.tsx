@@ -13,7 +13,6 @@ import { TableSkeleton, Spinner } from '../components/Skeleton';
 import { Button, ROW_ICON, RowActions, StatusText } from '../components/ui';
 import { useToast } from '../components/Toast';
 import { useTranslation } from '../i18n/useTranslation';
-import ConfiguracionQrPage from './ConfiguracionQrPage';
 import { formatearFecha, formatearFechaHora } from '../utils/fecha';
 
 const FRECUENCIAS = [
@@ -53,7 +52,7 @@ export default function ConfigCargosPage() {
     return (decodeTokenPayload(token)?.sucursal_id as string) ?? null;
   })();
 
-  const [activeTab, setActiveTab] = useState<'mora' | 'programados' | 'qr'>('mora');
+  const [activeTab, setActiveTab] = useState<'mora' | 'programados'>('mora');
 
   // ── Section A: Cargos por Mora ─────────────────────────────────────────
   const [configs, setConfigs]           = useState<ConfigCargo[]>([]);
@@ -104,7 +103,7 @@ export default function ConfigCargosPage() {
 
   useEffect(() => { loadMora(); }, []);
 
-  const handleTabChange = (tab: 'mora' | 'programados' | 'qr') => {
+  const handleTabChange = (tab: 'mora' | 'programados') => {
     setActiveTab(tab);
     if (tab === 'programados' && !progLoaded) loadProg();
   };
@@ -505,7 +504,7 @@ export default function ConfigCargosPage() {
         <div>
           <p className="sg-eyebrow">SecureGate · Reglas locales</p>
           <h1 className="mt-1 text-2xl font-bold tracking-tight text-white sm:text-3xl">{t('config.title')}</h1>
-          <p className="mt-1 text-sm text-gray-400">Define cómo tu comunidad gestiona mora, cargos programados y accesos QR.</p>
+          <p className="mt-1 text-sm text-gray-400">{t('config.pageDescription')}</p>
         </div>
         <span className="sg-status bg-emerald-500/10 text-emerald-400">Configuración activa</span>
       </div>
@@ -527,14 +526,6 @@ export default function ConfigCargosPage() {
           }`}
         >
           Cargos Programados
-        </button>
-        <button
-          onClick={() => handleTabChange('qr')}
-          className={`flex-1 py-2.5 text-sm font-semibold transition-colors ${
-            activeTab === 'qr' ? 'sg-tab-active bg-brand-500/10' : 'sg-tab hover:bg-gray-500/10'
-          }`}
-        >
-          {t('qr.configTabLabel')}
         </button>
       </div>
 
@@ -719,7 +710,6 @@ export default function ConfigCargosPage() {
       {/* ════════════════════════════════════════════════════════════
           SECTION C — Reglas de uso del QR
       ════════════════════════════════════════════════════════════ */}
-      {activeTab === 'qr' && <ConfiguracionQrPage />}
     </div>
   );
 }
