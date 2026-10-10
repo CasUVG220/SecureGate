@@ -19,11 +19,14 @@
  */
 import request from 'supertest';
 import jwt from 'jsonwebtoken';
+import { Pool } from 'pg';
 import app from '../../app';
 import { q, uno, cerrarPool } from '../helpers/db';
 import { sembrar, Fixtures } from '../helpers/seed';
 import { login, bearer, PASSWORD } from '../helpers/auth';
 import { adminNuevo, activarDosPasos, liberarPaso, totp, AdminDePrueba } from '../helpers/twofa';
+import { reservarIntento } from '../../controllers/twofa.controller';
+import { MAX_INTENTOS } from '../../utils/twofa';
 
 let fx: Fixtures;
 const sesion: Record<string, string> = {};
@@ -406,6 +409,52 @@ describe('I-15 límite de intentos por persona', () => {
     expect(filas[4].datos_nuevos).toMatchObject({ motivo: 'bloqueado' });
     expect(filas[0].datos_nuevos).toMatchObject({ motivo: 'codigo_incorrecto' });
     for (const x of filas) expect(x.ip_address).toBeTruthy();
+  });
+
+  it('una ráfaga de reservas simultáneas deja pasar EXACTAMENTE 5 intentos (el tope no se salta con peticiones en paralelo)', async () => {
+    const { a } = await conDosPasos();
+    // Un pool propio con una conexión por reserva: el pool de la app en pruebas es de 5 y escondería la carrera.
+    const ancho = new Pool({ connectionString: process.env.DATABASE_URL, max: 40 });
+    try {
+      const reservas = await Promise.all(Array.from({ length: 40 }, () => reservarIntento(a.id, ancho)));
+      expect(reservas.filter(r => r.permitido)).toHaveLength(MAX_INTENTOS);
+      expect(reservas.filter(r => r.permitido && r.bloqueadaAhora)).toHaveLength(1);    // solo el quinto deja el bloqueo puesto
+      expect(reservas.filter(r => !r.permitido)).toHaveLength(40 - MAX_INTENTOS);
+    } finally {
+      await ancho.end();
+    }
+    expect(new Date((await filaDe(a.id)).bloqueado_hasta).getTime()).toBeGreaterThan(Date.now());
+  });
+
+  it('una ráfaga de 30 intentos simultáneos contra el ingreso: a lo sumo 4 respuestas «código incorrecto»; el resto, bloqueada', async () => {
+    const { a, secreto } = await conDosPasos();
+    const desafios = await Promise.all(Array.from({ length: 30 }, () => desafioDe(a)));
+    const respuestas = await Promise.all(desafios.map(d => verificar(d, '000000')));
+    const por = (estado: number) => respuestas.filter(r => r.status === estado).length;
+    expect(por(401)).toBe(MAX_INTENTOS - 1);
+    expect(por(429)).toBe(30 - (MAX_INTENTOS - 1));
+    expect(respuestas.some(r => r.status >= 500 || r.status === 200)).toBe(false);
+    // Bloqueada: ni el código correcto entra.
+    expect((await verificar(await desafioDe(a), totp(secreto))).status).toBe(429);
+  });
+
+  it('el código correcto dentro de una ráfaga de errados NO deja a la persona bloqueada si fue uno de los primeros 5', async () => {
+    const { a, secreto } = await conDosPasos();
+    for (let i = 0; i < 3; i++) await verificar(await desafioDe(a), '000000');           // 3 fallos
+    const entra = await verificar(await desafioDe(a), totp(secreto));                      // el 4.º intento es el bueno
+    expect(entra.status).toBe(200);
+    const f = await filaDe(a.id);
+    expect([f.intentos_fallidos, f.bloqueado_hasta]).toEqual([0, null]);
+  });
+
+  it('el quinto intento puede ser el bueno: se evalúa, entra y limpia el bloqueo que él mismo puso', async () => {
+    const { a, secreto } = await conDosPasos();
+    for (let i = 0; i < 4; i++) expect((await verificar(await desafioDe(a), '000000')).status).toBe(401);
+    const entra = await verificar(await desafioDe(a), totp(secreto));
+    expect(entra.status).toBe(200);
+    const f = await filaDe(a.id);
+    expect([f.intentos_fallidos, f.bloqueado_hasta]).toEqual([0, null]);
+    expect((await verificar(await desafioDe(a), '000000')).status).toBe(401);              // y vuelve a haber 5 intentos
   });
 
   it('el bloqueo se levanta solo al vencer, y entonces el código correcto entra y reinicia la cuenta', async () => {
