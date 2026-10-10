@@ -6,6 +6,7 @@ import pool from '../db/pool';
 import { bloqueoDeUsuario, responderBloqueo } from '../utils/suspension';
 import { serverError } from '../utils/http';
 import { firmarDesafio } from '../utils/twofa';
+import { revocarAccesoDeUsuario } from '../utils/revocacion';
 
 const hashToken = (raw: string): string =>
   crypto.createHash('sha256').update(raw).digest('hex');
@@ -18,6 +19,23 @@ const HASH_SENUELO = '$2a$12$ZRX2V39MIy1HIarQEHLajeuzmFASGyluyDeLaPb957LHVr9LBhD
 
 const REFRESH_TTL_MS  = 7 * 24 * 60 * 60 * 1000;
 const ACCESS_EXPIRES  = '1h';
+
+/** Respuesta cuando se cierra una familia de sesiones por reutilización de un refresh token. */
+const SESION_COMPROMETIDA = {
+  error: 'Por seguridad cerramos tu sesión: detectamos que se usó dos veces. Inicia sesión de nuevo y, si no fuiste tú, cambia tu contraseña.',
+  codigo: 'sesion_comprometida',
+};
+
+/**
+ * Ventana de gracia de la rotación (S-06). Un refresh token se usa UNA vez: al renovar se revoca y se entrega otro de la
+ * misma familia. Si un token ya rotado se presenta otra vez, pasada la gracia, alguien más tiene una copia: se cierra la
+ * familia entera. Dentro de la gracia se tolera, porque es lo que pasa cuando una persona renueva desde dos pestañas a la
+ * vez (las dos leyeron la misma cookie antes de que la primera respuesta la reemplazara) y no debe perder su sesión.
+ */
+const graciaDeRotacionS = (): number => {
+  const n = parseInt(process.env.REFRESH_GRACIA_SEGUNDOS || '10', 10);
+  return Number.isFinite(n) && n >= 0 ? n : 10;
+};
 
 const cookieOpts = {
   httpOnly: true,
@@ -39,7 +57,7 @@ export const revocarSesionesDeUsuario = async (
   db: { query: (sql: string, p?: unknown[]) => Promise<unknown> },
   usuarioId: string,
 ): Promise<void> => {
-  await db.query('UPDATE refresh_tokens SET revoked = TRUE WHERE usuario_id = $1 AND revoked = FALSE', [usuarioId]);
+  await db.query('UPDATE refresh_tokens SET revoked = TRUE, revoked_at = NOW() WHERE usuario_id = $1 AND revoked = FALSE', [usuarioId]);
 };
 
 /** Portales de entrada. Un rol pertenece a uno y sólo a uno. */
@@ -179,13 +197,15 @@ export const refresh = async (req: Request, res: Response) => {
     // mudo y nadie sabría por qué se cerró su sesión (hallazgo S-11). La vigencia y el usuario activo sí se exigen.
     const found = await pool.query(
       `SELECT rt.id, rt.usuario_id, rt.revoked, (rt.expires_at > NOW()) AS vigente,
+              rt.familia_id, rt.rotado_en, rt.cierre_motivo,
+              (rt.rotado_en IS NOT NULL AND rt.rotado_en > NOW() - make_interval(secs => $2::int)) AS en_gracia,
               u.nombre, u.email, u.rol, u.sucursal_id, u.empresa_id, u.activo,
               s.empresa_id AS empresa_id_via_sucursal
        FROM refresh_tokens rt
        JOIN  usuarios   u ON rt.usuario_id = u.id
        LEFT JOIN sucursales s ON s.id = u.sucursal_id
        WHERE rt.token_hash = $1`,
-      [hashToken(refreshRaw)],
+      [hashToken(refreshRaw), graciaDeRotacionS()],
     );
 
     const row = found.rows[0];
@@ -211,26 +231,70 @@ export const refresh = async (req: Request, res: Response) => {
     // propio de esa empresa, no un desconocido.
     const bloqueo = await bloqueoDeUsuario(pool, { rol: row.rol, empresa_id, sucursal_id });
     if (bloqueo) {
-      if (!row.revoked) await pool.query('UPDATE refresh_tokens SET revoked = TRUE WHERE id = $1', [row.id]);
+      if (!row.revoked) await pool.query('UPDATE refresh_tokens SET revoked = TRUE, revoked_at = NOW() WHERE id = $1', [row.id]);
       res.clearCookie('refresh_token', { httpOnly: true, secure: cookieOpts.secure, sameSite: 'strict' });
       auditarRechazo(423, bloqueo.codigo);
       return responderBloqueo(res, bloqueo);
     }
 
-    // Un token ya revocado (cierre de sesión, rotación anterior) no renueva nada.
-    if (row.revoked) return sinSesion('token_revocado');
-
-    // Rotate: revoke old, issue new
-    await pool.query('UPDATE refresh_tokens SET revoked = TRUE WHERE id = $1', [row.id]);
-
     const newRefreshRaw = crypto.randomBytes(64).toString('hex');
     const expiresAt     = new Date(Date.now() + REFRESH_TTL_MS);
 
-    await pool.query(
-      `INSERT INTO refresh_tokens (usuario_id, token_hash, expires_at, ip_address)
-       VALUES ($1, $2, $3, $4)`,
-      [row.usuario_id, hashToken(newRefreshRaw), expiresAt, clientIp(req)],
+    /** Hijo del token en la misma familia, SIN tocar al padre: la carrera legítima de dos pestañas (ver graciaDeRotacionS). */
+    const emitirEnGracia = () => pool.query(
+      `INSERT INTO refresh_tokens (usuario_id, token_hash, expires_at, ip_address, familia_id)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [row.usuario_id, hashToken(newRefreshRaw), expiresAt, clientIp(req), row.familia_id],
     );
+
+    if (row.revoked) {
+      // Revocado por ROTACIÓN hace un instante: otra pestaña lo cambió justo antes. Se le da su propio sucesor.
+      if (row.rotado_en && row.en_gracia) {
+        await emitirEnGracia();
+      } else if (row.rotado_en) {
+        // Revocado por rotación hace RATO y se presenta otra vez: quien lo trae es una copia (token robado) o el dueño
+        // original después de que otra copia ya lo rotó. No se sabe cuál es cuál, así que se cierra la familia entera:
+        // las dos partes tienen que volver a iniciar sesión, y también se cortan los access tokens vigentes.
+        const cerradas = await pool.query(
+          `UPDATE refresh_tokens SET revoked = TRUE, revoked_at = NOW(), cierre_motivo = 'reutilizacion'
+            WHERE familia_id = $1 AND revoked = FALSE`,
+          [row.familia_id],
+        );
+        revocarAccesoDeUsuario(row.usuario_id);
+        registrarAuditoria(
+          req, { accion: 'REFRESH_REUTILIZADO', tabla: 'refresh_tokens' }, 401,
+          { motivo: 'token_reutilizado', sesiones_cerradas: cerradas.rowCount ?? 0 },
+          { usuarioId: row.usuario_id, sucursalId: row.sucursal_id ?? null },
+        );
+        res.clearCookie('refresh_token', { httpOnly: true, secure: cookieOpts.secure, sameSite: 'strict' });
+        return res.status(401).json(SESION_COMPROMETIDA);
+      } else if (row.cierre_motivo === 'reutilizacion') {
+        // Un token de la familia que la detección de robo ya cerró. Si lo trae el dueño legítimo, tiene que enterarse de
+        // por qué pierde la sesión (si no, vería la pantalla de acceso sin explicación). No es otro evento de robo.
+        auditarRechazo(401, 'sesion_cerrada_por_reuso');
+        res.clearCookie('refresh_token', { httpOnly: true, secure: cookieOpts.secure, sameSite: 'strict' });
+        return res.status(401).json(SESION_COMPROMETIDA);
+      } else {
+        // Cierre de sesión, cambio de contraseña, baja o suspensión: no son señal de robo.
+        return sinSesion('token_revocado');
+      }
+    } else {
+      // Rotación atómica: revoca el viejo y crea el nuevo en UNA sentencia. Si dos peticiones traen el mismo token a la
+      // vez, solo una lo reclama (`revoked = FALSE`); la otra no devuelve fila y recibe su propio sucesor en gracia.
+      const nuevoId = crypto.randomUUID();
+      const rotado = await pool.query(
+        `WITH viejo AS (
+           UPDATE refresh_tokens SET revoked = TRUE, revoked_at = NOW(), rotado_en = NOW(), reemplazado_por = $5
+            WHERE id = $1 AND revoked = FALSE
+            RETURNING usuario_id, familia_id
+         )
+         INSERT INTO refresh_tokens (id, usuario_id, token_hash, expires_at, ip_address, familia_id)
+         SELECT $5, usuario_id, $2, $3, $4, familia_id FROM viejo
+         RETURNING id`,
+        [row.id, hashToken(newRefreshRaw), expiresAt, clientIp(req), nuevoId],
+      );
+      if (rotado.rows.length === 0) await emitirEnGracia();
+    }
 
     const payload = { id: row.usuario_id, nombre: row.nombre, email: row.email, rol: row.rol, sucursal_id, empresa_id };
     const newAccessToken = jwt.sign(payload, process.env.JWT_SECRET as string, { expiresIn: ACCESS_EXPIRES });
@@ -246,7 +310,7 @@ export const logout = async (req: Request, res: Response) => {
   const refreshRaw: string | undefined = req.cookies?.refresh_token;
   if (refreshRaw) {
     const cerrado = await pool.query(
-      'UPDATE refresh_tokens SET revoked = TRUE WHERE token_hash = $1 RETURNING usuario_id',
+      'UPDATE refresh_tokens SET revoked = TRUE, revoked_at = COALESCE(revoked_at, NOW()) WHERE token_hash = $1 RETURNING usuario_id',
       [hashToken(refreshRaw)],
     ).catch(() => null);
     // La fila de auditoría (LOGOUT) lleva a quien cerró la sesión, aunque la ruta no exija JWT.

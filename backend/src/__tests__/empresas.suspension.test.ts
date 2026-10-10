@@ -119,7 +119,7 @@ describe('refresh con empresa suspendida', () => {
 
     expect(res.status).toHaveBeenCalledWith(HTTP_BLOQUEO);
     expect(res.clearCookie).toHaveBeenCalledWith('refresh_token', expect.any(Object));
-    expect(sinAuditoria()[2][0]).toMatch(/SET revoked = TRUE WHERE id = \$1/);
+    expect(sinAuditoria()[2][0]).toMatch(/SET revoked = TRUE, revoked_at = NOW\(\) WHERE id = \$1/);
     expect(mockPool.query.mock.calls.some(c => /INSERT INTO refresh_tokens/.test(c[0]))).toBe(false);
     // El rechazo queda en la bitácora con la persona del token, la IP y el motivo (RNF-10).
     expect(auditorias()).toHaveLength(1);

@@ -125,6 +125,19 @@ const CASOS: Caso[] = [
     },
   },
 
+  {
+    // Un refresh token ya rotado que se presenta otra vez pasada la gracia: la familia entera se cierra (SCRUM-124 / S-06).
+    // Usuario propio: cerrar la familia corta también los access tokens vigentes de la persona.
+    accion: 'REFRESH_REUTILIZADO', quien: null, persona: true, exito: false,
+    ejecutar: async () => {
+      const a = await adminNuevo(app, 'admin_sucursal', fx.sucursales.A1, null, fx.sufijo);
+      const s = await login(app, a.email);
+      expect((await request(app).post('/api/auth/refresh').set('Cookie', s.cookie!).send({})).status).toBe(200);   // rota el token
+      await q(`UPDATE refresh_tokens SET rotado_en = NOW() - interval '5 minutes' WHERE usuario_id = $1 AND rotado_en IS NOT NULL`, [a.id]);
+      return request(app).post('/api/auth/refresh').set('Cookie', s.cookie!).send({});                            // el viejo, otra vez: 401
+    },
+  },
+
   // Un residente pide una pantalla de administración: el guard de rol lo rechaza (403) y deja huella con su persona y su IP.
   { accion: 'ACCESO_DENEGADO', quien: 'resA1', exito: false, ejecutar: () => request(app).get('/api/dashboard').set(as('resA1')) },
 

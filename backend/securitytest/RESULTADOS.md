@@ -144,8 +144,8 @@ traslada al residente; el login ignora `rol`/`empresa_id` del body; el número d
 | Rol desconocido / sin rol / token en la URL / cabecera de 20 KB | 403 / 403 / 401 / 4xx |
 | TTL del access token | 3 600 s; claims: id, nombre, email, rol, sucursal_id, empresa_id, iat, exp |
 | Revocación al dar de baja a un usuario | token, refresh y login mueren al instante (401) |
-| Rotación del refresh token | el anterior queda inválido (401) |
-| **Detección de reutilización del refresh** | **No existe** (S-06) |
+| Rotación del refresh token | el anterior queda inválido (401) pasada la ventana de gracia de 10 s |
+| **Detección de reutilización del refresh** | **Corregida en el Sprint 9 (SCRUM-124):** familia de tokens, gracia de 10 s, cierre de la familia, `REFRESH_REUTILIZADO` y aviso al titular (S-06). *En la corrida del Sprint 8 no existía.* |
 | Cookie de refresh en desarrollo / en producción | HttpOnly + SameSite=Strict / además `Secure` |
 
 ### f) Rate limit real, con los límites de producción (`09-ratelimit`)
@@ -299,7 +299,7 @@ Severidad según el impacto real en este sistema (no la etiqueta de la herramien
 | S-03 | Baja | 500 en vez de 400 ante UUID/fecha inválidos, NUL, textos largos y parámetros repetidos. | `07`, `05`, `08`, ZAP | ✅ Corregido |
 | S-04 | Baja | `GET /reservas/disponibilidad` muestra áreas y horarios de otra empresa a cualquier personal. | `01` | ✅ Corregido |
 | S-05 | Baja | `POST /anuncios/:id/leer` deja a un residente escribir sobre un anuncio de otra empresa. | `01` | ✅ Corregido |
-| S-06 | Baja | El refresh token no detecta reutilización. | `03` | ⏳ Deuda |
+| S-06 | Baja | El refresh token no detecta reutilización. | `03` | ✅ Corregido en el Sprint 9 (SCRUM-124) |
 | S-07 | Baja | `eliminar-definitivo`: límite por IP y los intentos bloqueados no se auditan. | `05` | ✅ Corregido |
 | S-08 | Baja | Respuestas con datos personales y el JWT sin `Cache-Control: no-store`. | `08`, ZAP 10049 | ✅ Corregido |
 | S-09 | Baja | 404 HTML de Express que además pisa el CSP; `Permissions-Policy` ausente. | `08`, ZAP 10055/10063 | ✅ Corregido |

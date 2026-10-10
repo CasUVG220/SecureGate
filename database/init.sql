@@ -701,6 +701,24 @@ DO $$ BEGIN
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 
+-- ── Refresh tokens: familias y detección de reutilización (SCRUM-124 / S-06) ───────────────────────
+-- Cada inicio de sesión abre una FAMILIA (`familia_id`); cada renovación rota el token dentro de ella. Un token que ya
+-- fue rotado y se presenta otra vez pasada la ventana de gracia significa que alguien más tiene una copia (robo): se
+-- revoca la familia entera y queda auditado (REFRESH_REUTILIZADO). `rotado_en` marca los revocados POR ROTACIÓN (a
+-- diferencia de los revocados por cierre de sesión, cambio de contraseña o suspensión, que no son señal de robo);
+-- `revoked_at` dice cuándo se revocó cualquiera; `reemplazado_por` es el sucesor. Las filas anteriores quedan, cada una,
+-- como su propia familia (no hay manera de reconstruir el linaje). Las columnas nuevas usan TIMESTAMPTZ (ver S-17).
+ALTER TABLE refresh_tokens ADD COLUMN IF NOT EXISTS familia_id UUID;
+UPDATE refresh_tokens SET familia_id = gen_random_uuid() WHERE familia_id IS NULL;
+ALTER TABLE refresh_tokens ALTER COLUMN familia_id SET DEFAULT gen_random_uuid();
+ALTER TABLE refresh_tokens ALTER COLUMN familia_id SET NOT NULL;
+ALTER TABLE refresh_tokens ADD COLUMN IF NOT EXISTS rotado_en TIMESTAMPTZ;
+ALTER TABLE refresh_tokens ADD COLUMN IF NOT EXISTS revoked_at TIMESTAMPTZ;
+ALTER TABLE refresh_tokens ADD COLUMN IF NOT EXISTS reemplazado_por UUID;
+-- Por qué se cerró un token que NO se rotó: 'reutilizacion' = lo cerró la detección de robo (el dueño legítimo debe enterarse).
+ALTER TABLE refresh_tokens ADD COLUMN IF NOT EXISTS cierre_motivo VARCHAR(30);
+CREATE INDEX IF NOT EXISTS idx_rt_familia ON refresh_tokens(familia_id);
+
 -- ── Verificación en dos pasos para administradores (SCRUM-123) ─────────────
 -- Una fila por persona que empezó a configurarla; `activado` sigue en FALSE hasta que confirma su primer código.
 -- El secreto TOTP NUNCA va en claro: se guarda cifrado (AES-256-GCM, ver backend/src/utils/twofa.ts). `ultimo_paso` es el
