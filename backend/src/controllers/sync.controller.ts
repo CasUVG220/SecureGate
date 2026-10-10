@@ -33,9 +33,9 @@ export const getSnapshotGarita = async (req: Request, res: Response) => {
       ),
       pool.query(
         `SELECT bl.id, v.numero_dpi, v.nombre AS visitante_nombre, bl.razon, bl.fecha_fin,
-                NULL::uuid AS residente_id
+                NULL::uuid AS residente_id, bl.placa
          FROM visitante_blacklist bl
-         JOIN visitantes v ON v.id = bl.visitante_id
+         LEFT JOIN visitantes v ON v.id = bl.visitante_id
          WHERE bl.sucursal_id = $1
            AND bl.activo = TRUE
            AND (bl.fecha_fin IS NULL OR bl.fecha_fin > NOW())`,
@@ -43,7 +43,7 @@ export const getSnapshotGarita = async (req: Request, res: Response) => {
       ),
       pool.query(
         `SELECT rvbl.id, v.numero_dpi, v.nombre AS visitante_nombre, rvbl.razon,
-                NULL::timestamp AS fecha_fin, rvbl.residente_id
+                NULL::timestamp AS fecha_fin, rvbl.residente_id, NULL::varchar AS placa
          FROM residente_visitante_blacklist rvbl
          JOIN visitantes v ON v.id = rvbl.visitante_id
          JOIN residentes r ON r.id = rvbl.residente_id
