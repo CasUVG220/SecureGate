@@ -17,6 +17,11 @@ export type { ErrorStateProps, ErrorVariant } from './ErrorState';
 export { default as Input, Select, Textarea } from './Input';
 export type { InputProps, SelectProps, TextareaProps } from './Input';
 
+export { default as PasswordInput } from './PasswordInput';
+export type { PasswordInputProps } from './PasswordInput';
+export { PASSWORD_MIN, requisitosDeClave } from './password';
+export type { RequisitoClave } from './password';
+
 export { default as RowActions } from './RowActions';
 export { default as StatusText } from './StatusText';
 export type { StatusKind, StatusTextProps } from './StatusText';

@@ -1185,6 +1185,39 @@ export const createUsuario = async (data: UsuarioInput): Promise<Usuario> => {
   return body as Usuario;
 };
 
+export interface UsuarioCambios {
+  nombre?: string;
+  email?: string;
+  /** Solo `agente` o `admin_sucursal`. */
+  rol?: string;
+  /** Opcional: vacío o ausente conserva la contraseña actual. */
+  password?: string;
+}
+
+/** Edita a un usuario del personal. Alcance y reglas: backend `updateUsuario`. */
+export const updateUsuario = async (id: string, cambios: UsuarioCambios): Promise<Usuario> => {
+  const res = await apiFetch(`${BASE_URL}/api/usuarios/${id}`, {
+    method: 'PUT',
+    headers: authHeaders(),
+    body: JSON.stringify(cambios),
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error((body as { error?: string }).error || 'Error al editar usuario');
+  return body as Usuario;
+};
+
+/** Baja lógica: el usuario deja de poder entrar y se le cierran las sesiones. */
+export const desactivarUsuario = async (id: string): Promise<void> => {
+  const res = await apiFetch(`${BASE_URL}/api/usuarios/${id}`, {
+    method: 'DELETE',
+    headers: authHeaders(),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error((body as { error?: string }).error || 'Error al dar de baja al usuario');
+  }
+};
+
 export interface Preferencias {
   idioma?: string;
   tema?: string;
