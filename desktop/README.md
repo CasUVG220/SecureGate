@@ -208,9 +208,11 @@ src-tauri/src/           Rust, un módulo por dominio
   fingerprint.rs         huella de hardware (MachineGuid + CPU, sin MAC)
   secure_store.rs        Windows Credential Manager / Keychain
   license.rs             activación, heartbeat, gracia 72 h, kill switch
-  auth.rs                sesión del agente (JWT + refresh)
+  auth.rs                sesión del agente (JWT + refresh). Una cuenta con verificación en dos pasos (administradores) no entra
+                         aquí: se le indica que use la versión web. Un refresh token que el servidor ve usado dos veces cierra la
+                         sesión (`sesion_comprometida`); la garita sigue registrando sin conexión (docs/refresh_tokens.md)
   db.rs                  SQLite + SQLCipher, clave Argon2id
-  garita.rs              espejo local, evaluación de visitante, cola
+  garita.rs              espejo local, evaluación de visitante, validación de invitaciones QR sin red (docs/qr_sin_conexion.md), cola
   sync.rs                pull del espejo, push con backoff, purga
   ocr.rs                 arranque y protocolo del sidecar de OCR
 sidecar-ocr/             proceso Node con ppu-paddle-ocr (ONNX Runtime nativo)
