@@ -150,6 +150,9 @@ export const activarLicencia = async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Código de activación inválido' });
     }
     const lic = found.rows[0];
+    // Ruta sin sesión: la fila de auditoría (LICENCIA_ACTIVADA) lleva la licencia, el equipo y la sucursal.
+    res.locals.auditoria = { licencia_id: lic.id, dispositivo: nombre_dispositivo?.trim().slice(0, 100) || null };
+    res.locals.auditoriaSucursalId = lic.sucursal_id;
     if (lic.estado === 'revocada') {
       return res.status(403).json({ error: 'Esta licencia fue revocada', estado: 'revocada' });
     }
