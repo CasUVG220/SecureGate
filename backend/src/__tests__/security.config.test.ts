@@ -20,7 +20,7 @@ jest.mock('../db/pool', () => ({
 
 import pool from '../db/pool';
 import { validarPassword, PASSWORD_MIN } from '../utils/password';
-import { validarJwtSecret, trustProxyHops, SECRETOS_CONOCIDOS } from '../config/env';
+import { validarJwtSecret, validarTwofaKey, trustProxyHops, SECRETOS_CONOCIDOS } from '../config/env';
 import { revocarAccesoDeUsuario, revocarAccesoDeEmpresa, tokenRevocado, _reiniciarRevocaciones } from '../utils/revocacion';
 import { runMigrations, desactivarCuentasDemo, CUENTAS_DEMO } from '../db/migrate';
 import { auditLog } from '../middleware/audit.middleware';
@@ -107,6 +107,22 @@ describe('validarJwtSecret (arranque seguro)', () => {
 
   it('en desarrollo un secreto definido pero corto también se rechaza', () => {
     expect(() => validarJwtSecret({ NODE_ENV: 'development', JWT_SECRET: 'corto' } as any)).toThrow(/al menos/);
+  });
+});
+
+describe('validarTwofaKey (llave opcional de la verificación en dos pasos)', () => {
+  it('sin definir no hace nada (los secretos se protegen con una llave derivada de JWT_SECRET)', () => {
+    expect(() => validarTwofaKey({} as any)).not.toThrow();
+    expect(() => validarTwofaKey({ TWOFA_KEY: '   ' } as any)).not.toThrow();
+  });
+
+  it('acepta una llave larga', () => {
+    expect(() => validarTwofaKey({ TWOFA_KEY: 'b'.repeat(64) } as any)).not.toThrow();
+  });
+
+  it('rechaza una llave corta o un valor público conocido', () => {
+    expect(() => validarTwofaKey({ TWOFA_KEY: 'corta' } as any)).toThrow(/al menos 32/);
+    expect(() => validarTwofaKey({ TWOFA_KEY: 'change_me_in_production' } as any)).toThrow(/público/);
   });
 });
 

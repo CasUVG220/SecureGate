@@ -20,7 +20,7 @@ Dos pruebas mantienen esta lista honesta:
 | Acción | Qué es | Ruta | Quién | Límite de tasa |
 |---|---|---|---|---|
 | **Sesión y acceso** | | | | |
-| `LOGIN` | Inicio de sesión (correcto, fallido o bloqueado). Guarda el correo intentado; con contraseña correcta, también la persona | `POST /api/auth/login` | Cualquiera | 20 fallos/15 min por IP y 10 por cuenta; los bloqueos (429) se auditan |
+| `LOGIN` | Inicio de sesión (correcto, fallido o bloqueado). Guarda el correo intentado; con contraseña correcta, también la persona. Con la verificación en dos pasos activa, la contraseña correcta responde 200 con `segundo_paso: pendiente` en el detalle (aún sin sesión) y el ingreso se completa en `TWOFA_VERIFICACION` | `POST /api/auth/login` | Cualquiera | 20 fallos/15 min por IP y 10 por cuenta; los bloqueos (429) se auditan |
 | `LOGOUT` | Cierre de sesión (revoca el refresh token) | `POST /api/auth/logout` | Cualquiera con cookie | 120/15 min por IP |
 | `REFRESH_RECHAZADO` | Renovación de sesión rechazada: token desconocido, vencido, revocado, usuario dado de baja o empresa suspendida (423). Las renovaciones buenas **no** se auditan | `POST /api/auth/refresh` | Cualquiera con cookie | 120/15 min por IP |
 | `ACCESO_DENEGADO` | Una persona **con sesión** pidió algo que su rol no permite (403 de un guard de rol). Detalle: guard, método, ruta y rol. Señal de alguien que prueba rutas de administración. Los 401 sin sesión no se auditan | cualquier ruta protegida | Cualquiera con sesión | General por IP |
@@ -51,6 +51,13 @@ Dos pruebas mantienen esta lista honesta:
 | `RESIDENTE_CREADO` | Alta de residente y su cuenta | `POST /api/residentes` | admin de sucursal | — |
 | `RESIDENTE_ACTUALIZADO` | Edición de residente | `PUT /api/residentes/:id` | admin de sucursal | — |
 | `RESIDENTE_ELIMINADO` | Baja de residente | `DELETE /api/residentes/:id` | admin de sucursal | — |
+| **Verificación en dos pasos** (administradores, SCRUM-123) | | | | |
+| `TWOFA_INICIADO` | Empieza a configurar el segundo factor: entrega el secreto para el QR (el secreto no se guarda en la bitácora) | `POST /api/auth/2fa/iniciar` | owner, admin de empresa o de sucursal | — |
+| `TWOFA_ACTIVADO` | Confirma el primer código y la activa; entrega una sola vez los 10 códigos de recuperación. También queda el intento con un código errado (400) o bloqueado (429) | `POST /api/auth/2fa/confirmar` | owner, admin de empresa o de sucursal | 10 fallos/15 min por usuario y 5 por persona (bloqueo de 15 min); los bloqueos se auditan |
+| `TWOFA_DESACTIVADO` | La desactiva; exige la contraseña **y** un código (TOTP o de recuperación) | `POST /api/auth/2fa/desactivar` | owner, admin de empresa o de sucursal | 5 fallos/15 min por usuario y 5 por persona; los bloqueos se auditan |
+| `TWOFA_CODIGOS_REGENERADOS` | Genera 10 códigos de recuperación nuevos (los anteriores dejan de valer); exige un código TOTP | `POST /api/auth/2fa/codigos-recuperacion` | owner, admin de empresa o de sucursal | 10 fallos/15 min por usuario y 5 por persona; los bloqueos se auditan |
+| `TWOFA_VERIFICACION` | Segundo paso del ingreso: canjea el desafío del login y un código por la sesión. Correcto (detalle: `via` = `totp` o `recuperacion`), incorrecto (401) o bloqueado (429, detalle: `motivo` o `limite`). **Nunca guarda el código** | `POST /api/auth/2fa/verificar` | Público (con el desafío de 5 min que da el login) | 30 fallos/15 min por IP y 5 por persona (bloqueo de 15 min); los bloqueos se auditan |
+| `TWOFA_RESTABLECIDO` | Un superior borra el segundo factor de alguien que perdió el teléfono y los códigos; cierra sus sesiones. Misma regla de alcance que la baja. (El owner se restablece desde la consola: `npm run cuenta:restablecer-2fa`, que deja la misma fila con `via: consola`) | `DELETE /api/usuarios/:id/2fa` | admin de sucursal o superior | — |
 | **Equipos de garita** | | | | |
 | `LICENCIA_EMITIDA` | Genera un código de activación | `POST /api/licencias` | admin de sucursal o superior | — |
 | `LICENCIA_ACTIVADA` | Un equipo canjea su código (ruta pública; la fila lleva la licencia, el equipo y la sucursal) | `POST /api/licencias/activar` | Público | 10/15 min por IP; los bloqueos se auditan |
@@ -129,5 +136,5 @@ por fechas y por persona. Los intentos bloqueados por un límite de tasa llevan 
 
 Ver `backend/DEUDA_TECNICA.md`, S-10. Resumen de la decisión tomada en el Sprint 9: **se mantiene el bloqueo por cuenta** (10 fallos en 15 min), porque es la única
 defensa contra fuerza bruta distribuida (muchas IPs contra un correo), y se compensa así: (1) cada bloqueo queda auditado con el correo y la IP; (2) el bloqueo sólo cuenta
-**fallos** (un acceso correcto no lo gasta); (3) los administradores pueden activar la verificación en dos pasos (SCRUM-123), que no se bloquea por intentos ajenos sino por
-intentos propios del segundo factor. Alternativas descartadas y por qué, en el mismo documento.
+**fallos** (un acceso correcto no lo gasta); (3) los administradores pueden activar la verificación en dos pasos (SCRUM-123, `docs/verificacion_dos_pasos.md`), cuyo bloqueo se cuenta por
+intentos propios del segundo factor —que sólo alcanza quien ya sabe la contraseña— y no por los de cualquiera que conozca el correo. Alternativas descartadas y por qué, en el mismo documento.

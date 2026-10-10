@@ -701,4 +701,34 @@ DO $$ BEGIN
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 
+-- ── Verificación en dos pasos para administradores (SCRUM-123) ─────────────
+-- Una fila por persona que empezó a configurarla; `activado` sigue en FALSE hasta que confirma su primer código.
+-- El secreto TOTP NUNCA va en claro: se guarda cifrado (AES-256-GCM, ver backend/src/utils/twofa.ts). `ultimo_paso` es el
+-- último intervalo de 30 s aceptado, para que un código usado no valga dos veces. `intentos_fallidos`, `ultimo_fallo_en` y
+-- `bloqueado_hasta` limitan los intentos POR PERSONA (5 fallos en 15 min → 15 min bloqueada), vengan de cuántas IPs vengan.
+-- Estas tablas nuevas usan TIMESTAMPTZ (el resto del esquema usa TIMESTAMP, ver S-17 en backend/DEUDA_TECNICA.md).
+CREATE TABLE IF NOT EXISTS usuario_2fa (
+  usuario_id        UUID PRIMARY KEY REFERENCES usuarios(id) ON DELETE CASCADE,
+  secreto_cifrado   TEXT NOT NULL,
+  activado          BOOLEAN NOT NULL DEFAULT FALSE,
+  activado_en       TIMESTAMPTZ,
+  ultimo_paso       BIGINT,
+  intentos_fallidos INT NOT NULL DEFAULT 0 CHECK (intentos_fallidos >= 0),
+  ultimo_fallo_en   TIMESTAMPTZ,
+  bloqueado_hasta   TIMESTAMPTZ,
+  created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Códigos de recuperación: 10 por persona, de un solo uso, guardados como HMAC (con la base sola no se leen ni se adivinan).
+CREATE TABLE IF NOT EXISTS usuario_2fa_recuperacion (
+  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  usuario_id  UUID NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+  codigo_hash CHAR(64) NOT NULL,
+  usado_en    TIMESTAMPTZ,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (usuario_id, codigo_hash)
+);
+
+CREATE INDEX IF NOT EXISTS idx_2fa_recuperacion_usuario ON usuario_2fa_recuperacion(usuario_id);
+
 SELECT 'SecureGate DB inicializada correctamente' AS mensaje;

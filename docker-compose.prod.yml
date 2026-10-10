@@ -74,6 +74,9 @@ services:
       # ≥ 32 caracteres y no público: si no, el backend se niega a arrancar.
       # Genera uno con `openssl rand -hex 48`.
       JWT_SECRET: ${JWT_SECRET:?define JWT_SECRET en el entorno}
+      # Opcional. Llave de los secretos de la verificación en dos pasos; vacía, se deriva de JWT_SECRET. Fíjala con el
+      # valor ACTUAL de JWT_SECRET antes de rotarlo (docs/verificacion_dos_pasos.md).
+      TWOFA_KEY: ${TWOFA_KEY:-}
       # Origenes permitidos por CORS. En produccion es obligatorio: el
       # backend no refleja el origen del navegador fuera de desarrollo.
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:?define ALLOWED_ORIGINS, p. ej. https://midominio.com}

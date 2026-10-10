@@ -5,6 +5,7 @@ import crypto from 'crypto';
 import pool from '../db/pool';
 import { bloqueoDeUsuario, responderBloqueo } from '../utils/suspension';
 import { serverError } from '../utils/http';
+import { firmarDesafio } from '../utils/twofa';
 
 const hashToken = (raw: string): string =>
   crypto.createHash('sha256').update(raw).digest('hex');
@@ -108,9 +109,11 @@ export const login = async (req: Request, res: Response) => {
     const result = await pool.query(
       `SELECT u.id, u.nombre, u.email, u.rol, u.password_hash,
               u.sucursal_id, u.empresa_id, u.idioma, u.tema,
-              s.empresa_id AS empresa_id_via_sucursal
+              s.empresa_id AS empresa_id_via_sucursal,
+              (f.usuario_id IS NOT NULL) AS dos_pasos
        FROM usuarios u
        LEFT JOIN sucursales s ON s.id = u.sucursal_id
+       LEFT JOIN usuario_2fa f ON f.usuario_id = u.id AND f.activado = TRUE
        WHERE u.email = $1
          AND u.activo = TRUE`,
       [email],
@@ -123,7 +126,7 @@ export const login = async (req: Request, res: Response) => {
       return res.status(401).json({ error: 'Credenciales incorrectas' });
     }
 
-    const { password_hash: _hash, ...u } = candidato;
+    const { password_hash: _hash, dos_pasos: dosPasos, ...u } = candidato;
 
     // La contraseña fue correcta: de aquí en adelante la fila de auditoría (LOGIN) lleva a la persona, aunque el
     // portal sea el equivocado o su empresa esté suspendida. Con contraseña errada sólo queda el correo intentado.
@@ -149,6 +152,14 @@ export const login = async (req: Request, res: Response) => {
     // estado de una empresa a quien no es de ella.
     const bloqueo = await bloqueoDeUsuario(pool, { rol: u.rol, empresa_id: u.empresa_id ?? u.empresa_id_via_sucursal ?? null, sucursal_id: u.sucursal_id });
     if (bloqueo) return responderBloqueo(res, bloqueo);
+
+    // Verificación en dos pasos (SCRUM-123): con el segundo factor activo la contraseña sola NO abre sesión. Se responde un
+    // desafío de 5 minutos que /auth/2fa/verificar canjea por la sesión junto con el código. Se exige siempre que esté
+    // activo, aunque el rol haya cambiado después: bajar de rol no es una forma de saltarse el segundo factor.
+    if (dosPasos === true) {
+      res.locals.auditoria = { segundo_paso: 'pendiente' };
+      return res.json({ requiere_2fa: true, desafio: firmarDesafio(u.id) });
+    }
 
     await emitirSesion(req, res, u);
   } catch (error) {
