@@ -21,6 +21,7 @@ Las pruebas de base de datos corrieron **solo** contra el Postgres desechable lo
 | SCRUM-113 | H06+H08 · fechas, placa y glosario | **HECHO** |
 | SCRUM-114 | H09+H10 · pasos tras las altas y avisos de visita | **HECHO** |
 | SCRUM-115 | H11+H12 · reportes, anuncios y consistencia visual | **HECHO** (el logo se guarda dentro de la base como imagen pequeña: decisión documentada) |
+| SCRUM-129 | Deuda de seguridad S-11, S-13, S-14, S-15 | **HECHO** (S-15 revisada, Tauri 2.12 pendiente de validar en Windows) |
 
 *(la tabla se completa ticket por ticket)*
 
@@ -431,3 +432,34 @@ en `ae.managementCounts`, «+ + Nueva sucursal» en `EmpresaDetail` (icono y tex
 
 **Pruebas:** frontend +64 (confirmaciones, RowActions, ConfirmDialog, anuncios, reportes, gráfico de un punto, logo, tipo, plural, paleta, diálogos nativos); backend integración **I-10** (6). **Suites tras el ticket:** backend 638 unitarias + 121 integración/regresión + `tsc`;
 frontend 385 + build; desktop 102 + Rust 74 + build. Todo verde.
+
+
+---
+
+## SCRUM-129 — Deuda técnica de seguridad (S-11, S-13, S-14, S-15) · **HECHO**
+
+**Commits:** `95a50eb` (S-11) · `6803dbc` (S-14) · `691bcf3` (S-13) · `4939452` (documentos). Criterios leídos en Jira (solo lectura); cifras de `npm audit`/`cargo audit` tomadas hoy, tal cual.
+
+**S-11 — `/auth/refresh` responde 423 con el motivo (backend, web y escritorio)**
+- **Verificado contra el código:** el backend *sí* tenía la rama 423 (`bloqueoDeUsuario` en `refresh`), pero en el flujo real nunca se alcanzaba: suspender una empresa **revoca** los refresh tokens de sus usuarios y la consulta
+  descartaba los revocados (`rt.revoked = FALSE`), así que el cliente recibía un 401 mudo. La prueba de regresión R-3 incluso documentaba «refresh 401». Los tests unitarios con base simulada pasaban porque el token seguía vigente.
+- **Backend:** el token se busca sin filtrar por `revoked`; con la empresa suspendida o dada de baja → **423 + motivo** (se limpia la cookie y, si hacía falta, se revoca); token vencido o usuario dado de baja → 401 sin consultar ni revelar la empresa;
+  token revocado con la empresa en regla → 401. R-3 pasa a esperar 423 (y, tras reactivar, la cookie vieja → 401). 4 pruebas unitarias nuevas y la de «usuario desactivado» adaptada al mecanismo nuevo.
+- **Web:** `refreshToken` ya guardaba el aviso en 423 y la pantalla de acceso lo mostraba, pero nada lo probaba; ahora una prueba cubre petición 401 → refresh 423 → sesión cerrada → aviso con el motivo (una sola lectura).
+- **Escritorio (Rust + React):** el 423 marca la sesión «requiere login», guarda el texto del servidor (`Sesion.bloqueo`, con `#[serde(default)]`: las sesiones guardadas por versiones anteriores se siguen leyendo) y la pantalla de acceso lo muestra
+  («… suspendidas: Falta de pago. La garita puede seguir registrando entradas en este equipo»). Clasificador `clasificar_refresh` con pruebas en Rust; prueba de la pantalla en vitest. El login con 423 ahora lleva el código `empresa_suspendida`.
+
+**S-14 — node-cron 4.x:** 3.0.3 → **4.6.0**. `npm audit --omit=dev` del backend: de `2 moderate` a **`found 0 vulnerabilities`**. Se quitó `@types/node-cron` (la 4.x trae sus tipos). Las tres tareas diarias se movieron a `src/jobs/programacion.ts` y una prueba comprueba que cada expresión
+es válida en la versión instalada, que las de zona disparan a la hora de Guatemala aunque el contenedor esté en UTC y que una corrida fallida se registra sin tumbar nada. Node 20 (Docker y CI) cumple el mínimo de la 4.x.
+
+**S-13 — vitest:** 4.1.10 → **4.1.11** en frontend y escritorio (cierra `GHSA-82fw-gwwq-j7x9`, `@vitest/mocker`). **Decisión:** no se sube a la 5.x (la última): exige Node ≥ 22.12 y el CI y los Dockerfile usan Node 20, así que obligaría a cambiar de runtime. El aviso del ticket
+(«subir de versión mayor») ya no hacía falta: la corrección salió en el mismo major. Quedan 8 avisos de **desarrollo** (`tailwindcss` 3 y su cadena) que solo cierra Tailwind 4 → documentado.
+
+**S-15 — `cargo audit` (cargo-audit 0.22.2, 528 crates, 1 296 avisos):** **0 vulnerabilidades**, 7 avisos tras corregir uno (6 sin mantenimiento —`proc-macro-error`, cinco `unic-*`— y 1 de solidez, `glib` 0.18.5): todos transitivos de Tauri/GTK. `cargo update -p yoke-derive` (0.8.3 yanked → 0.8.4)
+cierra el octavo. **Revisión de Tauri:** `cargo update --dry-run` lo subiría a 2.12.2 (`wry` 0.57, `tao` 0.37, 86 paquetes) y eliminaría los cinco `unic-*`, pero cambia la capa WebView2 de Windows y no hay equipo Windows para probar el instalador → **no aplicado**, queda
+para la validación en Windows (SCRUM-157; ver «Pendientes para humanos»).
+
+**Cifras `npm audit` después del ticket:** backend `38 vulnerabilities (6 moderate, 32 high)` / producción `found 0`; frontend `8 (2 moderate, 6 high)` / producción `found 0`; desktop `8 (2 moderate, 6 high)` / producción `found 0` (antes, completo: 40 / 11 / 8; producción backend 2).
+`backend/DEUDA_TECNICA.md` y `backend/securitytest/RESULTADOS.md` (sección l-ter) actualizados con estas salidas.
+
+**Pruebas:** backend unitarias +8 (646), integración sin cambios en cantidad (121; R-3 actualizada); frontend +4 (389); desktop vitest +3 (105), Rust +3 (77). **Todo verde** (backend, `tsc`, frontend + build, desktop + build, Rust).
