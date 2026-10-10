@@ -17,6 +17,7 @@ Las pruebas de base de datos corrieron **solo** contra el Postgres desechable lo
 | SCRUM-109 | H02 · editar y dar de baja personal (PUT /usuarios/:id + AgentesPage) | **HECHO** |
 | SCRUM-110 | H03 · lista negra por placa | **HECHO** |
 | SCRUM-111 | H04 · garita sin cámara | **HECHO** (la salida sin red se deja en línea, decisión documentada) |
+| SCRUM-112 | H05+H07 · pagos, avisos y confirmaciones | **HECHO** |
 
 *(la tabla se completa ticket por ticket)*
 
@@ -256,3 +257,54 @@ nada que teclear). `SalidaPage` ya permitía teclear la placa y tenía la lista 
 **Pruebas:** desktop +21 (CameraPane manual, RecientesList, SalidaDialog con acceso conocido, `idDeCodigoManual`, `esModoSalida`),
 frontend +6 (`GaritaPage.sinCamara`, `qr`), Rust 72 (+1: `registro_id` en recientes).
 **Pendiente humano:** probar con una PC de garita real sin webcam y con el permiso de cámara denegado (Windows).
+
+---
+
+## SCRUM-112 — H05 + H07 · Pagos, avisos y confirmaciones · **HECHO**
+
+**Commits:** `adb20a8` (backend) · `ce912f7` (dashboard) · `8515da7` (Toast/FormActions/sondeo) · `d85bbfb` (pantallas).
+**Verificado contra el código** (el QA acertó en todo lo siguiente): no había advertencia de monto>saldo; los textos «Pago simulado… Visanet»
+se pintaban siempre; cada intento de tarjeta rechazado se insertaba en `pagos`; `Toast` fijaba 4 s sin pausa ni variante persistente; el
+ticket no se refrescaba; no había aviso de reservas por aprobar (el dashboard solo contaba pagos). «Anuncio creado» ya existía.
+
+**Pagos (backend)**
+- **Una tarjeta rechazada no es un pago:** `pagarConTarjeta` responde **402** y **no inserta nada**; el intento queda en `audit_logs`
+  (`PAGO_TARJETA_SIMULADO`, usuario, IP, 402). Antes cada intento fallido era una fila `rechazado` que ensuciaba historial y reportes.
+- **Nuevo `GET /pagos/tarjeta/estado`** → `{disponible, simulada}` (según `PAGOS_TARJETA_SIMULADA`). Cuando entre Visanet real la web deja de
+  mostrar los avisos de prueba sin tocar la pantalla.
+- **Reportes de ingresos:** `reportes.controller` (CSV de pagos) excluye `rechazado` (`?incluir_rechazados=1` los trae). La estadística
+  «recaudado» ya sumaba solo `aprobado`. Los «pagos recientes» del residente y de su ficha excluyen rechazados.
+- Lo que SÍ conserva un rechazo: un **comprobante de transferencia rechazado por el administrador** sigue existiendo (con su motivo) porque el
+  residente necesita saberlo.
+
+**Pagos (web)**
+- `PagoTarjetaModal`: **advertencia** (no bloqueo) si monto > saldo, con ambas cifras y «Usar mi saldo (Q…)»; sin saldo avisa que no reduce
+  ninguna deuda. Los textos «Pago simulado / Visanet / entorno de prueba» solo aparecen si `simulada` (prueba en la suite: con la bandera
+  apagada el modal no contiene «simulad», «Visanet» ni «entorno de prueba»). Si la pasarela no está disponible, `ResidentePage` oculta el botón y
+  explica que se puede pagar por transferencia. La insignia «Simulado» del historial también depende de la bandera.
+- Historial del residente sin rechazados; los comprobantes rechazados quedan en una sección plegable «Comprobantes rechazados (n)» con el motivo.
+  `PagosPage` (admin): «Todos (sin rechazados)» + contador de ocultos; «Rechazado» los muestra.
+
+**Avisos y confirmaciones**
+- `Toast` (kit de UI): **errores persistentes** (se cierran con su ✕), **acción opcional** («Ver anuncio», «Ver mi reserva», «Revisar ahora»; las
+  confirmaciones con acción también persisten), pausa al pasar el cursor/foco (WCAG 2.2.1), máximo 4 a la vez.
+- **Anuncios:** «Publicar anuncio» con un recuadro previo «Quién lo verá» (de inmediato / desde la fecha / hasta la fecha o sin fin / urgente en rojo);
+  confirmación persistente con «Ver anuncio» que desplaza y resalta la fila nueva; botones fijos al pie del diálogo.
+- **«Guardar» fijo al pie** (`FormActions`, `position: sticky`) en Configuración de QR y de Reservas, con «Hay cambios sin guardar»; el formulario de
+  área común y el de anuncios pasaron al `Modal` con `footer`.
+- **Solicitudes:** `usePolling` (10 s el chat, 15 s las listas del admin y del residente; solo con pestaña visible; sin apilar; sin esqueleto). La
+  prueba atrapó un defecto mío: la detección de cambios dentro de `setState` no corría a tiempo, ahora usa una firma estado+mensajes.
+- **Reservas por aprobar:** `GET /dashboard` suma `reservas_pendientes`; fila «Reservas por aprobar» (con acción) en el dashboard, insignia en el menú
+  (se refresca cada 30 s), banner con «Ver solo pendientes» en la pantalla de reservas y toast cuando llega una nueva.
+
+**Observaciones (no se cambiaron, para decisión del equipo):**
+1. El modelo de pagos **«un pago liquida todo»** (`saldo_pendiente = 0` sin restar el monto, en tarjeta, efectivo y aprobación de transferencias): un pago
+   parcial deja el saldo en cero y uno mayor registra un ingreso inflado. La advertencia de monto es solo de interfaz.
+2. El CSV de pagos todavía lista los cargos de `metodo = 'reserva'` (deuda generada); la estadística ya los excluye para no contar doble.
+
+**Pruebas:** integración **I-6** (`integration/pagos.int.test.ts`, 11): aprobada/rechazada (402 sin fila, saldo intacto, auditoría con IP), bandera apagada (501),
+estado de la pasarela, CSV y estadística sin rechazados, «recientes» sin rechazados, aislamiento de `/pagos` entre empresas. Unitarias: tarjeta (402, estado),
+dashboard (+ reservas). Frontend +29: `Toast`, `usePolling`, `TicketChat.sondeo`, `AnunciosPage`, `ConfiguracionBarraFija`, `DashboardPage`, `PagoTarjeta`,
+`PagosPage`, `AdminReservasPage`.
+
+**Suites tras el ticket:** backend 637 unitarias, 86 integración/regresión, `tsc` limpio; frontend 249 y build; desktop 100 + Rust 72 y build.
