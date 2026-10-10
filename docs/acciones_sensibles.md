@@ -47,14 +47,14 @@ Dos pruebas mantienen esta lista honesta:
 | `INVITACION_ACEPTADA` | La persona invitada crea su cuenta (ruta pública con token de un solo uso) | `POST /api/invitaciones/:token/aceptar` | Público | 30/15 min por IP; los bloqueos se auditan |
 | **Personal y residentes** | | | | |
 | `USUARIO_CREADO` | Alta de cuenta (agente, administrador…) | `POST /api/usuarios` | admin de sucursal o superior | — |
-| `USUARIO_EDITADO` | Cambio de nombre, correo, rol o contraseña (sólo los nombres de campo quedan en el detalle) | `PUT /api/usuarios/:id` | admin de sucursal o superior | — |
+| `USUARIO_EDITADO` | Cambio de nombre, correo, rol o contraseña (sólo los nombres de campo quedan en el detalle; si el cambio de rol le quitó la verificación en dos pasos, `dos_pasos_quitada`) | `PUT /api/usuarios/:id` | admin de sucursal o superior | — |
 | `USUARIO_DESACTIVADO` | Baja de una cuenta (cierra sus sesiones) | `DELETE /api/usuarios/:id` | admin de sucursal o superior | — |
 | `RESIDENTE_CREADO` | Alta de residente y su cuenta | `POST /api/residentes` | admin de sucursal | — |
 | `RESIDENTE_ACTUALIZADO` | Edición de residente | `PUT /api/residentes/:id` | admin de sucursal | — |
 | `RESIDENTE_ELIMINADO` | Baja de residente | `DELETE /api/residentes/:id` | admin de sucursal | — |
 | **Verificación en dos pasos** (administradores, SCRUM-123) | | | | |
 | `TWOFA_INICIADO` | Empieza a configurar el segundo factor: entrega el secreto para el QR (el secreto no se guarda en la bitácora) | `POST /api/auth/2fa/iniciar` | owner, admin de empresa o de sucursal | — |
-| `TWOFA_ACTIVADO` | Confirma el primer código y la activa; entrega una sola vez los 10 códigos de recuperación. También queda el intento con un código errado (400) o bloqueado (429) | `POST /api/auth/2fa/confirmar` | owner, admin de empresa o de sucursal | 10 fallos/15 min por usuario y 5 por persona (bloqueo de 15 min); los bloqueos se auditan |
+| `TWOFA_ACTIVADO` | Confirma la contraseña **y** el primer código y la activa; entrega una sola vez los 10 códigos de recuperación. También queda el intento sin contraseña o con una errada (400), con un código errado (400) o bloqueado (429) | `POST /api/auth/2fa/confirmar` | owner, admin de empresa o de sucursal | 10 fallos/15 min por usuario y 5 por persona (bloqueo de 15 min); los bloqueos se auditan |
 | `TWOFA_DESACTIVADO` | La desactiva; exige la contraseña **y** un código (TOTP o de recuperación) | `POST /api/auth/2fa/desactivar` | owner, admin de empresa o de sucursal | 5 fallos/15 min por usuario y 5 por persona; los bloqueos se auditan |
 | `TWOFA_CODIGOS_REGENERADOS` | Genera 10 códigos de recuperación nuevos (los anteriores dejan de valer); exige un código TOTP | `POST /api/auth/2fa/codigos-recuperacion` | owner, admin de empresa o de sucursal | 10 fallos/15 min por usuario y 5 por persona; los bloqueos se auditan |
 | `TWOFA_VERIFICACION` | Segundo paso del ingreso: canjea el desafío del login y un código por la sesión. Correcto (detalle: `via` = `totp` o `recuperacion`), incorrecto (401) o bloqueado (429, detalle: `motivo` o `limite`). **Nunca guarda el código** | `POST /api/auth/2fa/verificar` | Público (con el desafío de 5 min que da el login) | 30 fallos/15 min por IP y 5 por persona (bloqueo de 15 min); los bloqueos se auditan |

@@ -396,9 +396,12 @@ export const getDosPasosEstado = (): Promise<DosPasosEstado> =>
 export const iniciarDosPasos = (): Promise<{ secreto: string; otpauth_url: string }> =>
   llamarDosPasos('iniciar', 'POST', {}, 'No se pudo iniciar la verificación en dos pasos');
 
-/** Activa con el primer código de la app. Devuelve los códigos de recuperación: se muestran UNA vez. */
-export const confirmarDosPasos = async (codigo: string): Promise<string[]> =>
-  (await llamarDosPasos<{ codigos_recuperacion: string[] }>('confirmar', 'POST', { codigo }, 'No se pudo activar')).codigos_recuperacion;
+/**
+ * Activa con la contraseña y el primer código de la app (la contraseña se pide como para desactivarla: re-autenticación ante
+ * un cambio de seguridad de la cuenta). Devuelve los códigos de recuperación: se muestran UNA vez.
+ */
+export const confirmarDosPasos = async (codigo: string, password: string): Promise<string[]> =>
+  (await llamarDosPasos<{ codigos_recuperacion: string[] }>('confirmar', 'POST', { codigo, password }, 'No se pudo activar')).codigos_recuperacion;
 
 export const desactivarDosPasos = async (password: string, codigo: string): Promise<void> => {
   await llamarDosPasos('desactivar', 'POST', { password, codigo }, 'No se pudo desactivar');
