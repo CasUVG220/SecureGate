@@ -30,6 +30,8 @@ export interface DataTableProps<T> {
   bare?: boolean;
   className?: string;
   caption?: string;
+  /** Clases extra por fila (p. ej. resaltar el elemento recién creado). */
+  rowClassName?: (row: T) => string | false | null | undefined;
 }
 
 const ALIGN = { left: 'text-left', right: 'text-right', center: 'text-center' } as const;
@@ -42,7 +44,7 @@ const ALIGN = { left: 'text-left', right: 'text-right', center: 'text-center' } 
  * en el teléfono y tener que arrastrar la tabla en horizontal.
  */
 export default function DataTable<T>({
-  columns, rows, rowKey, loading = false, empty, onRowClick, bare = false, className, caption,
+  columns, rows, rowKey, loading = false, empty, onRowClick, bare = false, className, caption, rowClassName,
 }: DataTableProps<T>) {
   const visibleOnMobile = columns.filter(c => !c.hideOnMobile && !c.actions && !c.primary);
   const primaryCol = columns.find(c => c.primary);
@@ -79,8 +81,9 @@ export default function DataTable<T>({
                 : rows.map(row => (
                     <tr
                       key={rowKey(row)}
+                      data-row-key={rowKey(row)}
                       onClick={onRowClick ? () => onRowClick(row) : undefined}
-                      className={cx('transition-colors', onRowClick && 'cursor-pointer', 'hover:bg-gray-500/[0.06]')}
+                      className={cx('transition-colors', onRowClick && 'cursor-pointer', 'hover:bg-gray-500/[0.06]', rowClassName?.(row))}
                     >
                       {columns.map(col => (
                         <td key={col.key} className={cx('px-5 py-3.5 align-middle', ALIGN[col.align ?? 'left'], col.className)}>
@@ -102,7 +105,7 @@ export default function DataTable<T>({
         ) : showEmpty ? empty : (
           <ul className="divide-y divide-gray-700">
             {rows.map(row => (
-              <li key={rowKey(row)}>
+              <li key={rowKey(row)} data-row-key={rowKey(row)} className={cx(rowClassName?.(row))}>
                 <div
                   onClick={onRowClick ? () => onRowClick(row) : undefined}
                   className={cx('px-4 py-4', onRowClick && 'cursor-pointer active:bg-gray-500/[0.08]')}
