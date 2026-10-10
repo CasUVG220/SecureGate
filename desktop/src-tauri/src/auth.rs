@@ -117,6 +117,21 @@ fn extraer_refresh(headers: &reqwest::header::HeaderMap) -> Option<String> {
         .filter(|s| !s.is_empty())
 }
 
+/// Lo que se le dice a quien llega con una cuenta que tiene la verificación en dos pasos (SCRUM-123).
+const MSG_DOS_PASOS: &str =
+    "Tu cuenta tiene la verificación en dos pasos, que esta app no admite. Inicia sesión desde la versión web de SecureGate.";
+
+/// ¿La respuesta del login es el desafío de la verificación en dos pasos y no una sesión? Con ella activa el servidor
+/// contesta 200 con `{ requiere_2fa: true, desafio }` en vez de `{ token, usuario }`. La app de escritorio es del
+/// personal de garita, que no la usa; si un administrador con la verificación activa entra aquí, se le dice por dónde
+/// hacerlo en vez de mostrar un error de formato («missing field `token`»).
+fn pide_dos_pasos(cuerpo: &str) -> bool {
+    serde_json::from_str::<serde_json::Value>(cuerpo)
+        .ok()
+        .and_then(|v| v.get("requiere_2fa").and_then(|b| b.as_bool()))
+        .unwrap_or(false)
+}
+
 pub async fn login(state: &AppState, email: &str, password: &str) -> AppResult<SesionDto> {
     let base = state.api_url();
     // Se usa el cliente crudo para poder leer Set-Cookie (Api::post sólo
@@ -140,6 +155,9 @@ pub async fn login(state: &AppState, email: &str, password: &str) -> AppResult<S
             _ => "login",
         };
         return Err(AppError::http(status.as_u16(), codigo, msg));
+    }
+    if pide_dos_pasos(&texto) {
+        return Err(AppError::new("dos_pasos", MSG_DOS_PASOS));
     }
     let r: RespLogin = serde_json::from_str(&texto)?;
     if r.usuario.rol == "residente" {
@@ -340,6 +358,17 @@ mod tests {
         let s: Sesion = serde_json::from_str(json).unwrap();
         assert!(!s.requiere_login);
         assert_eq!(s.bloqueo, None);
+    }
+
+    #[test]
+    fn reconoce_el_desafio_de_dos_pasos_y_no_confunde_una_sesion_normal() {
+        assert!(pide_dos_pasos(r#"{"requiere_2fa":true,"desafio":"abc.def.ghi"}"#));
+        assert!(!pide_dos_pasos(r#"{"requiere_2fa":false}"#));
+        assert!(!pide_dos_pasos(r#"{"token":"a.b.c","usuario":{"id":"1","nombre":"Ana","email":"a@x.com","rol":"agente"}}"#));
+        assert!(!pide_dos_pasos("no es json"));
+        assert!(!pide_dos_pasos(""));
+        // El mensaje dice qué hacer, sin jerga.
+        assert!(MSG_DOS_PASOS.contains("versión web"));
     }
 
     #[test]

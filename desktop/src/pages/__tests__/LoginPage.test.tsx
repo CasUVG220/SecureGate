@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { LoginPage } from '../LoginPage';
-import type { EstadoApp } from '../../lib/tauri';
+import { api, type EstadoApp } from '../../lib/tauri';
 
 vi.mock('../../lib/tauri', async importOriginal => ({
   ...(await importOriginal<typeof import('../../lib/tauri')>()),
@@ -34,5 +34,21 @@ describe('LoginPage — sesión cortada', () => {
   it('con la sesión en regla no muestra ningún aviso', () => {
     render(<LoginPage onLogin={vi.fn()} estado={estado({})} />);
     expect(screen.queryByText(/venció|suspendidas/)).not.toBeInTheDocument();
+  });
+});
+
+describe('LoginPage — cuenta con verificación en dos pasos (SCRUM-123)', () => {
+  it('el administrador con la verificación activa recibe el motivo y por dónde entrar, no un error de formato', async () => {
+    const mensaje = 'Tu cuenta tiene la verificación en dos pasos, que esta app no admite. Inicia sesión desde la versión web de SecureGate.';
+    (api.sesion.login as unknown as ReturnType<typeof vi.fn>).mockRejectedValue({ codigo: 'dos_pasos', mensaje });
+    const onLogin = vi.fn();
+    const { container } = render(<LoginPage onLogin={onLogin} estado={estado({})} />);
+
+    fireEvent.change(screen.getByLabelText(/Correo/), { target: { value: 'ana@empresa.com' } });
+    fireEvent.change(container.querySelector('input[type="password"]')!, { target: { value: 'Clave#2026a' } });
+    fireEvent.submit(container.querySelector('form')!);
+
+    expect(await screen.findByText(/versión web de SecureGate/)).toBeInTheDocument();
+    expect(onLogin).not.toHaveBeenCalled();
   });
 });
