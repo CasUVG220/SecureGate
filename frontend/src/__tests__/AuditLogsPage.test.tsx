@@ -127,4 +127,30 @@ describe('AuditLogsPage', () => {
     const tabla = screen.getByRole('table');
     expect(within(tabla).getAllByRole('row').length).toBe(FILAS.length + 1);
   });
+
+  // SCRUM-123: los eventos de dos pasos se leen sin abrir el JSON; nunca traen códigos ni contraseñas.
+  it('explica la verificación en dos pasos: contraseña sin código, por dónde entró y por qué falló', async () => {
+    getLogs.mockResolvedValue({
+      total: 4,
+      logs: [
+        fila({ accion: 'LOGIN', status_code: 200, datos_nuevos: { email: 'ana@x.com', segundo_paso: 'pendiente' } }),
+        fila({ accion: 'TWOFA_VERIFICACION', status_code: 200, datos_nuevos: { via: 'recuperacion' } }),
+        fila({ accion: 'TWOFA_VERIFICACION', status_code: 429, datos_nuevos: { motivo: 'bloqueado' } }),
+        fila({ accion: 'REFRESH_RECHAZADO', status_code: 401, datos_nuevos: { motivo: 'token_revocado' } }),
+      ],
+    });
+    render(<AuditLogsPage />);
+    await screen.findByText('Contraseña correcta; falta el código de dos pasos');
+    expect(screen.getAllByText('Verificación en dos pasos: código al iniciar sesión')).toHaveLength(2);
+    expect(screen.getByText('Entró con un código de recuperación')).toBeInTheDocument();
+    expect(screen.getByText('Motivo: persona bloqueada por demasiados intentos')).toBeInTheDocument();
+    expect(screen.getByText('Motivo: token revocado')).toBeInTheDocument();
+  });
+
+  it('un motivo que no conoce no se muestra (ni se inventa un texto)', async () => {
+    getLogs.mockResolvedValue({ total: 1, logs: [fila({ accion: 'REFRESH_RECHAZADO', status_code: 401, datos_nuevos: { motivo: 'algo_nuevo' } })] });
+    render(<AuditLogsPage />);
+    await screen.findByText('Renovación de sesión rechazada');
+    expect(screen.queryByText(/Motivo:/)).toBeNull();
+  });
 });

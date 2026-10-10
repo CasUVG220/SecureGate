@@ -25,4 +25,18 @@ describe('navegación por rol', () => {
     expect(translations.es['nav.group.company']).toBe('Mi empresa');
     expect(translations.en['nav.group.company']).toBeTruthy();
   });
+
+  /** SCRUM-123: «Mi cuenta» (verificación en dos pasos) es de los tres roles de administración. */
+  it('los tres roles de administración tienen «Mi cuenta»; el personal de garita y los residentes no', () => {
+    const paginas = (rol: string) => navForRole(rol).flatMap(g => g.items.map(i => i.key as string));
+    for (const rol of ['owner', 'admin_empresa', 'admin_sucursal']) expect([rol, paginas(rol)]).toEqual([rol, expect.arrayContaining(['cuenta'])]);
+    for (const rol of ['agente', 'residente', 'desconocido']) expect([rol, paginas(rol)]).toEqual([rol, expect.not.arrayContaining(['cuenta'])]);
+  });
+
+  it('«Mi cuenta» existe en español e inglés', () => {
+    expect(translations.es['nav.account']).toBe('Mi cuenta');
+    expect(translations.en['nav.account']).toBe('My account');
+    expect(translations.es['nav.group.account']).toBeTruthy();
+    expect(translations.en['nav.group.account']).toBeTruthy();
+  });
 });

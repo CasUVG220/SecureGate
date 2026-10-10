@@ -99,6 +99,12 @@ export default function AuditLogsPage() {
     if (typeof d.intentos_callados === 'number' && d.intentos_callados > 0) {
       partes.push(rellenar(t('audit.detail.silenced'), { n: d.intentos_callados }));
     }
+    // Verificación en dos pasos y renovaciones rechazadas: cómo entró o por qué falló (el detalle nunca lleva códigos).
+    if (d.segundo_paso === 'pendiente') partes.push(t('audit.detail.secondStep'));
+    if (d.via === 'totp' || d.via === 'recuperacion') partes.push(t(`audit.detail.via.${d.via}`));
+    if (typeof d.motivo === 'string' && t(`audit.motivo.${d.motivo}`, '') !== '') {
+      partes.push(rellenar(t('audit.detail.reason'), { motivo: t(`audit.motivo.${d.motivo}`) }));
+    }
     return partes.length ? partes.join(' · ') : null;
   };
 

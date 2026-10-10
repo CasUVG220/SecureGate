@@ -1,13 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import AgentesPage from '../pages/AgentesPage';
-import { getUsuarios, updateUsuario, desactivarUsuario, createUsuario } from '../services/api';
+import { getUsuarios, updateUsuario, desactivarUsuario, createUsuario, restablecerDosPasos } from '../services/api';
 
 vi.mock('../services/api', () => ({
   getUsuarios: vi.fn(),
   createUsuario: vi.fn(),
   updateUsuario: vi.fn(),
   desactivarUsuario: vi.fn(),
+  restablecerDosPasos: vi.fn(),
   // Token de pruebas: el usuario con sesión es «yo-1».
   decodeTokenPayload: () => ({ id: 'yo-1', rol: 'admin_sucursal' }),
 }));
@@ -16,6 +17,7 @@ const mockGet = getUsuarios as unknown as ReturnType<typeof vi.fn>;
 const mockPut = updateUsuario as unknown as ReturnType<typeof vi.fn>;
 const mockBaja = desactivarUsuario as unknown as ReturnType<typeof vi.fn>;
 const mockCreate = createUsuario as unknown as ReturnType<typeof vi.fn>;
+const mockRestablecer = restablecerDosPasos as unknown as ReturnType<typeof vi.fn>;
 
 const usuario = (over: Record<string, unknown> = {}) => ({
   id: 'u1', nombre: 'Luis Guardia', email: 'luis@garita.com', rol: 'agente',
@@ -145,5 +147,66 @@ describe('AgentesPage — editar y dar de baja', () => {
     expect(campo.type).toBe('password');
     fireEvent.click(screen.getByRole('button', { name: 'Mostrar contraseña' }));
     expect(campo.type).toBe('text');
+  });
+
+  // ── Verificación en dos pasos (SCRUM-123) ─────────────────────────────────────────────────────
+  describe('verificación en dos pasos de otra persona', () => {
+    beforeEach(() => {
+      mockRestablecer.mockReset();
+      mockGet.mockResolvedValue([
+        usuario({ id: 'u1', nombre: 'Marta Admin', email: 'marta@garita.com', rol: 'admin_sucursal', dos_pasos: true }),
+        usuario({ id: 'u2', nombre: 'Luis Guardia', dos_pasos: false }),
+      ]);
+    });
+
+    it('marca en la lista a quien la tiene activada y solo a esa persona', async () => {
+      render(<AgentesPage />);
+      await screen.findByText('Marta Admin');
+      expect(screen.getAllByText('Con verificación en dos pasos')).toHaveLength(1);
+      expect(screen.getByText('marta@garita.com').closest('td')).toHaveTextContent('Con verificación en dos pasos');
+    });
+
+    it('el menú ofrece «Restablecer verificación en dos pasos» solo a quien la tiene', async () => {
+      render(<AgentesPage />);
+      await abrirMenu('Marta Admin');
+      expect(screen.getAllByRole('menuitem').map(i => i.textContent)).toEqual(['Editar', 'Restablecer verificación en dos pasos', 'Dar de baja']);
+      fireEvent.keyDown(document, { key: 'Escape' });
+      await abrirMenu('Luis Guardia');
+      expect(screen.getAllByRole('menuitem').map(i => i.textContent)).toEqual(['Editar', 'Dar de baja']);
+    });
+
+    it('pide confirmación explicando qué pasa y, al confirmar, restablece y recarga la lista', async () => {
+      mockRestablecer.mockResolvedValue(undefined);
+      render(<AgentesPage />);
+      await abrirMenu('Marta Admin');
+      fireEvent.click(screen.getByRole('menuitem', { name: 'Restablecer verificación en dos pasos' }));
+
+      const dialogo = await screen.findByRole('dialog', { name: '¿Restablecer la verificación en dos pasos de Marta Admin?' });
+      expect(dialogo).toHaveTextContent('se cierran sus sesiones abiertas');
+      expect(mockRestablecer).not.toHaveBeenCalled();
+
+      fireEvent.click(within(dialogo).getByRole('button', { name: 'Restablecer' }));
+      await waitFor(() => expect(mockRestablecer).toHaveBeenCalledWith('u1'));
+      await waitFor(() => expect(mockGet).toHaveBeenCalledTimes(2));          // recarga la lista
+    });
+
+    it('cancelar no restablece nada', async () => {
+      render(<AgentesPage />);
+      await abrirMenu('Marta Admin');
+      fireEvent.click(screen.getByRole('menuitem', { name: 'Restablecer verificación en dos pasos' }));
+      const dialogo = await screen.findByRole('dialog');
+      fireEvent.click(within(dialogo).getByRole('button', { name: 'Cancelar' }));
+      await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+      expect(mockRestablecer).not.toHaveBeenCalled();
+    });
+
+    it('si el servidor lo rechaza, muestra el motivo en la página', async () => {
+      mockRestablecer.mockRejectedValue(new Error('Usuario no encontrado o sin acceso'));
+      render(<AgentesPage />);
+      await abrirMenu('Marta Admin');
+      fireEvent.click(screen.getByRole('menuitem', { name: 'Restablecer verificación en dos pasos' }));
+      fireEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Restablecer' }));
+      expect(await screen.findByText('Usuario no encontrado o sin acceso')).toBeInTheDocument();
+    });
   });
 });
