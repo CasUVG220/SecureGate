@@ -56,7 +56,8 @@ export const getSnapshotGarita = async (req: Request, res: Response) => {
          FROM preautorizaciones p
          WHERE p.sucursal_id = $1
            AND p.activo = TRUE
-           AND (p.fecha_fin IS NULL OR p.fecha_fin >= CURRENT_DATE)`,
+           AND p.fecha_fin IS NOT NULL           -- sin fecha de fin es un visitante guardado, no un aviso
+           AND p.fecha_fin >= CURRENT_DATE`,
         [sucursal_id],
       ),
     ]);
