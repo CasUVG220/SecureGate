@@ -11,6 +11,7 @@ import { Alert } from '../shared/Alert';
 import { Button, Input, Textarea } from '../ui';
 import { api, mensajeDe, type Evaluacion, type InvitacionQr, type Residente, type ResultadoApertura } from '../../lib/tauri';
 import { esValida, formatear, normalizar } from '../../lib/placa';
+import { diaCorto } from '../../lib/tiempo';
 
 export interface VisitanteFormHandle {
   /** Rellena la placa (desde el OCR). */
@@ -192,7 +193,7 @@ export const VisitanteForm = forwardRef<VisitanteFormHandle, Props>(function Vis
               {evaluacion.razon_bloqueo}. No se puede registrar el acceso.
             </Alert>
           : evaluacion.preautorizado
-            ? <Alert tone="ok">Preautorizado por el residente{evaluacion.preautorizacion?.fecha_fin ? ` hasta ${evaluacion.preautorizacion.fecha_fin}` : ''}.</Alert>
+            ? <Alert tone="ok">Visita avisada por el residente{evaluacion.preautorizacion?.fecha_fin ? ` hasta el ${diaCorto(evaluacion.preautorizacion.fecha_fin)}` : ''}.</Alert>
             : null
       )}
 

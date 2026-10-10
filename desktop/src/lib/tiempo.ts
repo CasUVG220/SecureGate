@@ -25,3 +25,14 @@ export const horasATexto = (h: number): string => {
   if (hh === 0) return `${mm} min`;
   return mm ? `${hh} h ${mm} min` : `${hh} h`;
 };
+
+const MESES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+
+/** Día de calendario ('2026-10-12' o con hora) como «12 oct 2026», sin mover el día por la zona. Vacío si no es fecha. */
+export function diaCorto(valor: string | null | undefined): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec((valor ?? '').trim());
+  if (!m) return '';
+  const mes = Number(m[2]);
+  if (mes < 1 || mes > 12) return '';
+  return `${Number(m[3])} ${MESES[mes - 1]} ${m[1]}`;
+}
