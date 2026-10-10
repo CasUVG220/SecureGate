@@ -1739,9 +1739,16 @@ export interface AuditLog {
   usuario_email: string | null;
   accion: string;
   tabla_afectada: string | null;
+  registro_id?: string | null;
   ip_address: string | null;
   sucursal_id: string | null;
+  /** Código HTTP con el que terminó la acción: 2xx salió bien, 429 la frenó un límite, 4xx se rechazó. */
+  status_code?: number | null;
+  /** Detalle: el correo intentado en un login, el límite que bloqueó, el guard que denegó… Nunca contraseñas. */
+  datos_nuevos?: Record<string, unknown> | null;
 }
+
+export type AuditEstado = 'ok' | 'rechazado' | 'bloqueado' | 'error';
 
 export const getAuditLogs = async (params: {
   limit?: number;
@@ -1750,6 +1757,10 @@ export const getAuditLogs = async (params: {
   usuario_id?: string;
   desde?: string;
   hasta?: string;
+  /** Resultado de la acción según su código HTTP. */
+  estado?: AuditEstado;
+  /** Persona (nombre o correo de la cuenta) o correo intentado en un login. */
+  buscar?: string;
 }): Promise<{ logs: AuditLog[]; total: number }> => {
   const url = new URL(`${BASE_URL}/api/audit-logs`);
   if (params.limit  !== undefined) url.searchParams.set('limit',  String(params.limit));
@@ -1758,10 +1769,21 @@ export const getAuditLogs = async (params: {
   if (params.usuario_id) url.searchParams.set('usuario_id', params.usuario_id);
   if (params.desde)      url.searchParams.set('desde',      params.desde);
   if (params.hasta)      url.searchParams.set('hasta',      params.hasta);
+  if (params.estado)     url.searchParams.set('estado',     params.estado);
+  if (params.buscar)     url.searchParams.set('buscar',     params.buscar);
 
   const res = await apiFetch(url.toString(), { headers: authHeaders() });
   if (!res.ok) throw new Error('Error al cargar logs de auditoría');
   return res.json() as Promise<{ logs: AuditLog[]; total: number }>;
+};
+
+export interface AuditAccion { accion: string; total: number; ultima: string }
+
+/** Acciones que existen en la bitácora (con su cantidad): llenan el filtro del panel. */
+export const getAuditAcciones = async (): Promise<AuditAccion[]> => {
+  const res = await apiFetch(`${BASE_URL}/api/audit-logs/acciones`, { headers: authHeaders() });
+  if (!res.ok) throw new Error('Error al cargar las acciones de auditoría');
+  return ((await res.json()) as { acciones: AuditAccion[] }).acciones;
 };
 
 
