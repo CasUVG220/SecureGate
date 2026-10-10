@@ -33,6 +33,7 @@ const RESPUESTAS: Array<[string, Array<Record<string, unknown>>]> = [
   ['timestamp_salida IS NULL', [{ total: 2 }]],
   ['estado_pago', [{ total: 4 }]],
   ["estado = 'pendiente'", [{ total: 6 }]],
+  ["estado = 'pendiente_aprobacion'", [{ total: 5 }]],
   ['LIMIT 10', [{ id: 'a1', nombre_visitante: 'Luis', numero_casa: 'A-12', timestamp_entrada: '2026-09-24T10:00:00', timestamp_salida: null }]],
   ['COUNT(*)::int AS total', [{ total: 10 }]],
 ];
@@ -75,15 +76,27 @@ it('la referencia de ayer se corta a la hora actual, no al día completo', async
 });
 
 it.each([
-  ['admin de sucursal', ADM_SUC, /ra\.sucursal_id = \$1|r\.sucursal_id  = \$1|p\.sucursal_id  = \$1/, 'suc-1'],
+  ['admin de sucursal', ADM_SUC, /ra\.sucursal_id = \$1|r\.sucursal_id  = \$1|p\.sucursal_id  = \$1|a\.sucursal_id  = \$1/, 'suc-1'],
   ['admin de empresa', ADM_EMP, /_s\.empresa_id = \$1/, 'emp-1'],
-])('%s: las siete consultas filtran por su alcance', async (_n, user, filtro, param) => {
+])('%s: las ocho consultas filtran por su alcance', async (_n, user, filtro, param) => {
   await pedir(user);
-  expect(mockPool.query).toHaveBeenCalledTimes(7);
+  expect(mockPool.query).toHaveBeenCalledTimes(8);
   for (const [sql, params] of mockPool.query.mock.calls) {
     expect(sql).toMatch(filtro);
     expect(params).toEqual([param]);
   }
+});
+
+it('reservas por aprobar: cuenta las pendientes de aprobación dentro del alcance del rol', async () => {
+  const body = await pedir(ADM_SUC);
+  expect(body.reservas_pendientes).toBe(5);
+  const sql = mockPool.query.mock.calls.map(([s]) => s as string).find(s => s.includes("'pendiente_aprobacion'"))!;
+  expect(sql).toContain('areas_comunes');
+  expect(sql).toMatch(/a\.sucursal_id\s+= \$1/);
+  mockPool.query.mockClear();
+  await pedir(ADM_EMP);
+  const sqlEmp = mockPool.query.mock.calls.map(([s]) => s as string).find(s => s.includes("'pendiente_aprobacion'"))!;
+  expect(sqlEmp).toMatch(/_s\.empresa_id = \$1/);
 });
 
 it('owner: sin parámetros de tenant', async () => {
