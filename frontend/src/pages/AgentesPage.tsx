@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
-  getUsuarios, createUsuario, updateUsuario, desactivarUsuario, decodeTokenPayload, type Usuario,
+  getUsuarios, createUsuario, updateUsuario, desactivarUsuario, restablecerDosPasos, decodeTokenPayload, type Usuario,
 } from '../services/api';
 import { TableSkeleton } from '../components/Skeleton';
 import { useToast } from '../components/Toast';
 import { useTranslation } from '../i18n/useTranslation';
-import { Button, Input, Modal, PasswordInput, ROW_ICON, RowActions, Select, StatusText } from '../components/ui';
+import { Button, Input, Modal, PasswordInput, ROW_ICON, RowActions, Select, StatusText, useConfirmacion } from '../components/ui';
+import { rellenar } from '../components/charts/format';
 
 const EMPTY_AGENT = { nombre: '', email: '', password: '' };
 
@@ -17,6 +18,7 @@ interface EdicionForm { nombre: string; email: string; rol: string; password: st
 export default function AgentesPage() {
   const showToast = useToast();
   const { t } = useTranslation();
+  const { confirmar, dialogo: dialogoConfirmar } = useConfirmacion();
 
   const [agentes, setAgentes] = useState<Usuario[]>([]);
   const [loading, setLoading] = useState(true);
@@ -142,6 +144,25 @@ export default function AgentesPage() {
     }
   };
 
+  // ── Restablecer la verificación en dos pasos (SCRUM-123) ─────────────────
+  // Para quien perdió el teléfono y los códigos de recuperación. Le borra el segundo factor y le cierra las sesiones.
+  const restablecerVerificacion = async (u: Usuario) => {
+    const ok = await confirmar({
+      title: rellenar(t('agents.twofaResetTitle'), { nombre: u.nombre }),
+      message: t('agents.twofaResetBody'),
+      confirmLabel: t('agents.twofaResetConfirm'),
+      tone: 'danger',
+    });
+    if (!ok) return;
+    try {
+      await restablecerDosPasos(u.id);
+      cargar();
+      showToast(t('agents.twofaResetDone'));
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : t('twofa.err.generic'));
+    }
+  };
+
   const filtered = agentes.filter(a => {
     const q = search.toLowerCase();
     return (`${a.nombre} ${a.email} ${a.rol} ${rolLabel(a.rol)}`).toLowerCase().includes(q);
@@ -234,7 +255,10 @@ export default function AgentesPage() {
                 filtered.map((a, i) => (
                   <tr key={a.id} className={`border-b border-gray-700 last:border-0 ${i % 2 === 1 ? 'bg-gray-700/20' : ''}`}>
                     <td className="px-5 py-3 font-semibold text-white">{a.nombre}</td>
-                    <td className="px-5 py-3 text-gray-400">{a.email}</td>
+                    <td className="px-5 py-3 text-gray-400">
+                      {a.email}
+                      {a.dos_pasos && <span className="mt-0.5 block text-xs text-gray-500">{t('agents.twofaOn')}</span>}
+                    </td>
                     <td className="px-5 py-3 text-gray-200">{rolLabel(a.rol)}</td>
                     <td className="px-5 py-3">
                       <StatusText kind={a.activo ? 'on' : 'off'}>
@@ -248,6 +272,9 @@ export default function AgentesPage() {
                           menuLabel={`${t('agents.menuLabel')} ${a.nombre}`}
                           actions={[
                             { id: 'editar', label: t('agents.edit'), icon: ROW_ICON.edit, onClick: () => abrirEdicion(a) },
+                            ...(a.dos_pasos
+                              ? [{ id: 'dos-pasos', label: t('agents.twofaReset'), icon: ROW_ICON.history, onClick: () => void restablecerVerificacion(a) }]
+                              : []),
                             { id: 'baja', label: t('agents.deactivate'), icon: ROW_ICON.pause, tone: 'danger', onClick: () => { setBaja(a); setBajaError(null); } },
                           ]}
                         />
@@ -338,6 +365,8 @@ export default function AgentesPage() {
           </div>
         )}
       </Modal>
+
+      {dialogoConfirmar}
     </div>
   );
 }

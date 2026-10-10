@@ -275,15 +275,22 @@ export class PortalIncorrectoError extends Error {
 }
 
 /**
+ * La contraseña fue correcta pero la cuenta tiene la verificación en dos pasos: todavía NO hay sesión. El `desafio`
+ * (válido 5 minutos) se canjea por la sesión en `verificarDosPasos` junto con el código (SCRUM-123).
+ */
+export interface DesafioDosPasos { requiere_2fa: true; desafio: string }
+
+/**
  * Inicia sesión contra un portal concreto. El backend rechaza las credenciales
  * que no pertenecen a ese portal: un residente no entra por el de personal ni
- * al revés.
+ * al revés. Si la cuenta tiene la verificación en dos pasos activa responde un
+ * `DesafioDosPasos` en vez de la sesión (`'requiere_2fa' in resultado`).
  */
 export const login = async (
   email: string,
   password: string,
   portal?: 'personal' | 'residente',
-): Promise<LoginResult> => {
+): Promise<LoginResult | DesafioDosPasos> => {
   const res = await fetch(`${BASE_URL}/api/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -300,6 +307,86 @@ export const login = async (
     throw new Error(body.error || 'Credenciales incorrectas');
   }
   return body;
+};
+
+// ── Verificación en dos pasos (SCRUM-123) ─────────────────────────────────
+
+/**
+ * Error de una operación de dos pasos. `codigo` es el que manda el backend (`CODIGO_INCORRECTO`, `BLOQUEADO`,
+ * `PASSWORD_INCORRECTA`, `DESAFIO_INVALIDO`, `YA_ACTIVA`…) para que la pantalla muestre el texto en el idioma elegido;
+ * `espera_s` viene cuando la persona quedó bloqueada por demasiados intentos.
+ */
+export class DosPasosError extends Error {
+  codigo: string;
+  status: number;
+  espera_s?: number;
+
+  constructor(mensaje: string, codigo: string, status: number, espera_s?: number) {
+    super(mensaje);
+    this.name = 'DosPasosError';
+    this.codigo = codigo;
+    this.status = status;
+    this.espera_s = espera_s;
+  }
+}
+
+const errorDeDosPasos = async (res: Response, respaldo: string): Promise<DosPasosError> => {
+  const body = await res.json().catch(() => ({})) as { error?: string; codigo?: string; espera_s?: number };
+  return new DosPasosError(body.error || respaldo, body.codigo ?? '', res.status, body.espera_s);
+};
+
+/** Segundo paso del acceso: canjea el desafío del login y un código (de la app o de recuperación) por la sesión. */
+export const verificarDosPasos = async (desafio: string, codigo: string): Promise<LoginResult> => {
+  const res = await fetch(`${BASE_URL}/api/auth/2fa/verificar`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({ desafio, codigo }),
+  });
+  if (res.status === HTTP_BLOQUEO) throw new EmpresaBloqueadaError(await res.json() as BloqueoEmpresa);
+  if (!res.ok) throw await errorDeDosPasos(res, 'No se pudo verificar el código');
+  return res.json() as Promise<LoginResult>;
+};
+
+export interface DosPasosEstado {
+  activado: boolean;
+  activado_en: string | null;
+  codigos_restantes: number;
+}
+
+const llamarDosPasos = async <T,>(ruta: string, metodo: 'GET' | 'POST', cuerpo?: object, respaldo = 'No se pudo completar la operación'): Promise<T> => {
+  const res = await apiFetch(`${BASE_URL}/api/auth/2fa/${ruta}`, {
+    method: metodo,
+    headers: authHeaders(),
+    ...(cuerpo ? { body: JSON.stringify(cuerpo) } : {}),
+  });
+  if (!res.ok) throw await errorDeDosPasos(res, respaldo);
+  return res.json() as Promise<T>;
+};
+
+export const getDosPasosEstado = (): Promise<DosPasosEstado> =>
+  llamarDosPasos<DosPasosEstado>('estado', 'GET', undefined, 'No se pudo consultar la verificación en dos pasos');
+
+/** Empieza la configuración: entrega el secreto (para escribirlo a mano) y la URL `otpauth://` que se dibuja como QR. */
+export const iniciarDosPasos = (): Promise<{ secreto: string; otpauth_url: string }> =>
+  llamarDosPasos('iniciar', 'POST', {}, 'No se pudo iniciar la verificación en dos pasos');
+
+/** Activa con el primer código de la app. Devuelve los códigos de recuperación: se muestran UNA vez. */
+export const confirmarDosPasos = async (codigo: string): Promise<string[]> =>
+  (await llamarDosPasos<{ codigos_recuperacion: string[] }>('confirmar', 'POST', { codigo }, 'No se pudo activar')).codigos_recuperacion;
+
+export const desactivarDosPasos = async (password: string, codigo: string): Promise<void> => {
+  await llamarDosPasos('desactivar', 'POST', { password, codigo }, 'No se pudo desactivar');
+};
+
+/** Códigos de recuperación nuevos; los anteriores dejan de valer. Pide un código de la app. */
+export const regenerarCodigosRecuperacion = async (codigo: string): Promise<string[]> =>
+  (await llamarDosPasos<{ codigos_recuperacion: string[] }>('codigos-recuperacion', 'POST', { codigo }, 'No se pudieron generar los códigos')).codigos_recuperacion;
+
+/** Un superior borra el segundo factor de quien perdió el teléfono y los códigos; le cierra las sesiones. */
+export const restablecerDosPasos = async (usuarioId: string): Promise<void> => {
+  const res = await apiFetch(`${BASE_URL}/api/usuarios/${usuarioId}/2fa`, { method: 'DELETE', headers: authHeaders() });
+  if (!res.ok) throw await errorDeDosPasos(res, 'No se pudo restablecer la verificación en dos pasos');
 };
 
 export interface AccesoActivo {
@@ -1207,6 +1294,8 @@ export interface Usuario {
   sucursal_nombre: string | null;
   activo: boolean;
   created_at: string;
+  /** Tiene la verificación en dos pasos activada (sólo la lista de administración lo informa). */
+  dos_pasos?: boolean;
 }
 
 export interface UsuarioInput {

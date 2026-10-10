@@ -25,6 +25,7 @@ import ReservasAdminPage      from './pages/ReservasAdminPage';
 import ReservasPage           from './pages/ReservasPage';
 import AnnouncementsBell      from './components/AnnouncementsBell';
 import MisAnunciosPage        from './pages/MisAnunciosPage';
+import MiCuentaPage           from './pages/MiCuentaPage';
 import { ToastProvider }      from './components/ui/Toast';
 import { cx }                 from './components/ui/cx';
 import { decodeTokenPayload, getReservas, getTickets } from './services/api';
@@ -46,7 +47,7 @@ type Page =
   | 'dashboard' | 'residentes' | 'pagos' | 'preaut' | 'reportes' | 'config' | 'config-qr' | 'verificacion' | 'agentes' | 'garitas' | 'blacklist' | 'anuncios' | 'tickets' | 'reservas'
   | 'portal' | 'mis-reservas' | 'mis-anuncios'
   | 'owner-dashboard' | 'owner-empresas' | 'owner-empresa-detail' | 'owner-audit'
-  | 'ae-dashboard' | 'ae-sucursales';
+  | 'ae-dashboard' | 'ae-sucursales' | 'cuenta';
 
 interface NavItem { key: Page; labelKey: string; d: string; }
 interface NavGroup { labelKey: string; items: NavItem[]; }
@@ -69,7 +70,17 @@ const ICON = {
   gate:       'M2 4h20v12H2zM8 20h8M12 16v4',
   qr:         'M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3zM14 14h3v3h-3zM18 18h3v3h-3z',
   audit:      'M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M9 5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2M9 5h6M9 12h6M9 16h4',
+  account:    'M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z',
 } as const;
+
+/**
+ * «Mi cuenta» (verificación en dos pasos) es de los tres roles de administración; el personal de garita y los residentes
+ * no la tienen. Se agrega al final de cada menú de administración.
+ */
+const CUENTA_NAV: NavGroup = {
+  labelKey: 'nav.group.account',
+  items: [{ key: 'cuenta', labelKey: 'nav.account', d: ICON.account }],
+};
 
 /**
  * La navegación se agrupa por intención, no por orden de implementación: el
@@ -102,6 +113,7 @@ const ADMIN_NAV: NavGroup[] = [
   { labelKey: 'nav.group.analysis', items: [
     { key: 'reportes', labelKey: 'nav.reports', d: ICON.reports },
   ]},
+  CUENTA_NAV,
 ];
 
 /**
@@ -126,6 +138,7 @@ const OWNER_NAV: NavGroup[] = [
     { key: 'owner-empresas',  labelKey: 'nav.companies',      d: ICON.home },
     { key: 'owner-audit',     labelKey: 'nav.auditLogs',      d: ICON.audit },
   ]},
+  CUENTA_NAV,
 ];
 
 const ADMIN_EMPRESA_NAV: NavGroup[] = [
@@ -135,6 +148,7 @@ const ADMIN_EMPRESA_NAV: NavGroup[] = [
     { key: 'ae-sucursales', labelKey: 'nav.aeBranches',  d: ICON.home },
     { key: 'garitas',       labelKey: 'nav.gates',       d: ICON.gate },
   ]},
+  CUENTA_NAV,
 ];
 
 /**
@@ -405,6 +419,7 @@ function AppShell() {
       case 'portal':       return <ResidentePage requestedTab={portalTab} tabNonce={portalTabNonce} />;
       case 'ae-dashboard':   return <AdminEmpresaDashboard />;
       case 'ae-sucursales':  return <GestionSucursales />;
+      case 'cuenta':         return <MiCuentaPage />;
       case 'owner-dashboard':
         return <OwnerDashboard onSelectEmpresa={goToEmpresaDetail} />;
       case 'owner-empresas':
