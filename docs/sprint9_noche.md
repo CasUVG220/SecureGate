@@ -19,6 +19,7 @@ Las pruebas de base de datos corrieron **solo** contra el Postgres desechable lo
 | SCRUM-111 | H04 · garita sin cámara | **HECHO** (la salida sin red se deja en línea, decisión documentada) |
 | SCRUM-112 | H05+H07 · pagos, avisos y confirmaciones | **HECHO** |
 | SCRUM-113 | H06+H08 · fechas, placa y glosario | **HECHO** |
+| SCRUM-114 | H09+H10 · pasos tras las altas y avisos de visita | **HECHO** |
 
 *(la tabla se completa ticket por ticket)*
 
@@ -346,3 +347,47 @@ Guatemala el formulario arrancaba con la fecha de mañana); los ejemplos de plac
 
 **Pruebas:** frontend +31 (`fecha` 18, `sinToLocale` 2, `glosario` 9, `PlacaInput` 4 y ajustes), integración **I-7** (`placas.int.test.ts`, 14), Rust 74 (+2).
 **Suites tras el ticket:** backend 637 unitarias + 100 integración/regresión + `tsc`; frontend 282 + build; desktop 100 + Rust 74 + build. Todo verde.
+
+
+---
+
+## SCRUM-114 — H09 + H10 · Pasos siguientes tras las altas y aviso de visita · **HECHO**
+
+**Commits:** `fbbd44f` (banderas «sin administrador» en el backend) · `774cc20` (alta única, siguiente paso, contraseña, menú) · `37be0b8` (primeros pasos de la sucursal) · `023bf63` (fechas y duplicados del aviso en el backend) · `620aef9` (texto del escritorio) · `038f88f` («Avisar de una visita» en la web, glosario).
+**Verificado contra el código** (el QA acertó en todo): dos altas de empresa (`OwnerDashboard` y `OwnerEmpresas`, cada una con su modal), rótulo «Administración global» reutilizado en `ADMIN_EMPRESA_NAV`,
+ningún ojo de contraseña en `owner/` ni `admin_empresa/`, tabla de preautorizaciones sin placa, dos formularios de preautorización y `fecha_fin` «opcional» en el formulario pero ignorada por el servidor.
+
+**H09 — después de crear**
+- **Un solo formulario de empresa** (`components/EmpresaModal.tsx`: alta y edición) para el panel y para la lista del owner. Al crear no se cierra de golpe: pasa a un segundo paso «Empresa creada» con
+  **Invitar administrador** o **Ahora no**. Lo mismo al crear una **sucursal** (`GestionSucursales`).
+- **«Invitar administrador»** (`components/InvitarAdminModal.tsx`) se extrajo del panel de invitaciones y sirve a dos entradas: el panel (se elige a quién) y el paso siguiente (el alcance ya está
+  decidido y solo se escribe el correo). Se fue un `window.prompt` (copiar el enlace: ahora está visible y seleccionado).
+- **Aviso «Sin administrador» / «Invitación pendiente»** en las listas de empresas y sucursales, con la acción **Invitar administrador** en la fila. `GET /api/empresas` y `GET /api/sucursales`
+  devuelven `tiene_admin` e `invitacion_pendiente` (administrador activo / invitación vigente, no revocada ni vencida). Prueba de integración **I-8** (`altas.int.test.ts`).
+- **Bienvenida con el primer paso** en los paneles vacíos: sin empresas (owner), sin sucursales (administrador de empresa) y sin residentes (administrador de sucursal: «Primeros pasos» con tres accesos
+  directos). `GET /api/dashboard` devuelve `total_residentes` dentro de la misma consulta de la mora (sin recorrido extra).
+- **Contraseña con ojo y requisitos visibles** (`PasswordInput`) en los formularios de usuario nuevo del owner y del administrador de empresa; sin cumplirlos no se envía.
+- **«Administración global» solo para el owner**: el administrador de empresa ve **Mi empresa** (`navForRole` se exporta y una prueba lo vigila).
+- Los rótulos «Admin», «Asignar Admin», «Admin Sucursal» pasan a **administrador** (glosario).
+
+**H10 — aviso de visita**
+- **Hallazgo:** el desajuste de `fecha_fin` no era un olvido sino dos conceptos mezclados en una tabla. Una fila **con** `fecha_fin` es una visita avisada; una fila **sin** ella es un «visitante guardado» de
+  la libreta del residente (así la usa el portal: «Visitantes guardados», con `fecha_fin === null`) y **no autoriza nada**: `checkPreautorizacion`, `buscarPreautorizacion` y la evaluación local del escritorio
+  ya lo exigían. El único sitio que los trataba como permanentes era el padrón de la garita (`/sync/garita`: `fecha_fin IS NULL OR …`), que ahora los excluye.
+- **Decisión sobre `fecha_fin`:** **obligatoria** en el aviso. El alta del administrador responde 400 sin ella (antes creaba una fila muerta sin avisar a nadie); el residente sigue pudiendo guardar a alguien sin fecha
+  (libreta). Ambas altas validan `AAAA-MM-DD` (incluidas fechas imposibles; una de ellas tumbaba con 500 en mi primera versión y la prueba lo cazó) y `fin ≥ inicio`.
+- **Sin duplicados:** un aviso idéntico (mismo DPI y placa normalizada, mismas fechas) → **409** con el id del existente. Dos pasajeros distintos en el mismo carro no se pisan. Un visitante guardado no se repite
+  aunque se guarde otro día. Antes, «Preautorizar hoy» creaba una fila nueva en cada clic y el residente nunca veía el resultado.
+- **Un solo flujo «Avisar de una visita»** (`components/AvisarVisitaModal.tsx`) para el administrador (elige la casa) y para el residente: las dos fechas empiezan en hoy, «Hasta» sigue a «Desde» hasta que se toca,
+  DPI o placa (basta uno). Desde un visitante guardado abre el formulario con sus datos (ya no crea nada a ciegas).
+- **Lista del administrador** («Visitas avisadas»): columna de **placa**, fechas como rango, estado *Hoy / Próxima / Vencida*; los guardados y las vencidas no estorban (las vencidas se piden aparte).
+  **Portal del residente:** «Visitas avisadas» y «Visitantes guardados» son listas distintas.
+- **Glosario:** preautorización → **aviso de visita**; la prueba del glosario vigila «preautoriz*» y «admin» abreviado en ES y EN; reglas del aviso en `docs/glosario.md`. En el escritorio la garita dice
+  «Visita avisada por el residente hasta el 12 oct 2026».
+
+**Observaciones:** (1) el padrón de la garita ya no baja los visitantes guardados (cambio de comportamiento deliberado y sin efecto visible: el escritorio nunca los usaba);
+(2) las búsquedas `fecha_fin >= CURRENT_DATE` comparan con la fecha de Postgres (UTC), no la de Guatemala: entre las 6 pm y la medianoche locales un aviso que vence «hoy» ya no se reconoce — es el defecto raíz S-17
+(SCRUM-124); (3) siguen en pie los `window.confirm` de eliminar (SCRUM-115).
+
+**Pruebas:** backend integración **I-8** (5) e **I-9** (10), unitarias +1; frontend +24 (alta de empresa/sucursal, invitar, bienvenida, contraseña, navegación por rol, primeros pasos, aviso de visita, lista del administrador, pestaña del residente);
+desktop +2. **Suites tras el ticket:** backend 638 unitarias + 115 integración/regresión + `tsc`; frontend 325 + build; desktop 102 + Rust 74 + build. Todo verde.
