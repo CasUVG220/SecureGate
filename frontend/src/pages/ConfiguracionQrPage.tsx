@@ -59,7 +59,7 @@ export default function ConfiguracionQrPage() {
       })
       .catch(() => setError('No se pudo cargar la configuración de QR.'))
       .finally(() => setLoading(false));
-  }, []);
+  }, [marcarGuardado]);
 
   const handleSave = async () => {
     const maxIntentos = Number(form.max_intentos_fallidos);
