@@ -1,7 +1,8 @@
 //! Sincronización con el backend.
 //!
-//! - **Pull** (`pull`): trae residentes / blacklist / preautorizaciones de la
-//!   sucursal y reemplaza el espejo local. Periódico + al arrancar + a mano.
+//! - **Pull** (`pull`): trae residentes / blacklist / preautorizaciones /
+//!   invitaciones QR de la sucursal y reemplaza el espejo local. Periódico + al
+//!   arrancar + a mano.
 //! - **Push** (`push_pendientes`): sube la cola `accesos_pendientes` con
 //!   backoff exponencial. Un 2xx marca la fila como sincronizada (se conserva
 //!   unos días como respaldo y luego `purgar` la elimina); un 4xx de negocio
@@ -55,9 +56,16 @@ fn parsear_fecha(v: &Value) -> Option<String> {
     v.as_str().map(|s| s.to_string())
 }
 
-fn aplicar_snapshot(conn: &Connection, snap: &Value) -> AppResult<(usize, usize, usize)> {
+/// Reemplaza el espejo local por el snapshot. `inicio` es el instante (RFC 3339, reloj de este equipo) en que se PIDIÓ el
+/// snapshot: los usos de invitaciones QR que este equipo sincronizó desde entonces pueden no estar en la copia del servidor,
+/// así que se siguen contando por su cuenta (ver `garita::usos_locales`). Devuelve cuántas filas de cada tabla quedaron:
+/// (residentes, blacklist, preautorizaciones, invitaciones QR).
+fn aplicar_snapshot(conn: &Connection, snap: &Value, inicio: &str) -> AppResult<(usize, usize, usize, usize)> {
     let tx = conn.unchecked_transaction()?;
-    tx.execute_batch("DELETE FROM residentes_local; DELETE FROM blacklist_local; DELETE FROM preautorizaciones_local;")?;
+    tx.execute_batch(
+        "DELETE FROM residentes_local; DELETE FROM blacklist_local; DELETE FROM preautorizaciones_local;
+         DELETE FROM invitaciones_qr_local;",
+    )?;
 
     let residentes = snap["residentes"].as_array().cloned().unwrap_or_default();
     for r in &residentes {
@@ -111,15 +119,48 @@ fn aplicar_snapshot(conn: &Connection, snap: &Value) -> AppResult<(usize, usize,
             ],
         )?;
     }
+    // Invitaciones QR (SCRUM-126). Un servidor que aún no las manda deja el espejo vacío: sin red todo QR se rechaza como
+    // «no está en la copia local» y con red sigue validándose en línea, como antes.
+    let qrs = snap["invitaciones_qr"].as_array().cloned().unwrap_or_default();
+    for q in &qrs {
+        let dia = |v: &Value| v.as_str().map(|s| s.chars().take(10).collect::<String>());
+        tx.execute(
+            "INSERT INTO invitaciones_qr_local
+               (id, tipo, etiqueta, nombre_visitante, numero_dpi, placa, residente_id, numero_casa, residente_nombre,
+                fecha_inicio, fecha_fin, usos_maximos, usos_actuales, activo, bloqueado_hasta)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)",
+            params![
+                // El id se guarda en minúsculas: el QR se escanea como lo imprimió el residente, el servidor lo manda así.
+                q["id"].as_str().unwrap_or_default().to_lowercase(),
+                q["tipo"].as_str().unwrap_or("grupal"),
+                q["etiqueta"].as_str(),
+                q["nombre_visitante"].as_str(),
+                q["numero_dpi"].as_str(),
+                q["placa"].as_str().map(crate::placa::normalizar).filter(|x| !x.is_empty()),
+                q["residente_id"].as_str().unwrap_or_default(),
+                q["numero_casa"].as_str().unwrap_or_default(),
+                q["residente_nombre"].as_str().unwrap_or_default(),
+                dia(&q["fecha_inicio"]).unwrap_or_default(),
+                dia(&q["fecha_fin"]),
+                q["usos_maximos"].as_i64(),
+                q["usos_actuales"].as_i64().unwrap_or(0),
+                q["activo"].as_bool().unwrap_or(true) as i64,
+                q["bloqueado_hasta"].as_str(),
+            ],
+        )?;
+    }
+    db::meta_escribir(&tx, "qr_snapshot_desde", inicio)?;
     db::meta_escribir(&tx, "ultima_sync_ok", &Utc::now().to_rfc3339())?;
     tx.commit()?;
-    Ok((residentes.len(), blacklist.len(), pre.len()))
+    Ok((residentes.len(), blacklist.len(), pre.len(), qrs.len()))
 }
 
-pub async fn pull(state: &AppState) -> AppResult<(usize, usize, usize)> {
+pub async fn pull(state: &AppState) -> AppResult<(usize, usize, usize, usize)> {
     let (jwt, lic) = auth::credenciales(state).await?;
     let base = state.api_url();
     let cred = Credenciales { jwt: Some(&jwt), licencia: Some(&lic) };
+    // El instante se toma ANTES de pedir el snapshot: lo que se sincronice mientras tanto se cuenta de más, nunca de menos.
+    let inicio = Utc::now().to_rfc3339();
     let snap: Value = match state.api.get(&base, "/sync/garita", &cred).await {
         Ok(v) => v,
         Err(e) => {
@@ -128,8 +169,8 @@ pub async fn pull(state: &AppState) -> AppResult<(usize, usize, usize)> {
         }
     };
     state.marcar_conexion(true);
-    let n = con_db(state, |c| aplicar_snapshot(c, &snap))?;
-    log::info!("pull OK: {} residentes, {} blacklist, {} preautorizaciones", n.0, n.1, n.2);
+    let n = con_db(state, |c| aplicar_snapshot(c, &snap, &inicio))?;
+    log::info!("pull OK: {} residentes, {} blacklist, {} preautorizaciones, {} invitaciones QR", n.0, n.1, n.2, n.3);
     Ok(n)
 }
 
@@ -475,7 +516,7 @@ mod tests {
             "preautorizaciones": [{"id": "p1", "residente_id": "r1", "nombre_visitante": "P", "numero_dpi": "9",
                                    "placa": "p-123 abc", "fecha_inicio": "2026-09-01T06:00:00.000Z", "fecha_fin": "2026-09-30T06:00:00.000Z"}]
         });
-        assert_eq!(aplicar_snapshot(&c, &snap).unwrap(), (1, 2, 1));
+        assert_eq!(aplicar_snapshot(&c, &snap, "2026-10-10T16:00:00+00:00").unwrap(), (1, 2, 1, 0));
         let ids: Vec<String> = c.prepare("SELECT id FROM residentes_local").unwrap()
             .query_map([], |r| r.get(0)).unwrap().collect::<Result<_, _>>().unwrap();
         assert_eq!(ids, ["r1"], "el residente viejo desapareció");
@@ -490,5 +531,70 @@ mod tests {
             .unwrap();
         assert_eq!((dpi.as_str(), placa.as_deref()), ("", Some("P123ABC")));
         assert!(db::meta_leer(&c, "ultima_sync_ok").unwrap().is_some());
+    }
+
+    fn snapshot_con_qr() -> Value {
+        json!({
+            "residentes": [], "blacklist": [], "preautorizaciones": [],
+            "invitaciones_qr": [
+                {"id": "3F2A9C10-AAAA-4BBB-8CCC-0123456789AB", "tipo": "individual", "etiqueta": "Fiesta", "nombre_visitante": "Marta",
+                 "numero_dpi": "2999111220101", "placa": "p-123 abc", "residente_id": "r1", "numero_casa": "A-1", "residente_nombre": "Ana",
+                 "fecha_inicio": "2026-10-09", "fecha_fin": "2026-10-12", "usos_maximos": 2, "usos_actuales": 1, "activo": true,
+                 "bloqueado_hasta": null},
+                {"id": "11111111-2222-4333-8444-555555555555", "tipo": "grupal", "etiqueta": null, "nombre_visitante": null,
+                 "numero_dpi": null, "placa": null, "residente_id": "r1", "numero_casa": "A-1", "residente_nombre": "Ana",
+                 "fecha_inicio": "2026-10-01T06:00:00.000Z", "fecha_fin": null, "usos_maximos": null, "usos_actuales": 0, "activo": false,
+                 "bloqueado_hasta": "2026-10-10T17:00:00.000Z"}
+            ]
+        })
+    }
+
+    #[test]
+    fn el_snapshot_guarda_las_invitaciones_qr_normalizadas_y_el_instante_de_la_copia() {
+        let c = Connection::open_in_memory().unwrap();
+        db::aplicar_esquema(&c).unwrap();
+        assert_eq!(aplicar_snapshot(&c, &snapshot_con_qr(), "2026-10-10T16:00:00+00:00").unwrap(), (0, 0, 0, 2));
+
+        // Id en minúsculas, placa canónica, fechas AAAA-MM-DD aunque lleguen como instante, activo como 0/1.
+        let (placa, ini, fin, max, usos, activo): (Option<String>, String, Option<String>, Option<i64>, i64, i64) = c
+            .query_row(
+                "SELECT placa, fecha_inicio, fecha_fin, usos_maximos, usos_actuales, activo FROM invitaciones_qr_local
+                 WHERE id = '3f2a9c10-aaaa-4bbb-8ccc-0123456789ab'",
+                [],
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?)),
+            )
+            .unwrap();
+        assert_eq!((placa.as_deref(), ini.as_str(), fin.as_deref(), max, usos, activo), (Some("P123ABC"), "2026-10-09", Some("2026-10-12"), Some(2), 1, 1));
+        let (ini2, activo2, bloqueo): (String, i64, Option<String>) = c
+            .query_row(
+                "SELECT fecha_inicio, activo, bloqueado_hasta FROM invitaciones_qr_local WHERE id = '11111111-2222-4333-8444-555555555555'",
+                [],
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+            )
+            .unwrap();
+        assert_eq!((ini2.as_str(), activo2, bloqueo.as_deref()), ("2026-10-01", 0, Some("2026-10-10T17:00:00.000Z")));
+        assert_eq!(db::meta_leer(&c, "qr_snapshot_desde").unwrap().as_deref(), Some("2026-10-10T16:00:00+00:00"));
+    }
+
+    #[test]
+    fn cada_sincronizacion_reemplaza_la_copia_de_invitaciones_y_un_servidor_sin_ellas_la_vacia() {
+        let c = Connection::open_in_memory().unwrap();
+        db::aplicar_esquema(&c).unwrap();
+        aplicar_snapshot(&c, &snapshot_con_qr(), "2026-10-10T16:00:00+00:00").unwrap();
+
+        // La invitación revocada ya no viene: desaparece; la que sigue vigente se actualiza (un uso más).
+        let mut nuevo = snapshot_con_qr();
+        nuevo["invitaciones_qr"].as_array_mut().unwrap().remove(1);
+        nuevo["invitaciones_qr"][0]["usos_actuales"] = json!(2);
+        assert_eq!(aplicar_snapshot(&c, &nuevo, "2026-10-10T16:05:00+00:00").unwrap().3, 1);
+        let usos: i64 = c.query_row("SELECT usos_actuales FROM invitaciones_qr_local", [], |r| r.get(0)).unwrap();
+        assert_eq!(usos, 2);
+        assert_eq!(db::meta_leer(&c, "qr_snapshot_desde").unwrap().as_deref(), Some("2026-10-10T16:05:00+00:00"));
+
+        // Un backend anterior no manda `invitaciones_qr`: la copia queda vacía, sin error.
+        let viejo = json!({"residentes": [], "blacklist": [], "preautorizaciones": []});
+        assert_eq!(aplicar_snapshot(&c, &viejo, "2026-10-10T16:10:00+00:00").unwrap().3, 0);
+        let n: i64 = c.query_row("SELECT count(*) FROM invitaciones_qr_local", [], |r| r.get(0)).unwrap();
+        assert_eq!(n, 0);
     }
 }

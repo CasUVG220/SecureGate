@@ -33,7 +33,8 @@ export const Icono = ({ d, size = 18 }: { d: string; size?: number }) => (
 
 /** Qué necesita cada tarea para poder pulsar su botón. */
 const ACCION: Record<Proposito, { rotulo: string; requiere: 'ocr' | 'red' | null; pista: string }> = {
-  qr: { rotulo: '', requiere: 'red', pista: 'Se lee solo: muestra el QR a la cámara.' },
+  // Sin red se valida contra la copia local de las invitaciones (SCRUM-126): ya no necesita el servidor.
+  qr: { rotulo: '', requiere: null, pista: 'Se lee solo: muestra el QR a la cámara.' },
   placa: { rotulo: 'Leer placa', requiere: 'ocr', pista: 'Se lee en este equipo, sin internet.' },
   dpi: { rotulo: 'Leer DPI', requiere: 'red', pista: 'La foto se procesa en memoria y se descarta.' },
   salida: { rotulo: 'Dar salida', requiere: 'red', pista: 'Lee la placa y cierra el acceso abierto.' },
@@ -90,7 +91,7 @@ export function CameraPane({
 
   useEffect(() => { if (activa) onCamaraLista(); }, [activa, onCamaraLista]);
 
-  useQrScanner(cam.videoRef, proposito === 'qr' && activa && enLinea && !qrPausado, id => { void onQr(id); });
+  useQrScanner(cam.videoRef, proposito === 'qr' && activa && !qrPausado, id => { void onQr(id); });
 
   const capturar = async () => {
     const jpeg = cam.capturar();
@@ -169,8 +170,8 @@ export function CameraPane({
         )}
         {activa && proposito === 'qr' && (
           <p className="absolute bottom-3 left-1/2 max-w-[92%] -translate-x-1/2 truncate rounded-full bg-slate-900/75 px-3 py-1 text-xs font-medium text-slate-100">
-            {!enLinea ? 'Sin conexión: el QR no se puede verificar'
-              : qrPausado ? 'Verificando…'
+            {qrPausado ? 'Verificando…'
+              : !enLinea ? 'Sin conexión: se valida con la copia de este equipo'
               : 'Muestra el QR a la cámara'}
           </p>
         )}
@@ -202,7 +203,7 @@ export function CameraPane({
           <p className={cx('text-gray-400', compacto ? 'mt-2 text-2xs' : 'mt-4 text-xs')}>
             {enLinea
               ? 'El código se lee solo y rellena el formulario. Verifica el DPI antes de registrar.'
-              : 'Verificar un QR necesita conexión: la vigencia y los usos viven en el servidor. Pulsa «Sincronizar» o registra con el DPI a mano.'}
+              : 'Sin conexión, la invitación se valida con la copia que este equipo bajó en la última sincronización: no incluye las creadas después. Si no la reconoce, registra con el DPI a mano.'}
           </p>
           {/* Sin cámara (o con el QR dañado) el código se escribe o se pega a mano. */}
           <form onSubmit={verificarCodigo} className={cx('space-y-2', compacto ? 'mt-2' : 'mt-3')} aria-label="Código de la invitación">
@@ -221,13 +222,13 @@ export function CameraPane({
               variant="secondary"
               size={compacto ? 'sm' : 'md'}
               fullWidth
-              disabled={!enLinea || qrPausado || !codigo.trim()}
+              disabled={qrPausado || !codigo.trim()}
             >
               Verificar código
             </Button>
             {!enLinea && (
               <p role="status" className="text-xs font-medium text-warning-400">
-                Sin conexión: verificar el código necesita el servidor.
+                Sin conexión: el código se verifica con la copia de este equipo.
               </p>
             )}
           </form>

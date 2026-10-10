@@ -32,7 +32,7 @@ La garita tiene **cuatro tareas** y cada una puede usar una cámara distinta
 
 | Tarea | Para qué | Cómo funciona |
 |---|---|---|
-| **QR** | La invitación que el residente mandó al visitante | Escaneo continuo (jsQR): el agente no pulsa nada. Sólo lee códigos con prefijo `SGQR:` y UUID, para no consultar al servidor por cualquier etiqueta. **Requiere conexión.** |
+| **QR** | La invitación que el residente mandó al visitante | Escaneo continuo (jsQR): el agente no pulsa nada. Sólo lee códigos con prefijo `SGQR:` y UUID, para no consultar al servidor por cualquier etiqueta. **Funciona sin internet** con la copia local de las invitaciones de la sucursal (se baja en cada sincronización); ver `docs/qr_sin_conexion.md` para qué pasa si una invitación se revoca sin red. |
 | **Placa** (entrada) | Placa del vehículo que entra | Captura a demanda → OCR local (sidecar). **Funciona sin internet.** |
 | **DPI** | Documento del visitante | Captura a demanda → OCR en el backend (fase 2 lo hará local). Requiere conexión. |
 | **Salida** | Placa del vehículo que sale | Captura → OCR local → busca el acceso abierto con esa placa y lo cierra. **Requiere conexión.** |
@@ -61,7 +61,7 @@ Si la cámara falta, está ocupada o el permiso se negó, nada se bloquea:
 
 | Tarea | Alternativa manual |
 |---|---|
-| **QR** | «¿No se lee? Escribe el código»: acepta el texto que el residente ve bajo su QR (`SGQR:<id>`, o el id solo, con o sin guiones). Requiere conexión. |
+| **QR** | «¿No se lee? Escribe el código»: acepta el texto que el residente ve bajo su QR (`SGQR:<id>`, o el id solo, con o sin guiones). También funciona sin internet, con la copia local. |
 | **Placa** | «Escribir placa» lleva el cursor al campo de la placa del formulario. |
 | **DPI** | Se escribe en el formulario (13 dígitos); queda marcado «capturado manualmente». |
 | **Salida** | «Escribir placa» abre el diálogo de salida; o «Dar salida» en la lista **Registrados en este equipo**, que además se puede buscar por nombre, DPI, placa o casa. |

@@ -108,11 +108,14 @@ describe('sin cámara: código QR a mano', () => {
     expect(base.onQr).not.toHaveBeenCalled();
   });
 
-  it('sin red se apaga y lo dice (la vigencia y los usos viven en el servidor)', async () => {
+  it('sin red SIGUE funcionando y lo dice: el código se verifica con la copia de este equipo (SCRUM-126)', async () => {
     await abrirQr({ enLinea: false });
     fireEvent.change(screen.getByLabelText(/Escribe el código de la invitación/), { target: { value: UUID } });
-    expect(screen.getByRole('button', { name: 'Verificar código' })).toBeDisabled();
-    expect(screen.getByText('Sin conexión: verificar el código necesita el servidor.')).toBeInTheDocument();
+    const boton = screen.getByRole('button', { name: 'Verificar código' });
+    expect(boton).toBeEnabled();
+    expect(screen.getByText('Sin conexión: el código se verifica con la copia de este equipo.')).toBeInTheDocument();
+    fireEvent.click(boton);
+    await waitFor(() => expect(base.onQr).toHaveBeenCalledWith(UUID));
   });
 
   it('mientras el escáner verifica otro código (pausado) no se acepta uno nuevo', async () => {
