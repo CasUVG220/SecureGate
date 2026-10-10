@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { getConfigQr, updateConfigQr, type ConfigQr } from '../services/api';
-import { FormSkeleton, Spinner } from '../components/Skeleton';
+import { FormSkeleton } from '../components/Skeleton';
+import { Button } from '../components/ui';
 import { useToast } from '../components/Toast';
 import { useTranslation } from '../i18n/useTranslation';
 
@@ -177,14 +178,9 @@ export default function ConfiguracionQrPage() {
           </Campo>
         </div>
 
-        <button
-          onClick={handleSave}
-          disabled={saving}
-          className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-semibold px-6 py-2 rounded-xl transition-colors flex items-center gap-2"
-        >
-          {saving && <Spinner size={14} />}
+        <Button onClick={handleSave} loading={saving} className="px-6">
           {saving ? t('common.saving') : t('common.save')}
-        </button>
+        </Button>
       </div>
     </div>
   );

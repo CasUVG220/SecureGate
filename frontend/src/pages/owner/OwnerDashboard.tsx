@@ -3,8 +3,8 @@ import {
   getEmpresas, createEmpresa, updateEmpresa, deleteEmpresa, getDashboard,
   type DashboardData, type Empresa, type EmpresaInput,
 } from '../../services/api';
-import { Spinner, TableSkeleton } from '../../components/Skeleton';
-import { ROW_ICON, RowActions, StatusText } from '../../components/ui';
+import { TableSkeleton } from '../../components/Skeleton';
+import { Button, ROW_ICON, RowActions, StatusText } from '../../components/ui';
 import { AccesosPorHora, ResumenCifras, ResumenCifrasEsqueleto, comparar, fmtNumero, rellenar } from '../../components/charts';
 import { useToast } from '../../components/Toast';
 import { useTranslation } from '../../i18n/useTranslation';
@@ -245,20 +245,12 @@ export default function OwnerDashboard({ onSelectEmpresa }: Props) {
               ))}
 
               <div className="flex gap-3 pt-2">
-                <button
-                  type="submit"
-                  disabled={saving}
-                  className="flex-1 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-sm font-medium py-2 rounded-lg transition-colors flex items-center justify-center gap-2"
-                >
-                  {saving && <Spinner size={14} />} {t('empresas.create')}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setShowModal(false)}
-                  className="px-4 py-2 text-sm text-gray-400 hover:text-gray-200 transition-colors"
-                >
+                <Button type="submit" loading={saving} className="flex-1">
+                  {t('empresas.create')}
+                </Button>
+                <Button variant="ghost" onClick={() => setShowModal(false)}>
                   {t('common.cancel')}
-                </button>
+                </Button>
               </div>
             </form>
           </div>

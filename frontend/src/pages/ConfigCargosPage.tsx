@@ -10,7 +10,7 @@ import {
   type HistorialAplicacion,
 } from '../services/api';
 import { TableSkeleton, Spinner } from '../components/Skeleton';
-import { ROW_ICON, RowActions, StatusText } from '../components/ui';
+import { Button, ROW_ICON, RowActions, StatusText } from '../components/ui';
 import { useToast } from '../components/Toast';
 import { useTranslation } from '../i18n/useTranslation';
 import ConfiguracionQrPage from './ConfiguracionQrPage';
@@ -355,14 +355,12 @@ export default function ConfigCargosPage() {
             </div>
 
             <div className="flex gap-3 pt-1">
-              <button onClick={handleMoraSave} disabled={savingMora}
-                className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-semibold py-2 rounded-xl transition-colors flex items-center justify-center gap-2">
-                {savingMora && <Spinner />}
+              <Button onClick={handleMoraSave} loading={savingMora} className="flex-1">
                 {savingMora ? t('common.saving') : t('common.save')}
-              </button>
-              <button onClick={closeMoraModal} className="bg-gray-700 hover:bg-gray-600 text-gray-200 font-medium px-4 py-2 rounded-xl transition-colors">
+              </Button>
+              <Button variant="secondary" onClick={closeMoraModal}>
                 {t('common.cancel')}
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -411,14 +409,12 @@ export default function ConfigCargosPage() {
                 className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white placeholder-gray-400 focus:outline-none focus:border-blue-500 transition-colors" />
             </div>
             <div className="flex gap-3 pt-1">
-              <button onClick={handleProgSave} disabled={savingProg}
-                className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-semibold py-2 rounded-xl transition-colors flex items-center justify-center gap-2">
-                {savingProg && <Spinner />}
+              <Button onClick={handleProgSave} loading={savingProg} className="flex-1">
                 {savingProg ? t('common.saving') : t('common.save')}
-              </button>
-              <button onClick={closeProgModal} className="bg-gray-700 hover:bg-gray-600 text-gray-200 font-medium px-4 py-2 rounded-xl transition-colors">
+              </Button>
+              <Button variant="secondary" onClick={closeProgModal}>
                 {t('common.cancel')}
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -443,15 +439,12 @@ export default function ConfigCargosPage() {
               {FRECUENCIA_LABEL[confirmApply.frecuencia] ?? confirmApply.frecuencia}
             </p>
             <div className="flex gap-3 pt-1">
-              <button onClick={handleAplicar} disabled={applying}
-                className="flex-1 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-semibold py-2 rounded-xl transition-colors flex items-center justify-center gap-2">
-                {applying && <Spinner />}
+              <Button onClick={handleAplicar} loading={applying} className="flex-1">
                 {applying ? 'Aplicando...' : 'Confirmar'}
-              </button>
-              <button onClick={() => setConfirmApply(null)} disabled={applying}
-                className="bg-gray-700 hover:bg-gray-600 disabled:opacity-50 text-gray-200 font-medium px-4 py-2 rounded-xl transition-colors">
+              </Button>
+              <Button variant="secondary" onClick={() => setConfirmApply(null)} disabled={applying}>
                 {t('common.cancel')}
-              </button>
+              </Button>
             </div>
           </div>
         </div>

@@ -6,7 +6,8 @@ import {
   decodeTokenPayload,
   type Ticket, type TicketMensaje,
 } from '../services/api';
-import { Skeleton, Spinner } from './Skeleton';
+import { Skeleton } from './Skeleton';
+import { Button } from './ui';
 import { useTranslation } from '../i18n/useTranslation';
 
 export const TIPO_LABEL: Record<string, string> = {
@@ -146,7 +147,7 @@ export default function TicketChat({ ticketId, viewerRole, onActivity }: Props) 
             return (
               <div key={m.id} className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
                 <div className={`max-w-[80%] rounded-2xl px-3 py-2 ${
-                  mine ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-100'
+                  mine ? 'bg-brand-500 text-brand-ink' : 'bg-gray-700 text-gray-100'
                 }`}>
                   {!mine && (
                     <p className="text-[11px] font-semibold text-gray-300 mb-0.5">{m.autor_nombre}</p>
@@ -176,13 +177,9 @@ export default function TicketChat({ ticketId, viewerRole, onActivity }: Props) 
               placeholder={t('tickets.messagePlaceholder')}
               className="flex-1 bg-gray-700 border border-gray-600 rounded-xl px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 resize-none max-h-28"
             />
-            <button
-              onClick={handleSend}
-              disabled={sending || !texto.trim()}
-              className="bg-blue-600 hover:bg-blue-700 disabled:opacity-40 text-white font-semibold px-4 py-2 rounded-xl text-sm transition-colors flex items-center gap-2"
-            >
-              {sending ? <Spinner size={14} /> : t('tickets.send')}
-            </button>
+            <Button onClick={handleSend} disabled={!texto.trim()} loading={sending}>
+              {t('tickets.send')}
+            </Button>
           </div>
         )}
       </div>

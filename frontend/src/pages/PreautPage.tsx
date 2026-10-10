@@ -3,9 +3,9 @@ import {
   getPreautorizaciones, createPreautorizacion, deletePreautorizacion, getResidentes,
   type Preautorizacion, type Residente,
 } from '../services/api';
-import { TableSkeleton, Spinner } from '../components/Skeleton';
+import { TableSkeleton } from '../components/Skeleton';
 import { useToast } from '../components/Toast';
-import { ROW_ICON, RowActions } from '../components/ui';
+import { Button, ROW_ICON, RowActions } from '../components/ui';
 import { useTranslation } from '../i18n/useTranslation';
 
 const today = () => new Date().toISOString().slice(0, 10);
@@ -104,12 +104,9 @@ export default function PreautPage() {
     <div className="sg-page text-gray-100">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-bold text-white">{t('preauth.title')}</h1>
-        <button
-          onClick={() => { setForm(EMPTY_FORM); setFormError(null); setShowModal(true); }}
-          className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors"
-        >
+        <Button onClick={() => { setForm(EMPTY_FORM); setFormError(null); setShowModal(true); }}>
           {t('preauth.new')}
-        </button>
+        </Button>
       </div>
 
       {error && (
@@ -215,15 +212,12 @@ export default function PreautPage() {
                 </div>
               </div>
               <div className="flex gap-3 pt-2">
-                <button type="submit" disabled={saving}
-                  className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-semibold py-2.5 rounded-lg transition-colors flex items-center justify-center gap-2">
-                  {saving && <Spinner />}
+                <Button type="submit" loading={saving} className="flex-1">
                   {saving ? t('common.saving') : t('common.save')}
-                </button>
-                <button type="button" onClick={() => setShowModal(false)} disabled={saving}
-                  className="flex-1 bg-gray-700 hover:bg-gray-600 disabled:opacity-50 text-white font-semibold py-2.5 rounded-lg transition-colors">
+                </Button>
+                <Button variant="secondary" onClick={() => setShowModal(false)} disabled={saving} className="flex-1">
                   {t('common.cancel')}
-                </button>
+                </Button>
               </div>
             </form>
           </div>

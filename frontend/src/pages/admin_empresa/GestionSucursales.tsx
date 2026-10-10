@@ -4,8 +4,8 @@ import {
   getUsuarios, createUsuario, deleteUsuario,
   type Sucursal, type SucursalInput, type Usuario,
 } from '../../services/api';
-import { Spinner, TableSkeleton } from '../../components/Skeleton';
-import { ROW_ICON, RowActions, StatusText } from '../../components/ui';
+import { TableSkeleton } from '../../components/Skeleton';
+import { Button, ROW_ICON, RowActions, StatusText } from '../../components/ui';
 import { useToast } from '../../components/Toast';
 import InvitacionesPanel from '../../components/InvitacionesPanel';
 import { decodeTokenPayload } from '../../services/api';
@@ -359,7 +359,7 @@ export default function GestionSucursales() {
                   onClick={() => setStaffFilter(f)}
                   className={`text-xs font-medium px-3 py-1.5 rounded-md transition-colors ${
                     staffFilter === f
-                      ? 'bg-blue-600 text-white'
+                      ? 'bg-brand-500 text-brand-ink'
                       : 'text-gray-400 hover:text-gray-200'
                   }`}
                 >
@@ -469,18 +469,12 @@ export default function GestionSucursales() {
                 )
               )}
               <div className="flex gap-3 pt-2">
-                <button
-                  type="submit"
-                  disabled={saving}
-                  className="flex-1 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-sm font-medium py-2 rounded-lg transition-colors flex items-center justify-center gap-2"
-                >
-                  {saving && <Spinner size={14} />}
+                <Button type="submit" loading={saving} className="flex-1">
                   {editSuc ? t('common.save') : t('ae.createBranch')}
-                </button>
-                <button type="button" onClick={closeModal}
-                  className="px-4 py-2 text-sm text-gray-400 hover:text-gray-200 transition-colors">
+                </Button>
+                <Button variant="ghost" onClick={closeModal}>
                   {t('common.cancel')}
-                </button>
+                </Button>
               </div>
             </form>
           </div>
@@ -515,17 +509,12 @@ export default function GestionSucursales() {
                 </select>
               </div>
               <div className="flex gap-3 pt-2">
-                <button
-                  type="submit"
-                  disabled={saving}
-                  className="flex-1 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-sm font-medium py-2 rounded-lg transition-colors flex items-center justify-center gap-2"
-                >
-                  {saving && <Spinner size={14} />} {t('ae.assign')}
-                </button>
-                <button type="button" onClick={closeModal}
-                  className="px-4 py-2 text-sm text-gray-400 hover:text-gray-200 transition-colors">
+                <Button type="submit" loading={saving} className="flex-1">
+                  {t('ae.assign')}
+                </Button>
+                <Button variant="ghost" onClick={closeModal}>
                   {t('common.cancel')}
-                </button>
+                </Button>
               </div>
             </form>
           </div>
@@ -587,17 +576,12 @@ export default function GestionSucursales() {
               </div>
 
               <div className="flex gap-3 pt-2">
-                <button
-                  type="submit"
-                  disabled={saving}
-                  className="flex-1 bg-green-700 hover:bg-green-600 disabled:opacity-50 text-white text-sm font-medium py-2 rounded-lg transition-colors flex items-center justify-center gap-2"
-                >
-                  {saving && <Spinner size={14} />} {t('ae.createUser')}
-                </button>
-                <button type="button" onClick={closeModal}
-                  className="px-4 py-2 text-sm text-gray-400 hover:text-gray-200 transition-colors">
+                <Button type="submit" loading={saving} className="flex-1">
+                  {t('ae.createUser')}
+                </Button>
+                <Button variant="ghost" onClick={closeModal}>
                   {t('common.cancel')}
-                </button>
+                </Button>
               </div>
             </form>
           </div>

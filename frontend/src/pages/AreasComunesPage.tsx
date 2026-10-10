@@ -388,20 +388,12 @@ export default function AreasComunesPage() {
             </label>
 
             <div className="flex gap-3 pt-1">
-              <button
-                onClick={handleSave}
-                disabled={saving}
-                className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-semibold py-2 rounded-xl transition-colors flex items-center justify-center gap-2"
-              >
-                {saving && <Spinner size={14} />}
+              <Button onClick={handleSave} loading={saving} className="flex-1">
                 {saving ? t('common.saving') : t('common.save')}
-              </button>
-              <button
-                onClick={closeModal}
-                className="bg-gray-700 hover:bg-gray-600 text-gray-200 font-medium px-4 py-2 rounded-xl transition-colors"
-              >
+              </Button>
+              <Button variant="secondary" onClick={closeModal}>
                 {t('common.cancel')}
-              </button>
+              </Button>
             </div>
           </div>
         </div>

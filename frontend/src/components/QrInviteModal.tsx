@@ -152,7 +152,7 @@ export default function QrInviteModal({ invitacion, onClose, onCreated }: Props)
               <a
                 href={qrDataUri ?? undefined}
                 download={`invitacion-qr-${created.id}.png`}
-                className={`flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 rounded-xl transition-colors text-sm ${!qrDataUri ? 'pointer-events-none opacity-50' : ''}`}
+                className={`flex-1 bg-brand-500 hover:bg-brand-600 text-brand-ink text-center font-semibold py-2 rounded-xl transition-colors text-sm ${!qrDataUri ? 'pointer-events-none opacity-50' : ''}`}
               >
                 {t('qr.download')}
               </a>
