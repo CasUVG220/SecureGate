@@ -5,6 +5,7 @@ import { checkBlacklist } from './blacklist.controller';
 import { getConfigQrEfectiva } from './configQr.controller';
 import { tenantFilter, ownershipClause, ownershipParams } from '../utils/tenant';
 import { serverError } from '../utils/http';
+import { normalizarPlaca, sqlPlacaNormalizada } from '../utils/placa';
 
 /**
  * Marca de tiempo que reporta la garita offline. Se guarda tal cual en
@@ -80,7 +81,7 @@ export const registrarAcceso = async (req: Request, res: Response) => {
   // resuelta más abajo (solo de numero_dpi/residente_id, ya en el body), así
   // que se resuelve antes de pedir un cliente del pool en vez de mientras
   // éste queda retenido sin usarse (hallazgo de carga: backend/loadtest/RESULTADOS-sprint7.md).
-  const preautorizado = await checkPreautorizacion(numero_dpi, residente_id);
+  const preautorizado = await checkPreautorizacion(numero_dpi, residente_id, normalizarPlaca(placa) || null);
 
   const client = await pool.connect();
   try {
@@ -219,7 +220,7 @@ export const registrarAcceso = async (req: Request, res: Response) => {
           await client.query('ROLLBACK');
           return res.status(409).json({ error: 'Este QR requiere registrar la placa del vehículo' });
         }
-        if (inv.placa && inv.placa.trim().toUpperCase() !== String(placa).trim().toUpperCase()) {
+        if (inv.placa && normalizarPlaca(inv.placa) !== normalizarPlaca(placa)) {
           await client.query('ROLLBACK');
           return res.status(409).json({ error: 'La placa no coincide con la invitación' });
         }
@@ -233,12 +234,14 @@ export const registrarAcceso = async (req: Request, res: Response) => {
       );
     }
 
-    // Register vehicle if plate provided
+    // Register vehicle if plate provided. Se guarda en la forma canónica (P123ABC) aunque llegue
+    // como «p-123 abc»: así la búsqueda de salida, la lista negra y las preautorizaciones comparan igual.
     let vehiculo_id: string | null = null;
-    if (placa) {
+    const placaCanonica = normalizarPlaca(placa);
+    if (placaCanonica) {
       const vehiculoResult = await client.query(
         'INSERT INTO vehiculos (visitante_id, placa) VALUES ($1, $2) RETURNING id',
-        [visitante_id, placa]
+        [visitante_id, placaCanonica]
       );
       vehiculo_id = vehiculoResult.rows[0].id;
     }
@@ -422,6 +425,11 @@ export const getAccesoActivo = async (req: Request, res: Response) => {
   if (!placa) {
     return res.status(400).json({ error: 'Parámetro requerido: placa' });
   }
+  // «p-123 abc», «P123ABC» y «P-123ABC» son la misma placa; también contra filas guardadas antes de normalizar.
+  const placaCanonica = normalizarPlaca(placa);
+  if (!placaCanonica) {
+    return res.status(400).json({ error: 'Parámetro placa inválido' });
+  }
 
   const ts = tenantFilter(req.user!, 'ra');
   const placaOffset = ts.params.length + 1;
@@ -445,11 +453,11 @@ export const getAccesoActivo = async (req: Request, res: Response) => {
        JOIN vehiculos   veh ON ra.vehiculo_id   = veh.id
        ${ts.joinClause}
        WHERE ${ts.whereClause}
-         AND UPPER(veh.placa) = UPPER($${placaOffset})
+         AND ${sqlPlacaNormalizada('veh.placa')} = $${placaOffset}
          AND ra.timestamp_salida IS NULL
        ORDER BY ra.timestamp_entrada DESC
        LIMIT 1`,
-      [...ts.params, placa]
+      [...ts.params, placaCanonica]
     );
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'No hay acceso activo para esa placa' });

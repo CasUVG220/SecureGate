@@ -104,7 +104,8 @@ fn aplicar_snapshot(conn: &Connection, snap: &Value) -> AppResult<(usize, usize,
                 p["residente_id"].as_str().unwrap_or_default(),
                 p["nombre_visitante"].as_str().unwrap_or_default(),
                 p["numero_dpi"].as_str(),
-                p["placa"].as_str(),
+                // Canónica (P123ABC) aunque el servidor tenga filas viejas con guion o en minúsculas.
+                p["placa"].as_str().map(crate::placa::normalizar).filter(|x| !x.is_empty()),
                 dia(&p["fecha_inicio"]).unwrap_or_default(),
                 dia(&p["fecha_fin"]),
             ],
@@ -472,7 +473,7 @@ mod tests {
                 {"id": "b2", "numero_dpi": null, "visitante_nombre": null, "razon": "Vehículo", "fecha_fin": null, "residente_id": null, "placa": "p-123 abc"}
             ],
             "preautorizaciones": [{"id": "p1", "residente_id": "r1", "nombre_visitante": "P", "numero_dpi": "9",
-                                   "placa": null, "fecha_inicio": "2026-09-01T06:00:00.000Z", "fecha_fin": "2026-09-30T06:00:00.000Z"}]
+                                   "placa": "p-123 abc", "fecha_inicio": "2026-09-01T06:00:00.000Z", "fecha_fin": "2026-09-30T06:00:00.000Z"}]
         });
         assert_eq!(aplicar_snapshot(&c, &snap).unwrap(), (1, 2, 1));
         let ids: Vec<String> = c.prepare("SELECT id FROM residentes_local").unwrap()
@@ -480,6 +481,9 @@ mod tests {
         assert_eq!(ids, ["r1"], "el residente viejo desapareció");
         let fin: String = c.query_row("SELECT fecha_fin FROM preautorizaciones_local", [], |r| r.get(0)).unwrap();
         assert_eq!(fin, "2026-09-30");
+        // La placa de la preautorización se guarda canónica aunque el servidor la tenga con guion o en minúsculas.
+        let pre_placa: String = c.query_row("SELECT placa FROM preautorizaciones_local WHERE id = 'p1'", [], |r| r.get(0)).unwrap();
+        assert_eq!(pre_placa, "P123ABC");
         // El bloqueo solo de vehículo llega con DPI vacío y la placa normalizada.
         let (dpi, placa): (String, Option<String>) = c
             .query_row("SELECT numero_dpi, placa FROM blacklist_local WHERE id = 'b2'", [], |r| Ok((r.get(0)?, r.get(1)?)))

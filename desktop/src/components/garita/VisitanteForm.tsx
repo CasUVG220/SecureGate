@@ -165,7 +165,7 @@ export const VisitanteForm = forwardRef<VisitanteFormHandle, Props>(function Vis
           ref={placaRef}
           label="Placa (opcional)"
           className={CAMPO_GRANDE}
-          placeholder="P123ABC"
+          placeholder="P-123ABC"
           value={placa}
           onChange={e => setPlaca(e.target.value.toUpperCase())}
           error={placa && !esValida(placa) ? 'Formato: prefijo + 3 dígitos + 3 letras' : null}

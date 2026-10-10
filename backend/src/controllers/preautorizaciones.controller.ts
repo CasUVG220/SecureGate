@@ -2,6 +2,9 @@ import { Request, Response } from 'express';
 import pool from '../db/pool';
 import { tenantFilter, ownershipClause, ownershipParams } from '../utils/tenant';
 import { serverError, esUuid } from '../utils/http';
+import { normalizarPlaca, placaPlausible, sqlPlacaNormalizada, PLACA_MIN, PLACA_MAX } from '../utils/placa';
+
+const ERROR_PLACA = `La placa debe tener entre ${PLACA_MIN} y ${PLACA_MAX} letras o números`;
 
 /**
  * Verifica si existe una preautorización activa y vigente para el residente que
@@ -22,14 +25,14 @@ export const checkPreautorizacion = async (
      WHERE residente_id = $1
        AND (
          numero_dpi = $2
-         OR (numero_dpi IS NULL AND placa IS NOT NULL AND $3::text IS NOT NULL AND UPPER(placa) = UPPER($3::text))
+         OR (numero_dpi IS NULL AND placa IS NOT NULL AND $3::text IS NOT NULL AND ${sqlPlacaNormalizada('placa')} = $3::text)
        )
        AND activo = TRUE
        AND fecha_inicio <= NOW()::date
        AND fecha_fin IS NOT NULL
        AND fecha_fin >= NOW()::date
      LIMIT 1`,
-    [residente_id, numero_dpi, placa ?? null]
+    [residente_id, numero_dpi, normalizarPlaca(placa) || null]
   );
   return result.rows.length > 0;
 };
@@ -50,8 +53,9 @@ export const buscarPreautorizacion = async (req: Request, res: Response) => {
     extraParams.push(dpi);
   }
   if (placa) {
-    conditions.push(`UPPER(p.placa) = UPPER($${extraParams.length + 1})`);
-    extraParams.push(placa);
+    // Se compara normalizada (P123ABC): «p-123 abc» y «P123ABC» son el mismo vehículo, también en las filas viejas.
+    conditions.push(`${sqlPlacaNormalizada('p.placa')} = $${extraParams.length + 1}`);
+    extraParams.push(normalizarPlaca(placa));
   }
 
   try {
@@ -101,7 +105,8 @@ export const getPreautorizaciones = async (req: Request, res: Response) => {
 };
 
 export const createPreautorizacion = async (req: Request, res: Response) => {
-  const { residente_id, nombre_visitante, numero_dpi, placa, fecha_inicio, fecha_fin } = req.body;
+  const { residente_id, nombre_visitante, numero_dpi, placa: placaCruda, fecha_inicio, fecha_fin } = req.body;
+  const placa = normalizarPlaca(placaCruda);       // se guarda siempre en la forma canónica (P123ABC)
 
   if (!residente_id || !nombre_visitante || !fecha_inicio) {
     return res.status(400).json({
@@ -110,6 +115,9 @@ export const createPreautorizacion = async (req: Request, res: Response) => {
   }
   if (!numero_dpi && !placa) {
     return res.status(400).json({ error: 'Se requiere al menos DPI o placa del visitante' });
+  }
+  if (placa && !placaPlausible(placa)) {
+    return res.status(400).json({ error: ERROR_PLACA });
   }
 
   try {
@@ -197,13 +205,17 @@ export const getMisPreautorizaciones = async (req: Request, res: Response) => {
 };
 
 export const createMisPreautorizacion = async (req: Request, res: Response) => {
-  const { nombre_visitante, numero_dpi, placa, fecha_inicio, fecha_fin } = req.body;
+  const { nombre_visitante, numero_dpi, placa: placaCruda, fecha_inicio, fecha_fin } = req.body;
+  const placa = normalizarPlaca(placaCruda);
 
   if (!nombre_visitante || !fecha_inicio) {
     return res.status(400).json({ error: 'Campos requeridos: nombre_visitante, fecha_inicio' });
   }
   if (!numero_dpi && !placa) {
     return res.status(400).json({ error: 'Se requiere al menos DPI o placa del visitante' });
+  }
+  if (placa && !placaPlausible(placa)) {
+    return res.status(400).json({ error: ERROR_PLACA });
   }
 
   const residente = await getResidenteIdFromUser(req.user!.id);

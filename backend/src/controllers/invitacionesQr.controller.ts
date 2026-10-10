@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import pool from '../db/pool';
 import { getConfigQrEfectiva } from './configQr.controller';
 import { serverError } from '../utils/http';
+import { normalizarPlaca, placaPlausible, PLACA_MIN, PLACA_MAX } from '../utils/placa';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -34,7 +35,8 @@ export const getMisInvitaciones = async (req: Request, res: Response) => {
 };
 
 export const createMisInvitacion = async (req: Request, res: Response) => {
-  const { tipo, etiqueta, nombre_visitante, numero_dpi, placa, fecha_inicio, fecha_fin, usos_maximos } = req.body;
+  const { tipo, etiqueta, nombre_visitante, numero_dpi, placa: placaCruda, fecha_inicio, fecha_fin, usos_maximos } = req.body;
+  const placa = normalizarPlaca(placaCruda);      // forma canónica (P123ABC), se escriba como se escriba
 
   if (tipo !== 'grupal' && tipo !== 'individual') {
     return res.status(400).json({ error: "tipo debe ser 'grupal' o 'individual'" });
@@ -60,6 +62,9 @@ export const createMisInvitacion = async (req: Request, res: Response) => {
     return res.status(400).json({
       error: 'Esta sucursal exige registrar la placa del vehículo para invitaciones QR',
     });
+  }
+  if (placa && !placaPlausible(placa)) {
+    return res.status(400).json({ error: `La placa debe tener entre ${PLACA_MIN} y ${PLACA_MAX} letras o números` });
   }
 
   const usosMaximosFinal: number | null =
