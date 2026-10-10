@@ -28,3 +28,6 @@ backups/
 backend/loadtest/results/activar-codigos.csv
 backend/loadtest/results/*.log
 backend/reports/
+
+# Generado por scripts/render-nginx.sh a partir de nginx/nginx.conf.template
+nginx/nginx.conf

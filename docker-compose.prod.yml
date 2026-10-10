@@ -8,11 +8,13 @@
 #   1. Apuntar el dominio (registro A) a la IP publica del servidor.
 #   2. Emitir el certificado, p. ej.:
 #        sudo certbot certonly --standalone -d midominio.com
-#   3. Sustituir DOMINIO por el dominio real en nginx/nginx.conf.
+#   3. Definir DOMINIO (o PUBLIC_URL) en el entorno o en .env. nginx/nginx.conf NO se
+#      edita a mano: se genera desde nginx/nginx.conf.template con
+#      scripts/render-nginx.sh, que falla si el dominio falta o es inválido.
 #   4. Exportar las variables del bloque `environment` (o crear un .env).
 #
-# Uso:
-#   docker compose -f docker-compose.prod.yml up --build -d
+# Uso (recomendado: ./scripts/deploy.sh, que valida y genera nginx antes de levantar):
+#   ./scripts/render-nginx.sh && docker compose -f docker-compose.prod.yml up --build -d
 
 services:
 
@@ -129,7 +131,14 @@ services:
     security_opt:
       - no-new-privileges:true
     volumes:
-      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      # Generado por scripts/render-nginx.sh (deploy.sh lo corre). Si no existe, Compose
+      # aborta en vez de crear un directorio vacío y dejar a nginx en crash-loop.
+      - type: bind
+        source: ./nginx/nginx.conf
+        target: /etc/nginx/nginx.conf
+        read_only: true
+        bind:
+          create_host_path: false
       - /etc/letsencrypt:/etc/letsencrypt:ro
     depends_on:
       - frontend
