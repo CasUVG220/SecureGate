@@ -18,6 +18,7 @@ Las pruebas de base de datos corrieron **solo** contra el Postgres desechable lo
 | SCRUM-110 | H03 · lista negra por placa | **HECHO** |
 | SCRUM-111 | H04 · garita sin cámara | **HECHO** (la salida sin red se deja en línea, decisión documentada) |
 | SCRUM-112 | H05+H07 · pagos, avisos y confirmaciones | **HECHO** |
+| SCRUM-113 | H06+H08 · fechas, placa y glosario | **HECHO** |
 
 *(la tabla se completa ticket por ticket)*
 
@@ -308,3 +309,40 @@ dashboard (+ reservas). Frontend +29: `Toast`, `usePolling`, `TicketChat.sondeo`
 `PagosPage`, `AdminReservasPage`.
 
 **Suites tras el ticket:** backend 637 unitarias, 86 integración/regresión, `tsc` limpio; frontend 249 y build; desktop 100 + Rust 72 y build.
+
+---
+
+## SCRUM-113 — H06 + H08 · Glosario, fechas y placa · **HECHO**
+
+**Commits:** `83c9ada` (placa en backend y escritorio) · `e9a05ad` (fechas y campo de placa en la web) · el de glosario/menú (ver `git log --grep SCRUM-113`).
+**Verificado contra el código:** 32 llamadas `toLocale*String` (el QA decía 32; contadas hoy: 31 de fecha/hora + 4 de rangos en `charts/format.ts`), ninguna con zona;
+las reservas usaban `timeZone: 'UTC'`; «hoy» se calculaba con `toISOString().slice(0, 10)` en 5 pantallas (**defecto real**: a partir de las 6 pm de
+Guatemala el formulario arrancaba con la fecha de mañana); los ejemplos de placa eran `P123ABC` y `P-123ABC` y la placa se guardaba tal cual se tecleaba.
+
+**Fechas — `frontend/src/utils/fecha.ts`**
+- Toda hora en **America/Guatemala** (no en la del navegador), mes abreviado y escrito («1 nov 2026»; EN «Nov 1, 2026»), 24 h, tablas propias de meses y días
+  (no dependen de cómo escriba ICU «sept.»/«nov.»), «—» ante vacío o inválido.
+- Dos clases de valor: **instantes** (`formatearFecha`, `formatearFechaHora`, `formatearHora`…) y **días de calendario** de columnas DATE (`formatearDia`,
+  `formatearDiaMes`, `formatearRangoDias`…), que se leen sin corrimiento de zona (`2026-12-10T00:00Z` sería el 9 en Guatemala).
+- `hoyEnZona()` sustituye al cálculo en UTC. Los tres formateadores de `charts/format.ts` pasan por aquí.
+- **Prueba de regresión** `sinToLocale.test.ts` (parser de TypeScript): falla si aparece `toLocaleDateString/TimeString/String` o `new Date().toISOString().slice(0, 10)`.
+- Nota: los valores `TIMESTAMP` que escribe `NOW()` siguen desfasados 6 h por el defecto de raíz S-17 (Postgres en UTC, Node en America/Guatemala); este formateador
+  muestra el instante que recibe y quedará exacto cuando se corrija S-17 (SCRUM-124, al final).
+
+**Placa — una sola forma**
+- Canónica (se guarda y se compara): `P123ABC`; presentación y entrada: `P-123ABC`.
+- Backend: `utils/placa.ts`; accesos (`vehiculos`), preautorizaciones, invitaciones QR y la búsqueda de salida guardan la forma canónica y comparan **normalizando también
+  la columna** (`regexp_replace(upper(placa), '[^A-Z0-9]', '', 'g')`), así que las filas viejas con guion o minúsculas siguen apareciendo. **No hay migración de datos**
+  (decisión: cero riesgo en producción; un `UPDATE` único sería opcional). Placa absurda → 400. El OCR devuelve la forma canónica.
+  Se corrigió además que `registrarAcceso` no pasaba la placa a `checkPreautorizacion`, por lo que una preautorización solo de placa nunca marcaba la entrada.
+- Web: `PlacaInput` (mayúsculas + guion tras el prefijo, ejemplo único) en garita, salida, preautorizaciones, portal del residente e invitaciones QR; se envía normalizada y se
+  muestra con guion. Escritorio: el espejo de preautorizaciones se guarda canónico, la evaluación local compara normalizado y la cola manda `P123ABC`.
+
+**Glosario — `docs/glosario.md`**
+- **Bloquear** (no «ban»), **Solicitud** (no «ticket»; la API sigue `tickets`), **Garitas y códigos de activación** (en la web de administración se dice «código», en la app de
+  escritorio «licencia» es el *estado* del equipo), **Reportes** (no «Estadísticas»), **entradas** vs. **cobrado**, **Cargos y mora** (antes «Configuración»), **Reglas de QR**, formatos de
+  fecha/placa/moneda. `glosario.test.ts` hace cumplir ban/ticket/estadísticas en ES y EN.
+- **Entrada propia en el menú para «Reglas de QR»** (`config-qr`): ya no es una pestaña escondida dentro de cargos.
+
+**Pruebas:** frontend +31 (`fecha` 18, `sinToLocale` 2, `glosario` 9, `PlacaInput` 4 y ajustes), integración **I-7** (`placas.int.test.ts`, 14), Rust 74 (+2).
+**Suites tras el ticket:** backend 637 unitarias + 100 integración/regresión + `tsc`; frontend 282 + build; desktop 100 + Rust 74 + build. Todo verde.
