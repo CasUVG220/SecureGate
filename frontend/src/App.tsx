@@ -24,6 +24,7 @@ import TicketsPage            from './pages/TicketsPage';
 import ReservasAdminPage      from './pages/ReservasAdminPage';
 import ReservasPage           from './pages/ReservasPage';
 import AnnouncementsBell      from './components/AnnouncementsBell';
+import MisAnunciosPage        from './pages/MisAnunciosPage';
 import { ToastProvider }      from './components/ui/Toast';
 import { cx }                 from './components/ui/cx';
 import { decodeTokenPayload, getReservas, getTickets } from './services/api';
@@ -42,7 +43,7 @@ const EstadisticasPage = lazy(() => import('./pages/EstadisticasPage'));
 
 type Page =
   | 'dashboard' | 'residentes' | 'pagos' | 'preaut' | 'reportes' | 'config' | 'config-qr' | 'verificacion' | 'agentes' | 'garitas' | 'blacklist' | 'anuncios' | 'tickets' | 'reservas'
-  | 'portal' | 'mis-reservas'
+  | 'portal' | 'mis-reservas' | 'mis-anuncios'
   | 'owner-dashboard' | 'owner-empresas' | 'owner-empresa-detail' | 'owner-audit'
   | 'ae-dashboard' | 'ae-sucursales';
 
@@ -114,6 +115,7 @@ const RESIDENTE_NAV: NavGroup[] = [
   { labelKey: 'nav.group.portal', items: [
     { key: 'portal',       labelKey: 'nav.portal',       d: ICON.home },
     { key: 'mis-reservas', labelKey: 'nav.reservations', d: ICON.calendar },
+    { key: 'mis-anuncios',  labelKey: 'nav.announcements', d: ICON.announce },
   ]},
 ];
 
@@ -406,6 +408,7 @@ function AppShell() {
       case 'tickets':      return <TicketsPage />;
       case 'reservas':     return <ReservasAdminPage />;
       case 'mis-reservas': return <ReservasPage />;
+      case 'mis-anuncios': return <MisAnunciosPage />;
       case 'portal':       return <ResidentePage requestedTab={portalTab} tabNonce={portalTabNonce} />;
       case 'ae-dashboard':   return <AdminEmpresaDashboard />;
       case 'ae-sucursales':  return <GestionSucursales />;
@@ -524,7 +527,7 @@ function AppShell() {
         </div>
 
         <div className="flex items-center gap-1 sm:gap-2">
-          {isResidente && <AnnouncementsBell />}
+          {isResidente && <AnnouncementsBell onVerTodos={() => navigate('mis-anuncios')} />}
 
           <button
             type="button"

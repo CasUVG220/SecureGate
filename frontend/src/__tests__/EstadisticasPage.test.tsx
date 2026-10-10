@@ -41,7 +41,11 @@ describe('EstadisticasPage', () => {
     expect(within(resumen).getByText('Q2,400')).toBeInTheDocument();
     expect(within(resumen).getByText('frente a Q3,000 del periodo anterior')).toBeInTheDocument();
     expect(within(resumen).getByText('75%')).toBeInTheDocument();
-    expect(within(resumen).getByText('2 de 5')).toBeInTheDocument();
+    // Solo cuatro cifras arriba (SCRUM-115 / H11): la de solicitudes pasó a la sección Comunidad, con su gráfico.
+    expect(within(resumen).getAllByRole('heading')).toHaveLength(1);                 // la cifra que manda
+    expect(within(resumen).getAllByRole('listitem')).toHaveLength(3);                // y tres filas: 1 + 3 = 4 cifras
+    expect(within(resumen).queryByText('2 de 5')).not.toBeInTheDocument();
+    expect(screen.getByText('2 de 5 resueltas')).toBeInTheDocument();
     // Sin tarjetas de adorno: la variación va escrita, no en píldoras.
     expect(screen.queryByText('nuevo')).not.toBeInTheDocument();
 
@@ -107,7 +111,7 @@ describe('EstadisticasPage', () => {
     mockDescargarAccesos.mockRejectedValueOnce(new Error('No se pudo generar el reporte'));
     renderPagina();
     await screen.findByText('Lo más importante');
-    fireEvent.click(screen.getByRole('button', { name: 'Descargar CSV: Registro de accesos' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Descargar CSV: Reporte de entradas' }));
     expect(await screen.findByText('No se pudo generar el reporte')).toBeInTheDocument();
     expect(mockDescargarAccesos).toHaveBeenCalledWith('2026-08-26', '2026-09-24');
   });

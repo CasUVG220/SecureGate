@@ -5,9 +5,9 @@ import {
   decodeTokenPayload,
   type Anuncio, type AnuncioPrioridad,
 } from '../services/api';
-import { Badge, Button, DataTable, EmptyState, Input, Modal, Textarea, useToast, type Column, useConfirmacion } from '../components/ui';
+import { Badge, Button, DataTable, EmptyState, Input, Modal, ROW_ICON, RowActions, Textarea, useToast, type Column, useConfirmacion } from '../components/ui';
 import { useTranslation } from '../i18n/useTranslation';
-import { formatearDia, formatearFecha, hoyEnZona } from '../utils/fecha';
+import { diaISO, formatearDia, formatearFecha, hoyEnZona } from '../utils/fecha';
 
 const PRIORIDADES: { value: AnuncioPrioridad; labelKey: string }[] = [
   { value: 'normal',     labelKey: 'announce.prioNormal' },
@@ -152,6 +152,16 @@ export default function AnunciosPage() {
 
   const fmtDate = (d: string | null) => d ? formatearFecha(d) : null;
 
+  /** Si el anuncio todavía no empieza, ya terminó o está a la vista de los residentes (días de calendario). */
+  const estadoVigencia = (a: Anuncio): 'futuro' | 'vencido' | 'vigente' => {
+    const hoy = hoyEnZona();
+    const desde = diaISO(a.vigente_desde) ?? '';
+    const hasta = diaISO(a.vigente_hasta);
+    if (desde > hoy) return 'futuro';
+    if (hasta && hasta < hoy) return 'vencido';
+    return 'vigente';
+  };
+
   const vigencia = (a: Anuncio): string => {
     const desde = fmtDate(a.vigente_desde) ?? '—';
     const hasta = a.vigente_hasta ? fmtDate(a.vigente_hasta) : t('announce.indefinite');
@@ -189,16 +199,45 @@ export default function AnunciosPage() {
       ),
     },
     { key: 'vigencia', header: t('announce.colValidity'), className: 'whitespace-nowrap text-xs text-gray-400', cell: a => vigencia(a) },
-    { key: 'lecturas', header: t('announce.colReads'), align: 'center', className: 'text-gray-300', cell: a => a.total_lecturas ?? 0 },
+    {
+      // «Lecturas» sola decía poco (y un 0 parecía un fallo): se explica qué es y por qué puede ser cero.
+      key: 'lecturas',
+      header: (
+        <span className="block">
+          {t('announce.colReads')}
+          <span className="block text-2xs font-normal normal-case tracking-normal text-gray-400">{t('announce.colReadsHint')}</span>
+        </span>
+      ),
+      align: 'center',
+      cell: a => {
+        const leidas = a.total_lecturas ?? 0;
+        const total = a.total_residentes;
+        const nota = leidas > 0
+          ? (total !== undefined && leidas >= total ? t('announce.readsAll') : null)
+          : estadoVigencia(a) === 'futuro' ? t('announce.readsNotYet')
+          : estadoVigencia(a) === 'vencido' ? t('announce.readsExpired')
+          : t('announce.readsNone');
+        return (
+          <span className="block">
+            <span className="font-semibold tabular-nums text-gray-100">
+              {total !== undefined ? rellenar(t('announce.reads'), { n: leidas, total }) : leidas}
+            </span>
+            {nota && <span className="block text-2xs text-gray-400">{nota}</span>}
+          </span>
+        );
+      },
+    },
     {
       key: 'acciones', header: t('common.actions'), align: 'right', actions: true,
       cell: a => (
-        <div className="flex justify-end gap-2">
-          <Button size="sm" variant="ghost" onClick={() => openEdit(a)}>{t('common.edit')}</Button>
-          <Button size="sm" variant="ghost" onClick={() => handleDelete(a)} className="text-danger-400 hover:bg-danger-500/12 hover:text-danger-400">
-            {t('common.delete')}
-          </Button>
-        </div>
+        <RowActions
+          align="end"
+          menuLabel={`${t('common.actions')}: ${a.titulo}`}
+          actions={[
+            { id: 'editar', label: t('common.edit'), icon: ROW_ICON.edit, tone: 'primary', onClick: () => openEdit(a) },
+            { id: 'eliminar', label: t('common.delete'), icon: ROW_ICON.trash, tone: 'danger', onClick: () => handleDelete(a) },
+          ]}
+        />
       ),
     },
   ];

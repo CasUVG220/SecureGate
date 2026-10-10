@@ -3,12 +3,10 @@ import { getMisAnuncios, marcarAnuncioLeido, type MiAnuncio, type AnuncioPriorid
 import { Skeleton } from './Skeleton';
 import { useTranslation } from '../i18n/useTranslation';
 import { formatearFecha } from '../utils/fecha';
+import { alCambiarAnuncios, avisarAnunciosCambiaron } from '../utils/eventos';
+import { Badge, type BadgeTone } from './ui';
 
-const PRIORIDAD_BADGE: Record<AnuncioPrioridad, string> = {
-  normal:     'bg-gray-700 text-gray-300',
-  importante: 'bg-amber-900/50 text-amber-400',
-  urgente:    'bg-red-900/60 text-red-400',
-};
+const PRIORIDAD_TONE: Record<AnuncioPrioridad, BadgeTone> = { normal: 'neutral', importante: 'warning', urgente: 'danger' };
 
 const PRIORIDAD_LABEL: Record<AnuncioPrioridad, string> = {
   normal:     'announce.prioNormal',
@@ -16,7 +14,12 @@ const PRIORIDAD_LABEL: Record<AnuncioPrioridad, string> = {
   urgente:    'announce.prioUrgente',
 };
 
-export default function AnnouncementsBell() {
+interface Props {
+  /** Lleva a la página de anuncios (el pie del panel). */
+  onVerTodos?: () => void;
+}
+
+export default function AnnouncementsBell({ onVerTodos }: Props = {}) {
   const { t } = useTranslation();
   const [anuncios, setAnuncios] = useState<MiAnuncio[]>([]);
   const [open, setOpen]         = useState(false);
@@ -35,6 +38,9 @@ export default function AnnouncementsBell() {
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { load(); }, []);
 
+  // La página de anuncios también marca como leído: la campana se entera y recalcula sus pendientes.
+  useEffect(() => alCambiarAnuncios('campana', load), []);
+
   const unreadCount = anuncios.filter(a => a.leido_at === null).length;
 
   const togglePanel = () => {
@@ -50,6 +56,7 @@ export default function AnnouncementsBell() {
     ));
     try {
       await marcarAnuncioLeido(a.id);
+      avisarAnunciosCambiaron('campana');
     } catch {
       // Revert on failure
       setAnuncios(prev => prev.map(x =>
@@ -129,9 +136,8 @@ export default function AnnouncementsBell() {
                       }`}
                     >
                       <div className="flex items-center gap-2 mb-1">
-                        <span className={`inline-block text-[10px] font-semibold px-2 py-0.5 rounded-full ${PRIORIDAD_BADGE[a.prioridad]}`}>
-                          {t(PRIORIDAD_LABEL[a.prioridad])}
-                        </span>
+                        <Badge tone={PRIORIDAD_TONE[a.prioridad]}>{t(PRIORIDAD_LABEL[a.prioridad])}</Badge>
+                        {a.es_personal && <Badge tone="info">{t('announcements.personal')}</Badge>}
                         {unread && (
                           <span className="inline-block text-[10px] font-bold text-red-400">● {t('announcements.newTag')}</span>
                         )}
@@ -148,6 +154,18 @@ export default function AnnouncementsBell() {
                 })
               )}
             </div>
+
+            {onVerTodos && (
+              <div className="border-t border-white/10 px-4 py-2.5 text-center">
+                <button
+                  type="button"
+                  onClick={() => { setOpen(false); onVerTodos(); }}
+                  className="text-sm font-semibold text-brand-400 underline-offset-4 hover:underline"
+                >
+                  {t('announcements.seeAll')}
+                </button>
+              </div>
+            )}
           </div>
         </>
       )}

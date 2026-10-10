@@ -309,7 +309,7 @@ export default function EstadisticasPage({ onNavigate }: { onNavigate?: (pagina:
               </div>
             )}
 
-            {/* ── Cifras del periodo: una manda, el resto se compara ── */}
+            {/* ── Cifras del periodo: cuatro, no más. Una manda (con su gráfico) y tres se comparan. ── */}
             <ResumenCifras
               ariaLabel={t('stats.summary')}
               principal={{
@@ -352,18 +352,6 @@ export default function EstadisticasPage({ onNavigate }: { onNavigate?: (pagina:
                     etiqueta: t('stats.kpi.upToDate'),
                   },
                   nota: rellenar(t('stats.kpi.upToDateNote'), { al_dia: n(d.cartera.al_dia), total: n(d.cartera.residentes), mora: n(d.cartera.mora) }),
-                },
-                {
-                  id: 'solicitudes',
-                  etiqueta: t('stats.kpi.ticketsResolved'),
-                  valor: rellenar(t('stats.kpi.ticketsValue'), { cerradas: n(d.solicitudes.por_estado.cerrado), total: n(d.solicitudes.total) }),
-                  barra: {
-                    tipo: 'proporcion',
-                    fraccion: d.solicitudes.total ? d.solicitudes.por_estado.cerrado / d.solicitudes.total : 0,
-                    tono: 'series',
-                    etiqueta: t('stats.kpi.ticketsResolved'),
-                  },
-                  nota: rellenar(t('stats.kpi.ticketsOpen'), { n: n(d.solicitudes.por_estado.abierto) }),
                 },
               ]}
             />
@@ -529,6 +517,13 @@ export default function EstadisticasPage({ onNavigate }: { onNavigate?: (pagina:
             <Seccion id="stats-comunidad" titulo={t('stats.section.community')} pista={t('stats.section.communityHint')}>
               <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
                 <ChartCard titulo={t('stats.chart.ticketsTitle')} descripcion={t('stats.chart.ticketsDesc')}>
+                  <p className="mb-4 text-sm text-gray-300">
+                    <span className="font-semibold text-gray-50">
+                      {rellenar(t('stats.kpi.ticketsNote'), { cerradas: n(d.solicitudes.por_estado.cerrado), total: n(d.solicitudes.total) })}
+                    </span>
+                    <span className="mx-1.5" aria-hidden="true">·</span>
+                    {rellenar(t('stats.kpi.ticketsOpen'), { n: n(d.solicitudes.por_estado.abierto) })}
+                  </p>
                   <SegmentedBar
                     lang={lang}
                     formato={n}

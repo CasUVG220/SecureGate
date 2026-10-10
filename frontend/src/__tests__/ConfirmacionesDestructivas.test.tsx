@@ -46,7 +46,8 @@ describe('confirmaciones destructivas', () => {
     m('deleteAnuncio').mockResolvedValue(undefined);
     render(<AnunciosPage />);
     await screen.findAllByText('Corte de agua');
-    fireEvent.click((await screen.findAllByRole('button', { name: 'Eliminar' }))[0]);
+    fireEvent.click((await screen.findAllByRole('button', { name: /Acciones: Corte de agua/ }))[0]);
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Eliminar' }));
     expect(m('deleteAnuncio')).not.toHaveBeenCalled();
     await confirmarEn('¿Eliminar el anuncio «Corte de agua»?', /No se puede deshacer/, 'Eliminar');
     await waitFor(() => expect(m('deleteAnuncio')).toHaveBeenCalledWith('a1'));
@@ -59,7 +60,8 @@ describe('confirmaciones destructivas', () => {
     }]);
     render(<AnunciosPage />);
     await screen.findAllByText('Corte de agua');
-    fireEvent.click((await screen.findAllByRole('button', { name: 'Eliminar' }))[0]);
+    fireEvent.click((await screen.findAllByRole('button', { name: /Acciones: Corte de agua/ }))[0]);
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Eliminar' }));
     const dialogo = await screen.findByRole('dialog', { name: '¿Eliminar el anuncio «Corte de agua»?' });
     fireEvent.click(within(dialogo).getByRole('button', { name: 'Cancelar' }));
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
