@@ -22,6 +22,7 @@ Las pruebas de base de datos corrieron **solo** contra el Postgres desechable lo
 | SCRUM-114 | H09+H10 · pasos tras las altas y avisos de visita | **HECHO** |
 | SCRUM-115 | H11+H12 · reportes, anuncios y consistencia visual | **HECHO** (el logo se guarda dentro de la base como imagen pequeña: decisión documentada) |
 | SCRUM-129 | Deuda de seguridad S-11, S-13, S-14, S-15 | **HECHO** (S-15 revisada, Tauri 2.12 pendiente de validar en Windows) |
+| SCRUM-125 | RNF-10 · auditoría completa y límites de tasa | **HECHO** (se agregan los eventos de 2FA cuando se haga SCRUM-123) |
 
 *(la tabla se completa ticket por ticket)*
 
@@ -463,3 +464,41 @@ para la validación en Windows (SCRUM-157; ver «Pendientes para humanos»).
 `backend/DEUDA_TECNICA.md` y `backend/securitytest/RESULTADOS.md` (sección l-ter) actualizados con estas salidas.
 
 **Pruebas:** backend unitarias +8 (646), integración sin cambios en cantidad (121; R-3 actualizada); frontend +4 (389); desktop vitest +3 (105), Rust +3 (77). **Todo verde** (backend, `tsc`, frontend + build, desktop + build, Rust).
+
+
+---
+
+## SCRUM-125 — RNF-10 · Auditoría completa de acciones sensibles y límites de tasa · **HECHO**
+
+**Commits:** `c8e8f27` (lista de acciones y cobertura · Jira SCRUM-179) · `4a5addf` (límites con rastro y límites nuevos · SCRUM-180) · `d54c96e` (panel de auditoría y decisión S-10).
+**Criterios de aceptación (Jira, solo lectura):** lista de acciones sensibles y prueba de que cada una guarda usuario, fecha e IP (meta 100 %); los intentos bloqueados por límite de tasa también auditados; decisión documentada sobre S-10;
+el panel de auditoría muestra las acciones nuevas y se puede filtrar por ellas. **Verificado contra el código** (el QA no tenía el texto de RNF-10, así que se tomó la definición de los criterios): de 76 rutas que modifican algo, 59 se auditaban; faltaban 17.
+La `auditLog` de cada ruta iba **después** de los guards de rol y de los limitadores, así que un rechazo por rol o por límite nunca llegaba a la bitácora (se había arreglado a mano solo para el borrado definitivo, S-07).
+
+**Lista y cobertura (SCRUM-179)**
+- `docs/acciones_sensibles.md`: las **75 acciones** auditadas (qué son, ruta, quién, límite de tasa) y las **4 exenciones** con su porqué (`refresh` bueno, preferencias propias, acuse de lectura, latido del equipo).
+- **Huecos cerrados:** `LOGOUT`, `REFRESH_RECHAZADO` (solo los rechazos: token desconocido, vencido, revocado, usuario dado de baja, empresa suspendida), `PAGO_TRANSFERENCIA_ENVIADA`, borrado de avisos del residente, `OCR_DPI`/`OCR_PLACA`, `ANUNCIO_EDITADO`,
+  `TICKET_CREADO`/`CERRADO`/`MENSAJE_ENVIADO` (el texto del chat **no** se guarda en la bitácora), `LICENCIA_ACTIVADA`, las tres tareas manuales del owner y la descarga de CSV con datos personales (`REPORTE_*_EXPORTADO`).
+- **`ACCESO_DENEGADO`:** un 403 de un guard de rol (alguien con sesión probando rutas de administración) deja huella en el propio guard, con guard, método, ruta y rol. Los 401 sin sesión no (ruido anónimo).
+- **Rutas sin sesión atribuyen a la persona** cuando se sabe quién es: login correcto, logout y aceptar una invitación (vía `res.locals.auditoriaUsuarioId`) y a la sucursal al activar un equipo; con contraseña errada solo queda el correo intentado.
+- **Pruebas:** `auditoria.cobertura.test.ts` recorre el router REAL (el middleware lleva una marca) y falla si una ruta que modifica algo no se audita ni está exenta, o si la lista documentada y el código dejan de coincidir;
+  `auditoria.int.test.ts` (I-11) ejecuta **cada una de las 75 acciones** contra Postgres con el rol correcto y exige fila con usuario (cuando hay sesión), fecha (medida en la base, no en JS: ver S-17) e IP, con el `status_code` real
+  y 2xx en las que deben salir bien; la última prueba comprueba que la tabla cubre todas las acciones del código. **Cobertura: 100 %.**
+
+**Límites de tasa (SCRUM-180)**
+- **`crearLimitador()`** (fábrica común): cada 429 deja una fila con la acción que se intentaba, la persona (si hay sesión), la IP y el límite en `datos_nuevos`. Migrados: login (por IP y por cuenta, con el correo intentado y sin la contraseña),
+  refresh/logout, invitaciones públicas, activar equipos, heartbeat, borrado definitivo, OCR y el general por IP. El borrado definitivo conserva su comportamiento (S-07).
+- **El general por IP audita UNA fila por IP y minuto** (con la cuenta de lo callado): es anónimo, y una inundación de bloqueos no debe ser una inundación de escrituras en la base. Los de ruta auditan cada bloqueo (ya están acotados por el general).
+- **Límites nuevos por persona** (no por IP; un tercero tras el mismo NAT no agota el cupo ajeno): crear solicitudes 10/15 min, chat 40/min, pago con tarjeta 10/15 min (vector de «card testing»), comprobantes de transferencia 10/15 min;
+  el OCR pasa de por IP a por usuario. Pruebas **I-12** y **I-13**.
+- **Decisión S-10 (bloqueo de login por cuenta): se mantiene**, con alternativas descartadas y compensaciones documentadas en `backend/DEUDA_TECNICA.md` (bloqueos auditados y filtrables, solo cuenta fallos, no corta sesiones abiertas, 2FA para administradores).
+
+**Panel de auditoría**
+- La lista de acciones del filtro salía de un arreglo escrito a mano con 11 de ~75; ahora la sirve `GET /api/audit-logs/acciones` (las que existen, con su cantidad), agrupada por tema y con nombre legible en español e inglés.
+  Filtros nuevos: **resultado** (correctas / rechazadas / bloqueadas por límite / con error) y **persona o correo intentado** (en el servidor; antes filtraba solo la página cargada). El detalle muestra el límite que frenó un intento, la ruta de un acceso denegado
+  y cuántos bloqueos calló el límite general. Fechas con `utils/fecha`. Una prueba exige que cada acción documentada tenga nombre en ambos idiomas y grupo. Prueba **I-14**.
+
+**Observaciones:** (1) `registrarAuditoria` ahora nunca lanza, ni con un pool que falle de forma síncrona; (2) se corrigió que varias pruebas unitarias no simulaban `res.locals`/`req.headers`, que Express siempre trae;
+(3) las lecturas de alto volumen (listados, el padrón de la garita) siguen sin auditarse a propósito, como documenta la lista; (4) cuando se haga SCRUM-123, sus eventos de 2FA entran en la lista y en `auditoria.int.test.ts` (la prueba final lo obliga).
+
+**Pruebas:** backend unitarias +9 (655), integración **I-11 a I-14** (+100: 216 en total); frontend +16 (403). **Suites tras el ticket:** backend 655 unitarias + 216 integración/regresión + `tsc`; frontend 403 + build; desktop 105 + Rust 77 + build. Todo verde.
