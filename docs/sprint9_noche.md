@@ -516,7 +516,7 @@ La `auditLog` de cada ruta iba **después** de los guards de rol y de los limita
 
 **Cómo queda**
 - **Quién:** owner, administrador de empresa y de sucursal (rutas `/api/auth/2fa/*` con `requireAdminSucursal`; el personal de garita y los residentes reciben 403 auditado). **Opcional por persona.**
-- **Activar:** *Mi cuenta* (menú nuevo para los tres roles) → QR + clave en texto → primer código → quedan activos y se muestran **una sola vez** 10 códigos de recuperación (copiar, descargar `.txt`, y no se puede cerrar sin confirmar que se guardaron).
+- **Activar:** *Mi cuenta* (menú nuevo para los tres roles) → QR + clave en texto → primer código **y contraseña** → quedan activos y se muestran **una sola vez** 10 códigos de recuperación (copiar, descargar `.txt`, y no se puede cerrar sin confirmar que se guardaron).
 - **Entrar:** la contraseña correcta responde `200 { requiere_2fa, desafio }` **sin sesión**; la pantalla de acceso pide el código (o uno de recuperación) y `POST /api/auth/2fa/verificar` canjea el desafío (JWT de 5 min con `typ: '2fa'`, que `verifyToken` rechaza como sesión) por la sesión completa.
   Se vuelve a comprobar que la cuenta y la empresa siguen vigentes (423/401) y se exige aunque la persona cambie de rol después.
 - **Desactivar** pide contraseña **y** código; **regenerar códigos** pide un código de la app y anula los anteriores.
@@ -536,6 +536,10 @@ La `auditLog` de cada ruta iba **después** de los guards de rol y de los limita
 6. **Las rutas con sesión responden 400, nunca 401**, ante un código o contraseña errados: el cliente trata todo 401 como «sesión vencida», refresca y manda a la pantalla de acceso.
 7. **Tablas nuevas con `TIMESTAMPTZ`** (`usuario_2fa`, `usuario_2fa_recuperacion`): lo correcto desde el inicio, sin heredar la deuda S-17 del resto del esquema.
 8. **Escritorio:** la app de la garita no tiene segundo paso (los agentes no la usan). Si un administrador con la verificación activa entra allí, ve «Tu cuenta tiene la verificación en dos pasos, que esta app no admite. Inicia sesión desde la versión web» en vez de un error de formato.
+
+**Revisión final del ticket (después de abrir el PR).** Al repasar el diseño con ojos frescos aparecieron dos huecos y se cerraron en un commit aparte:
+- **Activar pide la contraseña** (igual que desactivar). Sin ella, quien solo tuviera una sesión robada podía activar la verificación con **su** teléfono y dejar fuera al titular (re-autenticación ante cambios de seguridad de la cuenta). Una contraseña errada o ausente no gasta intentos del segundo factor ni llega a la bitácora; 2 pruebas de integración y 2 de pantalla.
+- **Degradar a un administrador a agente le quita la verificación** (desde *Personal*): la app de escritorio no tiene segundo paso y la web no admite agentes, así que quien conservaba el segundo factor activo quedaba atrapado sin poder entrar a ningún lado hasta que alguien se lo restableciera. Queda en la bitácora (`dos_pasos_quitada`). Bajar de rol por SQL **no** lo quita (el ingreso lo sigue exigiendo). De paso se probó que **eliminar definitivamente una empresa** con un administrador que tiene la verificación activa no se atora (las filas caen en cascada).
 
 **Auditoría (RNF-10):** 6 acciones nuevas —`TWOFA_INICIADO`, `TWOFA_ACTIVADO`, `TWOFA_DESACTIVADO`, `TWOFA_CODIGOS_REGENERADOS`, `TWOFA_VERIFICACION`, `TWOFA_RESTABLECIDO`— en `docs/acciones_sensibles.md`, con nombre en español e inglés y detalle legible en el panel del owner
 («Contraseña correcta; falta el código de dos pasos», «Entró con un código de recuperación», «Motivo: persona bloqueada por demasiados intentos»; de paso, el panel ya explica también los motivos de `REFRESH_RECHAZADO`). Cada una tiene su caso en la prueba I-11 (la prueba final lo exige) y **ningún secreto, código ni contraseña** llega a la bitácora (hay una prueba que lo busca).
@@ -631,6 +635,8 @@ Dos pruebas que **afirmaban que el QR exigía red** (`CameraPanelTabs`, `CameraP
 - **Quien pierde la sesión lo sabe:** la web guarda el aviso (`sg_aviso_sesion`) y la pantalla de acceso lo muestra una vez; el escritorio muestra el texto del servidor (la garita sigue registrando entradas).
 - **Auditoría:** acción nueva `REFRESH_REUTILIZADO` en `docs/acciones_sensibles.md`, con nombre en español e inglés en el panel y su caso en la prueba I-11 (la prueba final lo exige). Cada presentación del token viejo queda auditada (la segunda ya no tiene nada que cerrar).
 - **Pruebas:** I-18 (9 casos: familia heredada, reutilización fuera de la gracia, otra sesión de la misma persona intacta, gracia, carrera simultánea, gracia acotada por entorno, cierre de sesión y cambio de contraseña no son robo), 8 unitarias, y la I-1 se adaptó (el token viejo da 401 *pasada la gracia*).
+- **Revisión final.** (1) *Familia ya cerrada:* un token hermano rotado hace un instante (dentro de su gracia) podía emitir un sucesor en una familia que la detección de robo acababa de cerrar; ahora la guarda está en el propio `INSERT` (`WHERE NOT EXISTS … cierre_motivo = 'reutilizacion'`) y también cubre la carrera «la familia se cerró entre la lectura y la rotación». Se comprobó con una mutación que la prueba nueva **falla sin la guarda**.
+  (2) *Riesgo asumido, documentado:* una respuesta de renovación que se pierde y se reintenta pasados 10 s cierra la sesión; en la garita con red inestable el equipo sigue registrando sin conexión pero no sincroniza hasta volver a iniciar sesión. Ajustable con `REFRESH_GRACIA_SEGUNDOS`; el análisis y la receta están en **`docs/refresh_tokens.md`**.
 - `S-06` pasa a ✅ en `backend/DEUDA_TECNICA.md`.
 
 ### S-17 · todas las columnas TIMESTAMP → TIMESTAMPTZ
@@ -646,7 +652,7 @@ Dos pruebas que **afirmaban que el QR exigía red** (`CameraPanelTabs`, `CameraP
 - **Lo que NO cambia (queda documentado en `docs/s17_timestamptz.md`):** las consultas que agrupan por día u hora (`DATE(…)`, `EXTRACT(HOUR …)`, `TO_CHAR(…)`, `CURRENT_DATE`) siguen usando la zona de la sesión de Postgres, UTC: el tablero de entradas por hora, el mapa de calor y la hora del reporte CSV muestran horas UTC (ya era así y no lo introdujo este ticket).
   Con `TIMESTAMPTZ` el arreglo es de una línea por consulta, o de una vez fijando la zona de sesión del pool; se dejó fuera para no cambiar de golpe tableros y reportes. `S-17` pasa a ✅ en `DEUDA_TECNICA.md`.
 
-**Suites tras el ticket:** backend **699** unitarias + **311** integración/regresión + `tsc`; frontend **439** + build; escritorio **109** + build + Rust **97**. Todo verde. (Una corrida completa cayó en tiempos de espera de vitest de 5 s mientras otra aplicación de la máquina saturaba la CPU —carga 13—; con el tiempo de espera ampliado y la máquina más libre las mismas suites pasan completas.)
+**Suites tras el ticket:** backend **699** unitarias + **311** integración/regresión + `tsc`; frontend **439** + build; escritorio **109** + build + Rust **97**. Todo verde. *(La revisión final posterior suma 2 unitarias y 7 de integración en el backend y 2 en el frontend: ver «Resultado final».)* (Una corrida completa cayó en tiempos de espera de vitest de 5 s mientras otra aplicación de la máquina saturaba la CPU —carga 13—; con el tiempo de espera ampliado y la máquina más libre las mismas suites pasan completas.)
 
 
 ---
@@ -659,10 +665,10 @@ Rama `sprint9-noche` (desde `main` actualizado), **65 commits**, 262 archivos (+
 
 | Suite | Línea base | Al final |
 |---|---:|---:|
-| Backend `npm test` (unitarias) | 30 suites · 594 | 35 suites · **699** |
-| Backend integración + regresión (`test:ci`, Postgres desechable) | 6 suites · 25 | 23 suites · **311** |
+| Backend `npm test` (unitarias) | 30 suites · 594 | 35 suites · **701** |
+| Backend integración + regresión (`test:ci`, Postgres desechable) | 6 suites · 25 | 23 suites · **318** |
 | Backend `tsc --noEmit` | limpio | limpio |
-| Frontend `npm test` · build | 22 archivos · 165 | 57 archivos · **439** · build verde |
+| Frontend `npm test` · build | 22 archivos · 165 | 57 archivos · **441** · build verde |
 | Escritorio `npm test` · build | 11 archivos · 79 | 15 archivos · **109** · build verde |
 | Escritorio Rust (`cargo test --lib`) | 65 | **97** |
 
@@ -670,7 +676,7 @@ Rama `sprint9-noche` (desde `main` actualizado), **65 commits**, 262 archivos (+
 
 **CI en GitHub:** el PR #1 corrió los 5 jobs del workflow (integración y regresión, unitarias de backend, frontend y escritorio, y Rust) y **todos pasaron** en la primera ejecución.
 
-**Nota sobre las corridas:** durante la noche otra aplicación de la máquina (un juego) saturó la CPU (carga de 20 a 25) y varias corridas completas de vitest cayeron en sus tiempos de espera de 5 s sin ningún fallo real; frontend y escritorio se repitieron con menos procesos y tiempos ampliados y pasan completos. Las réplicas de los jobs del CI en contenedores Linux (sin esa carga) pasan con los valores por omisión.
+**Nota sobre las corridas:** durante la noche otra aplicación de la máquina (un juego) saturó la CPU (carga de 20 a 25) y varias corridas completas de vitest cayeron en sus tiempos de espera de 5 s sin ningún fallo real; frontend y escritorio se repitieron con menos procesos y tiempos ampliados y pasan completos. Las réplicas de los jobs del CI en contenedores Linux (sin esa carga) pasan con los valores por omisión, y la última corrida completa —ya con la máquina tranquila— también (frontend en 11 s).
 
 ---
 
