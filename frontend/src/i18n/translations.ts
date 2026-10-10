@@ -1468,6 +1468,9 @@ export const translations: Record<string, Record<string, string>> = {
     'audit.motivo.token_vencido': 'token vencido',
     'audit.motivo.token_revocado': 'token revocado',
     'audit.motivo.usuario_inactivo': 'cuenta dada de baja',
+    'audit.accion.REFRESH_REUTILIZADO': 'Sesión cerrada por uso repetido del token',
+    'audit.motivo.token_reutilizado': 'un token ya usado se presentó otra vez (posible robo de sesión)',
+    'login.sesionComprometida': 'Por seguridad cerramos tu sesión: detectamos que se usó dos veces. Inicia sesión de nuevo y, si no fuiste tú, cambia tu contraseña.',
   },
 
   en: {
@@ -2938,5 +2941,8 @@ export const translations: Record<string, Record<string, string>> = {
     'audit.motivo.token_vencido': 'expired token',
     'audit.motivo.token_revocado': 'revoked token',
     'audit.motivo.usuario_inactivo': 'account deactivated',
+    'audit.accion.REFRESH_REUTILIZADO': 'Session closed after a token was reused',
+    'audit.motivo.token_reutilizado': 'an already used token was presented again (possible session theft)',
+    'login.sesionComprometida': 'For your security we closed your session: it was used twice. Sign in again and, if it was not you, change your password.',
   },
 };

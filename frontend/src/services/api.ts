@@ -77,6 +77,24 @@ export const tomarBloqueoGuardado = (): BloqueoEmpresa | null => {
   }
 };
 
+// ── Sesión cerrada por seguridad (S-06) ───────────────────────────────────
+// Si un refresh token ya usado se presenta otra vez, el servidor cierra la sesión entera y responde
+// `sesion_comprometida`. Quien la pierde llega a la pantalla de acceso: sin una explicación creería que es un fallo.
+
+export const AVISO_SESION_KEY = 'sg_aviso_sesion';
+
+/** Lee y borra el aviso de «sesión cerrada por seguridad» (una sola vez). */
+export const tomarAvisoSesionGuardado = (): 'sesion_comprometida' | null => {
+  try {
+    const raw = localStorage.getItem(AVISO_SESION_KEY);
+    if (!raw) return null;
+    localStorage.removeItem(AVISO_SESION_KEY);
+    return raw === 'sesion_comprometida' ? raw : null;
+  } catch {
+    return null;
+  }
+};
+
 // ── Auth helpers ──────────────────────────────────────────────────────────
 
 export const refreshToken = async (): Promise<string | null> => {
@@ -90,6 +108,13 @@ export const refreshToken = async (): Promise<string | null> => {
       // para que la pantalla de acceso lo muestre al volver.
       const body = await res.json().catch(() => ({})) as Partial<BloqueoEmpresa>;
       guardarBloqueo(body);
+      return null;
+    }
+    if (res.status === 401) {
+      const body = await res.json().catch(() => ({})) as { codigo?: string };
+      if (body.codigo === 'sesion_comprometida') {
+        try { localStorage.setItem(AVISO_SESION_KEY, 'sesion_comprometida'); } catch { /* sin storage no se recuerda */ }
+      }
       return null;
     }
     if (!res.ok) return null;

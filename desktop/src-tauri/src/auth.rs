@@ -39,8 +39,9 @@ pub struct Sesion {
     #[serde(default)]
     pub requiere_login: bool,
     /// Texto del servidor cuando el refresh se rechazó porque la empresa está
-    /// suspendida o dada de baja (423): se muestra en la pantalla de acceso en
-    /// lugar del genérico «tu sesión venció».
+    /// suspendida o dada de baja (423), o porque el servidor cerró la sesión por
+    /// seguridad al ver un token usado dos veces (S-06): se muestra en la
+    /// pantalla de acceso en lugar del genérico «tu sesión venció».
     #[serde(default)]
     pub bloqueo: Option<String>,
 }
@@ -186,13 +187,29 @@ pub enum ResultadoRefresh {
     SesionVencida,
     /// 423: la empresa está suspendida o dada de baja; lleva el texto del servidor.
     EmpresaBloqueada(String),
+    /// 401 `sesion_comprometida` (S-06): el servidor vio un refresh token usado dos veces y cerró toda la sesión; lleva el
+    /// texto del servidor para que el agente sepa por qué tiene que volver a iniciar sesión.
+    CerradaPorSeguridad(String),
     Otro(u16),
 }
 
 pub fn clasificar_refresh(status: u16, cuerpo: &str) -> ResultadoRefresh {
     match status {
         200..=299 => ResultadoRefresh::Renovada,
-        401 => ResultadoRefresh::SesionVencida,
+        401 => {
+            let v: serde_json::Value = serde_json::from_str(cuerpo).unwrap_or_default();
+            if v.get("codigo").and_then(|c| c.as_str()) == Some("sesion_comprometida") {
+                let mensaje = v
+                    .get("error")
+                    .and_then(|e| e.as_str())
+                    .filter(|m| !m.trim().is_empty())
+                    .unwrap_or("Por seguridad cerramos tu sesión. Inicia sesión de nuevo.")
+                    .to_string();
+                ResultadoRefresh::CerradaPorSeguridad(mensaje)
+            } else {
+                ResultadoRefresh::SesionVencida
+            }
+        }
         423 => {
             let v: serde_json::Value = serde_json::from_str(cuerpo).unwrap_or_default();
             let mensaje = v
@@ -236,6 +253,12 @@ pub async fn jwt_vigente(state: &AppState) -> AppResult<String> {
             s.bloqueo = None;
             guardar(state, Some(s))?;
             return Err(AppError::new("sesion_vencida", "La sesión venció; inicia sesión de nuevo"));
+        }
+        ResultadoRefresh::CerradaPorSeguridad(mensaje) => {
+            s.requiere_login = true;
+            s.bloqueo = Some(mensaje);
+            guardar(state, Some(s))?;
+            return Err(AppError::new("sesion_vencida", "La sesión se cerró por seguridad; inicia sesión de nuevo"));
         }
         ResultadoRefresh::EmpresaBloqueada(mensaje) => {
             // La empresa se suspendió con la sesión abierta (S-11): hay que volver a iniciar sesión,
@@ -335,6 +358,20 @@ mod tests {
         assert_eq!(clasificar_refresh(401, ""), ResultadoRefresh::SesionVencida);
         assert_eq!(clasificar_refresh(500, "boom"), ResultadoRefresh::Otro(500));
         assert_eq!(clasificar_refresh(429, ""), ResultadoRefresh::Otro(429));
+    }
+
+    #[test]
+    fn un_401_de_sesion_comprometida_lleva_el_texto_del_servidor_y_un_401_corriente_no() {
+        let cuerpo = r#"{"error":"Por seguridad cerramos tu sesión: detectamos que se usó dos veces.","codigo":"sesion_comprometida"}"#;
+        match clasificar_refresh(401, cuerpo) {
+            ResultadoRefresh::CerradaPorSeguridad(m) => assert!(m.contains("se usó dos veces"), "{m}"),
+            otro => panic!("esperaba CerradaPorSeguridad, salió {otro:?}"),
+        }
+        // Sin cuerpo legible igual se identifica por el código, con un texto de respaldo.
+        assert!(matches!(clasificar_refresh(401, r#"{"codigo":"sesion_comprometida"}"#), ResultadoRefresh::CerradaPorSeguridad(m) if m.contains("seguridad")));
+        // Un 401 de siempre (token vencido, revocado, desconocido) sigue siendo «sesión vencida».
+        assert_eq!(clasificar_refresh(401, r#"{"error":"Refresh token inválido o expirado"}"#), ResultadoRefresh::SesionVencida);
+        assert_eq!(clasificar_refresh(401, "no es json"), ResultadoRefresh::SesionVencida);
     }
 
     #[test]

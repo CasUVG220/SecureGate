@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { BLOQUEO_KEY, getEmpresas, refreshToken, tomarBloqueoGuardado } from '../api';
+import { AVISO_SESION_KEY, BLOQUEO_KEY, getEmpresas, refreshToken, tomarAvisoSesionGuardado, tomarBloqueoGuardado } from '../api';
 
 /**
  * S-11 (SCRUM-129): si la empresa se suspende con la sesión abierta, el servidor responde 423 a `/auth/refresh`.
@@ -35,6 +35,21 @@ describe('refreshToken', () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(respuesta(401, { error: 'Refresh token inválido o expirado' })));
     await expect(refreshToken()).resolves.toBeNull();
     expect(localStorage.getItem(BLOQUEO_KEY)).toBeNull();
+  });
+
+  it('401 sesion_comprometida (un token ya usado se presentó otra vez): guarda el aviso para explicar por qué se cerró la sesión', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(respuesta(401, { error: 'Por seguridad cerramos tu sesión…', codigo: 'sesion_comprometida' })));
+    await expect(refreshToken()).resolves.toBeNull();
+    expect(localStorage.getItem(AVISO_SESION_KEY)).toBe('sesion_comprometida');
+    expect(tomarAvisoSesionGuardado()).toBe('sesion_comprometida');
+    expect(tomarAvisoSesionGuardado()).toBeNull();                   // se lee una sola vez
+    expect(localStorage.getItem(BLOQUEO_KEY)).toBeNull();            // no es un aviso de empresa
+  });
+
+  it('un 401 corriente no deja ningún aviso de seguridad', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(respuesta(401, { error: 'Refresh token inválido o expirado' })));
+    await refreshToken();
+    expect(tomarAvisoSesionGuardado()).toBeNull();
   });
 
   it('200: guarda el token nuevo', async () => {
