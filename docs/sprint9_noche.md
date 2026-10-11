@@ -26,6 +26,7 @@ Las pruebas de base de datos corrieron **solo** contra el Postgres desechable lo
 | SCRUM-123 | Verificación en dos pasos (TOTP) para administradores | **HECHO** (opcional por persona; hacerla obligatoria queda como siguiente paso documentado) |
 | SCRUM-117 | Validación en Windows y deuda técnica mínima | **PARCIAL** (CI y revisión de `npm audit` hechos; la validación en Windows necesita un equipo y una persona) |
 | SCRUM-126 | Espejo local de invitaciones QR (modo offline) | **HECHO** (revocar sin red: se rechaza al sincronizar, documentado) |
+| SCRUM-124 | Reutilización del refresh token (S-06) y TIMESTAMPTZ (S-17) | **HECHO** (S-17 queda por probar sobre una copia de producción antes de desplegar; la suite de seguridad en vivo está actualizada pero no se ejecutó) |
 
 *(la tabla se completa ticket por ticket)*
 
@@ -605,3 +606,43 @@ y el frontend completo pasa en UTC, Guatemala y Tokio. No era un defecto de la p
 Dos pruebas que **afirmaban que el QR exigía red** (`CameraPanelTabs`, `CameraPane.manual`) se reescribieron para afirmar lo contrario. **Todo verde** (backend 692 + 282 + `tsc`; frontend 436 + build; escritorio 109 + build; Rust 96).
 
 **Pendiente:** probar el flujo sin red en un equipo real con cámara (la lógica está probada; el escáner con la cámara no se puede ejercitar aquí) y decidir la recomendación 6.
+
+
+---
+
+## SCRUM-124 — Reutilización del refresh token (S-06) y zona horaria de TIMESTAMP (S-17) · **HECHO**
+
+**Commits:** `9cb8b19` (S-06 backend · SCRUM-176) · `2f8ea74` (S-06 web y escritorio) · `dc935b0` (S-17 · SCRUM-177) · `6249b1c` (R-2 y re-ejecución · SCRUM-178). S-17 va al final y en commits aparte, como se pidió: si no cabía, se revertía y se dejaba S-06 solo. **Cupo: cabía.**
+
+| Criterio (Jira, solo lectura) | Estado |
+|---|---|
+| Reusar un refresh token rotado revoca la sesión (con la ventana de gracia definida) y queda auditado | **HECHO** (S-06) |
+| Migración a TIMESTAMPTZ de las columnas afectadas, probada primero sobre una copia de la base | **HECHO** sobre una copia del **esquema** con datos sintéticos en el Postgres desechable (I-19). **Falta** probarla sobre una copia de la base de **producción** (no se toca Cloud SQL): procedimiento en `docs/s17_timestamptz.md` |
+| `refresh_tokens` dura 7 días exactos y no 6 d 18 h | **HECHO** (I-20 lo mide en SQL y en Node) |
+| R-1 a R-3 y las suites de seguridad siguen pasando (R-2 se re-ejecuta: cambia su causa raíz) | **HECHO** R-1, R-2 (reescrita) y R-3 verdes; la suite de seguridad **en vivo** (`npm run securitytest`) está actualizada pero **no se ejecutó**: reinicia el contenedor `securegate-backend` y siembra la base `securegate-db` del stack local de docker-compose, y eso es entorno de la persona, no el Postgres desechable. Pendiente humano |
+
+### S-06 · detección de reutilización del refresh token
+
+- **Diseño.** Cada inicio de sesión abre una *familia* (`refresh_tokens.familia_id`); renovar **rota** el token dentro de ella en una sola sentencia atómica (el viejo queda revocado con `rotado_en`, `revoked_at` y `reemplazado_por`; el nuevo hereda la familia). Un token **ya rotado** que se presenta otra vez **pasada la gracia**
+  cierra la familia entera, corta los access tokens vigentes de la persona (cualquiera de las dos partes —dueño o ladrón— tiene que iniciar sesión de nuevo), responde `401 sesion_comprometida` y deja `REFRESH_REUTILIZADO` (persona, IP, cuántos tokens se cerraron).
+- **Ventana de gracia: 10 s** (`REFRESH_GRACIA_SEGUNDOS`). Dos pestañas que renuevan a la vez leyeron la misma cookie antes de que la primera respuesta la reemplazara: eso no es robo y no debe cerrar la sesión. Dentro de la gracia cada petición recibe **su propio sucesor** en la misma familia; las dos peticiones simultáneas se resuelven en SQL (una reclama el token, la otra no devuelve fila y recibe el suyo). Hay prueba de la carrera real con dos peticiones en paralelo.
+- **Qué NO es robo:** cierre de sesión, cambio de contraseña, baja del usuario o suspensión de la empresa revocan sin `rotado_en`: dan el 401 de siempre (`REFRESH_RECHAZADO`) y no cierran nada más. Un token de la familia que la detección ya cerró (lo trae el dueño legítimo) recibe `sesion_comprometida` **sin** otro evento de robo, para que se entere de por qué pierde la sesión.
+- **Quien pierde la sesión lo sabe:** la web guarda el aviso (`sg_aviso_sesion`) y la pantalla de acceso lo muestra una vez; el escritorio muestra el texto del servidor (la garita sigue registrando entradas).
+- **Auditoría:** acción nueva `REFRESH_REUTILIZADO` en `docs/acciones_sensibles.md`, con nombre en español e inglés en el panel y su caso en la prueba I-11 (la prueba final lo exige). Cada presentación del token viejo queda auditada (la segunda ya no tiene nada que cerrar).
+- **Pruebas:** I-18 (9 casos: familia heredada, reutilización fuera de la gracia, otra sesión de la misma persona intacta, gracia, carrera simultánea, gracia acotada por entorno, cierre de sesión y cambio de contraseña no son robo), 8 unitarias, y la I-1 se adaptó (el token viejo da 401 *pasada la gracia*).
+- `S-06` pasa a ✅ en `backend/DEUDA_TECNICA.md`.
+
+### S-17 · todas las columnas TIMESTAMP → TIMESTAMPTZ
+
+- **Qué estaba mal (medido):** la bitácora y las demás fechas llegaban **6 h adelantadas**, el refresh token duraba **6 d 18 h**, un bloqueo temporal de la lista negra terminaba 6 h antes, el bloqueo de un QR por DPI duraba ~6 h 15 min en vez de 15, y la API devolvía `expira_en` de las invitaciones por un rodeo (`expira_en_utc`, S-02).
+- **Migración** (sección final de `database/init.sql`, idempotente, en cada arranque): convierte **toda** columna `timestamp without time zone` del esquema (51 hoy), no una lista a mano, para que ninguna se quede atrás. Los datos que ya existen **conservan su instante**: `AT TIME ZONE 'UTC'` porque así los leía el SQL al comparar contra `NOW()` (ninguna comparación en SQL cambia de resultado);
+  solo `refresh_tokens.expires_at` y `visitante_blacklist.fecha_fin` se leen como Guatemala porque las escribió Node con un `Date` en hora local. Desde ahora un `Date` de Node viaja con su zona y se guarda bien sin ninguna conversión.
+- **Defensas:** cada columna en su propio sub-bloque (una vista que dependa de ella, por ejemplo, la deja como estaba con un `WARNING` y **las demás migraciones del arranque no se pierden**: `init.sql` corre como una sola transacción y un error suelto las descartaría todas; hay prueba). **Bug encontrado y corregido de paso:** `init.sql` volvía a ensanchar `visitante_blacklist.fecha_inicio/fecha_fin` a `TIMESTAMP`
+  **en cada arranque**, lo que habría deshecho la conversión (y corrido las fechas 6 h cada reinicio); ahora solo lo hace si siguen siendo `DATE`.
+- **Código:** se quita el rodeo `expira_en_utc` de las invitaciones (con `TIMESTAMPTZ` el `AT TIME ZONE 'UTC'` del rodeo habría *roto* la hora) y el mes de un pago pendiente se mide en la zona de la app (`fecha_pago AT TIME ZONE …`). Nada más hizo falta: el resto del SQL se comporta igual porque la sesión de Postgres sigue en UTC.
+- **Pruebas:** **I-19** (10 casos) arma el esquema **anterior** en un esquema aparte del Postgres desechable, le mete filas con horas de reloj conocidas y corre la migración como lo hará un despliegue sobre una base con datos (instantes, NULL, defaults, idempotencia, un arranque completo más, columna imposible de convertir). **I-20** (7 casos) hace acciones reales por HTTP y compara el instante que devuelve la API con el momento en que ocurrieron;
+  **las 7 fallan con el esquema viejo** (se comprobó arrancando con un `init.sql` sin la sección S-17) **y pasan con el nuevo**. **R-2** se reescribió: su causa raíz cambió; la prueba nueva falla con el esquema viejo y pasa con el nuevo. R-1 y R-3 sin cambios, verdes.
+- **Lo que NO cambia (queda documentado en `docs/s17_timestamptz.md`):** las consultas que agrupan por día u hora (`DATE(…)`, `EXTRACT(HOUR …)`, `TO_CHAR(…)`, `CURRENT_DATE`) siguen usando la zona de la sesión de Postgres, UTC: el tablero de entradas por hora, el mapa de calor y la hora del reporte CSV muestran horas UTC (ya era así y no lo introdujo este ticket).
+  Con `TIMESTAMPTZ` el arreglo es de una línea por consulta, o de una vez fijando la zona de sesión del pool; se dejó fuera para no cambiar de golpe tableros y reportes. `S-17` pasa a ✅ en `DEUDA_TECNICA.md`.
+
+**Suites tras el ticket:** backend **699** unitarias + **311** integración/regresión + `tsc`; frontend **439** + build; escritorio **109** + build + Rust **97**. Todo verde. (Una corrida completa cayó en tiempos de espera de vitest de 5 s mientras otra aplicación de la máquina saturaba la CPU —carga 13—; con el tiempo de espera ampliado y la máquina más libre las mismas suites pasan completas.)
