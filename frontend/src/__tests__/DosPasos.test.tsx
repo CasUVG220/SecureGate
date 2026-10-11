@@ -24,6 +24,7 @@ vi.mock('../services/api', async () => {
     login: vi.fn(),
     logout: vi.fn().mockResolvedValue(undefined),
     tomarBloqueoGuardado: vi.fn(() => null),
+    tomarAvisoSesionGuardado: vi.fn(() => null),
     verificarDosPasos: vi.fn(),
     getDosPasosEstado: vi.fn(),
     iniciarDosPasos: vi.fn(),

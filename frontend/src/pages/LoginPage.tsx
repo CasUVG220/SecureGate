@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { login, logout, tomarBloqueoGuardado, EmpresaBloqueadaError, PortalIncorrectoError, type BloqueoEmpresa, type LoginResult } from '../services/api';
+import { login, logout, tomarBloqueoGuardado, tomarAvisoSesionGuardado, EmpresaBloqueadaError, PortalIncorrectoError, type BloqueoEmpresa, type LoginResult } from '../services/api';
 import { Button, Input } from '../components/ui';
 import VerificacionDosPasos from '../components/VerificacionDosPasos';
 import { useTranslation } from '../i18n/useTranslation';
@@ -44,10 +44,13 @@ export default function LoginPage({ onLogin, portal = 'personal', onCambiarPorta
   const [desafio, setDesafio] = useState<string | null>(null);
 
   // Si la sesión murió por una suspensión (refresh → 423), el aviso llega
-  // guardado desde services/api y se muestra al aterrizar aquí.
+  // guardado desde services/api y se muestra al aterrizar aquí. Lo mismo si
+  // el servidor la cerró por seguridad porque un token se usó dos veces.
   useEffect(() => {
     const guardado = tomarBloqueoGuardado();
     if (guardado) setBloqueo(guardado);
+    if (tomarAvisoSesionGuardado()) setError(t('login.sesionComprometida'));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   /** Con la sesión ya abierta (con contraseña sola o tras el segundo paso). */
