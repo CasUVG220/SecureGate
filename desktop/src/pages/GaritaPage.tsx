@@ -143,9 +143,10 @@ export function GaritaPage({ estado, refrescar, onLogout }: Props) {
 
   /**
    * QR leído: se verifica contra el servidor (vigencia, usos y revocación
-   * viven allí) y, si es válido, rellena el formulario. El escáner queda
-   * pausado unos segundos para que el agente lea el aviso en vez de releer
-   * el mismo código.
+   * viven allí) o, sin red, contra la copia local de las invitaciones de la
+   * sucursal, y si es válido rellena el formulario. El escáner queda pausado
+   * unos segundos para que el agente lea el aviso en vez de releer el mismo
+   * código.
    */
   const capturaQr = async (idInvitacion: string) => {
     setQrOcupado(true);
@@ -155,7 +156,8 @@ export function GaritaPage({ estado, refrescar, onLogout }: Props) {
       form.current?.setDesdeQr(inv);
       setAviso({
         tone: 'info',
-        texto: `Invitación de ${inv.numero_casa} · ${inv.residente_nombre}. Revisa los datos y registra la entrada.`,
+        texto: `Invitación de ${inv.numero_casa} · ${inv.residente_nombre}. Revisa los datos y registra la entrada.`
+          + (inv.validada_sin_conexion ? ' Validada sin conexión: el servidor la confirma al sincronizar.' : ''),
       });
     } catch (e) {
       setAviso({ tone: 'warn', texto: `QR no válido: ${mensajeDe(e)}` });

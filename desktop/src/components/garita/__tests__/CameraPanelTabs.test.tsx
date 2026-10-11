@@ -233,12 +233,22 @@ describe('CameraPanel — escáner de QR', () => {
     expect(base.onQr).not.toHaveBeenCalled();
   });
 
-  it('sin conexión no escanea y lo dice: verificar un QR necesita el servidor', async () => {
+  it('sin conexión SIGUE escaneando y lo dice: se valida con la copia local de las invitaciones (SCRUM-126)', async () => {
     lecturaQr = { data: 'SGQR:3f1b2c4d-5e6f-4a8b-9c0d-1e2f3a4b5c6d' };
     render(<PanelConEstado enLinea={false} />);
-    expect(await screen.findByText(/Sin conexión: el QR no se puede verificar/)).toBeInTheDocument();
-    await new Promise(r => setTimeout(r, 400));
-    expect(base.onQr).not.toHaveBeenCalled();
+    expect(await screen.findByText(/Sin conexión: se valida con la copia de este equipo/)).toBeInTheDocument();
+    await waitFor(() => expect(base.onQr).toHaveBeenCalledWith('3f1b2c4d-5e6f-4a8b-9c0d-1e2f3a4b5c6d'), { timeout: 2000 });
+  });
+
+  it('sin conexión el código escrito a mano también se puede verificar', async () => {
+    render(<PanelConEstado enLinea={false} />);
+    const campo = await screen.findByLabelText(/Escribe el código|¿No se lee\? Escribe el código/);
+    fireEvent.change(campo, { target: { value: 'SGQR:3f1b2c4d-5e6f-4a8b-9c0d-1e2f3a4b5c6d' } });
+    const boton = screen.getByRole('button', { name: 'Verificar código' });
+    expect(boton).toBeEnabled();
+    fireEvent.click(boton);
+    await waitFor(() => expect(base.onQr).toHaveBeenCalledWith('3f1b2c4d-5e6f-4a8b-9c0d-1e2f3a4b5c6d'));
+    expect(screen.getByText(/Sin conexión: el código se verifica con la copia de este equipo/)).toBeInTheDocument();
   });
 
   it('mientras se verifica un código no vuelve a disparar', async () => {

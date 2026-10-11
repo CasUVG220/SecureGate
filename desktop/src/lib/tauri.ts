@@ -198,7 +198,13 @@ export interface InvitacionQr {
   numero_casa: string;
   residente_nombre: string;
   usos_maximos: number | null;
+  /** Con la validación sin red incluye los usos de este equipo que el servidor aún no cuenta. */
   usos_actuales: number;
+  /**
+   * Se validó contra la copia local porque no había red (o el servidor no respondió): el servidor confirma —o rechaza— el uso
+   * cuando el equipo sincronice. Ausente cuando respondió el servidor.
+   */
+  validada_sin_conexion?: boolean;
 }
 
 export interface AccesoPendiente {

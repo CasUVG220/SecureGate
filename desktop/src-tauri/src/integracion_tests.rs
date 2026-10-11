@@ -80,7 +80,7 @@ async fn flujo_completo_de_garita() {
     assert!(secure_store::leer(secure_store::CLAVE_SESION).unwrap().is_some());
 
     // 3. Pull del espejo.
-    let (res, _bl, _pre) = sync::pull(&state).await.expect("pull");
+    let (res, _bl, _pre, _qr) = sync::pull(&state).await.expect("pull");
     assert!(res > 0, "la sucursal de prueba debe tener residentes");
     let residentes = garita::con_db(&state, |c| garita::buscar_residentes(c, "", 5)).unwrap();
     let residente = residentes.first().expect("residente local").clone();

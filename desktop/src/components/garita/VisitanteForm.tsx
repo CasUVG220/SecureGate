@@ -183,6 +183,11 @@ export const VisitanteForm = forwardRef<VisitanteFormHandle, Props>(function Vis
           {qr.etiqueta ? ` · ${qr.etiqueta}` : ''}
           {qr.usos_maximos != null && ` · uso ${qr.usos_actuales + 1} de ${qr.usos_maximos}`}
           {!qr.numero_dpi && '. Pide el DPI y captúralo antes de registrar.'}
+          {qr.validada_sin_conexion && (
+            <span data-testid="qr-sin-conexion" className="mt-1 block text-xs">
+              Validada sin conexión con la copia de este equipo: el servidor la confirma al sincronizar.
+            </span>
+          )}
         </Alert>
       )}
 
