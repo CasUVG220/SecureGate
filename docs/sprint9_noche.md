@@ -571,7 +571,9 @@ frontend **+33** → 436 (segundo paso del acceso, Mi cuenta, restablecer desde 
 **Hallazgo que destapó el CI:** una prueba del frontend (`ReservasPage`, «horarios ocupados con el buffer») alimentaba un instante **sin zona** (`'2026-12-10T13:30:00'`) y solo pasaba si el proceso corría en `America/Guatemala` (en UTC mostraba 07:30). El servidor manda instantes con `Z`; la prueba ahora hace lo mismo
 y el frontend completo pasa en UTC, Guatemala y Tokio. No era un defecto de la pantalla (en producción siempre llega con zona), sino de la prueba.
 
-**Pendiente:** correr el workflow una vez en GitHub (el primer `desktop-rust` compila todo sin caché y puede acercarse a los 20–25 min del runner; el tiempo máximo del job es 40) y validar el instalador en Windows (SCRUM-157).
+**Verificado en GitHub (PR #1, 10/10/2026):** el workflow corrió completo y sus 5 jobs terminaron en verde en la primera ejecución —integración y regresión 1 min 56 s · unitarias backend 1 min 12 s · frontend 1 min 27 s · escritorio (web) 54 s · **Rust 7 min 9 s** sin caché (se había estimado 20–25 min; el máximo del job queda en 40)—. Antes, los `push` a la rama ya habían corrido los jobs de Node en verde (el de Rust se omite en `push` fuera de `main`, como se diseñó).
+
+**Pendiente:** validar el instalador en Windows (SCRUM-157).
 
 
 ---
@@ -666,6 +668,8 @@ Rama `sprint9-noche` (desde `main` actualizado), **65 commits**, 262 archivos (+
 
 **`npm audit`** (completo → solo producción `--omit=dev`): backend 40 → 38 · producción 2 → **0**; frontend 11 → 8 · producción **0**; escritorio 8 → 8 · producción **0**. Lo que queda son herramientas de desarrollo (pruebas de carga y la cadena de Tailwind 3); ver SCRUM-129.
 
+**CI en GitHub:** el PR #1 corrió los 5 jobs del workflow (integración y regresión, unitarias de backend, frontend y escritorio, y Rust) y **todos pasaron** en la primera ejecución.
+
 **Nota sobre las corridas:** durante la noche otra aplicación de la máquina (un juego) saturó la CPU (carga de 20 a 25) y varias corridas completas de vitest cayeron en sus tiempos de espera de 5 s sin ningún fallo real; frontend y escritorio se repitieron con menos procesos y tiempos ampliados y pasan completos. Las réplicas de los jobs del CI en contenedores Linux (sin esa carga) pasan con los valores por omisión.
 
 ---
@@ -686,7 +690,7 @@ Lo que **no se pudo hacer** esta noche y por qué. Casi todo necesita un equipo,
 
 5. **Windows (SCRUM-157):** instalar y correr la app de escritorio en Windows 10/11 de 6–8 GB con webcam USB y OCR de placas; medir el tiempo del OCR de placa y la RAM; compilar el instalador (`nsis`/`msi`). Sin equipo Windows no se puede. De paso validar `tauri 2.12.2` (revisado en SCRUM-129, **no aplicado**: cambia la capa WebView2 y elimina los cinco avisos `unic-*`).
 6. **Hardware real:** probar la garita **sin webcam** y con el permiso de cámara denegado (SCRUM-111), el **QR sin red** con cámara real (SCRUM-126: la lógica está probada, el escáner con la cámara no se puede ejercitar sin hardware) y mirar el **tema oscuro** del botón principal en un navegador real (SCRUM-108: se midió el contraste, pero no hubo navegador con extensión conectado).
-7. **Primera corrida del CI en GitHub** (SCRUM-158): el workflow se validó con `actionlint` y replicando cada job en contenedores Linux, pero nunca corrió en GitHub. El primer `desktop-rust` compila Tauri sin caché y puede acercarse a los 20–25 min (el máximo del job es 40).
+7. **CI en `main` tras fusionar** (SCRUM-158): en el PR #1 los 5 jobs pasaron en GitHub (ver SCRUM-117); queda solo mirar la primera corrida sobre `main` (ahí `desktop-rust` también corre en cada `push`) y, si el repositorio exige comprobaciones para fusionar, agregar los nombres de los jobs nuevos.
 
 ### Decisiones de producto que quedaron abiertas
 
