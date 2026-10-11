@@ -28,7 +28,6 @@ Las pruebas de base de datos corrieron **solo** contra el Postgres desechable lo
 | SCRUM-126 | Espejo local de invitaciones QR (modo offline) | **HECHO** (revocar sin red: se rechaza al sincronizar, documentado) |
 | SCRUM-124 | Reutilización del refresh token (S-06) y TIMESTAMPTZ (S-17) | **HECHO** (S-17 queda por probar sobre una copia de producción antes de desplegar; la suite de seguridad en vivo está actualizada pero no se ejecutó) |
 
-*(la tabla se completa ticket por ticket)*
 
 ## Línea base (antes de tocar nada)
 
@@ -647,6 +646,27 @@ Dos pruebas que **afirmaban que el QR exigía red** (`CameraPanelTabs`, `CameraP
 
 **Suites tras el ticket:** backend **699** unitarias + **311** integración/regresión + `tsc`; frontend **439** + build; escritorio **109** + build + Rust **97**. Todo verde. (Una corrida completa cayó en tiempos de espera de vitest de 5 s mientras otra aplicación de la máquina saturaba la CPU —carga 13—; con el tiempo de espera ampliado y la máquina más libre las mismas suites pasan completas.)
 
+
+---
+
+## Resultado final
+
+Rama `sprint9-noche` (desde `main` actualizado), **65 commits**, 262 archivos (+20 693 / −2 912) respecto de `origin/main`. Nada se fusionó ni se empujó a `main`; un solo PR en borrador.
+
+**Tickets:** HECHOS SCRUM-118, 108, 109, 110, 111, 112, 113, 114, 115, 129, 125, 123, 126 y 124 · PARCIAL SCRUM-117 (CI y revisión de `npm audit` hechos; la validación en Windows necesita un equipo) · BLOQUEADOS ninguno · OMITIDOS por instrucción: cámaras IP, teléfono como cámara, OCR de DPI local, auto-actualización, Visanet, pruebas de usabilidad, pruebas en Windows, landing y despliegue.
+
+| Suite | Línea base | Al final |
+|---|---:|---:|
+| Backend `npm test` (unitarias) | 30 suites · 594 | 35 suites · **699** |
+| Backend integración + regresión (`test:ci`, Postgres desechable) | 6 suites · 25 | 23 suites · **311** |
+| Backend `tsc --noEmit` | limpio | limpio |
+| Frontend `npm test` · build | 22 archivos · 165 | 57 archivos · **439** · build verde |
+| Escritorio `npm test` · build | 11 archivos · 79 | 15 archivos · **109** · build verde |
+| Escritorio Rust (`cargo test --lib`) | 65 | **97** |
+
+**`npm audit`** (completo → solo producción `--omit=dev`): backend 40 → 38 · producción 2 → **0**; frontend 11 → 8 · producción **0**; escritorio 8 → 8 · producción **0**. Lo que queda son herramientas de desarrollo (pruebas de carga y la cadena de Tailwind 3); ver SCRUM-129.
+
+**Nota sobre las corridas:** durante la noche otra aplicación de la máquina (un juego) saturó la CPU (carga de 20 a 25) y varias corridas completas de vitest cayeron en sus tiempos de espera de 5 s sin ningún fallo real; frontend y escritorio se repitieron con menos procesos y tiempos ampliados y pasan completos. Las réplicas de los jobs del CI en contenedores Linux (sin esa carga) pasan con los valores por omisión.
 
 ---
 
