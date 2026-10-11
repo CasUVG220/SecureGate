@@ -83,7 +83,7 @@ export const revocarSesionesDeEmpresa = async (db: import('pg').PoolClient | imp
   // Access tokens vigentes de toda la empresa: se cortan ya (utils/revocacion.ts).
   revocarAccesoDeEmpresa(empresaId);
   await db.query(
-    `UPDATE refresh_tokens SET revoked = TRUE
+    `UPDATE refresh_tokens SET revoked = TRUE, revoked_at = NOW()
      WHERE revoked = FALSE AND usuario_id IN (
        SELECT u.id FROM usuarios u
        LEFT JOIN sucursales s ON s.id = u.sucursal_id

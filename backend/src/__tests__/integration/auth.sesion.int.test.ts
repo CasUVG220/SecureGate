@@ -10,8 +10,8 @@
  *   - login válido → 200 con JWT y cookie refresh_token httpOnly; fila en refresh_tokens
  *     con el HASH del token (no el token) y revoked = false.
  *   - contraseña mala y correo inexistente → el MISMO 401 y el mismo cuerpo.
- *   - refresh rota: el token anterior da 401, el nuevo funciona, y la BD deja el
- *     anterior revocado.
+ *   - refresh rota: el token nuevo funciona, la BD deja el anterior revocado y, pasada la ventana de
+ *     gracia (S-06, ver refresh.reuso.int.test.ts), el anterior da 401.
  */
 import request from 'supertest';
 import app from '../../app';
@@ -53,7 +53,7 @@ describe('I-1 login y sesión', () => {
     expect(mala.headers['set-cookie']).toBeUndefined();
   });
 
-  it('refresh rota el token: el anterior da 401 y el nuevo funciona', async () => {
+  it('refresh rota el token: el nuevo funciona y el anterior da 401 pasada la ventana de gracia', async () => {
     const s = await login(app, fx.email.agenteA1);
     expect(s.cookie).toBeDefined();
 
@@ -63,13 +63,27 @@ describe('I-1 login y sesión', () => {
     const nueva = ([] as string[]).concat(r1.headers['set-cookie']).find(c => c.startsWith('refresh_token='))!.split(';')[0];
     expect(nueva).not.toBe(s.cookie);
 
+    // Pasada la gracia (10 s) el token anterior ya no sirve: se simula el paso del tiempo. (Dentro de ella se tolera, por las
+    // dos pestañas que renuevan a la vez; y presentado tarde, además de 401 cierra la sesión: refresh.reuso.int.test.ts.)
+    await q(`UPDATE refresh_tokens SET rotado_en = NOW() - interval '1 hour' WHERE usuario_id = $1 AND rotado_en IS NOT NULL`, [fx.usuarios.agenteA1]);
     const viejo = await request(app).post('/api/auth/refresh').set('Cookie', s.cookie!);
     expect(viejo.status).toBe(401);
+    expect(viejo.body.codigo).toBe('sesion_comprometida');
 
+    // …y como cerró la familia, el sucesor tampoco sirve: hay que volver a iniciar sesión.
     const r2 = await request(app).post('/api/auth/refresh').set('Cookie', nueva);
-    expect(r2.status).toBe(200);
+    expect(r2.status).toBe(401);
 
     const revocados = await q('SELECT count(*)::int AS n FROM refresh_tokens WHERE usuario_id = $1 AND revoked = TRUE', [fx.usuarios.agenteA1]);
-    expect(revocados[0].n).toBe(2); // el original y el primero rotado
+    expect(revocados[0].n).toBe(2); // el original (rotado) y su sucesor (cerrado con la familia)
+  });
+
+  it('una renovación normal rota sin perder la sesión: el sucesor renueva a su vez', async () => {
+    const s = await login(app, fx.email.agenteA1);
+    const r1 = await request(app).post('/api/auth/refresh').set('Cookie', s.cookie!);
+    expect(r1.status).toBe(200);
+    const nueva = ([] as string[]).concat(r1.headers['set-cookie']).find(c => c.startsWith('refresh_token='))!.split(';')[0];
+    const r2 = await request(app).post('/api/auth/refresh').set('Cookie', nueva);
+    expect(r2.status).toBe(200);
   });
 });

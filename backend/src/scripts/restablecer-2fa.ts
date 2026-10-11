@@ -36,7 +36,7 @@ async function main(): Promise<void> {
       console.log(`${email} no tiene la verificación en dos pasos configurada; no se cambió nada.`);
       return;
     }
-    await cliente.query('UPDATE refresh_tokens SET revoked = TRUE WHERE usuario_id = $1 AND revoked = FALSE', [id]);
+    await cliente.query('UPDATE refresh_tokens SET revoked = TRUE, revoked_at = NOW() WHERE usuario_id = $1 AND revoked = FALSE', [id]);
     await cliente.query(
       `INSERT INTO audit_logs (usuario_id, accion, tabla_afectada, registro_id, sucursal_id, status_code, datos_nuevos)
        VALUES (NULL, 'TWOFA_RESTABLECIDO', 'usuario_2fa', $1, $2, 200, $3::jsonb)`,
