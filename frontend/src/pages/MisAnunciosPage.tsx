@@ -34,7 +34,6 @@ export default function MisAnunciosPage() {
   }, []);
 
   // Carga inicial; y se vuelve a pedir cuando la campana marca algo como leído.
-  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { cargar(); }, [cargar]);
   useEffect(() => alCambiarAnuncios('pagina', cargar), [cargar]);
 

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import ConfirmDialog from '../ConfirmDialog';
 import { useConfirmacion } from '../useConfirmacion';
 
@@ -79,7 +79,11 @@ describe('useConfirmacion', () => {
 
   it('una confirmación nueva cancela la pendiente en vez de dejarla colgada', async () => {
     let capturar!: ReturnType<typeof useConfirmacion>['confirmar'];
-    function Captura() { const { confirmar, dialogo } = useConfirmacion(); capturar = confirmar; return <>{dialogo}</>; }
+    function Captura() {
+      const { confirmar, dialogo } = useConfirmacion();
+      useEffect(() => { capturar = confirmar; }, [confirmar]);   // fuera del pintado: no se reasigna una variable externa al renderizar
+      return <>{dialogo}</>;
+    }
     render(<Captura />);
     let primera!: Promise<boolean>;
     act(() => { primera = capturar({ title: 'uno', confirmLabel: 'ok' }); });

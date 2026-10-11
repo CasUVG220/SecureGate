@@ -69,7 +69,7 @@ export default function ConfiguracionReservasPage() {
       })
       .catch(() => setError('No se pudo cargar la configuración de reservas.'))
       .finally(() => setLoading(false));
-  }, []);
+  }, [marcarGuardado]);
 
   const handleSave = async () => {
     const completa = Number(form.horas_limite_cancelacion_completa);

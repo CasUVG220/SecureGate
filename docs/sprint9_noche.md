@@ -542,7 +542,7 @@ La `auditLog` de cada ruta iba **después** de los guards de rol y de los limita
 («Contraseña correcta; falta el código de dos pasos», «Entró con un código de recuperación», «Motivo: persona bloqueada por demasiados intentos»; de paso, el panel ya explica también los motivos de `REFRESH_RECHAZADO`). Cada una tiene su caso en la prueba I-11 (la prueba final lo exige) y **ningún secreto, código ni contraseña** llega a la bitácora (hay una prueba que lo busca).
 
 **Pruebas:** backend unitarias **+37** (`twofa.test.ts`: vectores del RFC, tolerancia de reloj, anti-reutilización, cifrado, códigos, desafío; `validarTwofaKey`) → 692; integración **+50** → 266 (**I-15**: 42 casos —activar, ingreso, códigos de recuperación, bloqueo por persona, desactivar, roles, restablecer, secretos fuera de la bitácora—; **I-16**: 2 casos de límites de tasa; 6 casos nuevos en I-11);
-frontend **+33** → 436 (segundo paso del acceso, Mi cuenta, restablecer desde Personal, panel de auditoría, navegación por rol); escritorio vitest +1 (106), Rust +1 (78). **Todo verde** (backend, `tsc`, frontend + build, desktop + build, Rust). `npm run lint` del frontend: los mismos 6 avisos que ya existían, ninguno en archivos de este ticket.
+frontend **+33** → 436 (segundo paso del acceso, Mi cuenta, restablecer desde Personal, panel de auditoría, navegación por rol); escritorio vitest +1 (106), Rust +1 (78). **Todo verde** (backend, `tsc`, frontend + build, desktop + build, Rust). `npm run lint` del frontend: 6 avisos que ya estaban cuando empezó este ticket y ninguno en archivos de este ticket (4 eran de tickets anteriores de la rama y se corrigieron al final; ver «Pendientes para humanos»).
 
 **Pendiente / límites conocidos:** (1) no es obligatoria; (2) sin aviso por correo al activar/desactivar/restablecer (la bitácora sí lo registra); (3) solo TOTP (llaves físicas/passkeys serían un segundo método); (4) el reloj del servidor debe estar sincronizado (NTP); (5) rotar `JWT_SECRET` exige fijar antes `TWOFA_KEY` (S-12).
 
@@ -683,4 +683,4 @@ Cámaras IP, teléfono como cámara, OCR de DPI local, auto-actualización de la
 ### Dos observaciones del repositorio
 
 - Hay un `git stash` **antiguo y ajeno** en este repositorio (`stash@{0}: WIP on main: 44eba69 feat: Pre-authorization of visitors`). Esta sesión no lo creó ni lo tocó; conviene decidir si todavía hace falta.
-- `npm run lint` del frontend tiene **6 avisos que ya existían** (2 errores de reglas de React 19 en `ConfirmDialog.test.tsx` y `OwnerDashboard.tsx`, y 4 advertencias); ninguno está en archivos de este trabajo.
+- `npm run lint` del frontend tiene **2 problemas que ya existían en `main`** (un error de React 19 en `OwnerDashboard.tsx` y una directiva sin uso en `PreautPage.tsx`); no se tocaron. (Durante el trabajo aparecieron 4 más en archivos nuevos o editados aquí —`ConfirmDialog.test.tsx`, `MisAnunciosPage.tsx`, `ConfiguracionQrPage.tsx`, `ConfiguracionReservasPage.tsx`— y se corrigieron.)
