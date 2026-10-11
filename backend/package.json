@@ -17,7 +17,10 @@
     "loadtest:heartbeat": "artillery run loadtest/sprint8-heartbeat.yml --output loadtest/results/sprint8-heartbeat.json",
     "loadtest:sync": "artillery run loadtest/sprint8-sync-garita.yml --output loadtest/results/sprint8-sync-garita.json",
     "loadtest:accesos-idcliente": "artillery run loadtest/sprint8-accesos-idcliente.yml --output loadtest/results/sprint8-accesos-idcliente.json",
-    "securitytest": "node securitytest/run-all.js"
+    "securitytest": "node securitytest/run-all.js",
+    "test:integration": "TZ=America/Guatemala JEST_JUNIT_OUTPUT_NAME=integracion.xml jest -c jest.integration.config.ts --runInBand --testPathPattern '__tests__/integration/'",
+    "test:regression": "TZ=America/Guatemala JEST_JUNIT_OUTPUT_NAME=regresion.xml jest -c jest.integration.config.ts --runInBand --testPathPattern '__tests__/regression/'",
+    "test:ci": "TZ=America/Guatemala JEST_JUNIT_OUTPUT_NAME=ci.xml jest -c jest.integration.config.ts --runInBand"
   },
   "dependencies": {
     "cookie-parser": "^1.4.7",
@@ -41,9 +44,12 @@
     "@types/node": "^20.0.0",
     "@types/node-cron": "^3.0.11",
     "@types/pg": "^8.10.0",
+    "@types/supertest": "^7.2.1",
     "artillery": "^2.0.34",
     "jest": "^29.7.0",
+    "jest-junit": "^17.0.0",
     "nodemon": "^3.0.0",
+    "supertest": "^7.3.1",
     "ts-jest": "^29.4.11",
     "ts-node": "^10.9.1",
     "typescript": "^5.0.0"

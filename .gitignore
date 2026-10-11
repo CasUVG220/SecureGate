@@ -27,3 +27,4 @@ backups/
 # Pruebas de carga del Sprint 8: códigos de activación locales y salida de consola
 backend/loadtest/results/activar-codigos.csv
 backend/loadtest/results/*.log
+backend/reports/
