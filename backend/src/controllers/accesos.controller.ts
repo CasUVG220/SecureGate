@@ -6,6 +6,7 @@ import { getConfigQrEfectiva } from './configQr.controller';
 import { tenantFilter, ownershipClause, ownershipParams } from '../utils/tenant';
 import { serverError } from '../utils/http';
 import { normalizarPlaca, sqlPlacaNormalizada } from '../utils/placa';
+import { APP_TZ } from '../utils/reservas';
 
 /**
  * Marca de tiempo que reporta la garita offline. Se guarda tal cual en
@@ -23,6 +24,13 @@ export const resolverRegistradoEn = (raw: unknown, ahora: Date = new Date()): Da
   if (d.getTime() < minimo) return null;
   return d;
 };
+
+/**
+ * Día (AAAA-MM-DD) en que ocurrió una entrada, para medir contra él la vigencia de una invitación. `$2` = `registrado_en`
+ * (o NULL), `$3` = zona de la app. Acotado a NOW() como `timestamp_entrada`: un reloj adelantado no gana un día de vigencia.
+ */
+const SQL_DIA_DE_ENTRADA =
+  `(CASE WHEN $2::timestamptz IS NULL THEN CURRENT_DATE ELSE (LEAST($2::timestamptz, NOW()) AT TIME ZONE $3)::date END)`;
 
 export const registrarAcceso = async (req: Request, res: Response) => {
   const {
@@ -161,14 +169,19 @@ export const registrarAcceso = async (req: Request, res: Response) => {
     // Locked with FOR UPDATE so two garitas scanning the same single-use code
     // at once can't both succeed (re-checks everything verificarInvitacion
     // already checked — that call is only advisory, this is authoritative).
+    //
+    // Las FECHAS de vigencia se miden al día en que ENTRÓ la persona (`registrado_en`, en la zona de la app), no al
+    // día en que llega el registro: una entrada hecha sin red con una invitación que vencía ese día se sincroniza
+    // al día siguiente y no por eso deja de ser válida (SCRUM-126). Sin `registrado_en` (la web) rige el día actual,
+    // como siempre. Lo que NO viaja en el tiempo es el estado: revocada, agotada o bloqueada se miden al sincronizar.
     if (invitacion_qr_id) {
       const invResult = await client.query(
         `SELECT id, sucursal_id, tipo, numero_dpi, placa, activo, usos_maximos, usos_actuales,
                 intentos_fallidos_dpi, bloqueado_hasta,
-                (fecha_inicio <= CURRENT_DATE) AS ya_vigente,
-                (fecha_fin IS NULL OR fecha_fin >= CURRENT_DATE) AS no_vencida
+                (fecha_inicio <= ${SQL_DIA_DE_ENTRADA}) AS ya_vigente,
+                (fecha_fin IS NULL OR fecha_fin >= ${SQL_DIA_DE_ENTRADA}) AS no_vencida
          FROM invitaciones_qr WHERE id = $1 FOR UPDATE`,
-        [invitacion_qr_id]
+        [invitacion_qr_id, registradoEn ?? null, APP_TZ]
       );
       if (invResult.rows.length === 0) {
         await client.query('ROLLBACK');
