@@ -25,6 +25,7 @@ Las pruebas de base de datos corrieron **solo** contra el Postgres desechable lo
 | SCRUM-125 | RNF-10 · auditoría completa y límites de tasa | **HECHO** (los eventos de 2FA entraron con SCRUM-123) |
 | SCRUM-123 | Verificación en dos pasos (TOTP) para administradores | **HECHO** (opcional por persona; hacerla obligatoria queda como siguiente paso documentado) |
 | SCRUM-117 | Validación en Windows y deuda técnica mínima | **PARCIAL** (CI y revisión de `npm audit` hechos; la validación en Windows necesita un equipo y una persona) |
+| SCRUM-126 | Espejo local de invitaciones QR (modo offline) | **HECHO** (revocar sin red: se rechaza al sincronizar, documentado) |
 
 *(la tabla se completa ticket por ticket)*
 
@@ -571,3 +572,36 @@ frontend **+33** → 436 (segundo paso del acceso, Mi cuenta, restablecer desde 
 y el frontend completo pasa en UTC, Guatemala y Tokio. No era un defecto de la pantalla (en producción siempre llega con zona), sino de la prueba.
 
 **Pendiente:** correr el workflow una vez en GitHub (el primer `desktop-rust` compila todo sin caché y puede acercarse a los 20–25 min del runner; el tiempo máximo del job es 40) y validar el instalador en Windows (SCRUM-157).
+
+
+---
+
+## SCRUM-126 — Espejo local de invitaciones QR (modo offline) · **HECHO**
+
+**Commits:** `362022c` (backend · SCRUM-181/183) · `21d2ea0` (escritorio · SCRUM-181/182). **Criterios de aceptación (Jira, solo lectura) y cómo se cumplen** (diseño y tabla de escenarios en **`docs/qr_sin_conexion.md`**):
+
+| Criterio | Cómo |
+|---|---|
+| Snapshot de las invitaciones vigentes en la base local, actualizado en cada sincronización | `GET /api/sync/garita` trae `invitaciones_qr`; el escritorio las guarda en `invitaciones_qr_local` (SQLite cifrado) y **reemplaza la copia completa en cada sincronización** (al arrancar, cada 5 min y a mano) |
+| Sin internet, un QR válido se acepta; uno vencido, revocado o agotado se rechaza | `validar_qr_local`: las mismas reglas y el mismo orden que `verificarInvitacion` del backend (revocada → bloqueada → aún no vigente → vencida → agotada) con los mensajes del servidor; la fecha es la del día local |
+| El uso viaja en la cola con `invitacion_qr_id` y se descuenta en el servidor sin duplicados | Columna nueva `accesos_pendientes.invitacion_qr_id` (con migración que rellena las filas anteriores) y el mismo id en el `payload`; `POST /api/accesos` ya descontaba con la fila bloqueada y era idempotente por `id_cliente`: ahora **lo prueba I-17** (reenvío ×3, carrera entre dos reintentos, un solo uso, 3 de 3) |
+| Documentado qué pasa si un QR se revoca mientras la garita está sin red | `docs/qr_sin_conexion.md`: se acepta con la copia vieja; al subir el servidor responde 409 y la fila queda **`rechazado`** con el motivo, sin descontar ni registrar; tabla con los demás escenarios (agotada en otra garita, bloqueada, vencida, invitación nueva…) |
+
+**Verificado contra el código (el QA estaba en lo cierto):** no había tabla de invitaciones en el SQLite, y la interfaz **apagaba** el escáner y el código manual sin red (`CameraPane`, `requiere: 'red'`). Cambié eso además de agregar la validación, o la copia no habría servido para nada.
+
+**Decisiones**
+1. **El servidor manda cuando responde.** La copia solo se usa si no hay red o el servidor contesta 5xx; un 404/409 del servidor se respeta (una copia puede estar vieja). `garita_verificar_qr` ya no cae en error: cae a la copia.
+2. **Qué lleva la copia:** las de la sucursal **de la licencia** (no la del agente) que aún pueden servir por fecha con **un día de margen** (el servidor compara `CURRENT_DATE` en UTC, que cambia a las 18:00 de Guatemala; la garita decide con su fecha local) y, de las revocadas, **solo las del último mes** (así puede decir «revocada» en vez de «no encontrada»
+   sin que el espejo crezca para siempre). Las fechas viajan como texto `AAAA-MM-DD` (`to_char`), no como instantes: no dependen de la zona del servidor.
+3. **Los usos de este equipo cuentan aunque el servidor no los sepa:** copia + los pendientes + los subidos *después* de pedir la copia (`qr_snapshot_desde`, que se toma ANTES de pedirla: lo que se sincroniza durante la petición se cuenta de más, nunca de menos). Los rechazados no cuentan. Resultado: un QR de un solo uso no se acepta dos veces en el mismo equipo, ni con dos paneles a la vez
+   (`encolar_acceso` lo vuelve a comprobar con el candado de la base; una invitación que la copia no conoce no se frena aquí: decide el servidor).
+4. **Cambio de reglas en el servidor (necesario para que sea correcto):** las **fechas** de vigencia se miden al **día de `registrado_en`** (acotado a `NOW()`, en la zona de la app) y no al día en que se sincroniza. Sin esto, una entrada hecha sin red el último día de una invitación se **rechazaba** al subir al día siguiente, aunque era válida cuando ocurrió. Lo que no viaja en el tiempo
+   es el **estado** (revocada, agotada, bloqueada): no hay `revoked_at` para saber *cuándo* ocurrió, así que se mide al sincronizar. Sin `registrado_en` (la web) todo sigue igual. Un reloj adelantado no gana vigencia (se acota a `NOW()`; hay prueba).
+5. **Lo que se queda en el servidor:** coincidencia de DPI de las individuales (y su bloqueo tras fallos) y placa obligatoria (`requiere_placa`) se comprueban al sincronizar; la copia no lleva esa configuración.
+6. **Una entrada que el servidor rechaza al sincronizar hoy no se registra** (igual que los rechazos por lista negra de la cola). Es la limitación más importante: la persona ya entró. Recomendación en el documento: registrarla igual con una marca «revisar» y listar los rechazos de la cola en el panel de administración.
+7. `bloqueado_hasta` hereda el desfase de S-17 (columna `TIMESTAMP`).
+
+**Pruebas:** backend integración **+16** (I-17) → 282; escritorio vitest **+3** → 109; Rust **+18** → 96 (cada motivo de rechazo y su orden, fronteras de fecha, id en mayúsculas/espacios, bloqueo temporal, suma de los usos locales, `encolar_acceso`, reemplazo de la copia, servidor anterior sin invitaciones, migración de una cola anterior).
+Dos pruebas que **afirmaban que el QR exigía red** (`CameraPanelTabs`, `CameraPane.manual`) se reescribieron para afirmar lo contrario. **Todo verde** (backend 692 + 282 + `tsc`; frontend 436 + build; escritorio 109 + build; Rust 96).
+
+**Pendiente:** probar el flujo sin red en un equipo real con cámara (la lógica está probada; el escáner con la cámara no se puede ejercitar aquí) y decidir la recomendación 6.
