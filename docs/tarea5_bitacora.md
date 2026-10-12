@@ -48,3 +48,5 @@ Cada ruptura se aplicó con un script, se corrió `npm run test:regression`, se 
 | 20:00:36 | R-3: `licencia.middleware.ts:96` `if (false)` | misma prueba R-3 (falla en el heartbeat; el login seguía en 423) | `expect((await heartbeat(licA1)).status).toBe(423)` — Received: 200 (`:66`) |
 
 Nota: para romper R-1 hubo que quitar también los parámetros (`ownershipParams`), si no Postgres responde 500 por parámetros de más y la regresión se vería como otro error.
+| 20:01 | E | Workflow .github/workflows/ci-integracion.yml + .github/scripts/resumen-junit.js. actionlint (docker rhysd/actionlint) sin errores; PyYAML no instalado en el host, no se usó. Pasos de CI simulados en local con Node 20: integración 9/9, regresión 16/16, resumen OK. |
+| 20:02 | A | Verificación de arranque real: `ts-node src/index.ts` (Node 20) contra la BD de prueba responde /health 200 y 404 en rutas inexistentes; migraciones y listen siguen en index.ts. |
