@@ -92,8 +92,8 @@ export const getDisponibilidad = async (req: Request, res: Response) => {
       // ser cualquier usuario no residente para leer nombre, tarifa y horarios
       // ocupados de un área de OTRA empresa (hallazgo S-04, backend/securitytest).
       const enAlcance = await pool.query(
-        `SELECT 1 FROM areas_comunes a WHERE a.id = $1`,
-        [area_id]
+        `SELECT 1 FROM areas_comunes a WHERE a.id = $1 AND ${ownershipClause('a', 2)}`,
+        [area_id, ...ownershipParams(req.user!)]
       );
       if (enAlcance.rows.length === 0) {
         return res.status(403).json({ error: 'Sin acceso a esta área' });
