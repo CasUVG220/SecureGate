@@ -51,3 +51,41 @@ Nota: para romper R-1 hubo que quitar también los parámetros (`ownershipParams
 | 20:01 | E | Workflow .github/workflows/ci-integracion.yml + .github/scripts/resumen-junit.js. actionlint (docker rhysd/actionlint) sin errores; PyYAML no instalado en el host, no se usó. Pasos de CI simulados en local con Node 20: integración 9/9, regresión 16/16, resumen OK. |
 | 20:02 | A | Verificación de arranque real: `ts-node src/index.ts` (Node 20) contra la BD de prueba responde /health 200 y 404 en rutas inexistentes; migraciones y listen siguen en index.ts. |
 | 20:04 | E/F | Push `git push chatio tarea5-ci` OK. Actions habilitado. Corrida 1 (verde): https://github.com/chatio/SecureGate/actions/runs/37560033083 — job 1m27s (workflow 1m32s). Avisos no críticos: Node.js 20 deprecado en acciones (checkout/setup-node/upload-artifact v4 corren forzadas en Node 24). |
+
+## Fase F — demostración en CI (chatio/SecureGate; horas CST = UTC-6)
+| # | Rama / commit | Resultado | Duración | URL |
+|---|---|---|---|---|
+| 1 | `tarea5-ci` — "docs(tarea5): bitácora de implementación y prueba en frío" | **VERDE** (integración 9/9, regresión 16/16) | workflow 1 m 32 s; job 1 m 27 s | https://github.com/chatio/SecureGate/actions/runs/37560033083 |
+| 2 | `demo/regresion` — "Introduce regresión (demo): quita ownershipClause de reservas/disponibilidad" | **ROJO**: solo falla el paso "Pruebas de regresión"; integración en verde. 4 fallos de R-1 | workflow 2 m 30 s; job 1 m 50 s | https://github.com/chatio/SecureGate/actions/runs/37560231136 |
+| 3 | `demo/regresion` — "Corrige la regresión (demo): restablece ownershipClause en reservas/disponibilidad" | **VERDE** | workflow 1 m 16 s; job 1 m 12 s | https://github.com/chatio/SecureGate/actions/runs/37560460617 |
+
+Corrida 2, pruebas fallidas (todas en `aislamiento.reg.test.ts`, aserción `expect(r.status).toBe(403)` → Expected 403, Received 200):
+- `R-1 aislamiento multi-tenant › disponibilidad con adminEmpA › el área de otra empresa (B1) → 403`
+- `R-1 aislamiento multi-tenant › disponibilidad con adminSucA1 › el área de otra empresa (B1) → 403`
+- `R-1 aislamiento multi-tenant › disponibilidad con agenteA1 › el área de otra empresa (B1) → 403`
+- `R-1 aislamiento multi-tenant › admin_sucursal A1 no ve el área de la otra sucursal de su empresa (A2)`
+Totales: `Tests: 4 failed, 12 passed, 16 total` (regresión). Los diffs de código de la demo: el commit 3 es un `git revert` del 2; `git diff tarea5-ci demo/regresion -- backend` queda vacío.
+
+## Tiempos por fase (hora del reloj; aproximados al minuto)
+| Fase | Inicio–fin | Notas |
+|---|---|---|
+| 0. Remotos, rama, Node 20 | 19:32–19:42 | `git fetch` falló al inicio (cuenta sin acceso); tras reintento del usuario, remotos OK. `nvm install 20` tardó varios minutos. |
+| A. app.ts / servidor | 19:44–19:46 | tsc limpio, `npm test` 594/594 |
+| B. Infraestructura | 19:47–19:57 | ~10 min perdidos en Docker Desktop colgado (500) hasta reiniciarlo (19:56) |
+| C. Pruebas I-1..R-3 | 19:57–20:00 | `test:ci` 25/25 |
+| D. Prueba en frío | 20:00–20:01 | 5 rupturas, todas detectadas |
+| E. Workflow | 20:01–20:03 | actionlint sin errores; push 20:02:13; verde 20:03:51 |
+| F. Demo en CI | 20:04–20:09 | 3 corridas |
+| G. Documentación | 20:09– | docs/tarea5_pruebas.md y correcciones a la auditoría |
+
+## Problemas y soluciones (implementación)
+1. `git fetch` "Repository not found" por cuenta de `gh` sin acceso → el usuario cambió de cuenta (CasUVG220, permiso WRITE); se reintentó y funcionó.
+2. Node 20 no estaba instalado (host con 25) → `nvm install 20` (efecto lateral: alias default de nvm = 20).
+3. Docker Desktop se colgó (HTTP 500) ~10 min tras abrirlo → se reinició la app. Al abrirlo también reinicia los contenedores de desarrollo por `restart: unless-stopped`; no se tocaron.
+4. Login 401 en I-1: `normalizeEmail()` pasa a minúsculas y el seed guardaba mayúsculas → correos del seed en minúsculas.
+5. R-2: `SHOW timezone` devuelve la columna `TimeZone` → `current_setting('TimeZone')`.
+6. R-3: tras suspender, refresh da 401 y no 423 (los refresh ya están revocados) → la prueba afirma 401. También hay un `sleep(1100)` por la resolución de segundos del `iat` (utils/revocacion.ts).
+7. El enunciado decía "sin licencia → 403": el código responde 401 en `/sync/garita` y permite `/accesos` sin licencia (web); las pruebas afirman lo real.
+8. Break de R-1: hay que quitar también `ownershipParams` o sale 500 en vez de 200.
+9. Un `git push` falló una vez por red ("Could not resolve host"); se reintentó con el mismo comando explícito.
+10. Aviso no crítico del CI: Node.js 20 deprecado en las acciones v4 (corren forzadas en Node 24) y `ubuntu-latest` migrará a Ubuntu 26 el 19-oct-2026.
