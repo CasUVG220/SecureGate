@@ -31,3 +31,7 @@ backend/reports/
 
 # Generado por scripts/render-nginx.sh a partir de nginx/nginx.conf.template
 nginx/nginx.conf
+
+# OCR del DPI (T3): el conjunto sintético se regenera con la semilla; no se versionan imágenes ni reportes de evaluación
+desktop/sidecar-ocr/fixtures-dpi/salida/
+scripts/eval-dpi/reportes/

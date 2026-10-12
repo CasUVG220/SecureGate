@@ -14,6 +14,7 @@ No se tocó producción, la VM, Cloud SQL ni secretos. Las pruebas de base de da
 | T0 | Estabilizar la línea base (2 pruebas dependían de la hora del día) | HECHO |
 | T1 | Pagos: un pago resta su monto del saldo | HECHO |
 | T2 | Interfaz `ProveedorPago` y preparación de Visanet | HECHO (la integración real queda PENDIENTE de documentación y credenciales) |
+| T3 | Conjunto sintético y evaluador del DPI | HECHO |
 
 ## Línea base (antes de tocar nada, con las 2 correcciones de T0)
 
@@ -61,3 +62,14 @@ Regla, casos, concurrencia y datos históricos: **`docs/pagos_saldo.md`**.
 > **Pruebas intermitentes ya existentes (no causadas por estas tareas):** `refresh.reuso.int` (I-19, ventana de gracia de 10 s) y `I-11 RESERVA_RECHAZADA`
 > (la fecha de la reserva se elige al azar y a veces choca) fallaron una vez cada una bajo carga y pasan al repetir en solitario y en la suite completa (2 corridas verdes seguidas).
 > Quedan como deuda: fijar la fecha de esas pruebas.
+
+## T3 — Conjunto sintético y evaluador del DPI · **HECHO**
+- `desktop/sidecar-ocr/fixtures-dpi/generar.mjs`: genera imágenes de DPI **ficticios** (tarjeta dibujada con `@napi-rs/canvas`, ya presente como dependencia de `ppu-paddle-ocr`) en
+  escenas de webcam con 7 variantes (limpia, luz baja/alta, ángulo, ruido, desenfoque, mixta) + `verdad_terreno.csv`, con semilla. Sin imágenes versionadas (`salida/` está en `.gitignore`).
+- `scripts/eval-dpi/index.mjs`: evaluador (motores `local`, `vision`, `ambos`). Métricas: exactitud del CUI y por campo (sin tildes y estricta), tasa de revisión manual, **errores silenciosos**,
+  tiempo p50/p95 por captura y meta RNF-03. Vision se invoca por el backend real (`/api/ocr/dpi`, necesita `--backend` y `--token`; **no se ejecutó aquí**: no hay clave de Google ni backend desplegado).
+- Corrida de extremo a extremo con el sidecar actual (que aún no extrae DPI): 60 imágenes, 0 % de exactitud esperado, 100 % a revisión, p50 421 ms / p95 536 ms. **Los modelos sí se pudieron descargar**
+  (el espejo de GitHub funciona; Hugging Face no) y el sidecar corre aquí de verdad: la T4 se mide con OCR real.
+- Pruebas: 7 del evaluador (`node --test scripts/eval-dpi/`) y 3 del generador (`npm --prefix desktop/sidecar-ocr test`). Se arregló el script de pruebas del sidecar: `node --test src/` no
+  funciona en Node 22 (pasó a `node --test`, que descubre `*.test.js`).
+- `onnxruntime-node` no pudo instalarse con scripts (`ECONNRESET` bajando binarios); con `npm ci --ignore-scripts` basta (trae el binario de CPU de Linux).
