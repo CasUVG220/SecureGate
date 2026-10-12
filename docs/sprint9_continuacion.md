@@ -16,6 +16,7 @@ No se tocó producción, la VM, Cloud SQL ni secretos. Las pruebas de base de da
 | T2 | Interfaz `ProveedorPago` y preparación de Visanet | HECHO (la integración real queda PENDIENTE de documentación y credenciales) |
 | T3 | Conjunto sintético y evaluador del DPI | HECHO |
 | T4 | Extractor local del DPI en el sidecar | HECHO (precisión real SIN medir: solo hay datos sintéticos) |
+| T5 | Integración en el escritorio (Rust + UI) y privacidad | HECHO |
 
 ## Línea base (antes de tocar nada, con las 2 correcciones de T0)
 
@@ -91,3 +92,15 @@ Regla, casos, concurrencia y datos históricos: **`docs/pagos_saldo.md`**.
   **errores silenciosos 0** (los 3 CUI mal quedaron marcados: 14 dígitos o 1 dígito corrido), tiempo p50 536 ms / p95 632 ms por captura en 4 vCPU (meta RNF-03 de 5 s: **cumple con holgura**; en el equipo de 6–8 GB falta medirlo).
 - Pruebas: 34 del sidecar (`npm --prefix desktop/sidecar-ocr test`: extractor, cada corrección, validación, enderezado y una de punta a punta que se omite sin modelos).
 - Nota de entorno: los modelos ONNX se bajaron del espejo de GitHub (Hugging Face no es alcanzable desde aquí); el hash coincide con el fijado.
+
+## T5 — Integración en el escritorio y privacidad · **HECHO**
+Diseño, privacidad, cómo armar el conjunto real con consentimiento, el criterio de corte y cómo evaluar: **`docs/ocr_dpi_local.md`**.
+- Rust (`ocr.rs`): `ocr_dpi_local`, `ocr_dpi_remoto` (respaldo; ahora devuelve `ResultadoDpi` y descarta `texto_completo`), **`ocr_dpi`** (política: local primero; remoto solo si el local falló o dudó **Y** hay red **Y** el equipo lo permite),
+  `ocr_dpi_config`/`ocr_dpi_configurar`. Bandera por equipo `dpi_remoto_respaldo` en `config.json` (encendida por defecto; los `config.json` anteriores siguen cargando). `Debug` de `ResultadoDpi` oculta CUI y nombres; `linea_log_dpi` solo banderas.
+- Origen del dato `origen_dpi` (`local`/`remoto`/`manual`): cola SQLite cifrada (migración idempotente), payload y **backend** (`registros_acceso.origen_dpi`, columna nueva en `init.sql`, prueba en I-3). Valor desconocido → NULL; `capturado_manualmente` sin origen → `manual`.
+  Decisión: se tocó `POST /api/accesos` (no `/ocr/dpi`) para que el origen quede en el servidor y no solo en el equipo.
+- UI: `GaritaPage` usa `api.ocr.dpi`; `VisitanteForm` muestra de dónde salió el dato y por qué revisar (frases sin jerga, sin repetir el número ni el nombre) y exige la casilla de confirmación cuando hay revisión obligatoria; la captura manual no cambió.
+  Interruptor del respaldo remoto en *Cámaras de esta garita → Lectura del DPI*. La lista de recientes indica el origen.
+- Pruebas: Rust **108** (+11: política del respaldo, sin red, parseo, privacidad del log, guarda de código sin disco, migración, config); vitest **121** (+12); sidecar **37** (incluye punta a punta de privacidad con un DPI ficticio); integración I-3 (+1).
+- Hallazgo: las bibliotecas de imagen del OCR dejan en el directorio temporal `mat-debug-<pid>.log` (vacío) y `.ses` (marca de tiempo + UUID); no contienen datos y la prueba de privacidad las tolera explícitamente y exige que nada más quede.
+- Sin probar con hardware real: la webcam y el flujo en Windows (el OCR local sí se ejerció con el modelo real en Linux).

@@ -129,6 +129,10 @@ pub struct NuevoAcceso {
     /// intentos fallidos.
     #[serde(default)]
     pub invitacion_qr_id: Option<String>,
+    /// De dónde salió el DPI: `local` (OCR del equipo), `remoto` (Vision) o `manual`. Si no viene, se deduce de
+    /// `capturado_manualmente`.
+    #[serde(default)]
+    pub origen_dpi: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -144,6 +148,8 @@ pub struct AccesoPendiente {
     pub placa: Option<String>,
     pub residente_casa: Option<String>,
     pub capturado_manualmente: bool,
+    /// `local`, `remoto` o `manual` (None en accesos anteriores a T5).
+    pub origen_dpi: Option<String>,
     /// Id del registro en el servidor, una vez sincronizado: con él se puede dar la
     /// salida desde la lista sin buscar por placa. `None` mientras siga pendiente.
     pub registro_id: Option<String>,
@@ -267,6 +273,12 @@ pub fn encolar_acceso(conn: &Connection, agente_id: &str, a: &NuevoAcceso) -> Ap
     // uso (contando los de este equipo que el servidor aún no cuenta), no se encola: dos paneles que escanearon la misma
     // invitación de un solo uso al mismo tiempo no pueden registrarla los dos. Una invitación que la copia no conoce
     // (nueva, o validada en línea) no se frena aquí: el servidor decide al sincronizar.
+    // Origen del DPI: solo los tres valores conocidos; si no viene, «manual» cuando el agente lo tecleó.
+    let origen_dpi: Option<&str> = match a.origen_dpi.as_deref().map(str::trim) {
+        Some(o @ ("local" | "remoto" | "manual")) => Some(o),
+        _ if a.capturado_manualmente => Some("manual"),
+        _ => None,
+    };
     let invitacion_qr = a.invitacion_qr_id.as_deref().map(|v| v.trim().to_lowercase()).filter(|v| !v.is_empty());
     if let Some(qr) = invitacion_qr.as_deref() {
         if qr_agotado_localmente(conn, qr)? {
@@ -288,6 +300,7 @@ pub fn encolar_acceso(conn: &Connection, agente_id: &str, a: &NuevoAcceso) -> Ap
         "placa": placa,
         "notas": a.notas.as_deref().map(str::trim).filter(|n| !n.is_empty()),
         "capturado_manualmente": a.capturado_manualmente,
+        "origen_dpi": origen_dpi,
         "invitacion_qr_id": invitacion_qr,
     });
     let casa: Option<String> = conn
@@ -297,8 +310,8 @@ pub fn encolar_acceso(conn: &Connection, agente_id: &str, a: &NuevoAcceso) -> Ap
     conn.execute(
         "INSERT INTO accesos_pendientes
            (id_cliente, payload, registrado_en, estado, intentos, proximo_intento_en,
-            nombre_visitante, numero_dpi, placa, residente_casa, capturado_manualmente, invitacion_qr_id)
-         VALUES (?1, ?2, ?3, 'pendiente', 0, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+            nombre_visitante, numero_dpi, placa, residente_casa, capturado_manualmente, invitacion_qr_id, origen_dpi)
+         VALUES (?1, ?2, ?3, 'pendiente', 0, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
         params![
             id_cliente,
             payload.to_string(),
@@ -309,6 +322,7 @@ pub fn encolar_acceso(conn: &Connection, agente_id: &str, a: &NuevoAcceso) -> Ap
             casa,
             a.capturado_manualmente as i64,
             payload["invitacion_qr_id"].as_str(),
+            origen_dpi,
         ],
     )?;
     Ok(id_cliente)
@@ -317,7 +331,7 @@ pub fn encolar_acceso(conn: &Connection, agente_id: &str, a: &NuevoAcceso) -> Ap
 pub fn listar_recientes(conn: &Connection, limite: usize) -> AppResult<Vec<AccesoPendiente>> {
     let mut st = conn.prepare(
         "SELECT id_cliente, registrado_en, estado, intentos, ultimo_error, sincronizado_en,
-                nombre_visitante, numero_dpi, placa, residente_casa, capturado_manualmente, registro_id
+                nombre_visitante, numero_dpi, placa, residente_casa, capturado_manualmente, registro_id, origen_dpi
          FROM accesos_pendientes ORDER BY registrado_en DESC LIMIT ?1",
     )?;
     let rows = st.query_map([limite as i64], |r| {
@@ -334,6 +348,7 @@ pub fn listar_recientes(conn: &Connection, limite: usize) -> AppResult<Vec<Acces
             residente_casa: r.get(9)?,
             capturado_manualmente: r.get::<_, i64>(10)? != 0,
             registro_id: r.get(11)?,
+            origen_dpi: r.get(12)?,
         })
     })?;
     Ok(rows.collect::<Result<_, _>>()?)
@@ -708,7 +723,7 @@ mod tests {
         let c = db();
         let id = encolar_acceso(&c, "agente-1", &NuevoAcceso {
             nombre_visitante: "Conductor".into(), numero_dpi: "8800000000001".into(), residente_id: "r1".into(),
-            placa: Some(" p-321 qwe ".into()), notas: None, capturado_manualmente: false, invitacion_qr_id: None,
+            placa: Some(" p-321 qwe ".into()), notas: None, capturado_manualmente: false, invitacion_qr_id: None, origen_dpi: None
         }).unwrap();
         let (payload, columna): (String, String) = c
             .query_row("SELECT payload, placa FROM accesos_pendientes WHERE id_cliente = ?1", [&id], |r| Ok((r.get(0)?, r.get(1)?)))
@@ -757,7 +772,7 @@ mod tests {
         let c = db();
         let err = encolar_acceso(&c, "agente-1", &NuevoAcceso {
             nombre_visitante: "Conductor".into(), numero_dpi: "8888888888888".into(), residente_id: "r1".into(),
-            placa: Some("p-999xyz".into()), notas: None, capturado_manualmente: false, invitacion_qr_id: None,
+            placa: Some("p-999xyz".into()), notas: None, capturado_manualmente: false, invitacion_qr_id: None, origen_dpi: None
         }).unwrap_err();
         assert_eq!(err.codigo, "blacklist");
         assert!(err.mensaje.starts_with("Vehículo en lista negra"), "{}", err.mensaje);
@@ -772,7 +787,7 @@ mod tests {
         let c = db();
         let nuevo = |dpi: &str| NuevoAcceso {
             nombre_visitante: "Visita".into(), numero_dpi: dpi.into(), residente_id: "r1".into(),
-            placa: None, notas: None, capturado_manualmente: false, invitacion_qr_id: None,
+            placa: None, notas: None, capturado_manualmente: false, invitacion_qr_id: None, origen_dpi: None
         };
         let a = encolar_acceso(&c, "agente-1", &nuevo("5000000000001")).unwrap();
         let _b = encolar_acceso(&c, "agente-1", &nuevo("5000000000002")).unwrap();
@@ -821,7 +836,7 @@ mod tests {
                 placa: None,
                 notas: None,
                 capturado_manualmente: false,
-                invitacion_qr_id: Some("  inv-9  ".into()),
+                invitacion_qr_id: Some("  inv-9  ".into()), origen_dpi: None
             },
         )
         .unwrap();
@@ -842,7 +857,7 @@ mod tests {
                 placa: None,
                 notas: None,
                 capturado_manualmente: true,
-                invitacion_qr_id: Some("   ".into()),
+                invitacion_qr_id: Some("   ".into()), origen_dpi: None
             },
         )
         .unwrap();
@@ -866,7 +881,7 @@ mod tests {
                 placa: Some("p 123abc".into()),
                 notas: None,
                 capturado_manualmente: true,
-                invitacion_qr_id: None,
+                invitacion_qr_id: None, origen_dpi: None
             },
         )
         .unwrap();
@@ -898,7 +913,7 @@ mod tests {
                 placa: None,
                 notas: None,
                 capturado_manualmente: false,
-                invitacion_qr_id: None,
+                invitacion_qr_id: None, origen_dpi: None
             },
         )
         .unwrap_err();
@@ -1050,11 +1065,34 @@ mod tests {
     }
 
     #[test]
+    fn encolar_guarda_el_origen_del_dpi_y_deduce_manual_si_no_viene() {
+        let c = db_con_qr(&[]);
+        let encolar = |origen: Option<&str>, manual: bool| {
+            let id = encolar_acceso(&c, "agente-1", &NuevoAcceso {
+                nombre_visitante: "Marta".into(), numero_dpi: "2999111220101".into(), residente_id: "r1".into(), placa: None, notas: None,
+                capturado_manualmente: manual, invitacion_qr_id: None, origen_dpi: origen.map(String::from),
+            }).unwrap();
+            let (col, payload): (Option<String>, String) = c
+                .query_row("SELECT origen_dpi, payload FROM accesos_pendientes WHERE id_cliente = ?1", [&id], |r| Ok((r.get(0)?, r.get(1)?)))
+                .unwrap();
+            let p: serde_json::Value = serde_json::from_str(&payload).unwrap();
+            assert_eq!(p["origen_dpi"].as_str(), col.as_deref(), "la columna y el payload dicen lo mismo");
+            col
+        };
+        assert_eq!(encolar(Some("local"), false).as_deref(), Some("local"));
+        assert_eq!(encolar(Some("remoto"), false).as_deref(), Some("remoto"));
+        assert_eq!(encolar(Some("manual"), true).as_deref(), Some("manual"));
+        assert_eq!(encolar(None, true).as_deref(), Some("manual"), "tecleado sin origen informado = manual");
+        assert_eq!(encolar(None, false), None);
+        assert_eq!(encolar(Some("otra cosa"), false), None, "un valor desconocido se descarta");
+    }
+
+    #[test]
     fn encolar_guarda_la_invitacion_en_su_columna_y_en_el_payload_en_minusculas() {
         let c = db_con_qr(&[("usos_maximos", "5")]);
         let id = encolar_acceso(&c, "agente-1", &NuevoAcceso {
             nombre_visitante: "Marta".into(), numero_dpi: "2999111220101".into(), residente_id: "r1".into(), placa: None, notas: None,
-            capturado_manualmente: false, invitacion_qr_id: Some(format!("  {}  ", QR.to_uppercase())),
+            capturado_manualmente: false, invitacion_qr_id: Some(format!("  {}  ", QR.to_uppercase())), origen_dpi: None,
         }).unwrap();
         let (payload, columna): (String, Option<String>) = c
             .query_row("SELECT payload, invitacion_qr_id FROM accesos_pendientes WHERE id_cliente = ?1", [&id], |r| Ok((r.get(0)?, r.get(1)?)))
@@ -1069,7 +1107,7 @@ mod tests {
         let c = db_con_qr(&[("usos_maximos", "2")]);                                              // 1 de 2 en la copia
         let acceso = |dpi: &str| NuevoAcceso {
             nombre_visitante: "Marta".into(), numero_dpi: dpi.into(), residente_id: "r1".into(), placa: None, notas: None,
-            capturado_manualmente: false, invitacion_qr_id: Some(QR.into()),
+            capturado_manualmente: false, invitacion_qr_id: Some(QR.into()), origen_dpi: None
         };
         encolar_acceso(&c, "agente-1", &acceso("2999111220101")).expect("el último uso disponible se encola");
         let e = encolar_acceso(&c, "agente-1", &acceso("2999111220102")).unwrap_err();
@@ -1083,7 +1121,7 @@ mod tests {
         let c = db();
         encolar_acceso(&c, "agente-1", &NuevoAcceso {
             nombre_visitante: "Marta".into(), numero_dpi: "2999111220101".into(), residente_id: "r1".into(), placa: None, notas: None,
-            capturado_manualmente: false, invitacion_qr_id: Some("99999999-0000-4000-8000-000000000000".into()),
+            capturado_manualmente: false, invitacion_qr_id: Some("99999999-0000-4000-8000-000000000000".into()), origen_dpi: None
         }).expect("se encola y el servidor decide al sincronizar");
     }
 

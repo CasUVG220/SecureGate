@@ -35,7 +35,7 @@ const SQL_DIA_DE_ENTRADA =
 export const registrarAcceso = async (req: Request, res: Response) => {
   const {
     nombre_visitante, numero_dpi, foto, residente_id, placa, notas, invitacion_qr_id,
-    registrado_en, capturado_manualmente, id_cliente,
+    registrado_en, capturado_manualmente, origen_dpi, id_cliente,
   } = req.body;
 
   // El agente que registra es SIEMPRE el de la sesión. Antes se leía `agente_id`
@@ -69,6 +69,10 @@ export const registrarAcceso = async (req: Request, res: Response) => {
   }
   const origen: 'web' | 'desktop' = req.licencia ? 'desktop' : 'web';
   const manual = capturado_manualmente === true || capturado_manualmente === 'true';
+  // Origen del DPI (T5): local | remoto | manual. Un valor desconocido se ignora (queda NULL), no rompe el registro;
+  // «capturado_manualmente» sin origen informado cuenta como manual.
+  const origenDpi: 'local' | 'remoto' | 'manual' | null =
+    origen_dpi === 'local' || origen_dpi === 'remoto' || origen_dpi === 'manual' ? origen_dpi : (manual ? 'manual' : null);
 
   // Idempotencia de la cola offline: si este id_cliente ya se recibió (un
   // reintento tras perder la respuesta), se devuelve el registro existente en
@@ -266,12 +270,12 @@ export const registrarAcceso = async (req: Request, res: Response) => {
     const registroResult = await client.query(
       `INSERT INTO registros_acceso
          (sucursal_id, visitante_id, residente_id, vehiculo_id, agente_id, tipo, notas, invitacion_qr_id,
-          timestamp_entrada, registrado_en, recibido_en, capturado_manualmente, origen, id_cliente, licencia_id)
+          timestamp_entrada, registrado_en, recibido_en, capturado_manualmente, origen, id_cliente, licencia_id, origen_dpi)
        VALUES ($1, $2, $3, $4, $5, 'entrada', $6, $7,
-               LEAST(COALESCE($8::timestamptz, NOW()), NOW()), $8::timestamptz, NOW(), $9, $10, $11, $12)
+               LEAST(COALESCE($8::timestamptz, NOW()), NOW()), $8::timestamptz, NOW(), $9, $10, $11, $12, $13)
        RETURNING *`,
       [sucursal_id, visitante_id, residente_id, vehiculo_id, agente_id, notas || null, invitacion_qr_id || null,
-       registradoEn ?? null, manual, origen, id_cliente || null, req.licencia?.id ?? null]
+       registradoEn ?? null, manual, origen, id_cliente || null, req.licencia?.id ?? null, origenDpi]
     );
     const registro = registroResult.rows[0];
 

@@ -11,11 +11,23 @@ pub const API_URL_DEFAULT: &str = "http://localhost:3000";
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
     pub api_url: String,
+    /// T5: ¿se permite usar el OCR remoto (Google Vision, vía backend) como RESPALDO del DPI cuando el OCR local falla o
+    /// duda? Por equipo. Encendida por defecto: primero siempre se lee en local y la imagen solo sale del equipo si el
+    /// local no alcanzó Y hay red. Apagarla deja el DPI 100 % en el equipo (la captura manual sigue disponible).
+    #[serde(default = "dpi_remoto_respaldo_por_defecto")]
+    pub dpi_remoto_respaldo: bool,
+}
+
+fn dpi_remoto_respaldo_por_defecto() -> bool {
+    true
 }
 
 impl Default for Config {
     fn default() -> Self {
-        Self { api_url: std::env::var("SECUREGATE_API_URL").unwrap_or_else(|_| API_URL_DEFAULT.to_string()) }
+        Self {
+            api_url: std::env::var("SECUREGATE_API_URL").unwrap_or_else(|_| API_URL_DEFAULT.to_string()),
+            dpi_remoto_respaldo: dpi_remoto_respaldo_por_defecto(),
+        }
     }
 }
 
@@ -139,11 +151,25 @@ mod tests {
     }
 
     #[test]
+    fn el_respaldo_remoto_del_dpi_esta_permitido_por_defecto_y_se_conserva_o_se_apaga_por_equipo() {
+        let dir = tempfile::tempdir().unwrap();
+        assert!(Config::cargar(dir.path()).dpi_remoto_respaldo, "por defecto: local primero, remoto como respaldo");
+        // Un config.json anterior a T5 (sin el campo) sigue cargando y con el valor por defecto.
+        std::fs::write(Config::ruta(dir.path()), r#"{"api_url":"http://10.0.0.5:3000"}"#).unwrap();
+        let c = Config::cargar(dir.path());
+        assert_eq!(c.api_url, "http://10.0.0.5:3000");
+        assert!(c.dpi_remoto_respaldo);
+        let apagada = Config { dpi_remoto_respaldo: false, ..c };
+        apagada.guardar(dir.path()).unwrap();
+        assert!(!Config::cargar(dir.path()).dpi_remoto_respaldo);
+    }
+
+    #[test]
     fn cargar_devuelve_default_si_no_hay_archivo() {
         let dir = tempfile::tempdir().unwrap();
         let c = Config::cargar(dir.path());
         assert!(c.api_url.starts_with("http"));
-        let nueva = Config { api_url: "http://10.0.0.5:3000".into() };
+        let nueva = Config { api_url: "http://10.0.0.5:3000".into(), ..Config::default() };
         nueva.guardar(dir.path()).unwrap();
         assert_eq!(Config::cargar(dir.path()).api_url, "http://10.0.0.5:3000");
     }

@@ -576,6 +576,13 @@ DO $$ BEGIN
 EXCEPTION WHEN duplicate_column THEN NULL;
 END $$;
 
+-- T5: de dónde salió el DPI del visitante (local = OCR del equipo, remoto = Google Vision vía backend, manual = tecleado).
+-- NULL en los registros anteriores y en los de la web, que no lo informan.
+DO $$ BEGIN
+  ALTER TABLE registros_acceso ADD COLUMN origen_dpi VARCHAR(10) CHECK (origen_dpi IN ('local', 'remoto', 'manual'));
+EXCEPTION WHEN duplicate_column THEN NULL;
+END $$;
+
 DO $$ BEGIN
   ALTER TABLE registros_acceso ADD COLUMN origen VARCHAR(20) NOT NULL DEFAULT 'web'
     CHECK (origen IN ('web', 'desktop'));

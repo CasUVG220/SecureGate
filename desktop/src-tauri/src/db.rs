@@ -167,7 +167,8 @@ pub fn aplicar_esquema(conn: &Connection) -> AppResult<()> {
           placa                 TEXT,
           residente_casa        TEXT,
           capturado_manualmente INTEGER NOT NULL DEFAULT 0,
-          invitacion_qr_id      TEXT
+          invitacion_qr_id      TEXT,
+          origen_dpi            TEXT
         );
         CREATE INDEX IF NOT EXISTS idx_pendientes_estado ON accesos_pendientes(estado, proximo_intento_en);
 
@@ -182,6 +183,7 @@ pub fn aplicar_esquema(conn: &Connection) -> AppResult<()> {
     )?;
     migrar_blacklist_placa(conn)?;
     migrar_pendientes_invitacion_qr(conn)?;
+    migrar_pendientes_origen_dpi(conn)?;
     Ok(())
 }
 
@@ -211,6 +213,18 @@ fn migrar_pendientes_invitacion_qr(conn: &Connection) -> AppResult<()> {
         }
     }
     conn.execute("CREATE INDEX IF NOT EXISTS idx_pendientes_qr ON accesos_pendientes(invitacion_qr_id)", [])?;
+    Ok(())
+}
+
+/// T5: la cola guarda de dónde salió el DPI de cada acceso (`local`, `remoto` o `manual`). En equipos con una cola anterior
+/// la columna no existe: se agrega vacía (NULL = no se sabe) sin tocar nada más. Idempotente.
+fn migrar_pendientes_origen_dpi(conn: &Connection) -> AppResult<()> {
+    let existe = conn
+        .prepare("SELECT 1 FROM pragma_table_info('accesos_pendientes') WHERE name = 'origen_dpi'")?
+        .exists([])?;
+    if !existe {
+        conn.execute("ALTER TABLE accesos_pendientes ADD COLUMN origen_dpi TEXT", [])?;
+    }
     Ok(())
 }
 
@@ -356,6 +370,25 @@ mod tests {
         assert_eq!(filas, 3, "no se pierde ninguna fila");
         aplicar_esquema(&c).unwrap();                      // idempotente
         assert_eq!(qr("a").as_deref(), Some("3f2a9c10-aaaa-4bbb-8ccc-0123456789ab"));
+    }
+
+    #[test]
+    fn una_cola_anterior_sin_origen_del_dpi_se_migra_sin_perder_filas() {
+        let c = Connection::open_in_memory().unwrap();
+        c.execute_batch(
+            "CREATE TABLE accesos_pendientes (
+               id_cliente TEXT PRIMARY KEY, payload TEXT NOT NULL, registrado_en TEXT NOT NULL,
+               estado TEXT NOT NULL DEFAULT 'pendiente', intentos INTEGER NOT NULL DEFAULT 0, proximo_intento_en TEXT,
+               ultimo_error TEXT, sincronizado_en TEXT, registro_id TEXT, nombre_visitante TEXT NOT NULL,
+               numero_dpi TEXT NOT NULL, placa TEXT, residente_casa TEXT, capturado_manualmente INTEGER NOT NULL DEFAULT 0,
+               invitacion_qr_id TEXT);
+             INSERT INTO accesos_pendientes (id_cliente, payload, registrado_en, nombre_visitante, numero_dpi)
+               VALUES ('a', '{}', '2026-10-10T10:00:00Z', 'V', '1');",
+        ).unwrap();
+        aplicar_esquema(&c).unwrap();
+        aplicar_esquema(&c).unwrap();                       // idempotente
+        let origen: Option<String> = c.query_row("SELECT origen_dpi FROM accesos_pendientes WHERE id_cliente = 'a'", [], |r| r.get(0)).unwrap();
+        assert_eq!(origen, None, "la fila anterior se conserva y queda sin origen");
     }
 
     #[test]

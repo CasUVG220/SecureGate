@@ -186,7 +186,7 @@ mod tests {
         c.execute("INSERT INTO residentes_local VALUES ('r1', 'A-12', 'Ana', 'al_dia', NULL)", []).unwrap();
         let id = garita::encolar_acceso(&c, "agente-1", &garita::NuevoAcceso {
             nombre_visitante: "Juan".into(), numero_dpi: "5555555555555".into(), residente_id: "r1".into(),
-            placa: None, notas: None, capturado_manualmente: true, invitacion_qr_id: None,
+            placa: None, notas: None, capturado_manualmente: true, invitacion_qr_id: None, origen_dpi: None,
         }).unwrap();
 
         // Relé Ethernet apuntando a un puerto donde nadie escucha: falla.
