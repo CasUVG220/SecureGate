@@ -43,7 +43,7 @@ describe('PagosPage', () => {
     mockRechazarPago.mockReset();
     mockGetResidentes.mockReset();
     mockGetResidentes.mockResolvedValue([
-      { id: 'r1', numero_casa: '101', nombre: 'Juan Pérez', email: 'juan@test.com', estado_pago: 'al_dia', saldo_pendiente: '0.00' },
+      { id: 'r1', numero_casa: '101', nombre: 'Juan Pérez', email: 'juan@test.com', estado_pago: 'mora', saldo_pendiente: '400.00' },
     ]);
   });
 
@@ -87,6 +87,28 @@ describe('PagosPage', () => {
 
     await waitFor(() => expect(mockCreatePago).toHaveBeenCalledWith({ residente_id: 'r1', monto: 150 }));
     expect(mockGetPagos).toHaveBeenCalledTimes(2);
+  });
+
+  it('crear pago: muestra el saldo del residente y NO envía un monto mayor al saldo (T1)', async () => {
+    mockGetPagos.mockResolvedValue([]);
+    render(<PagosPage />);
+    await screen.findByText('No hay pagos registrados.');
+    await waitFor(() => expect(mockGetResidentes).toHaveBeenCalled());
+    fireEvent.click(screen.getByRole('button', { name: '+ Agregar el primero' }));
+
+    fireEvent.change(screen.getByDisplayValue('Seleccionar residente...'), { target: { value: 'r1' } });
+    expect(screen.getByText(/Saldo pendiente: Q400\.00\. Puedes registrar un pago parcial/)).toBeInTheDocument();
+
+    fireEvent.change(screen.getByPlaceholderText('0.00'), { target: { value: '400.01' } });
+    fireEvent.click(screen.getByText('Guardar'));
+    expect(await screen.findByRole('alert')).toHaveTextContent('El monto (Q400.01) supera el saldo pendiente del residente (Q400.00)');
+    expect(mockCreatePago).not.toHaveBeenCalled();
+
+    // un pago parcial sí se envía
+    fireEvent.change(screen.getByPlaceholderText('0.00'), { target: { value: '150' } });
+    mockCreatePago.mockResolvedValue(pago({ id: 'p4' }));
+    fireEvent.click(screen.getByText('Guardar'));
+    await waitFor(() => expect(mockCreatePago).toHaveBeenCalledWith({ residente_id: 'r1', monto: 150 }));
   });
 
   it('aprobar pago: llama aprobarPago() y cambia estado', async () => {

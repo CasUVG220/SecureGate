@@ -78,10 +78,10 @@ Dos pruebas mantienen esta lista honesta:
 | `OCR_PLACA` | Lectura de la foto de una placa | `POST /api/ocr/placa` | personal | 30/min por usuario |
 | `OCR_ESCANEO` | Lectura bloqueada por límite (429) | `/api/ocr/*` | — | — |
 | **Dinero** | | | | |
-| `PAGO_TARJETA_SIMULADO` | Intento de pago con tarjeta (aprobado o rechazado) | `POST /api/pagos/tarjeta` | residente | 10/15 min por usuario; los bloqueos se auditan |
-| `PAGO_TRANSFERENCIA_ENVIADA` | El residente sube el comprobante de una transferencia | `POST /api/pagos/transferencia` | residente | 10/15 min por usuario; los bloqueos se auditan |
-| `PAGO_EFECTIVO` | Registro de un pago en efectivo | `POST /api/pagos` | admin de sucursal | — |
-| `PAGO_APROBADO` | Aprueba un comprobante | `PUT /api/pagos/:id/aprobar` | admin de sucursal | — |
+| `PAGO_TARJETA_SIMULADO` | Intento de pago con tarjeta (aprobado, rechazado, o **422** si el monto supera el saldo). El pago **resta su monto del saldo** (`docs/pagos_saldo.md`) | `POST /api/pagos/tarjeta` | residente | 10/15 min por usuario; los bloqueos se auditan |
+| `PAGO_TRANSFERENCIA_ENVIADA` | El residente sube el comprobante de una transferencia (**422** si el monto supera su saldo) | `POST /api/pagos/transferencia` | residente | 10/15 min por usuario; los bloqueos se auditan |
+| `PAGO_EFECTIVO` | Registro de un pago en efectivo; resta su monto del saldo (**422** si lo supera) | `POST /api/pagos` | admin de sucursal | — |
+| `PAGO_APROBADO` | Aprueba un comprobante; resta su monto del saldo (**422** si ya no cabe: sigue pendiente y hay que rechazarlo) | `PUT /api/pagos/:id/aprobar` | admin de sucursal | — |
 | `PAGO_RECHAZADO` | Rechaza un comprobante | `PUT /api/pagos/:id/rechazar` | admin de sucursal | — |
 | `CARGO_CONFIG_CREADA` | Alta de una regla de cargo por mora | `POST /api/cargos/configuracion`, `/api/configuracion-cargos` | admin de sucursal | — |
 | `CARGO_CONFIG_ACTUALIZADA` | Edición de una regla de cargo | `PUT /api/cargos/configuracion/:id`, `/api/configuracion-cargos/:id` | admin de sucursal | — |

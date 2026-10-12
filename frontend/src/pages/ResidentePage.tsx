@@ -300,6 +300,12 @@ export default function ResidentePage({ requestedTab, tabNonce = 0 }: ResidenteP
       setTrfError('Todos los campos son requeridos.'); return;
     }
     if (Number(trfForm.monto) <= 0) { setTrfError('El monto debe ser mayor a 0.'); return; }
+    // Un comprobante no puede pasar del saldo (el servidor también lo rechaza con 422).
+    if (saldo <= 0) { setTrfError(t('portal.noBalanceToPay')); return; }
+    if (Math.round(Number(trfForm.monto) * 100) > Math.round(saldo * 100)) {
+      setTrfError(t('portal.amountExceedsBalance').replace('{monto}', Number(trfForm.monto).toFixed(2)).replace('{saldo}', saldo.toFixed(2)));
+      return;
+    }
     setEnviando(true);
     try {
       const nuevo = await crearTransferencia({
@@ -1112,11 +1118,15 @@ export default function ResidentePage({ requestedTab, tabNonce = 0 }: ResidenteP
         saldo={saldo}
         simulada={estadoTarjeta.simulada}
         onResultado={pago => {
-          // Solo llegan pagos APROBADOS (un rechazo no se guarda): entran al historial y
-          // el saldo queda al día.
+          // Solo llegan pagos APROBADOS (un rechazo no se guarda): entran al historial y el pago
+          // resta su monto del saldo (parcial deja el resto; exacto deja al día).
           setMisPagos(prev => [pago, ...prev]);
           showToast(t('card.approved').replace('{monto}', parseFloat(pago.monto).toFixed(2)));
-          setData(prev => prev ? { ...prev, saldo_pendiente: '0.00', estado_pago: 'al_dia' } : prev);
+          setData(prev => {
+            if (!prev) return prev;
+            const restoC = Math.max(Math.round(parseFloat(prev.saldo_pendiente) * 100) - Math.round(parseFloat(pago.monto) * 100), 0);
+            return { ...prev, saldo_pendiente: (restoC / 100).toFixed(2), estado_pago: restoC === 0 ? 'al_dia' : prev.estado_pago };
+          });
           getMiResumenMes().then(setResumenMes).catch(() => {});
         }}
       />

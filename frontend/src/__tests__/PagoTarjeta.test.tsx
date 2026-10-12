@@ -133,7 +133,7 @@ describe('PagoTarjetaModal', () => {
     expect(screen.getByText('Paga tu saldo pendiente con tarjeta.')).toBeInTheDocument();
   });
 
-  describe('advertencia cuando el monto supera el saldo', () => {
+  describe('el monto no puede superar el saldo (T1)', () => {
     const cambiarMonto = (v: string) => fireEvent.change(screen.getByLabelText(/Monto a pagar/), { target: { value: v } });
 
     it('con el monto igual al saldo no avisa', () => {
@@ -141,17 +141,18 @@ describe('PagoTarjetaModal', () => {
       expect(screen.queryByText(/supera tu saldo pendiente/)).toBeNull();
     });
 
-    it('si el monto es mayor, avisa con las dos cifras y NO bloquea el pago', async () => {
-      mockPagar.mockResolvedValue({ id: 'p9', monto: '900.00', estado: 'aprobado', es_simulado: true });
+    it('si el monto es mayor, avisa con las dos cifras y BLOQUEA el pago (el servidor lo rechazaría con 422)', async () => {
       renderModal();
       cambiarMonto('900');
       const aviso = screen.getByRole('status');
       expect(aviso).toHaveTextContent('El monto (Q900.00) supera tu saldo pendiente (Q850.00)');
-      expect(aviso).toHaveTextContent('el excedente no se acredita');
+      expect(aviso).toHaveTextContent('No se puede pagar más de lo que se debe');
 
       llenar();
-      fireEvent.click(screen.getByRole('button', { name: /Confirmar pago/ }));
-      await waitFor(() => expect(mockPagar).toHaveBeenCalledWith(expect.objectContaining({ monto: 900 })));
+      const confirmar = screen.getByRole('button', { name: /Confirmar pago/ });
+      expect(confirmar).toBeDisabled();
+      fireEvent.click(confirmar);
+      expect(mockPagar).not.toHaveBeenCalled();
     });
 
     it('«Usar mi saldo» vuelve a poner el saldo exacto y el aviso desaparece', () => {
@@ -162,16 +163,21 @@ describe('PagoTarjetaModal', () => {
       expect(screen.queryByText(/supera tu saldo pendiente/)).toBeNull();
     });
 
-    it('un monto menor al saldo no es una advertencia', () => {
+    it('un monto menor al saldo es un pago parcial válido: no es una advertencia, solo una nota', async () => {
+      mockPagar.mockResolvedValue({ id: 'p8', monto: '100.00', estado: 'aprobado', es_simulado: true });
       renderModal();
       cambiarMonto('100');
       expect(screen.queryByRole('status')).toBeNull();
+      expect(screen.getByText(/pago parcial: lo que no pagues ahora queda como saldo pendiente/)).toBeInTheDocument();
+      llenar();
+      fireEvent.click(screen.getByRole('button', { name: /Confirmar pago/ }));
+      await waitFor(() => expect(mockPagar).toHaveBeenCalledWith(expect.objectContaining({ monto: 100 })));
     });
 
     it('sin saldo pendiente avisa que el pago no reduce ninguna deuda', () => {
       renderModal(vi.fn(), { saldo: 0 });
       cambiarMonto('50');
-      expect(screen.getByRole('status')).toHaveTextContent('No tienes saldo pendiente');
+      expect(screen.getByRole('status')).toHaveTextContent('No tienes saldo pendiente: no hay nada que pagar');
     });
   });
 

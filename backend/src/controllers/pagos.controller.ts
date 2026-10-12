@@ -3,16 +3,17 @@ import pool from '../db/pool';
 import { tenantFilter, ownershipClause, ownershipParams } from '../utils/tenant';
 import { APP_TZ, Consultable } from '../utils/reservas';
 import { serverError } from '../utils/http';
+import {
+  ExcedeSaldoError, aCentavos, bloquearSaldo, cuerpoExcedeSaldo, exigirQueCabe, restarDelSaldo,
+} from '../utils/saldo';
 
 /**
  * Marca como saldados los cargos de reserva pendientes del residente.
  *
- * El flujo de pagos del proyecto liquida todo de una vez (pone
- * saldo_pendiente = 0 en vez de restar el monto). Los cargos de reserva viven
- * en la misma tabla `pagos` con metodo = 'reserva', así que sin esto quedarían
- * en 'pendiente' para siempre mientras el saldo que representan se borra: deuda
- * huérfana. Se conserva la semántica existente ("un pago liquida todo") y se
- * extiende a los cargos de reserva.
+ * Los cargos de reserva viven en la misma tabla `pagos` con metodo = 'reserva' y suman
+ * al `saldo_pendiente`. Regla (T1): se saldan **solo cuando el pago deja el saldo en 0**;
+ * un pago parcial reduce el saldo pero no elige a cuál cargo se aplica, así que los cargos
+ * siguen «pendientes» hasta que la deuda total quede pagada.
  */
 export async function liquidarCargosReserva(
   db: Consultable,
@@ -27,10 +28,17 @@ export async function liquidarCargosReserva(
   return result.rowCount ?? 0;
 }
 
-/** Monto positivo, finito y con tope razonable. */
+/** Monto positivo, finito, con tope razonable y a lo más con dos decimales (centavos exactos). */
 const montoValido = (v: unknown): boolean => {
   const n = Number(v);
-  return Number.isFinite(n) && n > 0 && n <= 1_000_000;
+  return Number.isFinite(n) && n > 0 && n <= 1_000_000 && Math.abs(n * 100 - Math.round(n * 100)) < 1e-6;
+};
+
+/** Responde 422 si el error es «excede el saldo»; devuelve true si lo manejó. */
+const responderExcede = (res: Response, error: unknown): boolean => {
+  if (!(error instanceof ExcedeSaldoError)) return false;
+  res.status(422).json(cuerpoExcedeSaldo(error));
+  return true;
 };
 
 /** El comprobante es un data URI; ~5 MB de imagen ≈ 7 M caracteres en base64. */
@@ -82,6 +90,10 @@ export const createPago = async (req: Request, res: Response) => {
     }
     const sucursal_id: string = residente.rows[0].sucursal_id;
 
+    // Fila del residente bloqueada: dos pagos simultáneos se serializan y nunca dejan saldo negativo.
+    const montoC = aCentavos(monto);
+    exigirQueCabe((await bloquearSaldo(client, residente_id))!, montoC);
+
     const pagoResult = await client.query(
       `INSERT INTO pagos
          (sucursal_id, residente_id, monto, metodo, estado, comprobante, registrado_por)
@@ -90,19 +102,15 @@ export const createPago = async (req: Request, res: Response) => {
       [sucursal_id, residente_id, monto, comprobante || null, registrado_por]
     );
 
-    await liquidarCargosReserva(client, residente_id);
-
-    await client.query(
-      `UPDATE residentes
-       SET estado_pago = 'al_dia', saldo_pendiente = 0, fecha_ultimo_pago = NOW()
-       WHERE id = $1`,
-      [residente_id]
-    );
+    if (await restarDelSaldo(client, residente_id, montoC) === 0) {
+      await liquidarCargosReserva(client, residente_id);
+    }
 
     await client.query('COMMIT');
     res.status(201).json(pagoResult.rows[0]);
   } catch (error) {
-    await client.query('ROLLBACK');
+    await client.query('ROLLBACK').catch(() => {});
+    if (responderExcede(res, error)) return;
     serverError(res, error, 'Error al crear pago');
   } finally {
     client.release();
@@ -116,7 +124,7 @@ export const aprobarPago = async (req: Request, res: Response) => {
     await client.query('BEGIN');
 
     const pagoResult = await client.query(
-      `SELECT p.residente_id, p.estado
+      `SELECT p.residente_id, p.estado, p.monto
        FROM pagos p
        WHERE p.id = $1
          AND ${ownershipClause('p', 2)}
@@ -141,23 +149,26 @@ export const aprobarPago = async (req: Request, res: Response) => {
       return res.status(409).json({ error: `El pago tiene estado '${pagoResult.rows[0].estado}' y no puede aprobarse` });
     }
 
+    // El saldo puede haber bajado desde que el residente subió el comprobante (otro pago, un ajuste):
+    // se vuelve a comprobar con la fila del residente bloqueada. Si ya no cabe, el pago sigue
+    // pendiente y quien aprueba debe rechazarlo con un comentario.
+    const { residente_id, monto } = pagoResult.rows[0];
+    const montoC = aCentavos(monto);
+    exigirQueCabe((await bloquearSaldo(client, residente_id))!, montoC);
+
     const updated = await client.query(
       `UPDATE pagos SET estado = 'aprobado' WHERE id = $1 RETURNING *`, [id]
     );
 
-    await liquidarCargosReserva(client, pagoResult.rows[0].residente_id);
-
-    await client.query(
-      `UPDATE residentes
-       SET estado_pago = 'al_dia', saldo_pendiente = 0, fecha_ultimo_pago = NOW()
-       WHERE id = $1`,
-      [pagoResult.rows[0].residente_id]
-    );
+    if (await restarDelSaldo(client, residente_id, montoC) === 0) {
+      await liquidarCargosReserva(client, residente_id);
+    }
 
     await client.query('COMMIT');
     res.json(updated.rows[0]);
   } catch (error) {
-    await client.query('ROLLBACK');
+    await client.query('ROLLBACK').catch(() => {});
+    if (responderExcede(res, error)) return;
     serverError(res, error, 'Error al aprobar pago');
   } finally {
     client.release();
@@ -222,6 +233,15 @@ export const crearTransferencia = async (req: Request, res: Response) => {
     }
     const { id: residente_id, sucursal_id } = residente.rows[0];
 
+    // Aviso temprano: un comprobante por más de lo que se debe no puede aprobarse después.
+    // (La comprobación que manda es la de la aprobación, con la fila bloqueada.)
+    const saldoC = aCentavos((await pool.query(
+      'SELECT saldo_pendiente FROM residentes WHERE id = $1', [residente_id],
+    )).rows[0].saldo_pendiente);
+    if (aCentavos(monto) > saldoC) {
+      return res.status(422).json(cuerpoExcedeSaldo(new ExcedeSaldoError(saldoC, aCentavos(monto))));
+    }
+
     const result = await pool.query(
       `INSERT INTO pagos
          (sucursal_id, residente_id, monto, metodo, estado,
@@ -261,7 +281,7 @@ export function simularAutorizacionTarjeta(ultimos4: string): 'aprobado' | 'rech
  * backend no los recibe ni los almacena.
  */
 export const pagarConTarjeta = async (req: Request, res: Response) => {
-  // La pasarela es un MOCK que liquida la deuda con cualquier tarjeta. Sólo se
+  // La pasarela es un MOCK que acepta cualquier tarjeta. Sólo se
   // habilita de forma explícita (PAGOS_TARJETA_SIMULADA=true, docker-compose de
   // desarrollo); en producción responde 501 hasta que exista la integración
   // real. Sin este interruptor, cualquier residente podía dejar su saldo en 0
@@ -292,6 +312,14 @@ export const pagarConTarjeta = async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Residente no encontrado' });
     }
     const { id: residente_id, sucursal_id } = residente.rows[0];
+
+    // Primero se bloquea la fila del residente y se comprueba que el monto cabe en el saldo: así
+    // nunca se autoriza un cobro que después no se podría acreditar (y dos cobros simultáneos
+    // del mismo residente se serializan).
+    await client.query('BEGIN');
+    const montoC = aCentavos(monto);
+    exigirQueCabe((await bloquearSaldo(client, residente_id))!, montoC);
+
     const estado = simularAutorizacionTarjeta(String(ultimos4));
 
     // Una tarjeta rechazada NO es un pago: no se guarda en `pagos`. Antes cada intento
@@ -299,13 +327,12 @@ export const pagarConTarjeta = async (req: Request, res: Response) => {
     // y del administrador y se colaba en los reportes. El intento no se pierde: la ruta
     // lleva auditoría (PAGO_TARJETA_SIMULADO) con usuario, IP y este código 402.
     if (estado === 'rechazado') {
+      await client.query('ROLLBACK');
       return res.status(402).json({
         error: 'Pago rechazado por el emisor. Intenta con otra tarjeta.',
         estado: 'rechazado',
       });
     }
-
-    await client.query('BEGIN');
 
     const result = await client.query(
       `INSERT INTO pagos
@@ -318,19 +345,16 @@ export const pagarConTarjeta = async (req: Request, res: Response) => {
        String(ultimos4), usuario_id]
     );
 
-    // La autorización aprobada liquida igual que un pago en efectivo aprobado.
-    await liquidarCargosReserva(client, residente_id);
-    await client.query(
-      `UPDATE residentes
-          SET estado_pago = 'al_dia', saldo_pendiente = 0, fecha_ultimo_pago = NOW()
-        WHERE id = $1`,
-      [residente_id]
-    );
+    // La autorización aprobada resta su monto del saldo igual que un pago en efectivo aprobado.
+    if (await restarDelSaldo(client, residente_id, montoC) === 0) {
+      await liquidarCargosReserva(client, residente_id);
+    }
 
     await client.query('COMMIT');
     res.status(201).json(result.rows[0]);
   } catch (error) {
     await client.query('ROLLBACK').catch(() => {});
+    if (responderExcede(res, error)) return;
     serverError(res, error, 'Error al procesar el pago con tarjeta');
   } finally {
     client.release();

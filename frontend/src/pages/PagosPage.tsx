@@ -55,11 +55,19 @@ export default function PagosPage() {
   const handleFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
     setForm(prev => ({ ...prev, [e.target.name]: e.target.value }));
 
+  const residenteElegido = residentes.find(r => r.id === form.residente_id);
+  const saldoElegido = residenteElegido ? parseFloat(residenteElegido.saldo_pendiente) : null;
+
   const handleCrear = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.residente_id || !form.monto) { setFormError('Selecciona un residente e ingresa el monto.'); return; }
     const monto = parseFloat(form.monto);
     if (isNaN(monto) || monto <= 0) { setFormError('El monto debe ser mayor a 0.'); return; }
+    // Un pago resta su monto del saldo; uno mayor al saldo lo rechaza el servidor (422): se avisa antes.
+    if (saldoElegido !== null && Math.round(monto * 100) > Math.round(saldoElegido * 100)) {
+      setFormError(t('payments.amountExceedsBalance').replace('{monto}', monto.toFixed(2)).replace('{saldo}', saldoElegido.toFixed(2)));
+      return;
+    }
     setSaving(true); setFormError(null);
     try {
       await createPago({ residente_id: form.residente_id, monto });
@@ -250,6 +258,7 @@ export default function PagosPage() {
           <Input
             name="monto" label={t('payments.amountLabel')} required type="number" min="0.01" step="0.01"
             placeholder="0.00" value={form.monto} onChange={handleFormChange} suffix="Q"
+            hint={saldoElegido !== null ? t('payments.balanceHint').replace('{saldo}', saldoElegido.toFixed(2)) : undefined}
           />
           <div className="flex flex-wrap justify-end gap-3 pt-2">
             <Button variant="ghost" onClick={() => setShowModal(false)} disabled={saving}>{t('common.cancel')}</Button>
