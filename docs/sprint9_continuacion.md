@@ -15,6 +15,7 @@ No se tocó producción, la VM, Cloud SQL ni secretos. Las pruebas de base de da
 | T1 | Pagos: un pago resta su monto del saldo | HECHO |
 | T2 | Interfaz `ProveedorPago` y preparación de Visanet | HECHO (la integración real queda PENDIENTE de documentación y credenciales) |
 | T3 | Conjunto sintético y evaluador del DPI | HECHO |
+| T4 | Extractor local del DPI en el sidecar | HECHO (precisión real SIN medir: solo hay datos sintéticos) |
 
 ## Línea base (antes de tocar nada, con las 2 correcciones de T0)
 
@@ -58,6 +59,7 @@ Regla, casos, concurrencia y datos históricos: **`docs/pagos_saldo.md`**.
 - Decisión: la pasarela simulada ahora guarda su identificador (`SIM-<ult4>-A|R`) en `pagos.referencia`; es el único cambio visible respecto a antes.
 - No se tocó `PAGOS_TARJETA_SIMULADA` ni `scripts/deploy.sh`.
 - Pendiente para humanos: ver "Pendientes para humanos" (credenciales, contrato, documentación oficial de NeoNet).
+- **Indicación del equipo durante la corrida:** todavía no hay autorización de Visanet; dejar la pasarela simulada y el adaptador «no configurado» como maquetas funcionales es lo esperado. No se avanzó más en esa integración.
 
 > **Pruebas intermitentes ya existentes (no causadas por estas tareas):** `refresh.reuso.int` (I-19, ventana de gracia de 10 s) y `I-11 RESERVA_RECHAZADA`
 > (la fecha de la reserva se elige al azar y a veces choca) fallaron una vez cada una bajo carga y pasan al repetir en solitario y en la suite completa (2 corridas verdes seguidas).
@@ -73,3 +75,19 @@ Regla, casos, concurrencia y datos históricos: **`docs/pagos_saldo.md`**.
 - Pruebas: 7 del evaluador (`node --test scripts/eval-dpi/`) y 3 del generador (`npm --prefix desktop/sidecar-ocr test`). Se arregló el script de pruebas del sidecar: `node --test src/` no
   funciona en Node 22 (pasó a `node --test`, que descubre `*.test.js`).
 - `onnxruntime-node` no pudo instalarse con scripts (`ECONNRESET` bajando binarios); con `npm ci --ignore-scripts` basta (trae el binario de CPU de Linux).
+
+## T4 — Extractor local del DPI en el sidecar · **HECHO**
+- `desktop/sidecar-ocr/src/dpi.js` (función pura sobre las líneas del OCR), `src/enderezar.js` y la operación `dpi` del sidecar (`server.js`, `reconocerDpi`). Devuelve CUI (13 dígitos, con formato 4-5-4),
+  nombres, apellidos, **confianza por campo**, la lista de **correcciones** y `revision_obligatoria` con sus `motivos`. **No devuelve el texto crudo** ni la imagen.
+- Correcciones por posición: en el CUI O/Q/D→0, I/L/|→1, Z→2, S→5, G→6, B→8; en nombres 0→O, 1→I, 2→Z, 5→S, 6→G, 8→B. Cualquier corrección baja la confianza y **obliga a revisar**.
+  Validación: 13 dígitos exactos, departamento 01–22 y municipio 01–40.
+- **Pendiente (no se inventó):** (1) el **dígito verificador del CUI** (posición 9): no conozco con certeza el algoritmo oficial; el resultado trae `verificador: "no_verificado"`; (2) el **catálogo de municipios por
+  departamento** (se usa la cota 01–40; reemplazar por el catálogo oficial de RENAP); (3) confirmar con DPI reales la disposición supuesta (apellidos sobre nombres, etiquetas bilingües, CUI en 4-5-4).
+- Hallazgos con el OCR real sobre el conjunto sintético: el detector junta renglones cuando el documento está torcido más de ~6° (letras sueltas, CUI «no encontrado»), así que se agregó un
+  **enderezado** (perfil de proyección sobre una copia reducida, ~40 ms; en memoria, sin escribir a disco); el CUI sale en 3 fragmentos («7093» «67348» «1002») y se **unen por línea**; el modelo es del alfabeto
+  latino básico: **no produce Ñ ni tildes** (se informa aparte la comparación estricta). Sobre los espacios entre palabras: con `spaceRecovery` parte nombres («G LO RIA»), sin él los pega («LUISLUCIA»);
+  se eligió **sin él** (acierta más campos) y la pantalla siempre deja revisar.
+- **Resultado sobre 60 imágenes SINTÉTICAS** (semilla 20261011; **NO es evidencia de precisión con DPI reales**): CUI exacto **95 %** (57/60), nombres 78 %, apellidos 75 %, revisión manual 11.7 %,
+  **errores silenciosos 0** (los 3 CUI mal quedaron marcados: 14 dígitos o 1 dígito corrido), tiempo p50 536 ms / p95 632 ms por captura en 4 vCPU (meta RNF-03 de 5 s: **cumple con holgura**; en el equipo de 6–8 GB falta medirlo).
+- Pruebas: 34 del sidecar (`npm --prefix desktop/sidecar-ocr test`: extractor, cada corrección, validación, enderezado y una de punta a punta que se omite sin modelos).
+- Nota de entorno: los modelos ONNX se bajaron del espejo de GitHub (Hugging Face no es alcanzable desde aquí); el hash coincide con el fijado.
