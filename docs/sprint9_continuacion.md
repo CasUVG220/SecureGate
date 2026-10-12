@@ -13,6 +13,7 @@ No se tocó producción, la VM, Cloud SQL ni secretos. Las pruebas de base de da
 |---|---|---|
 | T0 | Estabilizar la línea base (2 pruebas dependían de la hora del día) | HECHO |
 | T1 | Pagos: un pago resta su monto del saldo | HECHO |
+| T2 | Interfaz `ProveedorPago` y preparación de Visanet | HECHO (la integración real queda PENDIENTE de documentación y credenciales) |
 
 ## Línea base (antes de tocar nada, con las 2 correcciones de T0)
 
@@ -45,3 +46,18 @@ Regla, casos, concurrencia y datos históricos: **`docs/pagos_saldo.md`**.
   autorizar (así se bloquea el saldo); una tarjeta rechazada hace `ROLLBACK`, sigue sin guardar nada.
 - Pruebas nuevas: I-6 pasó de 11 a 29 casos (parcial/exacto/mayor × 3 métodos, centavos exactos, cargos de reserva, 3 pruebas de concurrencia, coherencia de
   reportes); unitarias del controlador (+4); pantalla (`PagoTarjeta`, `PagosPage`, nueva `ResidentePagosSaldo`).
+
+## T2 — Interfaz de pasarela y preparación de Visanet · **HECHO**
+- `backend/src/services/pagos/` (`proveedor.ts`, `simulado.ts`, `visanet.ts`, `index.ts`): interfaz `ProveedorPago`, la simulada de siempre y un adaptador de Visanet
+  que lanza `ProveedorNoConfiguradoError`. El controlador (`pagarConTarjeta`) solo usa la interfaz; con la simulada todo se comporta igual (las pruebas que ya existían
+  siguen verdes). Con `PAGOS_PROVEEDOR=visanet`: 503 controlado, nada se guarda, auditoría con `{proveedor, motivo}`.
+- **Investigación (honesta):** la búsqueda abierta no encontró documentación pública de desarrollador. Lo único verificado: VisaNet Guatemala ahora es **NeoNet** (26/10/2023).
+  No se inventó ningún endpoint, firma, 3-D Secure ni webhook. Todo lo demás está en `docs/visanet_integracion.md` (qué se sabe, qué falta, checklist del trámite del comercio con
+  documentos, credenciales de sandbox, URLs de retorno y webhook, IPs).
+- Decisión: la pasarela simulada ahora guarda su identificador (`SIM-<ult4>-A|R`) en `pagos.referencia`; es el único cambio visible respecto a antes.
+- No se tocó `PAGOS_TARJETA_SIMULADA` ni `scripts/deploy.sh`.
+- Pendiente para humanos: ver "Pendientes para humanos" (credenciales, contrato, documentación oficial de NeoNet).
+
+> **Pruebas intermitentes ya existentes (no causadas por estas tareas):** `refresh.reuso.int` (I-19, ventana de gracia de 10 s) y `I-11 RESERVA_RECHAZADA`
+> (la fecha de la reserva se elige al azar y a veces choca) fallaron una vez cada una bajo carga y pasan al repetir en solitario y en la suite completa (2 corridas verdes seguidas).
+> Quedan como deuda: fijar la fecha de esas pruebas.

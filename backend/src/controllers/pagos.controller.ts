@@ -1,8 +1,10 @@
+import { randomUUID } from 'crypto';
 import { Request, Response } from 'express';
 import pool from '../db/pool';
 import { tenantFilter, ownershipClause, ownershipParams } from '../utils/tenant';
 import { APP_TZ, Consultable } from '../utils/reservas';
 import { serverError } from '../utils/http';
+import { ProveedorNoConfiguradoError, obtenerProveedorPago, simularAutorizacionTarjeta as _simular } from '../services/pagos';
 import {
   ExcedeSaldoError, aCentavos, bloquearSaldo, cuerpoExcedeSaldo, exigirQueCabe, restarDelSaldo,
 } from '../utils/saldo';
@@ -258,23 +260,14 @@ export const crearTransferencia = async (req: Request, res: Response) => {
 };
 
 /**
- * Decide el resultado de un cobro con tarjeta en la pasarela simulada.
- *
- * MOCK — SE REEMPLAZA POR LA INTEGRACIÓN REAL DE VISANET EN UN SPRINT FUTURO.
- * Cuando eso ocurra, esta función desaparece y `pagarConTarjeta` llamará al
- * SDK del procesador; el resto del flujo (persistencia, liquidación de saldo)
- * no cambia.
- *
- * La regla es determinística a propósito, para poder demostrar los dos caminos
- * sin depender del azar: una tarjeta cuyo número termina en 1 se rechaza y
- * cualquier otra se aprueba.
+ * La regla de la pasarela simulada vive ahora en `services/pagos/simulado.ts` (T2); se reexporta aquí para no romper
+ * a quien la importaba desde el controlador.
  */
-export function simularAutorizacionTarjeta(ultimos4: string): 'aprobado' | 'rechazado' {
-  return ultimos4.endsWith('1') ? 'rechazado' : 'aprobado';
-}
+export const simularAutorizacionTarjeta = _simular;
 
 /**
- * Cobro con tarjeta del residente logueado (pasarela simulada).
+ * Cobro con tarjeta del residente logueado, a través de la interfaz `ProveedorPago` (T2): hoy la pasarela simulada;
+ * el adaptador de Visanet falla de forma controlada (503, auditado) hasta que exista la integración real.
  *
  * Sólo llegan los últimos 4 dígitos: el número completo, el CVV y la fecha de
  * vencimiento se validan en el navegador y nunca salen de él, así que el
@@ -286,7 +279,8 @@ export const pagarConTarjeta = async (req: Request, res: Response) => {
   // desarrollo); en producción responde 501 hasta que exista la integración
   // real. Sin este interruptor, cualquier residente podía dejar su saldo en 0
   // con una sola petición.
-  if (process.env.PAGOS_TARJETA_SIMULADA !== 'true') {
+  const proveedor = obtenerProveedorPago();
+  if (!proveedor) {
     return res.status(501).json({ error: 'El pago con tarjeta no está disponible todavía' });
   }
 
@@ -320,7 +314,29 @@ export const pagarConTarjeta = async (req: Request, res: Response) => {
     const montoC = aCentavos(monto);
     exigirQueCabe((await bloquearSaldo(client, residente_id))!, montoC);
 
-    const estado = simularAutorizacionTarjeta(String(ultimos4));
+    let autorizacion;
+    try {
+      autorizacion = await proveedor.autorizar({
+        montoCentavos: montoC,
+        ultimos4: String(ultimos4),
+        titular: titular ? String(titular).slice(0, 80) : undefined,
+        referenciaInterna: randomUUID(),
+      });
+    } catch (error) {
+      await client.query('ROLLBACK').catch(() => {});
+      if (error instanceof ProveedorNoConfiguradoError) {
+        // Falla controlada: nada se cobró ni se guardó. La fila de auditoría (PAGO_TARJETA_SIMULADO, 503) lleva el proveedor.
+        res.locals.auditoria = { proveedor: error.proveedor, motivo: 'proveedor_no_configurado' };
+        return res.status(503).json({
+          error: 'El pago con tarjeta no está disponible todavía',
+          codigo: 'PROVEEDOR_NO_CONFIGURADO',
+        });
+      }
+      res.locals.auditoria = { proveedor: proveedor.nombre, motivo: 'error_del_proveedor' };
+      return res.status(502).json({ error: 'No se pudo comunicar con el procesador de pagos. Intenta de nuevo en unos minutos.', codigo: 'PROVEEDOR_ERROR' });
+    }
+    const estado = autorizacion.estado;
+    res.locals.auditoria = { proveedor: proveedor.nombre, estado };
 
     // Una tarjeta rechazada NO es un pago: no se guarda en `pagos`. Antes cada intento
     // fallido quedaba como una fila 'rechazado' que ensuciaba el historial del residente
@@ -337,12 +353,12 @@ export const pagarConTarjeta = async (req: Request, res: Response) => {
     const result = await client.query(
       `INSERT INTO pagos
          (sucursal_id, residente_id, monto, metodo, estado, concepto,
-          tarjeta_ultimos4, es_simulado, registrado_por)
-       VALUES ($1, $2, $3, 'tarjeta', $4, $5, $6, TRUE, $7)
+          tarjeta_ultimos4, es_simulado, referencia, registrado_por)
+       VALUES ($1, $2, $3, 'tarjeta', $4, $5, $6, $7, $8, $9)
        RETURNING *`,
       [sucursal_id, residente_id, monto, estado,
        titular ? `Pago con tarjeta — ${String(titular).slice(0, 80)}` : 'Pago con tarjeta',
-       String(ultimos4), usuario_id]
+       String(ultimos4), proveedor.simulado, autorizacion.idTransaccion ?? null, usuario_id]
     );
 
     // La autorización aprobada resta su monto del saldo igual que un pago en efectivo aprobado.
@@ -368,7 +384,7 @@ export const pagarConTarjeta = async (req: Request, res: Response) => {
  * verá textos de implementación.
  */
 export const getEstadoTarjeta = (_req: Request, res: Response) => {
-  const simulada = process.env.PAGOS_TARJETA_SIMULADA === 'true';
+  const simulada = obtenerProveedorPago()?.simulado === true;
   res.json({ disponible: simulada, simulada });
 };
 

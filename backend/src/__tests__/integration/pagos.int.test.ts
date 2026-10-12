@@ -406,3 +406,46 @@ describe('I-6 T1 modelo de saldo: parcial, exacto y mayor al saldo en los tres m
     });
   });
 });
+
+// ─── T2 · interfaz de pasarela: el adaptador de Visanet falla de forma controlada y auditada ───
+describe('I-6 T2 proveedor de pago', () => {
+  const previoProveedor = process.env.PAGOS_PROVEEDOR;
+  afterEach(() => { if (previoProveedor === undefined) delete process.env.PAGOS_PROVEEDOR; else process.env.PAGOS_PROVEEDOR = previoProveedor; });
+
+  it('con PAGOS_PROVEEDOR=visanet (sin integración): 503, nada guardado, saldo intacto y auditoría con el proveedor', async () => {
+    process.env.PAGOS_PROVEEDOR = 'visanet';
+    await conSaldo(fx.residentes.A2, 120);
+    const res = await login(app, fx.email.resA2);
+    const antes = (await filas(fx.residentes.A2)).length;
+
+    const r = await tarjeta(res.token, { monto: 120, ultimos4: '4444', titular: 'ANA' });
+    expect(r.status).toBe(503);
+    expect(r.body).toMatchObject({ codigo: 'PROVEEDOR_NO_CONFIGURADO' });
+    expect(r.body.error).toMatch(/no está disponible todavía/);
+    expect(JSON.stringify(r.body)).not.toMatch(/visanet/i);                 // el residente no ve nombres de implementación
+
+    expect(await filas(fx.residentes.A2)).toHaveLength(antes);
+    expect(Number((await uno('SELECT saldo_pendiente FROM residentes WHERE id = $1', [fx.residentes.A2])).saldo_pendiente)).toBe(120);
+
+    const aud = await esperarAuditoriaDe('PAGO_TARJETA_SIMULADO', fx.usuarios.resA2);
+    const fila = aud.find((a: { status_code: number }) => a.status_code === 503);
+    expect(fila).toBeTruthy();
+    expect(fila.datos_nuevos).toEqual({ proveedor: 'visanet', motivo: 'proveedor_no_configurado' });
+  });
+
+  it('con Visanet elegido el portal no ofrece el botón de tarjeta (disponible:false) ni textos de simulación', async () => {
+    process.env.PAGOS_PROVEEDOR = 'visanet';
+    const res = await login(app, fx.email.resA1);
+    const r = await request(app).get('/api/pagos/tarjeta/estado').set(bearer(res.token));
+    expect(r.body).toEqual({ disponible: false, simulada: false });
+  });
+
+  it('con la simulada todo sigue igual: queda marcada es_simulado y con el identificador de la transacción simulada', async () => {
+    delete process.env.PAGOS_PROVEEDOR;
+    await conSaldo(fx.residentes.A2, 50);
+    const res = await login(app, fx.email.resA2);
+    const r = await tarjeta(res.token, { monto: 50, ultimos4: '4242' });
+    expect(r.status).toBe(201);
+    expect(r.body).toMatchObject({ es_simulado: true, referencia: 'SIM-4242-A' });
+  });
+});

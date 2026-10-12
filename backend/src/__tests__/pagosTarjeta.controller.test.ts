@@ -24,6 +24,7 @@ function makeRes() {
   const res: Partial<Response> = {};
   res.status = jest.fn().mockReturnValue(res);
   res.json = jest.fn().mockReturnValue(res);
+  res.locals = {};
   return res as Response;
 }
 
@@ -156,6 +157,30 @@ describe('pagarConTarjeta', () => {
     const res = makeRes();
     await pagarConTarjeta(reqCon({ monto: 10.005, ultimos4: '4444' }), res);
     expect(res.status).toHaveBeenCalledWith(400);
+  });
+
+  it('con el adaptador de Visanet (sin integración): 503 controlado, ROLLBACK, nada guardado y el proveedor queda para la auditoría', async () => {
+    const previoProveedor = process.env.PAGOS_PROVEEDOR;
+    process.env.PAGOS_PROVEEDOR = 'visanet';
+    try {
+      const client = makeClient('aprobado');
+      mockPool.connect.mockResolvedValue(client);
+      const res = makeRes();
+
+      await pagarConTarjeta(reqCon({ monto: 100, ultimos4: '4444' }), res);
+
+      const sqls = client.query.mock.calls.map(c => c[0] as string);
+      expect(sqls.some(s => s.includes('INSERT INTO pagos'))).toBe(false);
+      expect(sqls.some(s => s.includes('UPDATE residentes'))).toBe(false);
+      expect(sqls).toContain('ROLLBACK');
+      expect(res.status).toHaveBeenCalledWith(503);
+      expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ codigo: 'PROVEEDOR_NO_CONFIGURADO' }));
+      expect(res.locals.auditoria)
+        .toEqual({ proveedor: 'visanet', motivo: 'proveedor_no_configurado' });
+      expect(client.release).toHaveBeenCalled();
+    } finally {
+      if (previoProveedor === undefined) delete process.env.PAGOS_PROVEEDOR; else process.env.PAGOS_PROVEEDOR = previoProveedor;
+    }
   });
 
   it('sólo persiste los últimos 4 dígitos del instrumento', async () => {
