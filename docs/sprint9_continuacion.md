@@ -19,6 +19,7 @@ No se tocó producción, la VM, Cloud SQL ni secretos. Las pruebas de base de da
 | T5 | Integración en el escritorio (Rust + UI) y privacidad | HECHO |
 | T6 | Decisión de diseño del puente de video | HECHO |
 | T7 | Modelo de cámaras, credenciales y puente local | HECHO (sin probar con hardware real; el `ffmpeg.exe` de Windows no se ejecutó) |
+| T8 | Descubrimiento ONVIF, alta de cámaras y visor | HECHO (sin probar con hardware real) |
 
 ## Línea base (antes de tocar nada, con las 2 correcciones de T0)
 
@@ -131,3 +132,16 @@ Código en `desktop/src-tauri/src/camaras/` (diseño en `docs/camaras_ip_diseno.
   `binaries/ffmpeg-<triple>`), `SG_MEDIAMTX` o un `ffmpeg` con libx264; aquí corrieron con mediamtx 1.12.0 (asset de GitHub Releases).
 - Riesgos que quedan: la URL con credenciales va a ffmpeg por línea de comandos (visible para el mismo usuario de Windows mientras corre; mejora: proxy RTSP local); la validación de redirecciones RTSP depende del texto del log de ffmpeg; `rtsps://` no soportado (el ffmpeg mínimo no lleva TLS).
 - `ffmpeg` mínimo: `tauri.conf.json` lo declara como `externalBin`; el CI de Rust crea un archivo vacío para compilar (como el de Node) y `prepare-sidecar` avisa si falta.
+
+## T8 — Descubrimiento ONVIF, alta de cámaras y visor · **HECHO** (sin probar con hardware real)
+- **Rust `camaras/onvif.rs`**: WS-Discovery (`Probe` a 239.255.255.250:3702 pidiendo `NetworkVideoTransmitter`, ~3 s). De cada respuesta solo se toma el **nombre** y el **modelo** de los scopes; la **IP sale del origen del paquete, nunca del XML** (una respuesta falsa no puede mandar a otra dirección);
+  se descartan respuestas de IP no privadas, se acota el tamaño/texto y se deduplica. Comando `camaras_descubrir`. Sugiere `rtsp://<ip>:554/`: **no obtiene la ruta del video** (eso exige llamadas SOAP autenticadas al servicio de medios de cada cámara; queda como mejora). Una máquina con varias tarjetas de red solo manda el `Probe` por la ruta por defecto.
+- **UI (escritorio)**: *Cámaras de esta garita → Cámaras IP y celulares*: lista, **Agregar / Editar / Quitar** (con confirmación propia, sin `window.confirm`), «Buscar cámaras en la red», dirección, usuario, contraseña (campo con «Mostrar»; al editar **no se vuelven a mostrar**: vacío = conservar, casilla para quitarlas) y **«Probar conexión»**:
+  «Guardar» exige una prueba correcta con los datos actuales (cualquier cambio la invalida) y existe «Guardar sin probar» para una cámara apagada. El selector de cada tarea incluye las cámaras de red; **funcionan en las vistas de 1, 2 y 4**; la tarea se la quita a la cámara anterior (una tarea, una cámara).
+- **Visor** (`CameraPane` + `useCamaraRed`): enciende la cámara en el puente, vigila su estado (cada 1,5 s), muestra el `<img>` del puente con token (**nunca la dirección real ni credenciales**) y se apaga al cerrar el panel (con cuenta de usos si dos paneles comparten cámara). **Captura para el OCR**: `camara_ip_fotograma` entrega el JPEG y la pantalla lo manda al mismo `ocr.placa`/`ocr.dpi`; el **QR** también funciona
+  (se pide un fotograma cada ~700 ms y se pasa por jsQR).
+- **Si una cámara cae**: la garita dice «Se perdió la señal de la cámara… Reintentando en N s» / «La cámara no responde» / «No se pudo usar la cámara» (contraseña mala: no se reintenta), y el agente puede **usar la webcam de este equipo** (y volver) o la **captura manual**, que nunca se quitó.
+- **Pruebas**: Rust +11 (ONVIF: scopes, IP del origen, respuestas falsas, deduplicación, filtro de IP, respondedor UDP simulado); sidecar: **de punta a punta** una cámara RTSP simulada (mediamtx + la foto de una placa repetida) → ffmpeg mínimo con los **mismos argumentos que el puente** → el **mismo OCR local**: «123AB» se lee en el fotograma de la cámara igual que en la foto original (se omite sin mediamtx);
+  vitest +31 (visor: en vivo, captura, error de captura, conectando, reconectando, caída permanente, cámara que no enciende, apagado con cuenta de usos; alta: prueba obligatoria, credenciales solo de ida, edición, rechazo de Rust, descubrimiento; configuración: lista, selector, confirmación; y **guardas** que impiden que una credencial de cámara aparezca en los tipos que devuelve Rust o en otro componente).
+- Decisión: el `useCamara` USB y su localStorage no cambiaron; la asignación de cámaras de red vive en Rust (`tareas`) y el resolvedor de pantalla mira primero ahí. Nota de pruebas: un `beforeEach` que *devuelve* una función la ejecuta al terminar (con `mockReset()` eso llamaba al mock): se escriben con llaves.
+- Pendiente (hardware real): cámaras reales con Digest, perfiles ONVIF raros, H.265 de fabricantes concretos, `rtsps://` (no soportado), y la ruta del video por ONVIF (GetStreamUri).

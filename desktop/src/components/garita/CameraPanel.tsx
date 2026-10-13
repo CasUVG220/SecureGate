@@ -45,7 +45,7 @@ export function CameraPanel({
   ocrDisponible, enLinea, disposicion, onLayout, onPanel, onCaptura, onQr, qrPausado, ocupado,
   onEscribirPlaca, onSalidaManual,
 }: Props) {
-  const { camaras, asignacion, asignar, refrescar } = useCamaras();
+  const { camaras, asignacion, asignar, refrescar, camarasRed, recargarRed } = useCamaras();
   const [config, setConfig] = useState(false);
   const { layout, paneles } = disposicion;
 
@@ -103,6 +103,7 @@ export function CameraPanel({
             key={`${i}-${p}`}
             proposito={p}
             camaras={camaras}
+            camarasRed={camarasRed}
             asignacion={asignacion}
             ocrDisponible={ocrDisponible}
             enLinea={enLinea}
@@ -120,9 +121,9 @@ export function CameraPanel({
         ))}
       </div>
 
-      {layout > 1 && camaras.length > 0 && camaras.length < layout && (
+      {layout > 1 && camaras.length + camarasRed.length > 0 && camaras.length + camarasRed.length < layout && (
         <p className="mt-4 rounded-lg border border-warning-500/30 bg-warning-500/10 px-3 py-2 text-xs font-medium text-warning-400">
-          Hay {camaras.length} {camaras.length === 1 ? 'cámara conectada' : 'cámaras conectadas'} y {layout} vistas:
+          Hay {camaras.length + camarasRed.length} {camaras.length + camarasRed.length === 1 ? 'cámara' : 'cámaras'} y {layout} vistas:
           varias mostrarán la misma imagen.{' '}
           <button type="button" className="underline underline-offset-4" onClick={abrirConfig}>Configurar</button>
         </p>
@@ -135,6 +136,8 @@ export function CameraPanel({
           layout={layout}
           onLayout={onLayout}
           onAsignar={asignar}
+          camarasRed={camarasRed}
+          onRecargarRed={recargarRed}
           onCerrar={() => setConfig(false)}
           onRefrescar={() => void refrescar()}
         />

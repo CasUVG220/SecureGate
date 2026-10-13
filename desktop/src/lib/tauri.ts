@@ -296,6 +296,14 @@ export interface ResultadoPrueba {
   alto: number | null;
 }
 
+export interface DispositivoOnvif {
+  ip: string;
+  nombre: string | null;
+  modelo: string | null;
+  /** Para empezar el alta: la persona completa la ruta del video y las credenciales. */
+  url_sugerida: string;
+}
+
 export interface FotogramaCapturado {
   /** JPEG en base64 (sin prefijo data:), listo para `ocr.placa` / `ocr.dpi`. */
   jpeg_base64: string;
@@ -372,6 +380,8 @@ export const api = {
     asignar: (id: string, tareas: string[]) => invoke<CamaraRed>('camaras_asignar', { id, tareas }),
     /** «Probar conexión»: intenta recibir una imagen SIN guardar nada. */
     probar: (entrada: EntradaCamara) => invoke<ResultadoPrueba>('camaras_probar', { entrada }),
+    /** Busca cámaras ONVIF en la red local (unos 3 s). Solo lista; no guarda nada. */
+    descubrir: () => invoke<DispositivoOnvif[]>('camaras_descubrir'),
     puente: () => invoke<{ puerto: number; token: string }>('camaras_puente_info'),
     encender: (id: string) => invoke<EstadoFuente>('camaras_encender', { id }),
     apagar: (id: string) => invoke<void>('camaras_apagar', { id }),

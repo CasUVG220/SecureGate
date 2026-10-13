@@ -37,6 +37,21 @@ La garita tiene **cuatro tareas** y cada una puede usar una cámara distinta
 | **DPI** | Documento del visitante | Captura a demanda → OCR **local primero** (sidecar, sin internet); el servidor remoto (Vision) es solo respaldo si el local falla o duda, hay red y el equipo lo permite. Siempre se revisa antes de registrar; ver `docs/ocr_dpi_local.md`. |
 | **Salida** | Placa del vehículo que sale | Captura → OCR local → busca el acceso abierto con esa placa y lo cierra. **Requiere conexión.** |
 
+### Cámaras IP y celular (SCRUM-119 y SCRUM-120)
+
+Además de las webcams USB, cada tarea puede usar una **cámara IP** (RTSP/ONVIF, de seguridad) o un **celular** que transmita por la red local.
+Se agregan en **Cámaras de esta garita → Cámaras IP y celulares**: «Buscar cámaras en la red» (descubrimiento ONVIF), dirección, usuario y
+contraseña, y **«Probar conexión»** antes de guardar. Después se asignan a cualquiera de las 4 tareas desde el mismo selector que las USB y
+funcionan en las vistas de 1, 2 y 4. La captura de fotograma para el OCR usa **el mismo OCR** que la webcam.
+
+- Diseño, números y alternativas: `docs/camaras_ip_diseno.md`. Todo corre en `src-tauri/src/camaras/`.
+- **Seguridad:** solo se aceptan direcciones de redes privadas (anti-SSRF); la contraseña vive en el **llavero del sistema** (nunca en SQLite ni en el
+  WebView ni en logs); la vista previa sale por un puente local (`127.0.0.1`, token efímero) y nunca por la dirección real de la cámara.
+- **Si una cámara cae** la pantalla lo dice (reconectando / sin señal) y el agente puede seguir con la webcam de este equipo o la captura manual.
+- **ffmpeg** (RTSP): un build mínimo LGPL de ~3 MB que se compila con `scripts/build-ffmpeg-min.sh windows|linux` y se empaqueta como sidecar. Sin él, las
+  cámaras USB y los celulares MJPEG siguen funcionando; solo las RTSP no.
+- **Sin probar con hardware real:** las pruebas usan servidores simulados (mediamtx + `testsrc2`, un servidor MJPEG propio y un respondedor ONVIF).
+
 ### Qué necesita red y por qué
 
 El QR y la salida van contra el servidor a propósito. La vigencia de un QR,

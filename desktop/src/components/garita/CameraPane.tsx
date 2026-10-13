@@ -9,7 +9,11 @@
 import { useEffect, useState } from 'react';
 import { Button, Input, StatusText, cx } from '../ui';
 import { useCamera } from '../../hooks/useCamera';
+import { useCamaraRed } from '../../hooks/useCamaraRed';
 import { useQrScanner } from '../../hooks/useQrScanner';
+import { useQrScannerRed } from '../../hooks/useQrScannerRed';
+import { camaraDeRedPara, estadoLegible } from '../../lib/camarasRed';
+import type { CamaraRed } from '../../lib/tauri';
 import {
   GUIA_PROPOSITO, NOMBRE_PROPOSITO, PROPOSITOS, ROTULO_PROPOSITO,
   asignacionHuerfana, idDeCodigoManual, resolverDispositivo,
@@ -43,6 +47,8 @@ const ACCION: Record<Proposito, { rotulo: string; requiere: 'ocr' | 'red' | null
 interface Props {
   proposito: Proposito;
   camaras: Camara[];
+  /** Cámaras IP y celulares guardadas (T8): si la tarea tiene una asignada, se usa en vez de la USB. */
+  camarasRed?: CamaraRed[];
   asignacion: AsignacionCamaras;
   ocrDisponible: boolean;
   enLinea: boolean;
@@ -79,22 +85,30 @@ export function motivoDeshabilitado(
 }
 
 export function CameraPane({
-  proposito, camaras, asignacion, ocrDisponible, enLinea, compacto, ocupado,
+  proposito, camaras, camarasRed = [], asignacion, ocrDisponible, enLinea, compacto, ocupado,
   onCaptura, onQr, qrPausado, onCambiarProposito, onConfigurar, onCamaraLista,
   onEscribirPlaca, onSalidaManual,
 }: Props) {
   const [codigo, setCodigo] = useState('');
   const [errorCodigo, setErrorCodigo] = useState<string | null>(null);
   const deviceId = resolverDispositivo(proposito, asignacion, camaras);
-  const cam = useCamera(true, deviceId);
-  const activa = cam.estado === 'activa';
+  // Cámara IP o celular asignada a esta tarea. Si cae, el agente puede pasarse a la webcam de este equipo sin salir de la pantalla.
+  const camaraRed = camaraDeRedPara(proposito, camarasRed);
+  const [usarWebcam, setUsarWebcam] = useState(false);
+  const porRed = !!camaraRed && !usarWebcam;
+  const cam = useCamera(!porRed, deviceId);
+  const red = useCamaraRed(porRed ? camaraRed! : null);
+  const vivoRed = porRed && red.estado?.estado === 'conectada';
+  const activa = porRed ? vivoRed : cam.estado === 'activa';
+  const legible = porRed ? estadoLegible(red.estado) : null;
 
-  useEffect(() => { if (activa) onCamaraLista(); }, [activa, onCamaraLista]);
+  useEffect(() => { if (cam.estado === 'activa' && !porRed) onCamaraLista(); }, [cam.estado, porRed, onCamaraLista]);
 
-  useQrScanner(cam.videoRef, proposito === 'qr' && activa && !qrPausado, id => { void onQr(id); });
+  useQrScanner(cam.videoRef, proposito === 'qr' && activa && !porRed && !qrPausado, id => { void onQr(id); });
+  useQrScannerRed(camaraRed?.id ?? null, proposito === 'qr' && vivoRed && !qrPausado, id => { void onQr(id); });
 
   const capturar = async () => {
-    const jpeg = cam.capturar();
+    const jpeg = porRed ? await red.capturar() : cam.capturar();
     if (jpeg) await onCaptura(proposito, jpeg);
   };
 
@@ -112,9 +126,10 @@ export function CameraPane({
 
   const accion = ACCION[proposito];
   const bloqueado = accion.requiere === 'ocr' ? !ocrDisponible : accion.requiere === 'red' ? !enLinea : false;
-  const motivo = motivoDeshabilitado(accion, { activa, iniciando: cam.estado === 'iniciando', ocupado, ocrDisponible, enLinea });
+  const iniciando = porRed ? (red.estado == null || red.estado.estado === 'conectando') : cam.estado === 'iniciando';
+  const motivo = motivoDeshabilitado(accion, { activa, iniciando, ocupado, ocrDisponible, enLinea });
   const guia = GUIA_PROPOSITO[proposito];
-  const huerfana = asignacionHuerfana(proposito, asignacion, camaras);
+  const huerfana = !porRed && asignacionHuerfana(proposito, asignacion, camaras);
 
   return (
     <section className="flex min-w-0 flex-col" aria-label={NOMBRE_PROPOSITO[proposito]}>
@@ -132,7 +147,7 @@ export function CameraPane({
           </select>
           {activa
             ? <StatusText kind="on" className="shrink-0">En vivo</StatusText>
-            : <StatusText kind="warn" className="shrink-0">Manual</StatusText>}
+            : <StatusText kind="warn" className="shrink-0">{legible ? legible.corto : 'Manual'}</StatusText>}
         </div>
       ) : (
         <div className="mb-4 flex items-center gap-3">
@@ -156,13 +171,15 @@ export function CameraPane({
           </div>
           {activa
             ? <StatusText kind="on" className="shrink-0">En vivo</StatusText>
-            : <StatusText kind="warn" className="shrink-0">Modo manual</StatusText>}
+            : <StatusText kind="warn" className="shrink-0">{legible ? legible.corto : 'Modo manual'}</StatusText>}
         </div>
       )}
 
       <div className="sg-camera">
         {/* El <video> siempre está montado para poder adjuntarle el stream. */}
-        <video ref={cam.videoRef} playsInline muted className={activa ? 'block' : 'hidden'} />
+        <video ref={cam.videoRef} playsInline muted className={activa && !porRed ? 'block' : 'hidden'} />
+        {/* Cámara IP o celular: el puente local entrega la imagen como MJPEG (nunca una URL con credenciales). */}
+        {vivoRed && red.urlVista && <img src={red.urlVista} alt={`Vista de ${camaraRed!.nombre}`} />}
         {activa && (
           <div className="sg-camera-guide" aria-hidden="true">
             <div className={cx('sg-camera-guide-box', guia === 'documento' && 'dpi', guia === 'cuadrada' && 'qr')} />
@@ -175,7 +192,22 @@ export function CameraPane({
               : 'Muestra el QR a la cámara'}
           </p>
         )}
-        {cam.fallo && (
+ {porRed && legible && legible.titulo && (
+          <div role="status" className={cx('flex max-w-sm flex-col items-center text-center', compacto ? 'px-3 py-4' : 'px-6 py-8')}>
+            <span className="mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white/80">
+              <Icono d={ICON_CAMERA_OFF} size={20} />
+            </span>
+            <p className={cx('font-semibold text-white', compacto ? 'text-sm' : 'text-base')}>{legible.titulo}</p>
+            {legible.detalle && <p className={cx('mt-1.5 text-slate-300', compacto ? 'text-2xs' : 'text-sm')}>{legible.detalle}</p>}
+            <p className="mt-2 text-2xs text-slate-400">{camaraRed!.nombre}</p>
+            <div className="mt-4 flex flex-wrap justify-center gap-2">
+              <Button variant="secondary" size="sm" onClick={red.reintentar}>Reintentar</Button>
+              <Button variant="ghost" size="sm" onClick={() => setUsarWebcam(true)}>Usar la webcam de este equipo</Button>
+              <Button variant="ghost" size="sm" onClick={onConfigurar}>Cámaras</Button>
+            </div>
+          </div>
+        )}
+        {!porRed && cam.fallo && (
           <div role="status" className={cx('flex max-w-sm flex-col items-center text-center', compacto ? 'px-3 py-4' : 'px-6 py-8')}>
             <span className="mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white/80">
               <Icono d={ICON_CAMERA_OFF} size={20} />
@@ -190,6 +222,18 @@ export function CameraPane({
           </div>
         )}
       </div>
+
+      {porRed && red.errorCaptura && (
+        <p role="alert" className="mt-2 text-xs font-medium text-danger-400">
+          No se pudo tomar la foto: {red.errorCaptura} Puedes escribir el dato a mano.
+        </p>
+      )}
+      {usarWebcam && camaraRed && (
+        <p className="mt-2 text-2xs font-medium text-warning-400">
+          Usando la webcam de este equipo en lugar de «{camaraRed.nombre}».{' '}
+          <button type="button" className="underline underline-offset-4" onClick={() => setUsarWebcam(false)}>Volver a la cámara de red</button>
+        </p>
+      )}
 
       {huerfana && (
         <p className="mt-2 text-2xs font-medium text-warning-400">

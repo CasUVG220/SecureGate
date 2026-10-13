@@ -42,7 +42,7 @@
     background: rgb(15 23 42);
     color: rgb(203 213 225);
   }
-  .sg-camera video { display: block; width: 100%; height: 100%; object-fit: cover; }
+  .sg-camera video, .sg-camera > img { display: block; width: 100%; height: 100%; object-fit: cover; }
 
   /* Guía de encuadre: el recorte oscurece todo menos la ventana de la placa
      o del DPI para que el agente centre el documento sin pensar. */

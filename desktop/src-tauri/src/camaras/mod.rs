@@ -12,6 +12,7 @@ pub mod credenciales;
 pub mod fuente;
 pub mod jpeg;
 pub mod modelo;
+pub mod onvif;
 pub mod puente;
 pub mod ssrf;
 #[cfg(test)]
@@ -364,6 +365,15 @@ pub async fn camaras_probar(app: AppHandle, state: State<'_, AppState>, entrada:
     } else {
         probar_conexion(ConectorRtsp { lanzador: Arc::new(LanzadorTauri { app }), validar, credenciales: cred, opciones: OpcionesVideo::default() }, ESPERA_PRUEBA).await
     })
+}
+
+/// Busca cámaras ONVIF en la red local (WS-Discovery, ~3 s). Solo lista; no guarda nada.
+#[tauri::command]
+pub async fn camaras_descubrir() -> AppResult<Vec<onvif::DispositivoOnvif>> {
+    let destino: std::net::SocketAddr = onvif::MULTICAST.parse().expect("dirección fija");
+    onvif::descubrir(destino, Duration::from_secs(3), &onvif::solo_redes_privadas)
+        .await
+        .map_err(|e| AppError::new("camaras", format!("No se pudo buscar cámaras en la red: {e}")))
 }
 
 #[tauri::command]

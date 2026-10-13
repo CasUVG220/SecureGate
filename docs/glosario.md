@@ -31,6 +31,7 @@ Idioma de la interfaz: español de Guatemala, tuteo («tu sucursal», «escribe 
 | Pantalla de datos y seguridad de la propia persona | **Mi cuenta** (menú de los tres roles de administración) | My account | «Perfil», «Mi perfil» | Menú |
 | Lugar que visita la persona | **Casa** | House | «unidad» en pantallas de residentes | Todas |
 | Documento de identidad | **DPI** | National ID | «documento», «cédula» | Formularios |
+| Cámara de seguridad conectada por la red | **Cámara IP** (en el escritorio, junto a **Celular como cámara**); se agrega en «Cámaras de esta garita → Cámaras IP y celulares»; **Probar conexión** antes de guardar; estados **En vivo / Reconectando / Sin señal** | IP camera, phone as a camera | «stream», «feed», «RTSP» a secas en pantallas del agente | App de escritorio |
 | Quién trabaja en la garita | **Agente de garita** (rol) · **Personal** (la lista) | Gate agent · Staff | «guardia» en rótulos, «terminal» | Menú, personal |
 | Baja de una persona del personal | **Dar de baja**: deja de poder entrar y se le cierran las sesiones; su historial se conserva | Deactivate | «Eliminar» para una baja suave | Personal |
 

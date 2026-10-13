@@ -257,6 +257,7 @@ pub fn run() {
             camaras::camaras_eliminar,
             camaras::camaras_asignar,
             camaras::camaras_probar,
+            camaras::camaras_descubrir,
             camaras::camaras_puente_info,
             camaras::camaras_encender,
             camaras::camaras_apagar,
