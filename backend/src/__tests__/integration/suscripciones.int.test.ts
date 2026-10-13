@@ -71,7 +71,8 @@ const uso = (k: string, empresaId: string, mes?: string) =>
 
 describe('I-24 migración y catálogo', () => {
   it('siembra tres planes marcados como supuestos y la migración es idempotente', async () => {
-    const antes = await q(`SELECT codigo, supuesto, precio_mensual_centavos::text AS p FROM planes ORDER BY orden`);
+    const sembrados = `codigo IN ('basico', 'estandar', 'profesional')`;                 // otras pruebas crean planes propios
+    const antes = await q(`SELECT codigo, supuesto, precio_mensual_centavos::text AS p FROM planes WHERE ${sembrados} ORDER BY orden`);
     expect(antes.map(p => p.codigo)).toEqual(['basico', 'estandar', 'profesional']);
     expect(antes.every(p => p.supuesto === true)).toBe(true);
 
@@ -79,7 +80,7 @@ describe('I-24 migración y catálogo', () => {
     await q(`UPDATE planes SET precio_mensual_centavos = 31337 WHERE codigo = 'basico'`);
     await runMigrations();
     await runMigrations();
-    const despues = await q(`SELECT codigo, precio_mensual_centavos::text AS p FROM planes ORDER BY orden`);
+    const despues = await q(`SELECT codigo, precio_mensual_centavos::text AS p FROM planes WHERE ${sembrados} ORDER BY orden`);
     expect(despues).toHaveLength(3);
     expect(despues[0].p).toBe('31337');
     await q(`UPDATE planes SET precio_mensual_centavos = $1 WHERE codigo = 'basico'`, [antes[0].p]);

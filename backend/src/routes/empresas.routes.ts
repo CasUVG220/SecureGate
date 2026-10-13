@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import * as ctrl from '../controllers/empresas.controller';
 import * as planes from '../controllers/planes.controller';
+import * as facturas from '../controllers/facturas.controller';
 import { requireOwner, requireAdminEmpresa } from '../middleware/auth.middleware';
 import { auditLog } from '../middleware/audit.middleware';
 import { crearLimitador } from '../middleware/limitadores';
@@ -39,6 +40,7 @@ router.post('/:id/eliminar-definitivo', requireOwner, eliminarLimiter,
 router.get('/:id/suscripcion',           requireAdminEmpresa, planes.getSuscripcion);
 router.get('/:id/suscripcion/historial', requireAdminEmpresa, planes.getHistorialSuscripcion);
 router.get('/:id/uso',                   requireAdminEmpresa, planes.getUsoEmpresa);
+router.get('/:id/facturas',              requireAdminEmpresa, facturas.getFacturasDeEmpresa);
 router.put('/:id/suscripcion',           requireOwner,        auditLog({ accion: 'SUSCRIPCION_ACTUALIZADA', tabla: 'suscripciones' }), planes.putSuscripcion);
 router.patch('/:id/reactivar', requireOwner,       auditLog({ accion: 'EMPRESA_REACTIVADA', tabla: 'empresas' }), ctrl.reactivarEmpresa);
 

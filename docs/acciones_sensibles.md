@@ -39,6 +39,11 @@ Dos pruebas mantienen esta lista honesta:
 | `PLAN_CREADO` | Alta de un plan del catálogo (precio mensual, visitas incluidas, excedente, límites) | `POST /api/planes` | owner | — |
 | `PLAN_ACTUALIZADO` | Cambio de precios, cupos o estado de un plan | `PUT /api/planes/:id` | owner | — |
 | `SUSCRIPCION_ACTUALIZADA` | Asigna o cambia el plan y/o el estado (prueba/activa/vencida/cancelada) de una empresa; escribe además `suscripcion_historial` | `PUT /api/empresas/:id/suscripcion` | owner | — |
+| **Facturación SaaS** (T11) | | | | |
+| `FACTURAS_SAAS_GENERADAS` | Corre a mano la facturación mensual (por defecto el mes anterior; `mes` opcional, solo un mes cerrado). Idempotente: una factura por empresa y mes. Manda los avisos de factura emitida | `POST /api/facturas-saas/generar` | owner | 5/15 min por usuario; los bloqueos se auditan |
+| `FACTURAS_SAAS_REVISADAS` | Marca como vencidas las facturas pendientes que pasaron su fecha y manda los avisos de pago vencido (pasada la gracia) | `POST /api/facturas-saas/revisar-vencidas` | owner | 5/15 min por usuario; los bloqueos se auditan |
+| `FACTURA_SAAS_PAGADA` | El owner confirma el pago de una factura (transferencia, depósito, efectivo u otro) con su referencia. Con `COBRO_PROVEEDOR=visanet` responde 503 y también se audita | `POST /api/facturas-saas/:id/pagar` | owner | — |
+| `FACTURA_SAAS_ANULADA` | Anula una factura pendiente o vencida con motivo; la del mes no se vuelve a generar | `POST /api/facturas-saas/:id/anular` | owner | — |
 | **Sucursales** | | | | |
 | `SUCURSAL_CREADA` | Alta de sucursal | `POST /api/sucursales` | admin de empresa | — |
 | `SUCURSAL_ACTUALIZADA` | Edición de sucursal | `PUT /api/sucursales/:id` | admin de empresa | — |

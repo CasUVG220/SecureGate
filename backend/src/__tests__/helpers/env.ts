@@ -18,7 +18,7 @@ def('DB_POOL_MAX', '5');
 // se suben los topes para que el volumen de las pruebas no los dispare. Las
 // pruebas que verifican un límite concreto lo bajan antes de importar la app.
 for (const k of [
-  'GENERAL', 'LOGIN', 'LOGIN_CUENTA', 'SESION', 'ACTIVAR', 'HEARTBEAT', 'INVITACION', 'OCR', 'ELIMINAR',
+  'GENERAL', 'LOGIN', 'LOGIN_CUENTA', 'SESION', 'ACTIVAR', 'HEARTBEAT', 'INVITACION', 'OCR', 'ELIMINAR', 'FACTURACION',
   '2FA', '2FA_CONFIRMAR', '2FA_DESACTIVAR', '2FA_CODIGOS',
 ]) def(`RATE_LIMIT_${k}_MAX`, '100000');
 

@@ -51,6 +51,15 @@ const as = (k: string) => bearer(sesion[k].token);
 
 const empresaNueva = async (extra = '') =>
   (await uno<{ id: string }>(`INSERT INTO empresas (nombre${extra ? ', ' + extra.split('=')[0] : ''}) VALUES ($1${extra ? ', ' + extra.split('=')[1] : ''}) RETURNING id`, [`AUD Empresa ${uid()}`]))!.id;
+/** Una factura SaaS pendiente de una empresa nueva (insertada directo: lo que se prueba aquí es la auditoría de pagarla o anularla). */
+const facturaNueva = async () => {
+  const e = await empresaNueva();
+  const n = (await uno<{ valor: string }>(`UPDATE saas_contadores SET valor = valor + 1 WHERE clave = 'factura_saas' RETURNING valor::text`))!.valor;
+  return (await uno<{ id: string }>(
+    `INSERT INTO facturas_saas (numero, empresa_id, periodo, plan_codigo, plan_nombre, dias_del_mes, dias_facturados, cuota_centavos, visitas, visitas_incluidas,
+        excedente_visitas, precio_visita_extra_centavos, excedente_centavos, total_centavos, detalle, vence_en)
+     VALUES ($1, $2, '2020-01', 'x', 'X', 31, 31, 1000, 0, 0, 0, 0, 0, 1000, '{}'::jsonb, CURRENT_DATE) RETURNING id`, [n, e]))!.id;
+};
 const usuarioNuevo = async (rol: string, suc: string | null, emp: string | null) =>
   (await uno<{ id: string }>(
     `INSERT INTO usuarios (nombre, email, password_hash, rol, sucursal_id, empresa_id, activo)
@@ -203,6 +212,18 @@ const CASOS: Caso[] = [
     },
   },
   { accion: 'SUSCRIPCION_ACTUALIZADA', quien: 'owner', ejecutar: async () => put('owner', `/api/empresas/${await empresaNueva()}/suscripcion`, { plan_codigo: 'basico', motivo: 'Prueba de auditoría' }) },
+
+  // ── Facturación SaaS (T11) ──
+  { accion: 'FACTURAS_SAAS_GENERADAS', quien: 'owner', ejecutar: () => post('owner', '/api/facturas-saas/generar', { mes: '2020-01' }) },
+  { accion: 'FACTURAS_SAAS_REVISADAS', quien: 'owner', ejecutar: () => post('owner', '/api/facturas-saas/revisar-vencidas') },
+  {
+    accion: 'FACTURA_SAAS_PAGADA', quien: 'owner',
+    ejecutar: async () => post('owner', `/api/facturas-saas/${await facturaNueva()}/pagar`, { metodo: 'transferencia', referencia: `BOL-${uid()}` }),
+  },
+  {
+    accion: 'FACTURA_SAAS_ANULADA', quien: 'owner',
+    ejecutar: async () => post('owner', `/api/facturas-saas/${await facturaNueva()}/anular`, { motivo: 'Prueba de auditoría' }),
+  },
 
   // ── Sucursales (admin de empresa) ──
   { accion: 'SUCURSAL_CREADA', quien: 'adminEmpA', ejecutar: () => post('adminEmpA', '/api/sucursales', { empresa_id: fx.empresas.A, nombre: `AUD Suc ${uid()}` }) },

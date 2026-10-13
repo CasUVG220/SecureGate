@@ -22,6 +22,7 @@ No se tocó producción, la VM, Cloud SQL ni secretos. Las pruebas de base de da
 | T8 | Descubrimiento ONVIF, alta de cámaras y visor | HECHO (sin probar con hardware real) |
 | T9 | Celular como cámara y medición de recursos | HECHO (sin probar con un celular ni equipo real) |
 | T10 | Planes, suscripciones y medición de uso | HECHO |
+| T11 | Facturación automática y avisos de pago vencido | HECHO |
 
 ## Línea base (antes de tocar nada, con las 2 correcciones de T0)
 
@@ -165,3 +166,16 @@ Detalle en `docs/saas_nucleo.md`.
 - **Límites del plan hechos cumplir** en `POST /api/sucursales` y `POST /api/licencias` (403 `LIMITE_PLAN`), con candado por empresa: 8 altas simultáneas con tope 3 dejan 3. Sin suscripción = sin límites (empresas anteriores). `eliminar-definitivo` borra también suscripción e histórico.
 - **Pruebas:** unitarias +21 (validación de dinero en centavos enteros, meses, cupos); integración **I-24** +18 (migración idempotente ejecutada dos veces sin pisar precios; aislamiento y cruce entre empresas A/B; frontera de mes 30-sep 23:59:59-06 vs 1-oct 00:00:00-06 —también expresada en UTC—; rechazados; duplicado por `id_cliente`; excedente en centavos; límites y concurrencia) y +3 casos en I-11.
 - Decisión: `POST /api/empresas` no crea suscripción sola (no se cambia el flujo existente); la crea el owner o el asistente de T12.
+
+## T11 — Facturación automática y avisos de pago vencido · **HECHO**
+Detalle, ejemplos de cálculo y decisiones en `docs/saas_nucleo.md` (secciones 6 y 7).
+- **Job mensual idempotente** `facturacion.mensual` (día 1, 01:20 America/Guatemala) en `src/jobs/programacion.ts`: factura el mes cerrado por empresa. Una factura por empresa y mes (`UNIQUE`), **número correlativo sin huecos** (contador transaccional), cuota + excedente en centavos, detalle JSON, estados pendiente/pagada/vencida (+ anulada). Mes parcial: días de prueba y cancelación, cuota e incluidas prorrateadas.
+  Segunda tarea diaria `facturacion.vencidas` (07:30): marca vencidas y manda avisos.
+- **Endpoints del owner** `POST /api/facturas-saas/generar` y `/revisar-vencidas` (auditados, límite 5/15 min **por usuario**, los bloqueos se auditan), `pagar`, `anular`; el admin de empresa ve solo las suyas (`GET /api/empresas/:id/facturas`, cruce = 404).
+- **`ProveedorCobro`**: `manual` (transferencia/depósito/efectivo confirmado por el owner; referencia obligatoria) y `visanet` como punto de enchufe sin integración (503 controlado). **Avisos** por el servicio de correo existente (stub `log`: no sale correo real), gracia configurable `SAAS_DIAS_GRACIA`, un aviso por factura y tipo.
+- **No se suspende automáticamente** (decisión y motivos en `saas_nucleo.md` §6.5); hay prueba de que ni la empresa ni su suscripción cambian. Facturación SaaS en tablas propias, aparte de los cargos a residentes.
+- Acciones nuevas en `docs/acciones_sensibles.md` e I-11: `FACTURAS_SAAS_GENERADAS`, `FACTURAS_SAAS_REVISADAS`, `FACTURA_SAAS_PAGADA`, `FACTURA_SAAS_ANULADA`. `eliminar-definitivo` borra también facturas y avisos.
+- Cambio colateral en T10: salir del estado `prueba` fija `prueba_hasta` en ese momento (la facturación cobra desde ahí).
+- **Pruebas:** unitarias +35 (cálculo: cuota, excedente, mes parcial, redondeo, ventana por prueba/cancelación/zona horaria, dinero, proveedores de cobro, configuración) y programación +cinco tareas; integración **I-25** +18 (idempotencia, correlativo sin huecos, mes parcial, aislamiento y cruce, cobro manual, Visanet 503, vencimientos, aviso único tras la gracia sin suspender) y I-25b +1 (límite de tasa) y +4 casos en I-11.
+- Nota de proceso: el commit de T10 (`f584bc3`) quedó con las líneas `Co-Authored-By`/`Claude-Session` que la consigna prohibe; no se reescribió la historia (no se permite `push --force`). Desde T11 los commits van sin ellas.
+

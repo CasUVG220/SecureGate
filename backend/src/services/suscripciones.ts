@@ -235,7 +235,10 @@ export async function asignarSuscripcion(db: Consultable, c: CambioSuscripcion):
     `UPDATE suscripciones
         SET plan_id = $2, estado = $3::text, updated_at = NOW(),
             cancelada_en = CASE WHEN $3::text = 'cancelada' THEN COALESCE(cancelada_en, NOW()) ELSE NULL END,
-            prueba_hasta = CASE WHEN $3::text = 'prueba' AND estado <> 'prueba' THEN NOW() + make_interval(days => $4::int) ELSE prueba_hasta END
+            prueba_hasta = CASE WHEN $3::text = 'prueba' AND estado <> 'prueba' THEN NOW() + make_interval(days => $4::int)
+                                -- Salir de la prueba (activar, cancelar…) la da por terminada hoy: la facturación (T11) cobra desde ahí.
+                                WHEN $3::text <> 'prueba' AND estado = 'prueba' THEN LEAST(prueba_hasta, NOW())
+                                ELSE prueba_hasta END
       WHERE id = $1`,
     [actual.id, planNuevoId, estadoNuevo, c.plan?.dias_prueba ?? 14],
   );
