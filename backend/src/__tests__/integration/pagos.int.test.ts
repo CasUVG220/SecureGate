@@ -11,7 +11,10 @@
  *   - los comprobantes de transferencia rechazados por el administrador no cuentan en el reporte
  *     CSV de ingresos (salvo que se pidan) ni en los «recientes» del residente;
  *   - cada administrador solo ve los pagos de su alcance;
- *   - /pagos/tarjeta/estado dice si hay pasarela y si es simulada (con la bandera apagada: ni lo uno ni lo otro).
+ *   - /pagos/tarjeta/estado dice si hay pasarela y si es simulada (con la bandera apagada: ni lo uno ni lo otro);
+ *   - T1 (modelo de saldo): un pago RESTA su monto del saldo, en los tres métodos (efectivo, transferencia
+ *     aprobada y tarjeta): parcial deja el resto, exacto deja 0 y «al día», mayor al saldo es 422 sin dejar
+ *     rastro; dos pagos simultáneos nunca dejan el saldo negativo.
  */
 import request from 'supertest';
 import app from '../../app';
@@ -131,6 +134,7 @@ describe('I-6 comprobantes rechazados fuera de los ingresos y del historial reci
   let aprobadoId: string;
 
   beforeAll(async () => {
+    await conSaldo(fx.residentes.A1, 2000);                                  // T1: un comprobante no puede pasar del saldo
     const residente = await login(app, fx.email.resA1);
     const adminSuc = await login(app, fx.email.adminSucA1);
     const nuevaTransferencia = async (referencia: string, monto: number) => {
@@ -205,5 +209,243 @@ describe('I-6 comprobantes rechazados fuera de los ingresos y del historial reci
     }
     // …ni en el CSV de ingresos
     expect((await csv('adminSucB1', '&incluir_rechazados=1')).some(l => l.includes('654') || l.includes('321'))).toBe(false);
+  });
+});
+
+// ─── T1 · un pago resta su monto del saldo ────────────────────────────────────────────────────
+describe('I-6 T1 modelo de saldo: parcial, exacto y mayor al saldo en los tres métodos', () => {
+  const saldoDe = async (id: string) => Number((await uno('SELECT saldo_pendiente FROM residentes WHERE id = $1', [id])).saldo_pendiente);
+  const estadoDe = async (id: string) => (await uno('SELECT estado_pago FROM residentes WHERE id = $1', [id])).estado_pago as string;
+  const efectivo = async (monto: number, residente = fx.residentes.A1, quien = 'adminSucA1') =>
+    request(app).post('/api/pagos').set(bearer((await login(app, fx.email[quien])).token)).send({ residente_id: residente, monto });
+  const comprobante = async (monto: number, quien = 'resA1') =>
+    request(app).post('/api/pagos/transferencia').set(bearer((await login(app, fx.email[quien])).token))
+      .send({ monto, referencia: `T1-${Math.random().toString(36).slice(2, 8)}`, banco: 'Banrural', fecha_transferencia: '2026-10-01' });
+  const aprobar = async (id: string, quien = 'adminSucA1') =>
+    request(app).put(`/api/pagos/${id}/aprobar`).set(bearer((await login(app, fx.email[quien])).token));
+  const tarjetaA1 = async (monto: number, ultimos4 = '4444') => tarjeta((await login(app, fx.email.resA1)).token, { monto, ultimos4, titular: 'ANA LOPEZ' });
+  const pagosDe = async (id: string) => (await filas(id)).length;
+
+  describe('efectivo (POST /api/pagos)', () => {
+    it('parcial: el saldo baja por el monto y sigue en mora', async () => {
+      await conSaldo(fx.residentes.A1, 1000);
+      const r = await efectivo(400);
+      expect(r.status).toBe(201);
+      expect(await saldoDe(fx.residentes.A1)).toBe(600);
+      expect(await estadoDe(fx.residentes.A1)).toBe('mora');
+      expect((await uno('SELECT fecha_ultimo_pago FROM residentes WHERE id = $1', [fx.residentes.A1])).fecha_ultimo_pago).toBeTruthy();
+    });
+    it('exacto: el saldo queda en 0 y el residente al día', async () => {
+      const r = await efectivo(600);
+      expect(r.status).toBe(201);
+      expect(await saldoDe(fx.residentes.A1)).toBe(0);
+      expect(await estadoDe(fx.residentes.A1)).toBe('al_dia');
+    });
+    it('mayor al saldo: 422 con mensaje claro, sin pago nuevo y sin tocar el saldo', async () => {
+      await conSaldo(fx.residentes.A1, 300);
+      const antes = await pagosDe(fx.residentes.A1);
+      const r = await efectivo(300.01);
+      expect(r.status).toBe(422);
+      expect(r.body).toMatchObject({ codigo: 'EXCEDE_SALDO', saldo_pendiente: '300.00' });
+      expect(r.body.error).toMatch(/supera el saldo pendiente \(Q300\.00\)/);
+      expect(await pagosDe(fx.residentes.A1)).toBe(antes);
+      expect(await saldoDe(fx.residentes.A1)).toBe(300);
+      expect(await estadoDe(fx.residentes.A1)).toBe('mora');
+      // el rechazo queda en la auditoría con su código
+      const aud = await esperarAuditoriaDe('PAGO_EFECTIVO', fx.usuarios.adminSucA1);
+      expect(aud.some((a: { status_code: number }) => a.status_code === 422)).toBe(true);
+    });
+    it('sin saldo pendiente cualquier monto es 422', async () => {
+      await q(`UPDATE residentes SET saldo_pendiente = 0, estado_pago = 'al_dia' WHERE id = $1`, [fx.residentes.A1]);
+      const r = await efectivo(1);
+      expect(r.status).toBe(422);
+      expect(r.body.error).toMatch(/no tiene saldo pendiente/);
+    });
+    it('el monto debe tener a lo más dos decimales', async () => {
+      await conSaldo(fx.residentes.A1, 100);
+      expect((await efectivo(10.005)).status).toBe(400);
+      expect(await saldoDe(fx.residentes.A1)).toBe(100);
+    });
+    it('centavos exactos: 3 pagos de Q33.33 y uno de Q0.01 saldan Q100.00 sin residuos de punto flotante', async () => {
+      await conSaldo(fx.residentes.A1, 100);
+      for (const m of [33.33, 33.33, 33.33]) expect((await efectivo(m)).status).toBe(201);
+      expect(await saldoDe(fx.residentes.A1)).toBe(0.01);
+      expect((await efectivo(0.01)).status).toBe(201);
+      expect(await saldoDe(fx.residentes.A1)).toBe(0);
+      expect(await estadoDe(fx.residentes.A1)).toBe('al_dia');
+    });
+  });
+
+  describe('transferencia (comprobante + aprobación)', () => {
+    it('parcial: aprobar resta solo el monto del comprobante', async () => {
+      await conSaldo(fx.residentes.A1, 1000);
+      const c = await comprobante(250);
+      expect(c.status).toBe(201);
+      expect(await saldoDe(fx.residentes.A1)).toBe(1000);                    // pendiente: no mueve el saldo
+      expect((await aprobar(c.body.id)).status).toBe(200);
+      expect(await saldoDe(fx.residentes.A1)).toBe(750);
+      expect(await estadoDe(fx.residentes.A1)).toBe('mora');
+    });
+    it('exacto: aprobar deja 0 y al día', async () => {
+      const c = await comprobante(750);
+      expect((await aprobar(c.body.id)).status).toBe(200);
+      expect(await saldoDe(fx.residentes.A1)).toBe(0);
+      expect(await estadoDe(fx.residentes.A1)).toBe('al_dia');
+    });
+    it('mayor al saldo: el comprobante se rechaza de entrada con 422 y no se guarda', async () => {
+      await conSaldo(fx.residentes.A1, 100);
+      const antes = await pagosDe(fx.residentes.A1);
+      const c = await comprobante(100.5);
+      expect(c.status).toBe(422);
+      expect(c.body).toMatchObject({ codigo: 'EXCEDE_SALDO', saldo_pendiente: '100.00' });
+      expect(await pagosDe(fx.residentes.A1)).toBe(antes);
+    });
+    it('si el saldo bajó desde que se subió el comprobante, aprobarlo es 422 y el pago sigue pendiente', async () => {
+      await conSaldo(fx.residentes.A1, 500);
+      const c = await comprobante(400);
+      expect(c.status).toBe(201);
+      expect((await efectivo(300)).status).toBe(201);                         // otro pago: quedan 200
+      const r = await aprobar(c.body.id);
+      expect(r.status).toBe(422);
+      expect(r.body.saldo_pendiente).toBe('200.00');
+      expect((await uno('SELECT estado FROM pagos WHERE id = $1', [c.body.id])).estado).toBe('pendiente');
+      expect(await saldoDe(fx.residentes.A1)).toBe(200);
+    });
+  });
+
+  describe('tarjeta (simulada)', () => {
+    it('parcial: el saldo baja por el monto', async () => {
+      await conSaldo(fx.residentes.A1, 900);
+      const r = await tarjetaA1(350);
+      expect(r.status).toBe(201);
+      expect(await saldoDe(fx.residentes.A1)).toBe(550);
+      expect(await estadoDe(fx.residentes.A1)).toBe('mora');
+    });
+    it('exacto: deja 0 y al día', async () => {
+      expect((await tarjetaA1(550)).status).toBe(201);
+      expect(await saldoDe(fx.residentes.A1)).toBe(0);
+      expect(await estadoDe(fx.residentes.A1)).toBe('al_dia');
+    });
+    it('mayor al saldo: 422, no se guarda el pago, ni siquiera con una tarjeta que se rechazaría (no llega a autorizar)', async () => {
+      await conSaldo(fx.residentes.A1, 200);
+      const antes = await pagosDe(fx.residentes.A1);
+      for (const ultimos4 of ['4444', '0001']) {
+        const r = await tarjetaA1(200.01, ultimos4);
+        expect(r.status).toBe(422);
+        expect(r.body.codigo).toBe('EXCEDE_SALDO');
+      }
+      expect(await pagosDe(fx.residentes.A1)).toBe(antes);
+      expect(await saldoDe(fx.residentes.A1)).toBe(200);
+    });
+  });
+
+  describe('cargos de reserva', () => {
+    it('siguen pendientes mientras haya saldo y se saldan cuando el saldo llega a 0', async () => {
+      await q('DELETE FROM pagos WHERE residente_id = $1', [fx.residentes.A1]);
+      await conSaldo(fx.residentes.A1, 500);
+      await q(
+        `INSERT INTO pagos (sucursal_id, residente_id, monto, metodo, estado, concepto, registrado_por)
+         VALUES ($1, $2, 200, 'reserva', 'pendiente', 'Reserva: Salón - 2026-11-01', $3)`,
+        [fx.sucursales.A1, fx.residentes.A1, fx.usuarios.adminSucA1],
+      );
+      expect((await efectivo(300)).status).toBe(201);
+      expect((await uno(`SELECT estado FROM pagos WHERE residente_id = $1 AND metodo = 'reserva'`, [fx.residentes.A1])).estado).toBe('pendiente');
+      expect((await efectivo(200)).status).toBe(201);
+      expect(await saldoDe(fx.residentes.A1)).toBe(0);
+      expect((await uno(`SELECT estado FROM pagos WHERE residente_id = $1 AND metodo = 'reserva'`, [fx.residentes.A1])).estado).toBe('aprobado');
+    });
+  });
+
+  describe('concurrencia: fila del residente bloqueada', () => {
+    it('cinco pagos en efectivo simultáneos de Q60 con saldo Q100: uno entra, cuatro son 422, el saldo es Q40 (nunca negativo)', async () => {
+      await conSaldo(fx.residentes.A1, 100);
+      await q('DELETE FROM pagos WHERE residente_id = $1', [fx.residentes.A1]);
+      const token = (await login(app, fx.email.adminSucA1)).token;
+      const respuestas = await Promise.all(Array.from({ length: 5 }, () =>
+        request(app).post('/api/pagos').set(bearer(token)).send({ residente_id: fx.residentes.A1, monto: 60 })));
+      const codigos = respuestas.map(r => r.status).sort();
+      expect(codigos).toEqual([201, 422, 422, 422, 422]);
+      expect(await saldoDe(fx.residentes.A1)).toBe(40);
+      expect(await pagosDe(fx.residentes.A1)).toBe(1);                       // el ingreso registrado es solo el que entró
+    });
+    it('dos aprobaciones simultáneas de comprobantes de Q60 con saldo Q100: una aprueba, la otra 422', async () => {
+      await conSaldo(fx.residentes.A1, 100);
+      await q('DELETE FROM pagos WHERE residente_id = $1', [fx.residentes.A1]);
+      const a = await comprobante(60);
+      const b = await comprobante(60);
+      const token = (await login(app, fx.email.adminSucA1)).token;
+      const rs = await Promise.all([a.body.id, b.body.id].map((id: string) =>
+        request(app).put(`/api/pagos/${id}/aprobar`).set(bearer(token))));
+      expect(rs.map(r => r.status).sort()).toEqual([200, 422]);
+      expect(await saldoDe(fx.residentes.A1)).toBe(40);
+    });
+    it('tarjeta y efectivo a la vez sobre el mismo saldo: solo cabe uno', async () => {
+      await conSaldo(fx.residentes.A1, 100);
+      await q('DELETE FROM pagos WHERE residente_id = $1', [fx.residentes.A1]);
+      const rs = await Promise.all([tarjetaA1(70), efectivo(70)]);
+      expect(rs.map(r => r.status).sort()).toEqual([201, 422]);
+      expect(await saldoDe(fx.residentes.A1)).toBe(30);
+    });
+  });
+
+  describe('reportes y estadísticas coherentes con el saldo', () => {
+    it('lo recaudado es la suma de lo aprobado y la cartera pendiente es el saldo que queda', async () => {
+      await q('DELETE FROM pagos WHERE residente_id = $1', [fx.residentes.A1]);
+      await conSaldo(fx.residentes.A1, 1000);
+      expect((await efectivo(400)).status).toBe(201);
+      expect((await tarjetaA1(100)).status).toBe(201);
+      expect((await efectivo(9999)).status).toBe(422);                       // no infla el ingreso
+      const d = (n: number) => new Date(Date.now() + n * 86_400_000).toISOString().slice(0, 10);
+      const s = await login(app, fx.email.adminSucA1);
+      const r = await request(app).get(`/api/reportes/estadisticas?desde=${d(-1)}&hasta=${d(1)}`).set(bearer(s.token));
+      expect(r.status).toBe(200);
+      const aprobadoA1 = Number((await uno(`SELECT COALESCE(SUM(monto),0) AS t FROM pagos WHERE residente_id = $1 AND estado = 'aprobado'`, [fx.residentes.A1])).t);
+      expect(aprobadoA1).toBe(500);
+      expect(await saldoDe(fx.residentes.A1)).toBe(500);                     // 1000 - 400 - 100
+      expect(r.body.pagos.recaudado).toBeGreaterThanOrEqual(500);
+    });
+  });
+});
+
+// ─── T2 · interfaz de pasarela: el adaptador de Visanet falla de forma controlada y auditada ───
+describe('I-6 T2 proveedor de pago', () => {
+  const previoProveedor = process.env.PAGOS_PROVEEDOR;
+  afterEach(() => { if (previoProveedor === undefined) delete process.env.PAGOS_PROVEEDOR; else process.env.PAGOS_PROVEEDOR = previoProveedor; });
+
+  it('con PAGOS_PROVEEDOR=visanet (sin integración): 503, nada guardado, saldo intacto y auditoría con el proveedor', async () => {
+    process.env.PAGOS_PROVEEDOR = 'visanet';
+    await conSaldo(fx.residentes.A2, 120);
+    const res = await login(app, fx.email.resA2);
+    const antes = (await filas(fx.residentes.A2)).length;
+
+    const r = await tarjeta(res.token, { monto: 120, ultimos4: '4444', titular: 'ANA' });
+    expect(r.status).toBe(503);
+    expect(r.body).toMatchObject({ codigo: 'PROVEEDOR_NO_CONFIGURADO' });
+    expect(r.body.error).toMatch(/no está disponible todavía/);
+    expect(JSON.stringify(r.body)).not.toMatch(/visanet/i);                 // el residente no ve nombres de implementación
+
+    expect(await filas(fx.residentes.A2)).toHaveLength(antes);
+    expect(Number((await uno('SELECT saldo_pendiente FROM residentes WHERE id = $1', [fx.residentes.A2])).saldo_pendiente)).toBe(120);
+
+    const aud = await esperarAuditoriaDe('PAGO_TARJETA_SIMULADO', fx.usuarios.resA2);
+    const fila = aud.find((a: { status_code: number }) => a.status_code === 503);
+    expect(fila).toBeTruthy();
+    expect(fila.datos_nuevos).toEqual({ proveedor: 'visanet', motivo: 'proveedor_no_configurado' });
+  });
+
+  it('con Visanet elegido el portal no ofrece el botón de tarjeta (disponible:false) ni textos de simulación', async () => {
+    process.env.PAGOS_PROVEEDOR = 'visanet';
+    const res = await login(app, fx.email.resA1);
+    const r = await request(app).get('/api/pagos/tarjeta/estado').set(bearer(res.token));
+    expect(r.body).toEqual({ disponible: false, simulada: false });
+  });
+
+  it('con la simulada todo sigue igual: queda marcada es_simulado y con el identificador de la transacción simulada', async () => {
+    delete process.env.PAGOS_PROVEEDOR;
+    await conSaldo(fx.residentes.A2, 50);
+    const res = await login(app, fx.email.resA2);
+    const r = await tarjeta(res.token, { monto: 50, ultimos4: '4242' });
+    expect(r.status).toBe(201);
+    expect(r.body).toMatchObject({ es_simulado: true, referencia: 'SIM-4242-A' });
   });
 });

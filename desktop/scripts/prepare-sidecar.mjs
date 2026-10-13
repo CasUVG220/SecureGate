@@ -17,7 +17,8 @@
  * oficial + node_modules es aburrido, verificable y no tiene casos raros.
  * Cuesta ~60 MB más de instalador; para una PC de garita es irrelevante.
  */
-import { cpSync, existsSync, mkdirSync, rmSync, readdirSync, statSync, chmodSync, copyFileSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, rmSync, readdirSync, statSync, chmodSync, copyFileSync, writeFileSync, readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { execSync } from 'node:child_process';
 import path from 'node:path';
 import os from 'node:os';
@@ -108,21 +109,46 @@ if (!existsSync(archivePath)) {
 }
 const shasums = execSync(`curl -fsSL https://nodejs.org/dist/${NODE_VERSION}/SHASUMS256.txt`).toString();
 const expected = shasums.split('\n').find(l => l.trim().endsWith(archive))?.split(/\s+/)[0];
-const actual = execSync(`shasum -a 256 "${archivePath}"`).toString().split(/\s+/)[0];
+// SHA-256 con Node (no con `shasum`): el mismo código corre en Windows, donde ese comando puede no existir.
+const actual = createHash('sha256').update(readFileSync(archivePath)).digest('hex');
 if (!expected || expected !== actual) {
   rmSync(archivePath, { force: true });
   throw new Error(`SHA-256 de ${archive} no coincide con SHASUMS256.txt (descarga eliminada; reintenta)`);
 }
+/**
+ * Extrae UN archivo de un .zip. `unzip` existe en Linux/macOS y en Git Bash; en un Windows pelado solo está `tar.exe` (bsdtar, que lee zip) o
+ * PowerShell. Se prueban en ese orden y se falla con un mensaje que dice qué faltó. (La rama de Windows no se pudo ejecutar en la nube.)
+ */
+function extraerDeZip(zip, miembro, destino) {
+  const intentos = [
+    `unzip -q -o "${zip}" "${miembro}" -d "${destino}"`,
+    `tar -xf "${zip}" -C "${destino}" "${miembro}"`,
+    `powershell -NoProfile -Command "Expand-Archive -LiteralPath '${zip}' -DestinationPath '${destino}' -Force"`,
+  ];
+  const errores = [];
+  for (const cmd of intentos) {
+    try { execSync(cmd, { stdio: 'pipe' }); if (existsSync(path.join(destino, miembro))) return; } catch (e) { errores.push(`${cmd.split(' ')[0]}: ${String(e.message).split('\n')[0]}`); }
+  }
+  throw new Error(`No se pudo extraer ${miembro} de ${zip}. Intentos: ${errores.join(' | ')}`);
+}
+
 const inner = `node-${NODE_VERSION}-${dist}`;
 const extractDir = path.join(cache, inner);
 rmSync(extractDir, { recursive: true, force: true });
 if (key === 'windows') {
-  execSync(`unzip -q -o "${archivePath}" "${inner}/node.exe" -d "${cache}"`);
+  extraerDeZip(archivePath, `${inner}/node.exe`, cache);
   copyFileSync(path.join(extractDir, 'node.exe'), binPath);
 } else {
   execSync(`tar -xzf "${archivePath}" -C "${cache}" "${inner}/bin/node"`);
   copyFileSync(path.join(extractDir, 'bin', 'node'), binPath);
   chmodSync(binPath, 0o755);
+}
+// ffmpeg del puente de video (T6/T7): un build mínimo LGPL que se compila con scripts/build-ffmpeg-min.sh (no se descarga: el popular es GPL y pesa 80 MB).
+const ffmpegBin = path.join(BIN_OUT, `ffmpeg-${t.triple}${t.exe}`);
+if (!existsSync(ffmpegBin) || statSync(ffmpegBin).size < 1_000_000) {
+  console.warn(`  ⚠ falta ${path.basename(ffmpegBin)}: las cámaras IP y el celular no funcionarán hasta compilarlo (desktop/scripts/build-ffmpeg-min.sh ${key === 'windows' ? 'windows' : 'linux'}). La webcam USB no lo necesita.`);
+} else {
+  console.log(`  ${path.basename(ffmpegBin)} presente (${(statSync(ffmpegBin).size / 2 ** 20).toFixed(1)} MB)`);
 }
 console.log(`  ${binName} ← nodejs.org ${NODE_VERSION} ${dist} (sha256 verificado)`);
 

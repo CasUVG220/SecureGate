@@ -13,11 +13,11 @@ import { validarBaseDePrueba } from './guardaBd';
 const TABLAS = [
   'empresas', 'sucursales', 'usuarios', 'residentes', 'refresh_tokens', 'invitaciones',
   'licencias_dispositivo', 'registros_acceso', 'visitantes', 'anuncios', 'anuncio_lecturas',
-  'areas_comunes', 'reservas_areas', 'audit_logs',
+  'areas_comunes', 'reservas_areas', 'audit_logs', 'planes', 'suscripciones', 'suscripcion_historial', 'facturas_saas', 'facturas_saas_avisos', 'saas_contadores', 'onboarding_solicitudes',
 ];
 const COLUMNAS: Array<[string, string]> = [
   ['registros_acceso', 'id_cliente'], ['registros_acceso', 'recibido_en'], ['registros_acceso', 'registrado_en'],
-  ['registros_acceso', 'licencia_id'], ['empresas', 'suspendida'], ['empresas', 'suspension_motivo'],
+  ['registros_acceso', 'licencia_id'], ['registros_acceso', 'origen_dpi'], ['empresas', 'suspendida'], ['empresas', 'suspension_motivo'],
   ['invitaciones', 'token_hash'], ['invitaciones', 'expira_en'],
 ];
 

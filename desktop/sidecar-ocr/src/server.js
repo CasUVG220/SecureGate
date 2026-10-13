@@ -13,6 +13,11 @@
  *   ← {"id":"1","ok":true,"texto":"P123ABC","items":[...],"confianza":0.93,
  *      "ms_inferencia":118,"ms_total":131}
  *
+ *   → {"id":"2","op":"dpi","image":"<base64>"}        (T4: extractor del DPI, ver src/dpi.js)
+ *   ← {"id":"2","ok":true,"cui":"…","nombres":"…","apellidos":"…","confianza":{…},"correcciones":[…],
+ *      "revision_obligatoria":true,"motivos":[…],"ms_inferencia":…,"ms_total":…}
+ *   La respuesta del DPI NO trae el texto crudo del documento: solo los campos extraídos.
+ *
  * Al arrancar emite {"evento":"listo","ms_carga":N} cuando los modelos ya
  * están en memoria; Rust espera ese evento antes de aceptar capturas.
  */
@@ -24,6 +29,8 @@ const fs = require('node:fs');
 const { performance } = require('node:perf_hooks');
 
 const { PaddleOcrService } = require('ppu-paddle-ocr');
+const { extraerDpi } = require('./dpi');
+const { estimarInclinacion, rotar } = require('./enderezar');
 
 const args = process.argv.slice(2);
 const argValue = (flag) => {
@@ -68,14 +75,14 @@ function createService(models) {
   });
 }
 
-async function recognize(service, imageBase64) {
+async function recognize(service, imageBase64, opciones = {}) {
   const t0 = performance.now();
   const bytes = Buffer.from(imageBase64, 'base64');
   const ab = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
   const t1 = performance.now();
   // noCache: cada captura es una foto nueva; cachear por bytes no aporta y
   // retendría imágenes en memoria más tiempo del necesario.
-  const result = await service.recognize(ab, { flatten: true, noCache: true });
+  const result = await service.recognize(ab, { flatten: true, noCache: true, ...opciones });
   const t2 = performance.now();
 
   const items = (result.results || []).map((r) => ({
@@ -90,6 +97,42 @@ async function recognize(service, imageBase64) {
     confianza: Number((result.confidence || 0).toFixed(4)),
     ms_inferencia: Math.round(t2 - t1),
     ms_total: Math.round(t2 - t0),
+  };
+}
+
+/**
+ * OCR + extracción de un DPI (T4). Devuelve los campos y cuánto tardó; nunca el texto crudo ni la imagen.
+ * Los tiempos incluyen la extracción (despreciable frente a la inferencia).
+ */
+async function reconocerDpi(service, imageBase64) {
+  const t0 = performance.now();
+  const original = Buffer.from(imageBase64, 'base64');
+  // 1) Se endereza la foto si el documento está torcido (el detector de líneas se confunde pasados ~6°).
+  let grados = 0;
+  try { grados = (await estimarInclinacion(original)).grados; } catch { /* sin enderezado: se lee la imagen tal cual */ }
+  const entrada = grados ? await rotar(original, grados) : original;
+  // Sin spaceRecovery: en el conjunto sintético acierta más campos que con él (que parte «GLORIA» en «G LO RIA»);
+  // lo que sí pierde son los espacios entre dos nombres («LUISLUCIA»), y por eso la pantalla muestra siempre los campos para revisar.
+  let r = await recognize(service, entrada.toString('base64'), { spaceRecovery: false });
+  let campos = extraerDpi(r.items);
+  let intentos = 1;
+  let msInferencia = r.ms_inferencia;
+  // 2) Si no salió un CUI válido y se había girado la imagen, se prueba también sin girar y se queda el mejor resultado.
+  if (!campos.cui_valido && grados) {
+    const r2 = await recognize(service, original.toString('base64'), { spaceRecovery: false });
+    const c2 = extraerDpi(r2.items);
+    intentos = 2;
+    msInferencia += r2.ms_inferencia;
+    if (c2.cui_valido || c2.confianza.cui > campos.confianza.cui) campos = c2;
+  }
+  return {
+    ...campos,
+    // El evaluador y la pantalla hablan de «revisión»; se expone con ese nombre además del detallado.
+    requiere_revision: campos.revision_obligatoria,
+    inclinacion_grados: grados,
+    intentos,
+    ms_inferencia: msInferencia,
+    ms_total: Math.round(performance.now() - t0),
   };
 }
 
@@ -123,11 +166,11 @@ async function main() {
     cola = cola.then(async () => {
       if (req.op === 'ping') return emit({ id: req.id, ok: true, pong: true });
       if (req.op === 'shutdown') { await service.destroy(); process.exit(0); }
-      if (req.op !== 'recognize' || typeof req.image !== 'string') {
+      if ((req.op !== 'recognize' && req.op !== 'dpi') || typeof req.image !== 'string') {
         return emit({ id: req.id, ok: false, error: 'petición inválida' });
       }
       try {
-        const r = await recognize(service, req.image);
+        const r = req.op === 'dpi' ? await reconocerDpi(service, req.image) : await recognize(service, req.image);
         emit({ id: req.id, ok: true, ...r });
       } catch (err) {
         emit({ id: req.id, ok: false, error: String(err && err.message || err) });
@@ -146,4 +189,4 @@ if (require.main === module) {
   main().catch((err) => { log('fatal', err); process.exit(1); });
 }
 
-module.exports = { createService, recognize, resolveModels, MODEL_FILES };
+module.exports = { createService, recognize, reconocerDpi, resolveModels, MODEL_FILES };

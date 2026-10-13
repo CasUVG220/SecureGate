@@ -15,7 +15,7 @@
  *   - la prueba final comprueba que la tabla cubre TODAS las acciones del código: una acción nueva sin caso aquí la rompe.
  */
 import request from 'supertest';
-import { randomUUID } from 'crypto';
+import { randomUUID, randomBytes, createHash } from 'crypto';
 import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import app from '../../app';
@@ -51,6 +51,24 @@ const as = (k: string) => bearer(sesion[k].token);
 
 const empresaNueva = async (extra = '') =>
   (await uno<{ id: string }>(`INSERT INTO empresas (nombre${extra ? ', ' + extra.split('=')[0] : ''}) VALUES ($1${extra ? ', ' + extra.split('=')[1] : ''}) RETURNING id`, [`AUD Empresa ${uid()}`]))!.id;
+/** Una factura SaaS pendiente de una empresa nueva (insertada directo: lo que se prueba aquí es la auditoría de pagarla o anularla). */
+const facturaNueva = async () => {
+  const e = await empresaNueva();
+  const n = (await uno<{ valor: string }>(`UPDATE saas_contadores SET valor = valor + 1 WHERE clave = 'factura_saas' RETURNING valor::text`))!.valor;
+  return (await uno<{ id: string }>(
+    `INSERT INTO facturas_saas (numero, empresa_id, periodo, plan_codigo, plan_nombre, dias_del_mes, dias_facturados, cuota_centavos, visitas, visitas_incluidas,
+        excedente_visitas, precio_visita_extra_centavos, excedente_centavos, total_centavos, detalle, vence_en)
+     VALUES ($1, $2, '2020-01', 'x', 'X', 31, 31, 1000, 0, 0, 0, 0, 0, 1000, '{}'::jsonb, CURRENT_DATE) RETURNING id`, [n, e]))!.id;
+};
+/** Una solicitud de alta autoservicio abierta, con el borrador indicado; devuelve el token del enlace (en la base solo vive su SHA-256). */
+const solicitudNueva = async (extra: Record<string, unknown> = {}) => {
+  const token = randomBytes(32).toString('base64url');
+  const nombre = `AUD Alta ${uid()}`;
+  await q(
+    `INSERT INTO onboarding_solicitudes (email, empresa_nombre, token_hash, borrador, expira_en) VALUES ($1, $2, $3, $4::jsonb, NOW() + interval '7 days')`,
+    [`aud.onb.${uid()}@inttest.local`, nombre, createHash('sha256').update(token).digest('hex'), JSON.stringify({ empresa_nombre: nombre, ...extra })]);
+  return token;
+};
 const usuarioNuevo = async (rol: string, suc: string | null, emp: string | null) =>
   (await uno<{ id: string }>(
     `INSERT INTO usuarios (nombre, email, password_hash, rol, sucursal_id, empresa_id, activo)
@@ -192,6 +210,49 @@ const CASOS: Caso[] = [
     accion: 'ADMIN_EMPRESA_ASIGNADO', quien: 'owner',
     ejecutar: async () => post('owner', `/api/empresas/${await empresaNueva()}/admin`, { usuario_id: await usuarioNuevo('agente', fx.sucursales.A1, null) }),
   },
+
+  // ── Planes y suscripciones (T10) ──
+  { accion: 'PLAN_CREADO', quien: 'owner', ejecutar: () => post('owner', '/api/planes', { codigo: `aud-${uid()}`.slice(0, 30), nombre: 'AUD plan', precio_mensual_centavos: 10000, visitas_incluidas: 100, precio_visita_extra_centavos: 10 }) },
+  {
+    accion: 'PLAN_ACTUALIZADO', quien: 'owner',
+    ejecutar: async () => {
+      const c = await post('owner', '/api/planes', { codigo: `aud-${uid()}`.slice(0, 30), nombre: 'AUD plan', precio_mensual_centavos: 10000, visitas_incluidas: 100, precio_visita_extra_centavos: 10 });
+      return put('owner', `/api/planes/${c.body.id}`, { nombre: 'AUD plan editado' });
+    },
+  },
+  { accion: 'SUSCRIPCION_ACTUALIZADA', quien: 'owner', ejecutar: async () => put('owner', `/api/empresas/${await empresaNueva()}/suscripcion`, { plan_codigo: 'basico', motivo: 'Prueba de auditoría' }) },
+
+  // ── Facturación SaaS (T11) ──
+  { accion: 'FACTURAS_SAAS_GENERADAS', quien: 'owner', ejecutar: () => post('owner', '/api/facturas-saas/generar', { mes: '2020-01' }) },
+  { accion: 'FACTURAS_SAAS_REVISADAS', quien: 'owner', ejecutar: () => post('owner', '/api/facturas-saas/revisar-vencidas') },
+  {
+    accion: 'FACTURA_SAAS_PAGADA', quien: 'owner',
+    ejecutar: async () => post('owner', `/api/facturas-saas/${await facturaNueva()}/pagar`, { metodo: 'transferencia', referencia: `BOL-${uid()}` }),
+  },
+  {
+    accion: 'FACTURA_SAAS_ANULADA', quien: 'owner',
+    ejecutar: async () => post('owner', `/api/facturas-saas/${await facturaNueva()}/anular`, { motivo: 'Prueba de auditoría' }),
+  },
+
+  // ── Alta autoservicio y portabilidad (T12) ──
+  { accion: 'ONBOARDING_SOLICITADO', quien: null, ejecutar: () => request(app).post('/api/onboarding/solicitar').send({ email: `aud.onb.${uid()}@inttest.local`, empresa_nombre: `AUD Alta ${uid()}`, acepta_terminos: true }) },
+  {
+    accion: 'ONBOARDING_BORRADOR_GUARDADO', quien: null,
+    ejecutar: async () => request(app).put(`/api/onboarding/${await solicitudNueva()}/borrador`).send({ sucursal_nombre: 'AUD sucursal' }),
+  },
+  {
+    accion: 'ONBOARDING_COMPLETADO', quien: null,
+    ejecutar: async () => request(app).post(`/api/onboarding/${await solicitudNueva({ sucursal_nombre: 'AUD sucursal', plan_codigo: 'basico' })}/completar`).send({}),
+  },
+  {
+    accion: 'ONBOARDING_INVITACION_REENVIADA', quien: null,
+    ejecutar: async () => {
+      const token = await solicitudNueva({ sucursal_nombre: 'AUD sucursal', plan_codigo: 'basico' });
+      expect((await request(app).post(`/api/onboarding/${token}/completar`).send({})).status).toBe(201);
+      return request(app).post(`/api/onboarding/${token}/reenviar`).send({});
+    },
+  },
+  { accion: 'DATOS_EMPRESA_EXPORTADOS', quien: 'owner', ejecutar: () => request(app).get(`/api/empresas/${fx.empresas.A}/exportar`).set(as('owner')).buffer(true).parse((res, cb) => { const t: Buffer[] = []; res.on('data', c => t.push(c)); res.on('end', () => cb(null, Buffer.concat(t))); }) },
 
   // ── Sucursales (admin de empresa) ──
   { accion: 'SUCURSAL_CREADA', quien: 'adminEmpA', ejecutar: () => post('adminEmpA', '/api/sucursales', { empresa_id: fx.empresas.A, nombre: `AUD Suc ${uid()}` }) },

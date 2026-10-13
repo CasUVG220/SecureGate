@@ -25,7 +25,9 @@ thiserror = "2"
 # HTTP hacia el backend. rustls en vez de OpenSSL del sistema: en Windows no
 # hay OpenSSL instalado y así el binario no depende de nada externo.
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
-tokio = { version = "1", features = ["sync", "time", "macros"] }
+tokio = { version = "1", features = ["sync", "time", "macros", "net", "io-util", "rt", "process"] }
+# Dirección de las cámaras (T7): análisis y validación anti-SSRF. Ya venía de reqwest.
+url = "2"
 
 # SQLite cifrado en reposo. `bundled-sqlcipher-vendored-openssl` compila
 # SQLCipher + OpenSSL dentro del binario (sin DLLs aparte). Requiere Perl (y
@@ -49,6 +51,7 @@ chrono = { version = "0.4", features = ["serde", "clock"] }
 base64 = "0.22"
 serialport = { version = "4", default-features = false }
 ureq = { version = "3", default-features = false }
+tauri-plugin-updater = "2"
 
 [target.'cfg(windows)'.dependencies]
 windows-native-keyring-store = "1"
@@ -61,7 +64,9 @@ windows = { version = "0.61", features = ["Win32_Foundation"] }
 apple-native-keyring-store = { version = "1", features = ["keychain"] }
 
 [dev-dependencies]
+tauri = { version = "2", features = ["test"] }
 tempfile = "3"
+tokio = { version = "1", features = ["sync", "time", "macros", "net", "io-util", "rt", "rt-multi-thread", "process", "test-util"] }
 
 # Read the optimization guideline for more details: https://tauri.app/concept/size/#cargo-configuration
 [profile.release]

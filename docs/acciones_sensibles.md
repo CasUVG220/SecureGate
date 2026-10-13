@@ -35,6 +35,22 @@ Dos pruebas mantienen esta lista honesta:
 | `EMPRESA_REACTIVADA` | Levanta la suspensión | `PATCH /api/empresas/:id/reactivar` | owner | — |
 | `EMPRESA_ELIMINADA_DEFINITIVO` | Borrado físico e irreversible, con la contraseña del owner | `POST /api/empresas/:id/eliminar-definitivo` | owner | 5/15 min por usuario; los bloqueos se auditan |
 | `ADMIN_EMPRESA_ASIGNADO` | Asigna el administrador de una empresa | `POST /api/empresas/:id/admin` | owner | — |
+| **Planes y suscripciones** (SaaS, T10) | | | | |
+| `PLAN_CREADO` | Alta de un plan del catálogo (precio mensual, visitas incluidas, excedente, límites) | `POST /api/planes` | owner | — |
+| `PLAN_ACTUALIZADO` | Cambio de precios, cupos o estado de un plan | `PUT /api/planes/:id` | owner | — |
+| `SUSCRIPCION_ACTUALIZADA` | Asigna o cambia el plan y/o el estado (prueba/activa/vencida/cancelada) de una empresa; escribe además `suscripcion_historial` | `PUT /api/empresas/:id/suscripcion` | owner | — |
+| **Facturación SaaS** (T11) | | | | |
+| `FACTURAS_SAAS_GENERADAS` | Corre a mano la facturación mensual (por defecto el mes anterior; `mes` opcional, solo un mes cerrado). Idempotente: una factura por empresa y mes. Manda los avisos de factura emitida | `POST /api/facturas-saas/generar` | owner | 5/15 min por usuario; los bloqueos se auditan |
+| `FACTURAS_SAAS_REVISADAS` | Marca como vencidas las facturas pendientes que pasaron su fecha y manda los avisos de pago vencido (pasada la gracia) | `POST /api/facturas-saas/revisar-vencidas` | owner | 5/15 min por usuario; los bloqueos se auditan |
+| `FACTURA_SAAS_PAGADA` | El owner confirma el pago de una factura (transferencia, depósito, efectivo u otro) con su referencia. Con `COBRO_PROVEEDOR=visanet` responde 503 y también se audita | `POST /api/facturas-saas/:id/pagar` | owner | — |
+| `FACTURA_SAAS_ANULADA` | Anula una factura pendiente o vencida con motivo; la del mes no se vuelve a generar | `POST /api/facturas-saas/:id/anular` | owner | — |
+| **Alta autoservicio** (T12; rutas públicas, sin sesión) | | | | |
+| `ONBOARDING_SOLICITADO` | Alguien pide dar de alta una empresa con su correo; se manda el enlace del asistente (nunca se revela si el correo ya tenía cuenta). Detalle: dominio del correo y resultado; el campo trampa lo marca `honeypot` | `POST /api/onboarding/solicitar` | Cualquiera | 5/hora por IP + 3/24 h por correo; los bloqueos (429) se auditan |
+| `ONBOARDING_BORRADOR_GUARDADO` | Se guarda el borrador del asistente (empresa, sucursal, plan). Detalle: solo los nombres de los campos. También es la acción de los bloqueos (429) de las consultas del enlace | `PUT /api/onboarding/:token/borrador` (y `GET …/:token`) | Quien tiene el enlace | 60/15 min por IP |
+| `ONBOARDING_COMPLETADO` | En una sola transacción crea la empresa, su primera sucursal, la suscripción en prueba y la invitación de administrador. Detalle: id de la solicitud y de la empresa | `POST /api/onboarding/:token/completar` | Quien tiene el enlace | 10/hora por IP |
+| `ONBOARDING_INVITACION_REENVIADA` | Reenvía la invitación del administrador con enlace nuevo (el anterior deja de servir; máximo 3) | `POST /api/onboarding/:token/reenviar` | Quien tiene el enlace | 10/hora por IP |
+| **Portabilidad de datos** (T12) | | | | |
+| `DATOS_EMPRESA_EXPORTADOS` | Descarga de los datos de la empresa en un .zip de CSV (sucursales, personal, residentes, visitas, pagos, garitas, facturas): incluye datos personales. Detalle: filas por archivo. Nunca contraseñas ni códigos de activación | `GET /api/empresas/:id/exportar` | owner o el admin de esa empresa | 3/hora por usuario; los bloqueos se auditan |
 | **Sucursales** | | | | |
 | `SUCURSAL_CREADA` | Alta de sucursal | `POST /api/sucursales` | admin de empresa | — |
 | `SUCURSAL_ACTUALIZADA` | Edición de sucursal | `PUT /api/sucursales/:id` | admin de empresa | — |
@@ -78,10 +94,10 @@ Dos pruebas mantienen esta lista honesta:
 | `OCR_PLACA` | Lectura de la foto de una placa | `POST /api/ocr/placa` | personal | 30/min por usuario |
 | `OCR_ESCANEO` | Lectura bloqueada por límite (429) | `/api/ocr/*` | — | — |
 | **Dinero** | | | | |
-| `PAGO_TARJETA_SIMULADO` | Intento de pago con tarjeta (aprobado o rechazado) | `POST /api/pagos/tarjeta` | residente | 10/15 min por usuario; los bloqueos se auditan |
-| `PAGO_TRANSFERENCIA_ENVIADA` | El residente sube el comprobante de una transferencia | `POST /api/pagos/transferencia` | residente | 10/15 min por usuario; los bloqueos se auditan |
-| `PAGO_EFECTIVO` | Registro de un pago en efectivo | `POST /api/pagos` | admin de sucursal | — |
-| `PAGO_APROBADO` | Aprueba un comprobante | `PUT /api/pagos/:id/aprobar` | admin de sucursal | — |
+| `PAGO_TARJETA_SIMULADO` | Intento de pago con tarjeta (aprobado, rechazado, o **422** si el monto supera el saldo). El pago **resta su monto del saldo** (`docs/pagos_saldo.md`) | `POST /api/pagos/tarjeta` | residente | 10/15 min por usuario; los bloqueos se auditan |
+| `PAGO_TRANSFERENCIA_ENVIADA` | El residente sube el comprobante de una transferencia (**422** si el monto supera su saldo) | `POST /api/pagos/transferencia` | residente | 10/15 min por usuario; los bloqueos se auditan |
+| `PAGO_EFECTIVO` | Registro de un pago en efectivo; resta su monto del saldo (**422** si lo supera) | `POST /api/pagos` | admin de sucursal | — |
+| `PAGO_APROBADO` | Aprueba un comprobante; resta su monto del saldo (**422** si ya no cabe: sigue pendiente y hay que rechazarlo) | `PUT /api/pagos/:id/aprobar` | admin de sucursal | — |
 | `PAGO_RECHAZADO` | Rechaza un comprobante | `PUT /api/pagos/:id/rechazar` | admin de sucursal | — |
 | `CARGO_CONFIG_CREADA` | Alta de una regla de cargo por mora | `POST /api/cargos/configuracion`, `/api/configuracion-cargos` | admin de sucursal | — |
 | `CARGO_CONFIG_ACTUALIZADA` | Edición de una regla de cargo | `PUT /api/cargos/configuracion/:id`, `/api/configuracion-cargos/:id` | admin de sucursal | — |

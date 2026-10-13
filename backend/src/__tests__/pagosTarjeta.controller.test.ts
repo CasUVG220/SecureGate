@@ -1,7 +1,8 @@
 /**
  * ── Por qué se prioriza esta lógica para testing ─────────────────────────────
  * pagarConTarjeta() es la pasarela simulada del sprint 7 y toca dinero: al
- * aprobar deja el saldo del residente en 0 y liquida los cargos de reserva. Dos
+ * aprobar RESTA el monto del saldo del residente (T1: pagos parciales válidos; un
+ * monto mayor al saldo es 422) y, si el saldo queda en 0, salda los cargos de reserva. Dos
  * cosas tienen que quedar blindadas antes de que entre Visanet:
  *   1. un cobro rechazado NO puede tocar el saldo ni guardarse como pago, y
  *   2. del instrumento sólo pueden persistirse los últimos 4 dígitos.
@@ -23,14 +24,21 @@ function makeRes() {
   const res: Partial<Response> = {};
   res.status = jest.fn().mockReturnValue(res);
   res.json = jest.fn().mockReturnValue(res);
+  res.locals = {};
   return res as Response;
 }
 
-function makeClient(estadoEsperado: 'aprobado' | 'rechazado') {
+function makeClient(estadoEsperado: 'aprobado' | 'rechazado', saldo = '1000.00', saldoFinal = '150.00') {
   return {
     query: jest.fn((sql: string, _params?: unknown[]) => {
       if (sql.includes('FROM residentes WHERE usuario_id')) {
         return Promise.resolve({ rows: [{ id: 'res-1', sucursal_id: 'suc-1' }] });
+      }
+      if (sql.includes('SELECT saldo_pendiente FROM residentes') && sql.includes('FOR UPDATE')) {
+        return Promise.resolve({ rows: [{ saldo_pendiente: saldo }] });
+      }
+      if (sql.includes('UPDATE residentes')) {
+        return Promise.resolve({ rows: [{ saldo_pendiente: saldoFinal }] });
       }
       if (sql.includes('INSERT INTO pagos')) {
         return Promise.resolve({ rows: [{ id: 'pago-1', estado: estadoEsperado, es_simulado: true }] });
@@ -65,7 +73,7 @@ describe('pagarConTarjeta', () => {
     else process.env.PAGOS_TARJETA_SIMULADA = previo;
   });
 
-  it('aprobado: registra el pago simulado y deja el saldo en 0', async () => {
+  it('aprobado: registra el pago simulado y le resta su monto al saldo', async () => {
     const client = makeClient('aprobado');
     mockPool.connect.mockResolvedValue(client);
     const res = makeRes();
@@ -76,6 +84,10 @@ describe('pagarConTarjeta', () => {
     expect(sqls).toContain('BEGIN');
     expect(sqls).toContain('COMMIT');
     expect(sqls.some(s => s.includes('UPDATE residentes'))).toBe(true);
+    // pago parcial (850 de 1000): el saldo queda en 150, los cargos de reserva siguen pendientes
+    expect(sqls.some(s => s.includes("metodo = 'reserva'"))).toBe(false);
+    const resta = client.query.mock.calls.find(c => String(c[0]).includes('UPDATE residentes'))!;
+    expect(resta[1]).toEqual(['res-1', '850.00']);
     expect(res.status).toHaveBeenCalledWith(201);
 
     const insert = client.query.mock.calls.find(c => String(c[0]).includes('INSERT INTO pagos'))!;
@@ -95,12 +107,80 @@ describe('pagarConTarjeta', () => {
     // Un intento rechazado no es un pago: no ensucia el historial ni los reportes de ingresos.
     // (Queda en la auditoría de la ruta con el código 402.)
     expect(sqls.some(s => s.includes('INSERT INTO pagos'))).toBe(false);
-    expect(sqls).not.toContain('BEGIN');
+    expect(sqls).toContain('ROLLBACK');                      // el bloqueo del saldo se suelta sin tocar nada
+    expect(sqls).not.toContain('COMMIT');
     expect(sqls.some(s => s.includes('UPDATE residentes'))).toBe(false);
     expect(sqls.some(s => s.includes("metodo = 'reserva'"))).toBe(false);
     expect(res.status).toHaveBeenCalledWith(402);
     expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ estado: 'rechazado', error: expect.stringMatching(/rechazado/i) }));
     expect(client.release).toHaveBeenCalled();
+  });
+
+  it('saldo exacto: deja el saldo en 0 y salda los cargos de reserva pendientes', async () => {
+    const client = makeClient('aprobado', '850.00', '0.00');
+    mockPool.connect.mockResolvedValue(client);
+    const res = makeRes();
+
+    await pagarConTarjeta(reqCon({ monto: 850, ultimos4: '4444' }), res);
+
+    expect(client.query.mock.calls.map(c => c[0] as string).some(s => s.includes("metodo = 'reserva'"))).toBe(true);
+    expect(res.status).toHaveBeenCalledWith(201);
+  });
+
+  it('monto mayor al saldo: 422, no autoriza, no guarda ningún pago y no toca el saldo', async () => {
+    const client = makeClient('aprobado', '300.00');
+    mockPool.connect.mockResolvedValue(client);
+    const res = makeRes();
+
+    await pagarConTarjeta(reqCon({ monto: 850, ultimos4: '4444' }), res);
+
+    const sqls = client.query.mock.calls.map(c => c[0] as string);
+    expect(sqls.some(s => s.includes('INSERT INTO pagos'))).toBe(false);
+    expect(sqls.some(s => s.includes('UPDATE residentes'))).toBe(false);
+    expect(sqls).toContain('ROLLBACK');
+    expect(res.status).toHaveBeenCalledWith(422);
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
+      codigo: 'EXCEDE_SALDO', saldo_pendiente: '300.00', error: expect.stringMatching(/Q300\.00/),
+    }));
+  });
+
+  it('sin saldo pendiente: 422 con un mensaje que lo dice', async () => {
+    const client = makeClient('aprobado', '0.00');
+    mockPool.connect.mockResolvedValue(client);
+    const res = makeRes();
+    await pagarConTarjeta(reqCon({ monto: 10, ultimos4: '4444' }), res);
+    expect(res.status).toHaveBeenCalledWith(422);
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ error: expect.stringMatching(/no tiene saldo pendiente/) }));
+  });
+
+  it('un monto con más de dos decimales es 400 (centavos exactos)', async () => {
+    const res = makeRes();
+    await pagarConTarjeta(reqCon({ monto: 10.005, ultimos4: '4444' }), res);
+    expect(res.status).toHaveBeenCalledWith(400);
+  });
+
+  it('con el adaptador de Visanet (sin integración): 503 controlado, ROLLBACK, nada guardado y el proveedor queda para la auditoría', async () => {
+    const previoProveedor = process.env.PAGOS_PROVEEDOR;
+    process.env.PAGOS_PROVEEDOR = 'visanet';
+    try {
+      const client = makeClient('aprobado');
+      mockPool.connect.mockResolvedValue(client);
+      const res = makeRes();
+
+      await pagarConTarjeta(reqCon({ monto: 100, ultimos4: '4444' }), res);
+
+      const sqls = client.query.mock.calls.map(c => c[0] as string);
+      expect(sqls.some(s => s.includes('INSERT INTO pagos'))).toBe(false);
+      expect(sqls.some(s => s.includes('UPDATE residentes'))).toBe(false);
+      expect(sqls).toContain('ROLLBACK');
+      expect(res.status).toHaveBeenCalledWith(503);
+      expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ codigo: 'PROVEEDOR_NO_CONFIGURADO' }));
+      expect(res.locals.auditoria)
+        .toEqual({ proveedor: 'visanet', motivo: 'proveedor_no_configurado' });
+      expect(client.release).toHaveBeenCalled();
+    } finally {
+      if (previoProveedor === undefined) delete process.env.PAGOS_PROVEEDOR; else process.env.PAGOS_PROVEEDOR = previoProveedor;
+    }
   });
 
   it('sólo persiste los últimos 4 dígitos del instrumento', async () => {

@@ -15,8 +15,10 @@
 //! La captura de cámara no pasa por Rust: `getUserMedia` corre en el WebView
 //! y la imagen capturada llega a `ocr` ya codificada.
 
+mod actualizador;
 mod api;
 mod auth;
+mod camaras;
 mod camera;
 mod config;
 mod db;
@@ -59,6 +61,8 @@ pub struct AppState {
     /// `config_hardware`) y al guardar una configuración nueva. Sin
     /// configuración es `SinDriver`: la apertura física es opcional.
     pub hardware: RwLock<std::sync::Arc<dyn hardware::TalanqueraDriver>>,
+    /// Puente de video local y cámaras IP/celular encendidas (T7).
+    pub camaras: camaras::Gestor,
 }
 
 impl AppState {
@@ -117,7 +121,8 @@ fn app_configurar_api_url(state: State<'_, AppState>, api_url: String) -> AppRes
             "Este equipo ya tiene una licencia activada: desvincúlalo antes de cambiar el servidor",
         ));
     }
-    let cfg = config::Config { api_url: url.clone() };
+    // Se conserva el resto de la configuración del equipo (p. ej. el respaldo remoto del DPI).
+    let cfg = config::Config { api_url: url.clone(), ..state.config.read().unwrap().clone() };
     cfg.guardar(&state.dir_datos)?;
     *state.config.write().unwrap() = cfg;
     Ok(url)
@@ -163,6 +168,7 @@ pub fn construir_estado_en(dir_datos: PathBuf) -> AppState {
         ultimo_push_ok: RwLock::new(None),
         ultimo_error: RwLock::new(None),
         hardware: RwLock::new(std::sync::Arc::new(hardware::SinDriver)),
+        camaras: camaras::Gestor::default(),
     }
 }
 
@@ -170,6 +176,8 @@ pub fn construir_estado_en(dir_datos: PathBuf) -> AppState {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
+        // T13: actualizaciones firmadas. La llave pública y el manifiesto vienen de `plugins.updater` en tauri.conf.json (ver actualizador.rs).
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(
             tauri_plugin_log::Builder::new()
                 .level(if cfg!(debug_assertions) { log::LevelFilter::Debug } else { log::LevelFilter::Info })
@@ -198,6 +206,7 @@ pub fn run() {
                 }
             }
 
+            app.manage(actualizador::Pendiente::default());
             camera::configurar(&handle);
             sync::iniciar_tareas(handle.clone());
             // Precalentar el OCR en segundo plano para que la primera captura
@@ -211,6 +220,7 @@ pub fn run() {
         })
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::Destroyed = event {
+                window.state::<AppState>().camaras.detener_todas();
                 ocr::detener(&window.state::<AppState>());
             }
         })
@@ -242,6 +252,24 @@ pub fn run() {
             ocr::ocr_precalentar,
             ocr::ocr_estado,
             ocr::ocr_dpi_remoto,
+            ocr::ocr_dpi_local,
+            ocr::ocr_dpi,
+            ocr::ocr_dpi_config,
+            ocr::ocr_dpi_configurar,
+            camaras::camaras_listar,
+            camaras::camaras_guardar,
+            camaras::camaras_eliminar,
+            camaras::camaras_asignar,
+            camaras::camaras_probar,
+            camaras::camaras_descubrir,
+            camaras::camaras_puente_info,
+            camaras::camaras_encender,
+            camaras::camaras_apagar,
+            camaras::camaras_estado,
+            camaras::camara_ip_fotograma,
+            actualizador::actualizacion_estado,
+            actualizador::actualizacion_buscar,
+            actualizador::actualizacion_instalar,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

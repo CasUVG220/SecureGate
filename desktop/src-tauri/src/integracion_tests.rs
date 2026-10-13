@@ -54,7 +54,7 @@ async fn flujo_completo_de_garita() {
     secure_store::inicializar_mock();
     let dir = tempfile::tempdir().unwrap();
     let state = crate::construir_estado_en(dir.path().to_path_buf());
-    *state.config.write().unwrap() = crate::config::Config { api_url: e.api.clone() };
+    *state.config.write().unwrap() = crate::config::Config { api_url: e.api.clone(), ..Default::default() };
 
     // Sin licencia: nada funciona.
     assert_eq!(license::evaluar(None, chrono::Utc::now()), license::EstadoLicencia::SinLicencia);
@@ -96,7 +96,7 @@ async fn flujo_completo_de_garita() {
         placa: Some("p 123 abc".into()),
         notas: Some("test".into()),
         capturado_manualmente: true,
-        invitacion_qr_id: None,
+        invitacion_qr_id: None, origen_dpi: None,
     })).expect("encolar");
     assert_eq!(sync::estado(&state).pendientes, 1);
 
@@ -124,7 +124,7 @@ async fn flujo_completo_de_garita() {
     }).unwrap();
     let err = garita::con_db(&state, |c| garita::encolar_acceso(c, &agente_id, &garita::NuevoAcceso {
         nombre_visitante: "Vetado".into(), numero_dpi: "1234500000000".into(), residente_id: residente.id.clone(),
-        placa: None, notas: None, capturado_manualmente: false, invitacion_qr_id: None,
+        placa: None, notas: None, capturado_manualmente: false, invitacion_qr_id: None, origen_dpi: None,
     })).unwrap_err();
     assert_eq!(err.codigo, "blacklist");
 
@@ -132,11 +132,11 @@ async fn flujo_completo_de_garita() {
     // funcionando (local), el push falla con backoff y no pierde nada; al
     // volver la red, la cola se vacía sola.
     let url_real = state.api_url();
-    *state.config.write().unwrap() = crate::config::Config { api_url: "http://127.0.0.1:1".into() };
+    *state.config.write().unwrap() = crate::config::Config { api_url: "http://127.0.0.1:1".into(), ..Default::default() };
     let dpi2 = format!("8{:012}", chrono::Utc::now().timestamp_millis() % 1_000_000_000_000);
     let id2 = garita::con_db(&state, |c| garita::encolar_acceso(c, &agente_id, &garita::NuevoAcceso {
         nombre_visitante: "Offline Pérez".into(), numero_dpi: dpi2, residente_id: residente.id.clone(),
-        placa: None, notas: None, capturado_manualmente: true, invitacion_qr_id: None,
+        placa: None, notas: None, capturado_manualmente: true, invitacion_qr_id: None, origen_dpi: None,
     })).expect("encolar offline");
     let err = sync::push_pendientes(&state).await.unwrap_err();
     assert!(err.es_sin_conexion(), "{err:?}");
@@ -150,7 +150,7 @@ async fn flujo_completo_de_garita() {
         "sin red, el heartbeat fallido no cambia el estado (gracia)");
 
     // Vuelve la red: el backoff aún no venció (5 s), así que primero no sube nada…
-    *state.config.write().unwrap() = crate::config::Config { api_url: url_real };
+    *state.config.write().unwrap() = crate::config::Config { api_url: url_real, ..Default::default() };
     assert_eq!(sync::push_pendientes(&state).await.unwrap(), 0);
     // …y cuando toca el reintento, se sincroniza.
     garita::con_db(&state, |c| { c.execute("UPDATE accesos_pendientes SET proximo_intento_en = '2000-01-01T00:00:00Z' WHERE id_cliente = ?1", [&id2])?; Ok(()) }).unwrap();

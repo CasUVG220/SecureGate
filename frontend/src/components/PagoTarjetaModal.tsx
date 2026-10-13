@@ -51,10 +51,12 @@ export default function PagoTarjetaModal({ open, onClose, saldo, simulada = fals
 
   const marca = useMemo(() => detectarMarca(datos.numero), [datos.numero]);
 
-  // Advertencia (no bloqueo): un monto mayor que el saldo no se acredita como saldo a favor.
+  // Regla del servidor (T1): un pago resta su monto del saldo; uno mayor al saldo se rechaza (422). Se bloquea
+  // aquí para no enviar un cobro que el servidor va a rechazar; un monto menor es un pago parcial válido.
   const importeActual = parseFloat(monto);
   const supera = Number.isFinite(importeActual) && importeActual > 0 && importeActual > saldo + 0.004;
   const sinSaldo = saldo <= 0 && Number.isFinite(importeActual) && importeActual > 0;
+  const parcial = !supera && !sinSaldo && Number.isFinite(importeActual) && importeActual > 0 && importeActual < saldo - 0.004;
 
   const cerrar = () => {
     setDatos(EMPTY);
@@ -77,6 +79,7 @@ export default function PagoTarjetaModal({ open, onClose, saldo, simulada = fals
     setRechazo(null);
 
     const importe = parseFloat(monto);
+    if (supera || sinSaldo) return;
     const encontrados = validarTarjeta(datos, importe);
     setErrores(encontrados);
     if (Object.keys(encontrados).length > 0) return;
@@ -185,6 +188,8 @@ export default function PagoTarjetaModal({ open, onClose, saldo, simulada = fals
           suffix="Q"
         />
 
+        {parcial && <p className="text-xs text-gray-400">{t('card.partialHint')}</p>}
+
         {(supera || sinSaldo) && (
           <div role="status" className="space-y-2 rounded-lg border border-warning-500/30 bg-warning-500/10 px-3 py-2.5 text-xs text-warning-400">
             <p className="font-medium">
@@ -211,6 +216,7 @@ export default function PagoTarjetaModal({ open, onClose, saldo, simulada = fals
           <Button
             type="submit"
             loading={procesando}
+            disabled={supera || sinSaldo}
             icon={
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <path d={ICON_LOCK} />

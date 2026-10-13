@@ -170,7 +170,7 @@ jobs:
       - name: Archivos que Tauri exige para compilar y que no se versionan
         run: |
           mkdir -p ../dist resources/sidecar-ocr binaries
-          touch binaries/node-x86_64-unknown-linux-gnu
+          touch binaries/node-x86_64-unknown-linux-gnu binaries/ffmpeg-x86_64-unknown-linux-gnu
 
       # `rust-version` del paquete es 1.88: el Rust estable del runner la cumple; `rustup update` solo lo asegura.
       - name: Rust estable

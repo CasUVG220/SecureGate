@@ -14,11 +14,23 @@ import {
   asignacionPorDefecto, guardarAsignacion, leerAsignacion,
   type AsignacionCamaras, type Camara, type Proposito,
 } from '../lib/camaras';
+import { api, type CamaraRed } from '../lib/tauri';
 
 export function useCamaras() {
   const [camaras, setCamaras] = useState<Camara[]>([]);
   const [asignacion, setAsignacion] = useState<AsignacionCamaras>(() => leerAsignacion());
   const [listo, setListo] = useState(false);
+  /** Cámaras IP y celulares guardadas en este equipo (T8). Sin credenciales: solo `con_credenciales`. */
+  const [camarasRed, setCamarasRed] = useState<CamaraRed[]>([]);
+
+  const recargarRed = useCallback(async () => {
+    try {
+      setCamarasRed(await api.camaras.listar());
+    } catch {
+      /* Sin el puente de Rust (pruebas, versión anterior) solo hay cámaras USB. */
+    }
+  }, []);
+  useEffect(() => { void recargarRed(); }, [recargarRed]);
 
   const refrescar = useCallback(async () => {
     if (!navigator.mediaDevices?.enumerateDevices) { setListo(true); return; }
@@ -52,13 +64,31 @@ export function useCamaras() {
     return () => md.removeEventListener('devicechange', alCambiar);
   }, [refrescar]);
 
-  const asignar = useCallback((proposito: Proposito, deviceId: string) => {
-    setAsignacion(prev => {
-      const siguiente = { ...prev, [proposito]: deviceId };
-      guardarAsignacion(siguiente);
-      return siguiente;
-    });
-  }, []);
+  /**
+   * Asigna una cámara a una tarea. `valor` es el `deviceId` de una USB (como antes), `red:<id>` para una cámara IP o celular, o `''` para
+   * «la predeterminada del sistema». Una tarea usa una sola cámara: elegir una la quita de la anterior (en el puente de Rust).
+   */
+  const asignar = useCallback(async (proposito: Proposito, valor: string) => {
+    const idRed = valor.startsWith('red:') ? valor.slice(4) : null;
+    try {
+      for (const c of camarasRed) {
+        const tiene = c.tareas.includes(proposito);
+        if (tiene && c.id !== idRed) await api.camaras.asignar(c.id, c.tareas.filter(t => t !== proposito));
+      }
+      const elegida = idRed ? camarasRed.find(c => c.id === idRed) : undefined;
+      if (elegida && !elegida.tareas.includes(proposito)) await api.camaras.asignar(elegida.id, [...elegida.tareas, proposito]);
+    } catch {
+      /* Si el puente no responde, la asignación de cámaras USB (abajo) sigue funcionando. */
+    }
+    await recargarRed();
+    if (!idRed) {
+      setAsignacion(prev => {
+        const siguiente = { ...prev, [proposito]: valor };
+        guardarAsignacion(siguiente);
+        return siguiente;
+      });
+    }
+  }, [camarasRed, recargarRed]);
 
-  return { camaras, asignacion, asignar, refrescar, listo };
+  return { camaras, asignacion, asignar, refrescar, listo, camarasRed, recargarRed };
 }

@@ -72,6 +72,13 @@ const PUBLICAS = new Set([
   'POST /api/licencias/heartbeat',   // token de licencia (401 sin él)
   'GET /api/invitaciones/:token',    // token de 256 bits de un solo uso
   'POST /api/invitaciones/:token/aceptar',
+  // Alta autoservicio (T12): públicas a propósito; cada una con su límite por IP, validación estricta y auditoría.
+  // Las que llevan :token solo sirven con el enlace de 256 bits que llegó al correo (se guarda su SHA-256). Modelo de amenazas: docs/saas_nucleo.md §8.
+  'POST /api/onboarding/solicitar',
+  'GET /api/onboarding/:token',
+  'PUT /api/onboarding/:token/borrador',
+  'POST /api/onboarding/:token/completar',
+  'POST /api/onboarding/:token/reenviar',
 ]);
 const claveDe = (r: RutaReal) => `${r.method} /api${r.path}`;
 

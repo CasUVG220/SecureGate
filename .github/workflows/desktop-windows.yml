@@ -1,0 +1,248 @@
+name: Escritorio · Windows
+
+# T13 · Compila y prueba la app de escritorio EN WINDOWS (la que usan las garitas).
+#
+# ⚠ SIN EJECUTAR: este flujo se escribió y se revisó con actionlint desde un entorno Linux sin acceso a runners de Windows. La PRIMERA
+# corrida real hay que revisarla a mano (paso a paso, sobre todo «Instalación silenciosa» y «Arranque»): es probable que haga falta
+# ajustar rutas, nombres de ejecutables o tiempos. Ver docs/validacion_windows.md.
+#
+# Qué hace: pruebas de la parte web y de Rust, prepara el sidecar de OCR, compila el instalador (NSIS y MSI), lo sube como artefacto, lo
+# instala en silencio y comprueba que el .exe existe y arranca (con tiempo límite).
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'desktop/**'
+      - '.github/workflows/desktop-windows.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: desktop-windows-${{ github.ref }}
+  cancel-in-progress: true
+
+# Versiones FIJAS a propósito (como el resto del CI: `ubuntu-latest`/`windows-latest` son alias que GitHub mueve sin avisar y una migración
+# del runner no debe romper el CI un día cualquiera). Se suben en un cambio revisable. Se usa `windows-2022` en lugar del alias
+# `windows-latest` por esa misma razón.
+env:
+  NODE_VERSION: '20.19.0'
+  RUST_VERSION: '1.97.0'
+  FFMPEG_ARTEFACTO: ffmpeg-windows
+
+jobs:
+  # El ffmpeg mínimo (≈ 3 MB, LGPL) se compila CRUZADO desde Linux con mingw: en un runner de Windows no hay forma cómoda de hacerlo.
+  # Se cachea por el hash del script (que lleva la versión y el SHA-256 del código fuente), así que casi siempre es un acierto de caché.
+  ffmpeg-windows:
+    name: ffmpeg mínimo para Windows (cruzado en Linux)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4.2.2
+
+      - name: Caché del binario
+        id: cache
+        uses: actions/cache@v4.2.3
+        with:
+          path: |
+            desktop/src-tauri/binaries/ffmpeg-x86_64-pc-windows-msvc.exe
+            desktop/src-tauri/binaries/ffmpeg-LICENSE.txt
+          key: ffmpeg-windows-${{ hashFiles('desktop/scripts/build-ffmpeg-min.sh') }}
+
+      - name: Dependencias de compilación
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends build-essential nasm yasm make curl xz-utils gcc-mingw-w64-x86-64
+
+      - name: Compilar ffmpeg.exe
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: bash desktop/scripts/build-ffmpeg-min.sh windows
+
+      - name: Subir ffmpeg.exe
+        uses: actions/upload-artifact@v4.6.2
+        with:
+          name: ${{ env.FFMPEG_ARTEFACTO }}
+          path: |
+            desktop/src-tauri/binaries/ffmpeg-x86_64-pc-windows-msvc.exe
+            desktop/src-tauri/binaries/ffmpeg-LICENSE.txt
+          if-no-files-found: error
+          retention-days: 7
+
+  windows:
+    name: Instalador de Windows (compilar, instalar y arrancar)
+    needs: ffmpeg-windows
+    # Si el ffmpeg cruzado falla, esto sigue (con un archivo vacío y un aviso) para no esconder los problemas propios de Windows.
+    if: ${{ !cancelled() }}
+    runs-on: windows-2022
+    timeout-minutes: 90
+
+    defaults:
+      run:
+        shell: pwsh
+        working-directory: desktop
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4.2.2
+
+      - name: Node
+        uses: actions/setup-node@v4.4.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+
+      # SQLCipher se compila con OpenSSL "vendored": pide Perl y NASM (ver desktop/README.md). El runner trae Perl (Strawberry) y suele
+      # traer NASM; si no, se instala con una versión fija.
+      - name: Perl y NASM
+        run: |
+          if (-not (Get-Command perl -ErrorAction SilentlyContinue)) { throw 'Falta perl en el runner (Strawberry Perl viene instalado en windows-2022; revisar la imagen).' }
+          if (-not (Get-Command nasm -ErrorAction SilentlyContinue)) {
+            choco install nasm --version=2.16.03 -y --no-progress
+            "C:\Program Files\NASM" | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
+          }
+          perl -v | Select-Object -First 2
+          $n = Get-Command nasm -ErrorAction SilentlyContinue
+          if ($n) { & $n.Source -v } else { & 'C:\Program Files\NASM\nasm.exe' -v }
+
+      - name: Rust ${{ env.RUST_VERSION }}
+        run: |
+          rustup toolchain install $env:RUST_VERSION --profile minimal --no-self-update
+          rustup default $env:RUST_VERSION
+          rustc --version
+          cargo --version
+
+      - name: Caché de cargo
+        uses: actions/cache@v4.2.3
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            desktop/src-tauri/target
+          key: cargo-${{ runner.os }}-${{ env.RUST_VERSION }}-${{ hashFiles('desktop/src-tauri/Cargo.lock') }}
+          restore-keys: cargo-${{ runner.os }}-${{ env.RUST_VERSION }}-
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Pruebas de la parte web (vitest)
+        run: npm test
+
+      # Node.exe + node_modules de win32-x64 + modelos del OCR en src-tauri/ (lo que el instalador empaqueta). Usa Node de nodejs.org con SHA-256 verificado.
+      - name: Preparar el sidecar de OCR para Windows
+        run: npm run sidecar:prepare:windows
+
+      - name: Traer ffmpeg.exe
+        id: ffmpeg
+        continue-on-error: true
+        uses: actions/download-artifact@v4.3.0
+        with:
+          name: ${{ env.FFMPEG_ARTEFACTO }}
+          path: desktop/src-tauri/binaries
+
+      - name: Sin ffmpeg real, un archivo vacío para poder compilar (y un aviso)
+        if: steps.ffmpeg.outcome != 'success'
+        run: |
+          New-Item -ItemType File -Force -Path src-tauri/binaries/ffmpeg-x86_64-pc-windows-msvc.exe | Out-Null
+          Write-Output '::warning title=ffmpeg::No se pudo traer ffmpeg.exe: el instalador de este PR NO trae cámaras IP ni celular como cámara (la webcam USB sí funciona).'
+
+      - name: Pruebas de Rust (cargo test --lib)
+        working-directory: desktop/src-tauri
+        run: cargo test --lib --locked
+
+      - name: Compilar el instalador (NSIS y MSI)
+        run: npm run tauri -- build --bundles nsis,msi
+
+      - name: Localizar los instaladores
+        id: instaladores
+        run: |
+          $dir = 'src-tauri/target/release/bundle'
+          $nsis = Get-ChildItem "$dir/nsis" -Filter *.exe -ErrorAction SilentlyContinue | Select-Object -First 1
+          $msi  = Get-ChildItem "$dir/msi"  -Filter *.msi -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $nsis) { throw "No se generó el instalador NSIS en $dir/nsis" }
+          if (-not $msi)  { throw "No se generó el instalador MSI en $dir/msi" }
+          "nsis=$($nsis.FullName)" >> $env:GITHUB_OUTPUT
+          "msi=$($msi.FullName)"  >> $env:GITHUB_OUTPUT
+          "### Instaladores" >> $env:GITHUB_STEP_SUMMARY
+          "| Archivo | Tamaño |" >> $env:GITHUB_STEP_SUMMARY
+          "|---|---:|" >> $env:GITHUB_STEP_SUMMARY
+          foreach ($f in @($nsis, $msi)) { "| ``$($f.Name)`` | $([math]::Round($f.Length / 1MB, 1)) MB |" >> $env:GITHUB_STEP_SUMMARY }
+
+      - name: Subir los instaladores
+        uses: actions/upload-artifact@v4.6.2
+        with:
+          name: instaladores-windows
+          path: |
+            desktop/src-tauri/target/release/bundle/nsis/*.exe
+            desktop/src-tauri/target/release/bundle/msi/*.msi
+          if-no-files-found: error
+          retention-days: 14
+
+      # ── Instalación silenciosa y arranque ───────────────────────────────────────────────────────────────
+      # NSIS: `/S` silencioso y `/D=` (SIEMPRE el último argumento, sin comillas) elige la carpeta. Después se busca el .exe de la app, se
+      # lanza y se espera: si el proceso muere antes del tiempo límite, la app no arranca. Una app de ventana no termina sola, así que
+      # «sigue viva a los 20 s» es la señal de éxito y se la cierra.
+      - name: Instalación silenciosa (NSIS) y arranque
+        timeout-minutes: 10
+        env:
+          INSTALADOR: ${{ steps.instaladores.outputs.nsis }}
+        run: |
+          $destino = Join-Path $env:RUNNER_TEMP 'SecureGateNsis'
+          $p = Start-Process -FilePath $env:INSTALADOR -ArgumentList '/S', "/D=$destino" -PassThru
+          if (-not $p.WaitForExit(240000)) { $p.Kill(); throw 'La instalación silenciosa (NSIS) no terminó en 4 minutos.' }
+          if ($p.ExitCode -ne 0) { throw "El instalador NSIS terminó con código $($p.ExitCode)." }
+          Get-ChildItem $destino -Recurse -Filter *.exe | Select-Object -ExpandProperty FullName
+          $exe = Get-ChildItem $destino -Recurse -Filter *.exe | Where-Object { $_.Name -match 'securegate' -and $_.Name -notmatch 'uninstall|unins' } | Select-Object -First 1
+          if (-not $exe) { throw "No se encontró el ejecutable de la app dentro de $destino." }
+          Write-Output "Ejecutable: $($exe.FullName) ($([math]::Round($exe.Length / 1MB, 1)) MB)"
+          # Lo que va junto al .exe: el runtime de Node y ffmpeg (sidecars) y los recursos del OCR.
+          foreach ($necesario in 'node*.exe', 'ffmpeg*.exe') {
+            if (-not (Get-ChildItem $destino -Recurse -Filter $necesario)) { throw "Falta $necesario en la instalación." }
+          }
+          if (-not (Get-ChildItem $destino -Recurse -Directory -Filter 'sidecar-ocr')) { throw 'Falta la carpeta sidecar-ocr en la instalación.' }
+
+          $app = Start-Process -FilePath $exe.FullName -PassThru
+          Start-Sleep -Seconds 20
+          if ($app.HasExited) { throw "La app se cerró sola a los pocos segundos (código $($app.ExitCode)): no arranca." }
+          Write-Output 'La app sigue viva a los 20 s: arranca.'
+          Stop-Process -Id $app.Id -Force
+          Get-Process | Where-Object { $_.Name -match 'securegate|msedgewebview2' } | Stop-Process -Force -ErrorAction SilentlyContinue
+
+          $desinstalador = Get-ChildItem $destino -Recurse -Filter 'uninstall*.exe' | Select-Object -First 1
+          if ($desinstalador) { Start-Process -FilePath $desinstalador.FullName -ArgumentList '/S' -Wait }
+
+      - name: Instalación silenciosa (MSI) y arranque
+        timeout-minutes: 10
+        env:
+          INSTALADOR: ${{ steps.instaladores.outputs.msi }}
+        run: |
+          $log = Join-Path $env:RUNNER_TEMP 'msi.log'
+          $p = Start-Process -FilePath msiexec.exe -ArgumentList '/i', "`"$env:INSTALADOR`"", '/qn', '/norestart', '/l*v', "`"$log`"" -PassThru
+          if (-not $p.WaitForExit(240000)) { $p.Kill(); throw 'La instalación silenciosa (MSI) no terminó en 4 minutos.' }
+          if ($p.ExitCode -notin 0, 3010) { Get-Content $log -Tail 60; throw "msiexec terminó con código $($p.ExitCode)." }
+          # El MSI instala por equipo, en Archivos de programa.
+          $raiz = @($env:ProgramFiles, ${env:ProgramFiles(x86)}) | Where-Object { $_ }
+          $exe = $raiz | ForEach-Object { Get-ChildItem $_ -Recurse -Filter *.exe -ErrorAction SilentlyContinue } |
+            Where-Object { $_.Name -match 'securegate' -and $_.Name -notmatch 'uninstall|unins' } | Select-Object -First 1
+          if (-not $exe) { Get-Content $log -Tail 60; throw 'No se encontró el ejecutable de la app tras instalar el MSI.' }
+          Write-Output "Ejecutable: $($exe.FullName)"
+          $app = Start-Process -FilePath $exe.FullName -PassThru
+          Start-Sleep -Seconds 20
+          if ($app.HasExited) { throw "La app (MSI) se cerró sola (código $($app.ExitCode)): no arranca." }
+          Write-Output 'La app instalada con MSI sigue viva a los 20 s: arranca.'
+          Stop-Process -Id $app.Id -Force
+          Get-Process | Where-Object { $_.Name -match 'securegate|msedgewebview2' } | Stop-Process -Force -ErrorAction SilentlyContinue
+          Start-Process -FilePath msiexec.exe -ArgumentList '/x', "`"$env:INSTALADOR`"", '/qn', '/norestart' -Wait
+
+      - name: Registros de la app (si algo falló)
+        if: failure()
+        run: |
+          $logs = Join-Path $env:LOCALAPPDATA 'com.securegate.garita'
+          if (Test-Path $logs) { Get-ChildItem $logs -Recurse -Filter *.log | ForEach-Object { "--- $($_.FullName)"; Get-Content $_.FullName -Tail 80 } }
+          else { Write-Output "No hay carpeta de datos en $logs" }

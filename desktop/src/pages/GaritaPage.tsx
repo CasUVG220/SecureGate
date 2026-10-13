@@ -8,6 +8,7 @@ import { LogoMark } from '../components/shared/Logo';
 import { Button, Card, StatusText } from '../components/ui';
 import { CameraPanel } from '../components/garita/CameraPanel';
 import { EstadoStrip } from '../components/garita/EstadoStrip';
+import { ActualizacionBanner } from '../components/garita/ActualizacionBanner';
 import { PlacaOcrDialog } from '../components/garita/PlacaOcrDialog';
 import { RecientesList } from '../components/garita/RecientesList';
 import { SalidaDialog } from '../components/garita/SalidaDialog';
@@ -17,6 +18,7 @@ import { VisitanteForm, type VisitanteFormHandle } from '../components/garita/Vi
 import { ThemeToggle } from '../context/ThemeContext';
 import { useCamarasLayout } from '../hooks/useCamarasLayout';
 import { mejorCandidato } from '../lib/placa';
+import { resumenLectura } from '../lib/dpi';
 import { esModoSalida, type Proposito } from '../lib/camaras';
 import {
   api, mensajeDe, onEstadoSync,
@@ -100,13 +102,15 @@ export function GaritaPage({ estado, refrescar, onLogout }: Props) {
   const capturaDpi = async (jpeg: string) => {
     setAviso(null);
     try {
-      const r = await api.ocr.dpiRemoto(jpeg);
-      if (!r.numero_dpi && !r.nombre) {
+      // Local primero (sin red); el servidor remoto solo es respaldo y solo si este equipo lo permite.
+      const r = await api.ocr.dpi(jpeg);
+      if (!r.cui && !r.nombre_completo) {
         setAviso({ tone: 'warn', texto: 'No se pudo leer el DPI. Captúralo manualmente.' });
         return;
       }
-      form.current?.setDesdeOcrDpi(r.nombre, r.numero_dpi);
-      setAviso({ tone: 'info', texto: `DPI leído: ${r.numero_dpi || '—'} · ${r.nombre || 'sin nombre'}. Verifica antes de registrar.` });
+      // Los campos quedan en el formulario para revisarlos; el aviso no repite el número ni el nombre.
+      form.current?.setDesdeOcrDpi(r);
+      setAviso({ tone: r.revision_obligatoria ? 'warn' : 'info', texto: `${resumenLectura(r)}${r.aviso ? ' Se usó el respaldo remoto porque la lectura local no alcanzó.' : ''}` });
     } catch (e) {
       setAviso({ tone: 'warn', texto: `Lectura de DPI no disponible (${mensajeDe(e)}). Captúralo manualmente.` });
     }
@@ -264,6 +268,11 @@ export function GaritaPage({ estado, refrescar, onLogout }: Props) {
 
       <div className="shrink-0 space-y-3 px-5 pt-4">
         <EstadoStrip estado={estado} />
+        {/* Actualizar reinicia la app: no se ofrece con accesos sin enviar ni con una captura a medias. */}
+        <ActualizacionBanner
+          pendientes={estado.sync.pendientes}
+          capturaEnCurso={capturando !== null || qrOcupado || ocrResultado !== null || salida !== null}
+        />
         {estado.licencia.estado === 'en_gracia' && (
           <Alert tone="warn">
             Sin contacto con el servidor. Puedes seguir trabajando: los accesos se guardan aquí y se enviarán solos al volver la conexión.

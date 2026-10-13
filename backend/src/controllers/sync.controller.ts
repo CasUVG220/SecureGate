@@ -61,7 +61,7 @@ export const getSnapshotGarita = async (req: Request, res: Response) => {
         [sucursal_id],
       ),
       // Invitaciones QR (SCRUM-126): copia para validarlas SIN red. Entran las que aún pueden servir por fecha (con un día
-      // de margen: CURRENT_DATE es el día en UTC, que cambia a las 18:00 de Guatemala; la garita decide con su propia fecha)
+      // de margen contado en Guatemala; la garita decide con su propia fecha)
       // y, de las revocadas, solo las del último mes: así la garita puede decir «revocada» en vez de «no encontrada» sin que
       // el espejo crezca para siempre. Las fechas viajan como texto AAAA-MM-DD (no como instantes) para no depender de la
       // zona del servidor. Quedan fuera las ya vencidas de antes: sin red se rechazan igual («no está en la copia local»).
@@ -75,7 +75,7 @@ export const getSnapshotGarita = async (req: Request, res: Response) => {
          JOIN residentes r ON r.id = i.residente_id
          JOIN usuarios   u ON u.id = r.usuario_id
          WHERE i.sucursal_id = $1
-           AND (i.fecha_fin IS NULL OR i.fecha_fin >= CURRENT_DATE - 1)
+           AND (i.fecha_fin IS NULL OR i.fecha_fin >= (NOW() AT TIME ZONE 'America/Guatemala')::date - 1)
            AND (i.activo = TRUE OR i.created_at > NOW() - INTERVAL '30 days')
          ORDER BY i.created_at DESC`,
         [sucursal_id],

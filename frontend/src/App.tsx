@@ -12,6 +12,10 @@ import AgentesPage            from './pages/AgentesPage';
 import LicenciasPage          from './pages/LicenciasPage';
 import NotFoundPage           from './pages/NotFoundPage';
 import AceptarInvitacionPage  from './pages/AceptarInvitacionPage';
+import RegistroPage           from './pages/RegistroPage';
+import OnboardingPage         from './pages/OnboardingPage';
+import SaasPage               from './pages/owner/SaasPage';
+import MiPlanPage             from './pages/admin_empresa/MiPlanPage';
 import OwnerDashboard         from './pages/owner/OwnerDashboard';
 import EmpresaDetail          from './pages/owner/EmpresaDetail';
 import OwnerEmpresas          from './pages/owner/OwnerEmpresas';
@@ -35,7 +39,7 @@ import { LanguageProvider, useLanguage } from './context/LanguageContext';
 import { useTranslation }     from './i18n/useTranslation';
 import { plural }         from './i18n/plural';
 import { useRuta }            from './hooks/useRuta';
-import { RUTA_PORTAL, portalDeRol, portalDeRuta, tokenDeInvitacion } from './routing/portales';
+import { RUTA_PORTAL, esRutaRegistro, portalDeRol, portalDeRuta, tokenDeInvitacion, tokenDeOnboarding } from './routing/portales';
 import type { PortalTab }     from './pages/ResidentePage';
 import { Spinner }            from './components/ui/Skeleton';
 
@@ -46,8 +50,8 @@ const EstadisticasPage = lazy(() => import('./pages/EstadisticasPage'));
 type Page =
   | 'dashboard' | 'residentes' | 'pagos' | 'preaut' | 'reportes' | 'config' | 'config-qr' | 'verificacion' | 'agentes' | 'garitas' | 'blacklist' | 'anuncios' | 'tickets' | 'reservas'
   | 'portal' | 'mis-reservas' | 'mis-anuncios'
-  | 'owner-dashboard' | 'owner-empresas' | 'owner-empresa-detail' | 'owner-audit'
-  | 'ae-dashboard' | 'ae-sucursales' | 'cuenta';
+  | 'owner-dashboard' | 'owner-empresas' | 'owner-empresa-detail' | 'owner-audit' | 'owner-saas'
+  | 'ae-dashboard' | 'ae-sucursales' | 'ae-plan' | 'cuenta';
 
 interface NavItem { key: Page; labelKey: string; d: string; }
 interface NavGroup { labelKey: string; items: NavItem[]; }
@@ -136,6 +140,7 @@ const OWNER_NAV: NavGroup[] = [
   { labelKey: 'nav.group.global', items: [
     { key: 'owner-dashboard', labelKey: 'nav.ownerDashboard', d: ICON.dashboard },
     { key: 'owner-empresas',  labelKey: 'nav.companies',      d: ICON.home },
+    { key: 'owner-saas',      labelKey: 'nav.saas',           d: ICON.payments },
     { key: 'owner-audit',     labelKey: 'nav.auditLogs',      d: ICON.audit },
   ]},
   CUENTA_NAV,
@@ -147,6 +152,7 @@ const ADMIN_EMPRESA_NAV: NavGroup[] = [
     { key: 'ae-dashboard',  labelKey: 'nav.aeDashboard', d: ICON.dashboard },
     { key: 'ae-sucursales', labelKey: 'nav.aeBranches',  d: ICON.home },
     { key: 'garitas',       labelKey: 'nav.gates',       d: ICON.gate },
+    { key: 'ae-plan',       labelKey: 'nav.myPlan',      d: ICON.payments },
   ]},
   CUENTA_NAV,
 ];
@@ -295,6 +301,9 @@ function AppShell() {
   const portalSesion = isAuthenticated ? portalDeRol(userRol) : null;
   // /invitacion/<token>: pantalla pública que vive fuera de los portales.
   const tokenInvitacion = tokenDeInvitacion(pathname);
+  // /registro y /onboarding/<token>: alta autoservicio de una empresa (T12). También públicas y fuera de los portales.
+  const tokenAlta = tokenDeOnboarding(pathname);
+  const enRegistro = esRutaRegistro(pathname);
 
   /**
    * Corrige la dirección cuando no cuadra: un alias (/staff, /tenant), una ruta
@@ -303,11 +312,11 @@ function AppShell() {
    * que se volvería a corregir al pulsar atrás.
    */
   useEffect(() => {
-    if (tokenInvitacion) return;
+    if (tokenInvitacion || tokenAlta || enRegistro) return;
     const destino = portalSesion ?? portalRuta ?? 'personal';
     const rutaDestino = RUTA_PORTAL[destino];
     if (pathname !== rutaDestino) ir(rutaDestino, { reemplazar: true });
-  }, [pathname, portalRuta, portalSesion, ir, tokenInvitacion]);
+  }, [pathname, portalRuta, portalSesion, ir, tokenInvitacion, tokenAlta, enRegistro]);
 
   // El portal que se pinta: el de la sesión manda sobre el de la barra de
   // direcciones, porque el efecto de arriba ya está corrigiendo la URL.
@@ -419,6 +428,7 @@ function AppShell() {
       case 'portal':       return <ResidentePage requestedTab={portalTab} tabNonce={portalTabNonce} />;
       case 'ae-dashboard':   return <AdminEmpresaDashboard />;
       case 'ae-sucursales':  return <GestionSucursales />;
+      case 'ae-plan':        return <MiPlanPage />;
       case 'cuenta':         return <MiCuentaPage />;
       case 'owner-dashboard':
         return <OwnerDashboard onSelectEmpresa={goToEmpresaDetail} />;
@@ -426,6 +436,8 @@ function AppShell() {
         return <OwnerEmpresas />;
       case 'owner-audit':
         return <AuditLogsPage />;
+      case 'owner-saas':
+        return <SaasPage />;
       case 'owner-empresa-detail':
         return selectedEmpresaId
           ? <EmpresaDetail empresaId={selectedEmpresaId} onBack={() => setPage('owner-dashboard')} />
@@ -446,6 +458,9 @@ function AppShell() {
       />
     );
   }
+
+  if (enRegistro) return <RegistroPage onIrALogin={() => ir(RUTA_PORTAL.personal, { reemplazar: true })} />;
+  if (tokenAlta) return <OnboardingPage token={tokenAlta} onIrALogin={() => ir(RUTA_PORTAL.personal, { reemplazar: true })} />;
 
   if (!isAuthenticated) {
     return <LoginPage portal={portalActivo} onLogin={handleLogin} onCambiarPortal={ir} />;

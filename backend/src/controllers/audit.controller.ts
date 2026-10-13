@@ -43,7 +43,8 @@ export const getAuditLogs = async (req: Request, res: Response) => {
   }
   if (desde) {
     params.push(desde);
-    conditions.push(`al.created_at >= $${params.length}`);
+    // El día lo elige una persona en Guatemala: se interpreta en esa zona, no en la de la sesión de la base (UTC).
+    conditions.push(`al.created_at >= ($${params.length}::date::timestamp AT TIME ZONE 'America/Guatemala')`);
   }
   if (estado) conditions.push(FILTRO_ESTADO[estado]);
   if (buscar) {
@@ -54,7 +55,7 @@ export const getAuditLogs = async (req: Request, res: Response) => {
   if (hasta) {
     // Include the entire "hasta" day by pushing the upper bound to end of day
     params.push(hasta);
-    conditions.push(`al.created_at <= ($${params.length}::date + INTERVAL '1 day')`);
+    conditions.push(`al.created_at <= (($${params.length}::date + 1)::timestamp AT TIME ZONE 'America/Guatemala')`);
   }
 
   const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
@@ -97,7 +98,7 @@ export const getAuditAcciones = async (_req: Request, res: Response) => {
   try {
     const r = await pool.query(
       `SELECT accion, COUNT(*)::int AS total, MAX(created_at) AS ultima
-         FROM audit_logs GROUP BY accion ORDER BY accion`);
+         FROM audit_logs GROUP BY accion ORDER BY accion COLLATE "C"`);
     res.json({ acciones: r.rows });
   } catch (error) {
     serverError(res, error, 'Error al obtener las acciones de auditoría');

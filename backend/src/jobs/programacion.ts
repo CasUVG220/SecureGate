@@ -3,6 +3,8 @@ import { revisarEstadosMora } from './mora.job';
 import { enviarRecordatoriosReservas } from './recordatoriosReservas.job';
 import { expirarInvitaciones } from './invitaciones.job';
 import { APP_TZ } from '../utils/reservas';
+import pool from '../db/pool';
+import { ejecutarFacturacionMensual, revisarVencimientos } from '../services/facturacion';
 
 /**
  * Tareas programadas del backend. Viven aquí (y no en index.ts) para poder comprobar con una prueba que las
@@ -47,6 +49,24 @@ export const TAREAS: TareaProgramada[] = [
     timezone: APP_TZ,
     ejecutar: expirarInvitaciones,
     resumen: (r: Awaited<ReturnType<typeof expirarInvitaciones>>) => `Invitaciones expiradas: ${r.expiradas}`,
+  },
+  {
+    // Facturación SaaS: el día 1 de cada mes a la 01:20 hora local factura el mes que terminó (T11). Idempotente: una factura por empresa y mes.
+    nombre: 'facturacion.mensual',
+    expresion: '20 1 1 * *',
+    timezone: APP_TZ,
+    ejecutar: () => ejecutarFacturacionMensual(pool),
+    resumen: (r: Awaited<ReturnType<typeof ejecutarFacturacionMensual>>) =>
+      `Facturación ${r.periodo} — generadas: ${r.generadas}, ya existían: ${r.existentes}, sin cobro: ${r.sin_cobro}, errores: ${r.errores}, avisos: ${r.avisos.emitidas}`,
+  },
+  {
+    // Facturas SaaS pendientes que ya pasaron su fecha → «vencida», y avisos de pago vencido (pasada la gracia). A diario, 07:30 hora local.
+    nombre: 'facturacion.vencidas',
+    expresion: '30 7 * * *',
+    timezone: APP_TZ,
+    ejecutar: () => revisarVencimientos(pool),
+    resumen: (r: Awaited<ReturnType<typeof revisarVencimientos>>) =>
+      `Facturas vencidas: ${r.vencidas}, avisos de pago vencido: ${r.avisos.vencidas}`,
   },
 ];
 

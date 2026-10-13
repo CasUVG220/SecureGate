@@ -20,7 +20,7 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self' ipc: http://ipc.localhost"
+      "csp": "default-src 'self'; img-src 'self' data: blob: http://127.0.0.1:*; media-src 'self' blob: mediastream:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self' ipc: http://ipc.localhost"
     }
   },
   "bundle": {
@@ -29,7 +29,7 @@
     "windows": {
       "webviewInstallMode": { "type": "embedBootstrapper" }
     },
-    "externalBin": ["binaries/node"],
+    "externalBin": ["binaries/node", "binaries/ffmpeg"],
     "resources": {
       "resources/sidecar-ocr/": "sidecar-ocr/"
     },
@@ -40,5 +40,12 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ]
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "",
+      "endpoints": ["https://github.com/chatio/SecureGate/releases/latest/download/latest.json"],
+      "windows": { "installMode": "passive" }
+    }
   }
 }

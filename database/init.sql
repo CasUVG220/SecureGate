@@ -576,6 +576,13 @@ DO $$ BEGIN
 EXCEPTION WHEN duplicate_column THEN NULL;
 END $$;
 
+-- T5: de dónde salió el DPI del visitante (local = OCR del equipo, remoto = Google Vision vía backend, manual = tecleado).
+-- NULL en los registros anteriores y en los de la web, que no lo informan.
+DO $$ BEGIN
+  ALTER TABLE registros_acceso ADD COLUMN origen_dpi VARCHAR(10) CHECK (origen_dpi IN ('local', 'remoto', 'manual'));
+EXCEPTION WHEN duplicate_column THEN NULL;
+END $$;
+
 DO $$ BEGIN
   ALTER TABLE registros_acceso ADD COLUMN origen VARCHAR(20) NOT NULL DEFAULT 'web'
     CHECK (origen IN ('web', 'desktop'));
@@ -800,5 +807,164 @@ BEGIN
     END;
   END LOOP;
 END $$;
+
+-- ── SaaS · planes, suscripciones y medición de uso (T10, Sprint 9 continuación) ───────────────────────
+-- Los planes y sus precios viven AQUÍ, en una tabla (nunca en el código). Dinero en CENTAVOS enteros (BIGINT), moneda GTQ.
+-- Los tres planes de abajo son SUPUESTOS A CONFIRMAR por el equipo (no existe en el repositorio un análisis del modelo de negocio
+-- del que tomarlos): por eso `supuesto = TRUE`. El owner los ajusta con PUT /api/planes/:id sin tocar código.
+-- Todas las columnas de fecha son TIMESTAMPTZ (S-17).
+CREATE TABLE IF NOT EXISTS planes (
+  id                           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  codigo                       VARCHAR(30) NOT NULL UNIQUE CHECK (codigo ~ '^[a-z0-9_-]{2,30}$'),
+  nombre                       VARCHAR(80) NOT NULL,
+  descripcion                  VARCHAR(300),
+  precio_mensual_centavos      BIGINT NOT NULL CHECK (precio_mensual_centavos >= 0),
+  visitas_incluidas            INTEGER NOT NULL CHECK (visitas_incluidas >= 0),
+  precio_visita_extra_centavos BIGINT NOT NULL CHECK (precio_visita_extra_centavos >= 0),
+  max_sucursales               INTEGER CHECK (max_sucursales IS NULL OR max_sucursales > 0),   -- NULL = sin límite
+  max_garitas                  INTEGER CHECK (max_garitas IS NULL OR max_garitas > 0),         -- NULL = sin límite
+  dias_prueba                  INTEGER NOT NULL DEFAULT 14 CHECK (dias_prueba BETWEEN 0 AND 90),
+  moneda                       CHAR(3) NOT NULL DEFAULT 'GTQ',
+  supuesto                     BOOLEAN NOT NULL DEFAULT TRUE,
+  activo                       BOOLEAN NOT NULL DEFAULT TRUE,
+  orden                        INTEGER NOT NULL DEFAULT 0,
+  created_at                   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at                   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+INSERT INTO planes (codigo, nombre, descripcion, precio_mensual_centavos, visitas_incluidas, precio_visita_extra_centavos, max_sucursales, max_garitas, dias_prueba, supuesto, orden)
+VALUES
+  ('basico',     'Básico',        'Una sucursal y una garita. SUPUESTO a confirmar por el equipo.',                 25000,  500,  50, 1,    1,    14, TRUE, 1),
+  ('estandar',   'Estándar',      'Hasta 3 sucursales y 3 garitas. SUPUESTO a confirmar por el equipo.',            60000,  2000, 35, 3,    3,    14, TRUE, 2),
+  ('profesional','Profesional',   'Hasta 10 sucursales y 10 garitas. SUPUESTO a confirmar por el equipo.',         150000,  8000, 25, 10,   10,   14, TRUE, 3)
+ON CONFLICT (codigo) DO NOTHING;
+
+-- Una suscripción vigente por empresa. `ciclo` es mensual por calendario (America/Guatemala): la cuota y el consumo se cuentan por mes calendario.
+CREATE TABLE IF NOT EXISTS suscripciones (
+  id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  empresa_id    UUID NOT NULL UNIQUE REFERENCES empresas(id) ON DELETE RESTRICT,
+  plan_id       UUID NOT NULL REFERENCES planes(id) ON DELETE RESTRICT,
+  estado        VARCHAR(12) NOT NULL DEFAULT 'prueba' CHECK (estado IN ('prueba', 'activa', 'vencida', 'cancelada')),
+  ciclo         VARCHAR(10) NOT NULL DEFAULT 'mensual' CHECK (ciclo IN ('mensual')),
+  inicio_en     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  prueba_hasta  TIMESTAMPTZ,
+  cancelada_en  TIMESTAMPTZ,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_suscripciones_plan   ON suscripciones(plan_id);
+CREATE INDEX IF NOT EXISTS idx_suscripciones_estado ON suscripciones(estado);
+
+-- Histórico de cambios de plan y de estado (quién, cuándo y por qué). No se borra: es la evidencia de por qué se facturó lo que se facturó.
+CREATE TABLE IF NOT EXISTS suscripcion_historial (
+  id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  suscripcion_id   UUID NOT NULL REFERENCES suscripciones(id) ON DELETE RESTRICT,
+  empresa_id       UUID NOT NULL REFERENCES empresas(id) ON DELETE RESTRICT,
+  plan_anterior_id UUID REFERENCES planes(id) ON DELETE RESTRICT,
+  plan_nuevo_id    UUID NOT NULL REFERENCES planes(id) ON DELETE RESTRICT,
+  estado_anterior  VARCHAR(12),
+  estado_nuevo     VARCHAR(12) NOT NULL,
+  motivo           VARCHAR(300),
+  cambiado_por     UUID REFERENCES usuarios(id) ON DELETE SET NULL,
+  created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_suscripcion_historial_empresa ON suscripcion_historial(empresa_id, created_at);
+
+-- Medición de uso: visitas por empresa y mes calendario. Una visita = una fila de registros_acceso (la salida actualiza la misma fila). Este índice
+-- sirve a la consulta «de las sucursales de la empresa, las visitas autorizadas entre dos instantes».
+CREATE INDEX IF NOT EXISTS idx_registros_acceso_sucursal_entrada
+  ON registros_acceso(sucursal_id, timestamp_entrada) WHERE autorizado = TRUE;
+
+
+-- ── SaaS · facturación interna mensual (T11, Sprint 9 continuación) ──────────────────────────────────────
+-- Cobros de SecureGate A LAS EMPRESAS (cuota del plan + visitas excedentes). Tablas propias, separadas de `pagos`/`cargos_*` (cuotas de residentes).
+-- Es una factura INTERNA (control de cobro), no un documento tributario: no pasa por la SAT. Dinero en centavos enteros (BIGINT).
+
+-- Contador correlativo SIN huecos: se incrementa con UPDATE dentro de la misma transacción que inserta la factura, así que un rollback no consume número.
+CREATE TABLE IF NOT EXISTS saas_contadores (
+  clave VARCHAR(40) PRIMARY KEY,
+  valor BIGINT NOT NULL DEFAULT 0
+);
+INSERT INTO saas_contadores (clave, valor) VALUES ('factura_saas', 0) ON CONFLICT (clave) DO NOTHING;
+
+CREATE TABLE IF NOT EXISTS facturas_saas (
+  id                           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  numero                       BIGINT NOT NULL UNIQUE,
+  empresa_id                   UUID NOT NULL REFERENCES empresas(id) ON DELETE RESTRICT,
+  suscripcion_id               UUID REFERENCES suscripciones(id) ON DELETE SET NULL,
+  periodo                      CHAR(7) NOT NULL CHECK (periodo ~ '^[0-9]{4}-(0[1-9]|1[0-2])$'),
+  plan_codigo                  VARCHAR(30) NOT NULL,
+  plan_nombre                  VARCHAR(80) NOT NULL,
+  dias_del_mes                 INTEGER NOT NULL CHECK (dias_del_mes BETWEEN 28 AND 31),
+  dias_facturados              INTEGER NOT NULL CHECK (dias_facturados BETWEEN 1 AND 31),
+  cuota_centavos               BIGINT NOT NULL CHECK (cuota_centavos >= 0),
+  visitas                      INTEGER NOT NULL CHECK (visitas >= 0),
+  visitas_incluidas            INTEGER NOT NULL CHECK (visitas_incluidas >= 0),
+  excedente_visitas            INTEGER NOT NULL CHECK (excedente_visitas >= 0),
+  precio_visita_extra_centavos BIGINT NOT NULL CHECK (precio_visita_extra_centavos >= 0),
+  excedente_centavos           BIGINT NOT NULL CHECK (excedente_centavos >= 0),
+  total_centavos               BIGINT NOT NULL,
+  moneda                       CHAR(3) NOT NULL DEFAULT 'GTQ',
+  detalle                      JSONB NOT NULL,
+  estado                       VARCHAR(10) NOT NULL DEFAULT 'pendiente' CHECK (estado IN ('pendiente', 'pagada', 'vencida', 'anulada')),
+  emitida_en                   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  vence_en                     DATE NOT NULL,
+  pagada_en                    TIMESTAMPTZ,
+  metodo_pago                  VARCHAR(20),
+  referencia_pago              VARCHAR(100),
+  nota_pago                    VARCHAR(300),
+  proveedor_cobro              VARCHAR(30),
+  marcada_por                  UUID REFERENCES usuarios(id) ON DELETE SET NULL,
+  anulada_en                   TIMESTAMPTZ,
+  anulada_motivo               VARCHAR(300),
+  created_at                   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at                   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT facturas_saas_total_ok CHECK (total_centavos = cuota_centavos + excedente_centavos),
+  -- Una factura por empresa y mes: lo que vuelve idempotente al job mensual.
+  CONSTRAINT facturas_saas_empresa_periodo UNIQUE (empresa_id, periodo)
+);
+
+CREATE INDEX IF NOT EXISTS idx_facturas_saas_estado_vence ON facturas_saas(estado, vence_en);
+CREATE INDEX IF NOT EXISTS idx_facturas_saas_empresa ON facturas_saas(empresa_id, periodo DESC);
+
+-- Un aviso por factura y tipo (emitida / vencida): el UNIQUE es lo que evita mandarlo dos veces.
+CREATE TABLE IF NOT EXISTS facturas_saas_avisos (
+  id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  factura_id    UUID NOT NULL REFERENCES facturas_saas(id) ON DELETE CASCADE,
+  tipo          VARCHAR(10) NOT NULL CHECK (tipo IN ('emitida', 'vencida')),
+  destinatarios INTEGER NOT NULL DEFAULT 0,
+  enviado_en    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT facturas_saas_avisos_unico UNIQUE (factura_id, tipo)
+);
+
+-- ── SaaS · onboarding autoservicio (T12, Sprint 9 continuación) ──────────────────────────────────────────
+-- Una invitación puede nacer sin un administrador que invite (alta por autoservicio): `invitado_por` queda NULL. Se sigue exigiendo para las
+-- invitaciones del owner y del admin de empresa (lo hace el controlador). Idempotente: DROP NOT NULL sobre una columna ya nula no hace nada.
+ALTER TABLE invitaciones ALTER COLUMN invitado_por DROP NOT NULL;
+
+-- Solicitud de alta de una empresa nueva. El correo se verifica porque el enlace de continuación solo llega a esa bandeja; el borrador se guarda
+-- en la fila para poder retomar el asistente desde otro equipo con el mismo enlace. Solo el SHA-256 del token vive en la base.
+CREATE TABLE IF NOT EXISTS onboarding_solicitudes (
+  id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  email          VARCHAR(254) NOT NULL,
+  empresa_nombre VARCHAR(150) NOT NULL,
+  token_hash     CHAR(64) NOT NULL UNIQUE,
+  estado         VARCHAR(10) NOT NULL DEFAULT 'abierta' CHECK (estado IN ('abierta', 'invitada')),
+  borrador       JSONB NOT NULL DEFAULT '{}'::jsonb,
+  empresa_id     UUID REFERENCES empresas(id) ON DELETE SET NULL,
+  sucursal_id    UUID REFERENCES sucursales(id) ON DELETE SET NULL,
+  invitacion_id  UUID REFERENCES invitaciones(id) ON DELETE SET NULL,
+  reenvios       INTEGER NOT NULL DEFAULT 0,
+  ip_origen      VARCHAR(64),
+  expira_en      TIMESTAMPTZ NOT NULL,
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Los topes anti-abuso consultan «solicitudes de este correo / esta IP en las últimas horas».
+CREATE INDEX IF NOT EXISTS idx_onboarding_email ON onboarding_solicitudes(email, created_at);
+CREATE INDEX IF NOT EXISTS idx_onboarding_ip    ON onboarding_solicitudes(ip_origen, created_at);
 
 SELECT 'SecureGate DB inicializada correctamente' AS mensaje;

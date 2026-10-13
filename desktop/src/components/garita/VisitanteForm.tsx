@@ -4,20 +4,23 @@
  *
  * `capturado_manualmente` = el DPI NO salió del OCR. Se enciende solo al
  * teclear el número y el agente puede forzarlo; viaja hasta el backend para
- * auditoría.
+ * auditoría. T5: además viaja `origen_dpi` (local / remoto / manual). Un DPI leído
+ * con correcciones o poca seguridad exige que el agente lo confirme contra el
+ * documento antes de registrar; el formulario siempre queda visible y editable.
  */
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState, type FormEvent } from 'react';
 import { Alert } from '../shared/Alert';
 import { Button, Input, Textarea } from '../ui';
-import { api, mensajeDe, type Evaluacion, type InvitacionQr, type Residente, type ResultadoApertura } from '../../lib/tauri';
+import { api, mensajeDe, type Evaluacion, type InvitacionQr, type OrigenDpi, type Residente, type ResultadoApertura, type ResultadoDpi } from '../../lib/tauri';
+import { resumenLectura, textosRevision } from '../../lib/dpi';
 import { esValida, formatear, normalizar } from '../../lib/placa';
 import { diaCorto } from '../../lib/tiempo';
 
 export interface VisitanteFormHandle {
   /** Rellena la placa (desde el OCR). */
   setPlaca: (placa: string) => void;
-  /** Rellena nombre + DPI desde el OCR de DPI. */
-  setDesdeOcrDpi: (nombre: string, numeroDpi: string) => void;
+  /** Rellena nombre + DPI desde la lectura del DPI (local o remota). */
+  setDesdeOcrDpi: (lectura: ResultadoDpi) => void;
   /** Rellena el formulario con una invitación QR ya verificada. */
   setDesdeQr: (inv: InvitacionQr) => void;
   /** Lleva el cursor al campo de la placa (alternativa a la cámara: «Escribir placa»). */
@@ -42,6 +45,10 @@ export const VisitanteForm = forwardRef<VisitanteFormHandle, Props>(function Vis
   const [placa, setPlaca] = useState('');
   const [notas, setNotas] = useState('');
   const [manual, setManual] = useState(true);
+  /** Cómo se obtuvo el DPI que está en pantalla, y la lectura (sin datos personales) que explica qué revisar. */
+  const [origenDpi, setOrigenDpi] = useState<OrigenDpi>('manual');
+  const [lectura, setLectura] = useState<ResultadoDpi | null>(null);
+  const [confirmado, setConfirmado] = useState(false);
   const [busqueda, setBusqueda] = useState('');
   const [resultados, setResultados] = useState<Residente[]>([]);
   const [residente, setResidente] = useState<Residente | null>(null);
@@ -59,9 +66,15 @@ export const VisitanteForm = forwardRef<VisitanteFormHandle, Props>(function Vis
       placaRef.current?.focus();
       placaRef.current?.scrollIntoView?.({ block: 'center', behavior: 'smooth' });
     },
-    setDesdeOcrDpi: (n, d) => {
-      if (n) setNombre(n);
-      if (d) { setDpi(d); setManual(false); }
+    setDesdeOcrDpi: r => {
+      if (r.nombre_completo) setNombre(r.nombre_completo);
+      if (r.cui) {
+        setDpi(r.cui.slice(0, 13));
+        setManual(false);
+        setOrigenDpi(r.origen);
+        setLectura(r);
+        setConfirmado(!r.revision_obligatoria);
+      }
     },
     // El QR trae la casa y, en las individuales, el visitante. Lo que traiga
     // se rellena; lo que no, lo completa el agente. El DPI sigue marcándose
@@ -78,7 +91,7 @@ export const VisitanteForm = forwardRef<VisitanteFormHandle, Props>(function Vis
       setBusqueda('');
       setResultados([]);
       if (inv.nombre_visitante) setNombre(inv.nombre_visitante);
-      if (inv.numero_dpi) { setDpi(inv.numero_dpi); setManual(false); }
+      if (inv.numero_dpi) { setDpi(inv.numero_dpi); setManual(false); setOrigenDpi('manual'); setLectura(null); }
       if (inv.placa) setPlaca(inv.placa);
     },
   }));
@@ -114,6 +127,7 @@ export const VisitanteForm = forwardRef<VisitanteFormHandle, Props>(function Vis
 
   const limpiar = () => {
     setNombre(''); setDpi(''); setPlaca(''); setNotas(''); setManual(true);
+    setOrigenDpi('manual'); setLectura(null); setConfirmado(false);
     setBusqueda(''); setResidente(null); setEvaluacion(null); setError(null);
     setQr(null);
   };
@@ -124,6 +138,7 @@ export const VisitanteForm = forwardRef<VisitanteFormHandle, Props>(function Vis
     setOk(null);
     if (!residente) { setError('Selecciona la casa/residente que visita.'); return; }
     if (!DPI_RE.test(dpi.trim())) { setError('El DPI debe tener 13 dígitos.'); return; }
+    if (lectura && !manual && !confirmado) { setError('Confirma que revisaste el DPI y el nombre contra el documento.'); return; }
     if (placa.trim() && !esValida(placa)) { setError('La placa no tiene un formato válido (ej. P123ABC).'); return; }
     setEnviando(true);
     try {
@@ -134,6 +149,7 @@ export const VisitanteForm = forwardRef<VisitanteFormHandle, Props>(function Vis
         placa: placa.trim() ? normalizar(placa) : null,
         notas: notas.trim() || null,
         capturado_manualmente: manual,
+        origen_dpi: manual ? 'manual' : origenDpi,
         invitacion_qr_id: qr?.id ?? null,
       });
       setOk(`Acceso de ${fila.nombre_visitante} registrado para ${fila.residente_casa ?? 'la casa'}. Se sincroniza en segundo plano.`);
@@ -159,7 +175,7 @@ export const VisitanteForm = forwardRef<VisitanteFormHandle, Props>(function Vis
           inputMode="numeric"
           placeholder="13 dígitos"
           value={dpi}
-          onChange={e => { setDpi(e.target.value.replace(/\D/g, '').slice(0, 13)); setManual(true); }}
+          onChange={e => { setDpi(e.target.value.replace(/\D/g, '').slice(0, 13)); setManual(true); setOrigenDpi('manual'); }}
           error={dpi && !DPI_RE.test(dpi) ? 'Debe tener 13 dígitos' : null}
         />
         <Input
@@ -174,6 +190,23 @@ export const VisitanteForm = forwardRef<VisitanteFormHandle, Props>(function Vis
           spellCheck={false}
         />
       </div>
+
+      {lectura && !manual && (
+        <Alert tone={lectura.revision_obligatoria ? 'warn' : 'info'}>
+          <p data-testid="lectura-dpi"><strong>{resumenLectura(lectura)}</strong></p>
+          {textosRevision(lectura).length > 0 && (
+            <ul className="mt-1 list-disc pl-5 text-xs">
+              {textosRevision(lectura).map(t => <li key={t}>{t}</li>)}
+            </ul>
+          )}
+          {lectura.revision_obligatoria && (
+            <label className="mt-2 flex cursor-pointer items-center gap-2.5 text-sm font-medium">
+              <input type="checkbox" className="h-4 w-4 rounded border-gray-500 accent-brand-500" checked={confirmado} onChange={e => setConfirmado(e.target.checked)} />
+              Revisé el DPI y el nombre contra el documento
+            </label>
+          )}
+        </Alert>
+      )}
 
       <Input label="Nombre del visitante" value={nombre} onChange={e => setNombre(e.target.value)} required maxLength={150} />
 
@@ -246,7 +279,8 @@ export const VisitanteForm = forwardRef<VisitanteFormHandle, Props>(function Vis
       <Textarea label="Notas (opcional)" value={notas} onChange={e => setNotas(e.target.value)} maxLength={500} rows={2} />
 
       <label className="flex cursor-pointer items-center gap-2.5 text-sm text-gray-200">
-        <input type="checkbox" className="h-4 w-4 rounded border-gray-500 accent-brand-500" checked={manual} onChange={e => setManual(e.target.checked)} />
+        <input type="checkbox" className="h-4 w-4 rounded border-gray-500 accent-brand-500" checked={manual}
+          onChange={e => { setManual(e.target.checked); setOrigenDpi(e.target.checked || !lectura ? 'manual' : lectura.origen); }} />
         DPI capturado manualmente (sin OCR) — queda marcado en auditoría
       </label>
 

@@ -4,6 +4,7 @@ import { esUuid } from '../utils/http';
 import { revocarSesionesDeUsuario } from './auth.controller';
 import { revocarAccesoDeUsuario } from '../utils/revocacion';
 import { serverError } from '../utils/http';
+import { reservarCupo, mensajeLimite } from '../services/suscripciones';
 
 export const getSucursales = async (req: Request, res: Response) => {
   const { rol, empresa_id } = req.user!;
@@ -58,19 +59,32 @@ export const createSucursal = async (req: Request, res: Response) => {
     return res.status(403).json({ error: 'No puedes crear sucursales en otra empresa' });
   }
 
+  // El cupo del plan se revisa y la sucursal se inserta en la misma transacción
+  // (con candado por empresa): dos altas simultáneas no pueden pasarse del límite.
+  const client = await pool.connect();
   try {
-    const result = await pool.query(
+    await client.query('BEGIN');
+    const cupo = await reservarCupo(client, bodyEmpresaId, 'sucursales');
+    if (!cupo.ok) {
+      await client.query('ROLLBACK');
+      return res.status(403).json({ error: mensajeLimite('sucursales', cupo), codigo: 'LIMITE_PLAN', limite: cupo.limite, usados: cupo.usados });
+    }
+    const result = await client.query(
       `INSERT INTO sucursales (empresa_id, nombre, direccion, tipo)
        VALUES ($1, $2, $3, $4)
        RETURNING *`,
       [bodyEmpresaId, nombre, direccion ?? null, tipo ?? null]
     );
+    await client.query('COMMIT');
     res.status(201).json(result.rows[0]);
   } catch (error: any) {
+    await client.query('ROLLBACK').catch(() => {});
     if (error.code === '23503') {
       return res.status(400).json({ error: 'La empresa especificada no existe' });
     }
     serverError(res, error, 'Error al crear sucursal');
+  } finally {
+    client.release();
   }
 };
 

@@ -79,6 +79,24 @@ describe('I-3 garita offline', () => {
     expect(filas[0]).toMatchObject({ origen: 'desktop', licencia_id: fx.licencias.A1.id, sucursal_id: fx.sucursales.A1 });
   });
 
+  it('T5: el origen del DPI (local / remoto / manual) se guarda; un valor raro se ignora; manual sin origen cuenta como manual', async () => {
+    const registrar = async (extra: Record<string, unknown>) => {
+      const id = randomUUID();
+      const r = await request(app).post('/api/accesos').set(bearer(agente)).set('X-Licencia-Token', licA1).send({
+        nombre_visitante: 'Visitante Origen', numero_dpi: `INT-DPI-${randomUUID().slice(0, 8)}`, residente_id: fx.residentes.A1,
+        id_cliente: id, ...extra,
+      });
+      expect(r.status).toBe(201);
+      return (await uno('SELECT origen_dpi, capturado_manualmente FROM registros_acceso WHERE id_cliente = $1', [id]));
+    };
+    expect(await registrar({ origen_dpi: 'local', capturado_manualmente: false })).toMatchObject({ origen_dpi: 'local', capturado_manualmente: false });
+    expect(await registrar({ origen_dpi: 'remoto', capturado_manualmente: false })).toMatchObject({ origen_dpi: 'remoto' });
+    expect(await registrar({ origen_dpi: 'manual', capturado_manualmente: true })).toMatchObject({ origen_dpi: 'manual', capturado_manualmente: true });
+    expect(await registrar({ origen_dpi: 'drop table', capturado_manualmente: false })).toMatchObject({ origen_dpi: null });
+    expect(await registrar({ capturado_manualmente: true })).toMatchObject({ origen_dpi: 'manual' });
+    expect(await registrar({})).toMatchObject({ origen_dpi: null });
+  });
+
   it('recibido_en lo sella el servidor aunque el cliente mande un registrado_en pasado', async () => {
     const f = await uno(
       `SELECT (recibido_en >= NOW() - interval '2 minutes' AND recibido_en <= NOW() + interval '1 minute') AS recibido_ahora,

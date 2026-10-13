@@ -49,6 +49,20 @@ export interface EstadoSync {
   sincronizando: boolean;
 }
 
+export interface EstadoActualizador {
+  /** ¿El instalador trae la llave pública de firmas? Sin ella no se busca nada. */
+  configurada: boolean;
+  version_actual: string;
+  endpoint: string | null;
+}
+
+export interface ResultadoBusquedaActualizacion {
+  disponible: boolean;
+  version: string | null;
+  notas: string | null;
+  fecha: string | null;
+}
+
 export interface EstadoOcr {
   disponible: boolean;
   ms_carga: number | null;
@@ -171,6 +185,29 @@ export interface NuevoAcceso {
   capturado_manualmente: boolean;
   /** Invitación QR presentada por el visitante, si entró por ese camino. */
   invitacion_qr_id?: string | null;
+  /** De dónde salió el DPI: OCR de este equipo, OCR remoto de respaldo o tecleado. */
+  origen_dpi?: OrigenDpi | null;
+}
+
+export type OrigenDpi = 'local' | 'remoto' | 'manual';
+
+/** Lectura de un DPI (T5). El CUI y los nombres son datos personales: no se guardan ni se registran en logs. */
+export interface ResultadoDpi {
+  origen: 'local' | 'remoto';
+  cui: string;
+  nombres: string;
+  apellidos: string;
+  /** nombres + apellidos (local) o el nombre completo que devuelve el servicio remoto. */
+  nombre_completo: string;
+  confianza: { cui: number; nombres: number; apellidos: number };
+  cui_valido: boolean;
+  /** Hay que confirmar el dato contra el documento antes de registrar. */
+  revision_obligatoria: boolean;
+  motivos: string[];
+  correcciones: number;
+  ms_total: number;
+  /** Si se usó el respaldo remoto, por qué el OCR del equipo no bastó. */
+  aviso: string | null;
 }
 
 /**
@@ -219,8 +256,73 @@ export interface AccesoPendiente {
   placa: string | null;
   residente_casa: string | null;
   capturado_manualmente: boolean;
+  /** `local`, `remoto` o `manual`; vacío en accesos anteriores. */
+  origen_dpi?: OrigenDpi | null;
   /** Id del registro en el servidor; vacío mientras el acceso siga pendiente de enviar. */
   registro_id?: string | null;
+}
+
+// ── Cámaras IP y celular (T7) ────────────────────────────────────────────────
+
+export type TipoCamara = 'usb' | 'ip' | 'celular';
+
+/**
+ * Una cámara guardada en este equipo. NO tiene campos de usuario ni contraseña: viven en el llavero del sistema y el frontend solo
+ * sabe si existen (`con_credenciales`).
+ */
+export interface CamaraRed {
+  id: string;
+  tipo: TipoCamara;
+  nombre: string;
+  /** Dirección SIN credenciales (null en las USB). */
+  url: string | null;
+  device_id: string | null;
+  /** Tareas de la garita que la usan: qr, placa, dpi, salida. */
+  tareas: string[];
+  con_credenciales: boolean;
+  creada_en: string;
+}
+
+/** Lo que se envía al guardar o probar. `usuario` y `clave` solo van de ida: no hay comando que los devuelva. */
+export interface EntradaCamara {
+  id?: string | null;
+  tipo: TipoCamara;
+  nombre: string;
+  url?: string | null;
+  device_id?: string | null;
+  usuario?: string | null;
+  clave?: string | null;
+  quitar_credenciales?: boolean;
+}
+
+export type EstadoFuente =
+  | { estado: 'detenida' }
+  | { estado: 'conectando' }
+  | { estado: 'conectada' }
+  | { estado: 'reconectando'; intento: number; proximo_en_s: number; motivo: string }
+  | { estado: 'caida'; motivo: string; intentos: number; reintentando: boolean };
+
+export interface ResultadoPrueba {
+  ok: boolean;
+  mensaje: string;
+  ms: number;
+  ancho: number | null;
+  alto: number | null;
+}
+
+export interface DispositivoOnvif {
+  ip: string;
+  nombre: string | null;
+  modelo: string | null;
+  /** Para empezar el alta: la persona completa la ruta del video y las credenciales. */
+  url_sugerida: string;
+}
+
+export interface FotogramaCapturado {
+  /** JPEG en base64 (sin prefijo data:), listo para `ocr.placa` / `ocr.dpi`. */
+  jpeg_base64: string;
+  seq: number;
+  edad_ms: number;
 }
 
 export interface ItemOcr {
@@ -284,6 +386,24 @@ export const api = {
       invoke<{ registro: unknown; apertura: ResultadoApertura }>('garita_registrar_salida', { registroId }),
   },
 
+  camaras: {
+    listar: () => invoke<CamaraRed[]>('camaras_listar'),
+    guardar: (entrada: EntradaCamara) => invoke<CamaraRed>('camaras_guardar', { entrada }),
+    eliminar: (id: string) => invoke<boolean>('camaras_eliminar', { id }),
+    /** Deja estas tareas en la cámara y se las quita a las demás (una tarea usa una sola cámara). */
+    asignar: (id: string, tareas: string[]) => invoke<CamaraRed>('camaras_asignar', { id, tareas }),
+    /** «Probar conexión»: intenta recibir una imagen SIN guardar nada. */
+    probar: (entrada: EntradaCamara) => invoke<ResultadoPrueba>('camaras_probar', { entrada }),
+    /** Busca cámaras ONVIF en la red local (unos 3 s). Solo lista; no guarda nada. */
+    descubrir: () => invoke<DispositivoOnvif[]>('camaras_descubrir'),
+    puente: () => invoke<{ puerto: number; token: string }>('camaras_puente_info'),
+    encender: (id: string) => invoke<EstadoFuente>('camaras_encender', { id }),
+    apagar: (id: string) => invoke<void>('camaras_apagar', { id }),
+    estado: () => invoke<Record<string, EstadoFuente>>('camaras_estado'),
+    /** Un fotograma para el OCR: el mismo JPEG que se manda a `ocr.placa` / `ocr.dpi`, igual que con la webcam. */
+    fotograma: (id: string) => invoke<FotogramaCapturado>('camara_ip_fotograma', { id }),
+  },
+
   hardware: {
     estado: () => invoke<EstadoHardware>('hardware_estado'),
     puertos: () => invoke<PuertoSerial[]>('hardware_puertos'),
@@ -298,12 +418,26 @@ export const api = {
     ahora: () => invoke<EstadoSync>('sync_ahora'),
   },
 
+  /** T13: actualizaciones firmadas. Buscar es automático; instalar solo lo pide una persona y Rust lo rechaza con accesos sin enviar. */
+  actualizacion: {
+    estado: () => invoke<EstadoActualizador>('actualizacion_estado'),
+    buscar: () => invoke<ResultadoBusquedaActualizacion>('actualizacion_buscar'),
+    /** Descarga, verifica la firma, instala y reinicia. `capturaEnCurso`: la pantalla dice si hay una captura a medias. */
+    instalar: (capturaEnCurso: boolean) => invoke<void>('actualizacion_instalar', { capturaEnCurso }),
+  },
+
   ocr: {
     placa: (imagenBase64: string) => invoke<ResultadoOcr>('ocr_placa', { imagenBase64 }),
     precalentar: () => invoke<EstadoOcr>('ocr_precalentar'),
     estado: () => invoke<EstadoOcr>('ocr_estado'),
-    dpiRemoto: (imagenBase64: string) =>
-      invoke<{ nombre: string; numero_dpi: string; texto_completo: string }>('ocr_dpi_remoto', { imagenBase64 }),
+    /** Local primero; remoto solo si el local falló o dudó, hay red y el equipo lo permite. */
+    dpi: (imagenBase64: string) => invoke<ResultadoDpi>('ocr_dpi', { imagenBase64 }),
+    /** Solo el OCR de este equipo (funciona sin red). */
+    dpiLocal: (imagenBase64: string) => invoke<ResultadoDpi>('ocr_dpi_local', { imagenBase64 }),
+    /** Respaldo: Google Vision a través del servidor. */
+    dpiRemoto: (imagenBase64: string) => invoke<ResultadoDpi>('ocr_dpi_remoto', { imagenBase64 }),
+    dpiConfig: () => invoke<{ remoto_respaldo: boolean }>('ocr_dpi_config'),
+    dpiConfigurar: (remotoRespaldo: boolean) => invoke<{ remoto_respaldo: boolean }>('ocr_dpi_configurar', { remotoRespaldo }),
   },
 };
 
