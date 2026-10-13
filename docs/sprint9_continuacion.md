@@ -17,6 +17,7 @@ No se tocó producción, la VM, Cloud SQL ni secretos. Las pruebas de base de da
 | T3 | Conjunto sintético y evaluador del DPI | HECHO |
 | T4 | Extractor local del DPI en el sidecar | HECHO (precisión real SIN medir: solo hay datos sintéticos) |
 | T5 | Integración en el escritorio (Rust + UI) y privacidad | HECHO |
+| T6 | Decisión de diseño del puente de video | HECHO |
 
 ## Línea base (antes de tocar nada, con las 2 correcciones de T0)
 
@@ -104,3 +105,11 @@ Diseño, privacidad, cómo armar el conjunto real con consentimiento, el criteri
 - Pruebas: Rust **108** (+11: política del respaldo, sin red, parseo, privacidad del log, guarda de código sin disco, migración, config); vitest **121** (+12); sidecar **37** (incluye punta a punta de privacidad con un DPI ficticio); integración I-3 (+1).
 - Hallazgo: las bibliotecas de imagen del OCR dejan en el directorio temporal `mat-debug-<pid>.log` (vacío) y `.ses` (marca de tiempo + UUID); no contienen datos y la prueba de privacidad las tolera explícitamente y exige que nada más quede.
 - Sin probar con hardware real: la webcam y el flujo en Windows (el OCR local sí se ejerció con el modelo real en Linux).
+
+## T6 — Decisión de diseño del puente de video · **HECHO**
+Documento: **`docs/camaras_ip_diseno.md`** (comparación, números, decisión, riesgos, alternativas descartadas).
+- **Decisión:** RTSP por un **sidecar ffmpeg mínimo LGPL propio** (3,3 MB `ffmpeg.exe` frente a 82,8 MB y GPLv3 del build popular, medidos); MJPEG/HTTP del celular **por proxy en Rust** (sin ffmpeg); ambos alimentan un **puente** que guarda el último fotograma en memoria y lo sirve por `127.0.0.1` con token efímero (vista previa) y por comando Tauri (captura para el OCR).
+- **Medido** (Linux, 4 vCPU, mediamtx + ffmpeg `testsrc2`): 1 flujo 720p15→MJPEG 640 px a 10 fps = 5 % de un núcleo y 40 MB; 2 flujos = 10 % y 79 MB; 1080p25 = 10 % y 65 MB; captura de 1 fotograma 1080p desde RTSP = 1,25 s; H.265 funciona. Estimado para 6–8 GB: ≈1,0–1,2 GB propios con 2 cámaras.
+- Se escribió y se **probó** `desktop/scripts/build-ffmpeg-min.sh` (Linux nativo ejecutado; Windows cruzado con mingw-w64: ejecutable PE válido de 3,3 MB, **no ejecutado**: no hay Windows ni Wine).
+- Hallazgos útiles para T7: ffmpeg 6.1 no tiene `-rw_timeout` para RTSP (se usa un vigilante de inactividad propio); sigue redirecciones RTSP por su cuenta (`Status 30x: Redirecting to …` en stderr) → se vigila y se mata; mediamtx se descarga como asset de GitHub Releases (sirve de servidor RTSP de prueba).
+- Alternativas descartadas: biblioteca nativa en Rust (sin decodificador H.264 libre de riesgo ni H.265, y sin forma de probarla aquí), mediamtx/go2rtc, GStreamer, libVLC, HLS y WebRTC directo.
