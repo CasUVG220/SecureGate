@@ -2339,3 +2339,192 @@ export const revocarLicencia = async (id: string): Promise<void> => {
     throw new Error((body as { error?: string }).error || 'Error al revocar la licencia');
   }
 };
+
+// ── SaaS: planes, consumo, facturas, alta autoservicio y exportación (T10–T12) ─────────────────────────
+// Dinero SIEMPRE en centavos enteros (como lo devuelve el backend); se formatea solo al mostrarlo.
+
+export type EstadoSuscripcion = 'prueba' | 'activa' | 'vencida' | 'cancelada';
+export type EstadoFacturaSaas = 'pendiente' | 'pagada' | 'vencida' | 'anulada';
+export type MetodoPagoSaas = 'transferencia' | 'deposito' | 'efectivo' | 'otro';
+
+export interface PlanSaas {
+  id?: string;
+  codigo: string;
+  nombre: string;
+  descripcion: string | null;
+  precio_mensual_centavos: number;
+  visitas_incluidas: number;
+  precio_visita_extra_centavos: number;
+  max_sucursales: number | null;
+  max_garitas: number | null;
+  dias_prueba: number;
+  moneda: string;
+  /** `true` = precio supuesto, todavía sin confirmar por el equipo. */
+  supuesto: boolean;
+}
+
+export interface SuscripcionSaas {
+  id: string;
+  empresa_id: string;
+  estado: EstadoSuscripcion;
+  inicio_en: string;
+  prueba_hasta: string | null;
+  plan: PlanSaas;
+}
+
+export interface FacturaSaas {
+  id: string;
+  numero: number;
+  numero_texto: string;
+  empresa_id: string;
+  empresa_nombre: string;
+  periodo: string;
+  plan_nombre: string;
+  dias_del_mes: number;
+  dias_facturados: number;
+  cuota_centavos: number;
+  visitas: number;
+  visitas_incluidas: number;
+  excedente_visitas: number;
+  excedente_centavos: number;
+  total_centavos: number;
+  estado: EstadoFacturaSaas;
+  emitida_en: string;
+  vence_en: string;
+  pagada_en: string | null;
+  metodo_pago: MetodoPagoSaas | null;
+  referencia_pago: string | null;
+  detalle: { lineas: Array<{ concepto: string; cantidad: number; precio_unitario_centavos: number; monto_centavos: number }> };
+}
+
+export type PasoOnboardingId = 'empresa' | 'sucursal' | 'plan' | 'admin' | 'garita';
+export interface ProgresoOnboarding {
+  pasos: Array<{ id: PasoOnboardingId; hecho: boolean }>;
+  completo: boolean;
+  primera_sucursal_id: string | null;
+}
+
+export interface PanelEmpresa {
+  empresa: { id: string; nombre: string };
+  suscripcion: SuscripcionSaas | null;
+  uso: { periodo: string; visitas: number; incluidas: number | null; excedente: number; excedente_centavos: number; plan: string | null; dia_del_mes: number; dias_del_mes: number };
+  proyeccion: { visitas_proyectadas: number; excedente_proyectado: number; excedente_proyectado_centavos: number } | null;
+  limites: { sucursales: { usadas: number; maximo: number | null }; garitas: { usadas: number; maximo: number | null } };
+  facturas: FacturaSaas[];
+  pendiente_centavos: number;
+  facturas_vencidas: number;
+  progreso: ProgresoOnboarding;
+}
+
+export interface UsoEmpresaOwner {
+  empresa_id: string;
+  nombre: string;
+  activo: boolean;
+  suspendida: boolean;
+  estado: EstadoSuscripcion | null;
+  plan: string | null;
+  plan_nombre: string | null;
+  visitas: number;
+  incluidas: number | null;
+  excedente: number;
+  excedente_centavos: number;
+  facturas_pendientes: number;
+  facturas_vencidas: number;
+  pendiente_centavos: number;
+}
+
+/** Lee la respuesta JSON y, si no fue exitosa, lanza el `error` que mandó el backend (o `porDefecto`). */
+async function resultado<T>(res: Response, porDefecto: string): Promise<T> {
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error((body as { error?: string }).error || porDefecto);
+  return body as T;
+}
+
+export const getPanelEmpresa = async (empresaId: string): Promise<PanelEmpresa> =>
+  resultado(await apiFetch(`${BASE_URL}/api/empresas/${empresaId}/panel`, { headers: authHeaders() }), 'No se pudo cargar tu plan');
+
+export const getPlanesSaas = async (): Promise<PlanSaas[]> =>
+  resultado(await apiFetch(`${BASE_URL}/api/planes`, { headers: authHeaders() }), 'No se pudieron cargar los planes');
+
+export const getUsoOwner = async (mes?: string): Promise<{ periodo: string; empresas: UsoEmpresaOwner[] }> =>
+  resultado(await apiFetch(`${BASE_URL}/api/planes/uso${mes ? `?mes=${encodeURIComponent(mes)}` : ''}`, { headers: authHeaders() }), 'No se pudo cargar el consumo');
+
+export const cambiarSuscripcion = async (
+  empresaId: string, data: { plan_codigo?: string; estado?: EstadoSuscripcion; motivo?: string },
+): Promise<{ suscripcion: SuscripcionSaas }> =>
+  resultado(await apiFetch(`${BASE_URL}/api/empresas/${empresaId}/suscripcion`, { method: 'PUT', headers: authHeaders(), body: JSON.stringify(data) }), 'No se pudo cambiar la suscripción');
+
+export const getFacturasSaas = async (filtro: { estado?: EstadoFacturaSaas; empresa_id?: string; periodo?: string } = {}): Promise<FacturaSaas[]> => {
+  const qs = new URLSearchParams(Object.entries(filtro).filter(([, v]) => v) as Array<[string, string]>).toString();
+  return resultado(await apiFetch(`${BASE_URL}/api/facturas-saas${qs ? `?${qs}` : ''}`, { headers: authHeaders() }), 'No se pudieron cargar las facturas');
+};
+
+export const pagarFacturaSaas = async (id: string, data: { metodo: MetodoPagoSaas; referencia?: string; nota?: string }): Promise<FacturaSaas> =>
+  resultado(await apiFetch(`${BASE_URL}/api/facturas-saas/${id}/pagar`, { method: 'POST', headers: authHeaders(), body: JSON.stringify(data) }), 'No se pudo marcar el pago');
+
+export const anularFacturaSaas = async (id: string, motivo: string): Promise<FacturaSaas> =>
+  resultado(await apiFetch(`${BASE_URL}/api/facturas-saas/${id}/anular`, { method: 'POST', headers: authHeaders(), body: JSON.stringify({ motivo }) }), 'No se pudo anular la factura');
+
+export interface ResumenGeneracionFacturas { periodo: string; generadas: number; existentes: number; sin_cobro: number; errores: number; total_centavos: number }
+export const generarFacturasSaas = async (mes?: string): Promise<ResumenGeneracionFacturas> =>
+  resultado(await apiFetch(`${BASE_URL}/api/facturas-saas/generar`, { method: 'POST', headers: authHeaders(), body: JSON.stringify(mes ? { mes } : {}) }), 'No se pudieron generar las facturas');
+
+export const revisarVencidasSaas = async (): Promise<{ vencidas: number }> =>
+  resultado(await apiFetch(`${BASE_URL}/api/facturas-saas/revisar-vencidas`, { method: 'POST', headers: authHeaders(), body: '{}' }), 'No se pudieron revisar los vencimientos');
+
+/** Descarga el .zip con los datos de la empresa (el navegador lo guarda con el nombre que manda el servidor). */
+export const exportarDatosEmpresa = async (empresaId: string): Promise<{ blob: Blob; nombre: string }> => {
+  const res = await apiFetch(`${BASE_URL}/api/empresas/${empresaId}/exportar`, { headers: authHeaders() });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error((body as { error?: string }).error || 'No se pudo exportar los datos');
+  }
+  const nombre = /filename="([^"]+)"/.exec(res.headers.get('Content-Disposition') ?? '')?.[1] ?? 'securegate-datos.zip';
+  return { blob: await res.blob(), nombre };
+};
+
+// Alta autoservicio (públicas: sin sesión). `OnboardingError.status` distingue enlace vencido (410) de uno inválido (404).
+export class OnboardingError extends Error {
+  status: number;
+  codigo?: string;
+  constructor(mensaje: string, status: number, codigo?: string) {
+    super(mensaje);
+    this.name = 'OnboardingError';
+    this.status = status;
+    this.codigo = codigo;
+  }
+}
+
+async function publico<T>(res: Response, porDefecto: string): Promise<T> {
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new OnboardingError((body as { error?: string }).error || porDefecto, res.status, (body as { codigo?: string }).codigo);
+  return body as T;
+}
+const json = { 'Content-Type': 'application/json' };
+
+export interface BorradorOnboarding {
+  empresa_nombre?: string; nit?: string | null; sucursal_nombre?: string; direccion?: string | null; tipo?: string | null; plan_codigo?: string;
+}
+export interface EstadoOnboarding {
+  estado: 'abierta' | 'invitada';
+  email: string;
+  borrador: BorradorOnboarding;
+  expira_en: string;
+  invitacion: { estado: string; puede_reenviar: boolean } | null;
+  planes: PlanSaas[];
+}
+
+export const solicitarAlta = async (data: { email: string; empresa_nombre: string; acepta_terminos: boolean; sitio_web?: string }): Promise<{ ok: boolean; mensaje: string }> =>
+  publico(await fetch(`${BASE_URL}/api/onboarding/solicitar`, { method: 'POST', headers: json, body: JSON.stringify(data) }), 'No se pudo registrar la solicitud');
+
+export const getOnboarding = async (token: string): Promise<EstadoOnboarding> =>
+  publico(await fetch(`${BASE_URL}/api/onboarding/${encodeURIComponent(token)}`), 'Enlace no válido');
+
+export const guardarBorradorOnboarding = async (token: string, data: BorradorOnboarding): Promise<{ borrador: BorradorOnboarding }> =>
+  publico(await fetch(`${BASE_URL}/api/onboarding/${encodeURIComponent(token)}/borrador`, { method: 'PUT', headers: json, body: JSON.stringify(data) }), 'No se pudo guardar');
+
+export const completarOnboarding = async (token: string): Promise<{ ok: boolean; email: string; mensaje: string }> =>
+  publico(await fetch(`${BASE_URL}/api/onboarding/${encodeURIComponent(token)}/completar`, { method: 'POST', headers: json, body: '{}' }), 'No se pudo completar el alta');
+
+export const reenviarInvitacionOnboarding = async (token: string): Promise<{ ok: boolean; mensaje: string }> =>
+  publico(await fetch(`${BASE_URL}/api/onboarding/${encodeURIComponent(token)}/reenviar`, { method: 'POST', headers: json, body: '{}' }), 'No se pudo reenviar la invitación');

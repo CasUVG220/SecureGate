@@ -44,6 +44,13 @@ Dos pruebas mantienen esta lista honesta:
 | `FACTURAS_SAAS_REVISADAS` | Marca como vencidas las facturas pendientes que pasaron su fecha y manda los avisos de pago vencido (pasada la gracia) | `POST /api/facturas-saas/revisar-vencidas` | owner | 5/15 min por usuario; los bloqueos se auditan |
 | `FACTURA_SAAS_PAGADA` | El owner confirma el pago de una factura (transferencia, depósito, efectivo u otro) con su referencia. Con `COBRO_PROVEEDOR=visanet` responde 503 y también se audita | `POST /api/facturas-saas/:id/pagar` | owner | — |
 | `FACTURA_SAAS_ANULADA` | Anula una factura pendiente o vencida con motivo; la del mes no se vuelve a generar | `POST /api/facturas-saas/:id/anular` | owner | — |
+| **Alta autoservicio** (T12; rutas públicas, sin sesión) | | | | |
+| `ONBOARDING_SOLICITADO` | Alguien pide dar de alta una empresa con su correo; se manda el enlace del asistente (nunca se revela si el correo ya tenía cuenta). Detalle: dominio del correo y resultado; el campo trampa lo marca `honeypot` | `POST /api/onboarding/solicitar` | Cualquiera | 5/hora por IP + 3/24 h por correo; los bloqueos (429) se auditan |
+| `ONBOARDING_BORRADOR_GUARDADO` | Se guarda el borrador del asistente (empresa, sucursal, plan). Detalle: solo los nombres de los campos. También es la acción de los bloqueos (429) de las consultas del enlace | `PUT /api/onboarding/:token/borrador` (y `GET …/:token`) | Quien tiene el enlace | 60/15 min por IP |
+| `ONBOARDING_COMPLETADO` | En una sola transacción crea la empresa, su primera sucursal, la suscripción en prueba y la invitación de administrador. Detalle: id de la solicitud y de la empresa | `POST /api/onboarding/:token/completar` | Quien tiene el enlace | 10/hora por IP |
+| `ONBOARDING_INVITACION_REENVIADA` | Reenvía la invitación del administrador con enlace nuevo (el anterior deja de servir; máximo 3) | `POST /api/onboarding/:token/reenviar` | Quien tiene el enlace | 10/hora por IP |
+| **Portabilidad de datos** (T12) | | | | |
+| `DATOS_EMPRESA_EXPORTADOS` | Descarga de los datos de la empresa en un .zip de CSV (sucursales, personal, residentes, visitas, pagos, garitas, facturas): incluye datos personales. Detalle: filas por archivo. Nunca contraseñas ni códigos de activación | `GET /api/empresas/:id/exportar` | owner o el admin de esa empresa | 3/hora por usuario; los bloqueos se auditan |
 | **Sucursales** | | | | |
 | `SUCURSAL_CREADA` | Alta de sucursal | `POST /api/sucursales` | admin de empresa | — |
 | `SUCURSAL_ACTUALIZADA` | Edición de sucursal | `PUT /api/sucursales/:id` | admin de empresa | — |

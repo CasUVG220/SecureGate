@@ -34,12 +34,19 @@ export const eliminarLimiter = crearLimitador({
   tabla: 'empresas',
   mensaje: 'Demasiados intentos; espera 15 minutos',
 });
+// Exportar recorre TODAS las tablas de la empresa: cupo por persona (no por IP) y los bloqueos (429) quedan auditados.
+export const exportarLimiter = crearLimitador({
+  nombre: 'exportar-datos-usuario', windowMs: 60 * 60 * 1000, max: parseInt(process.env.RATE_LIMIT_EXPORTAR_MAX || '3', 10), porUsuario: true,
+  accion: 'DATOS_EMPRESA_EXPORTADOS', tabla: 'empresas', mensaje: 'Demasiadas exportaciones; espera una hora',
+});
 router.post('/:id/eliminar-definitivo', requireOwner, eliminarLimiter,
   auditLog({ accion: 'EMPRESA_ELIMINADA_DEFINITIVO', tabla: 'empresas' }), ctrl.eliminarEmpresaDefinitivo);
 // Suscripción al plan SaaS y consumo (T10). El admin de empresa solo ve la suya; cambiarla es del owner.
 router.get('/:id/suscripcion',           requireAdminEmpresa, planes.getSuscripcion);
 router.get('/:id/suscripcion/historial', requireAdminEmpresa, planes.getHistorialSuscripcion);
 router.get('/:id/uso',                   requireAdminEmpresa, planes.getUsoEmpresa);
+router.get('/:id/panel',                 requireAdminEmpresa, planes.getPanelEmpresa);
+router.get('/:id/exportar',              requireAdminEmpresa, exportarLimiter, auditLog({ accion: 'DATOS_EMPRESA_EXPORTADOS', tabla: 'empresas' }), planes.exportarDatos);
 router.get('/:id/facturas',              requireAdminEmpresa, facturas.getFacturasDeEmpresa);
 router.put('/:id/suscripcion',           requireOwner,        auditLog({ accion: 'SUSCRIPCION_ACTUALIZADA', tabla: 'suscripciones' }), planes.putSuscripcion);
 router.patch('/:id/reactivar', requireOwner,       auditLog({ accion: 'EMPRESA_REACTIVADA', tabla: 'empresas' }), ctrl.reactivarEmpresa);

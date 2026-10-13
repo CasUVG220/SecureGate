@@ -939,4 +939,32 @@ CREATE TABLE IF NOT EXISTS facturas_saas_avisos (
   CONSTRAINT facturas_saas_avisos_unico UNIQUE (factura_id, tipo)
 );
 
+-- ── SaaS · onboarding autoservicio (T12, Sprint 9 continuación) ──────────────────────────────────────────
+-- Una invitación puede nacer sin un administrador que invite (alta por autoservicio): `invitado_por` queda NULL. Se sigue exigiendo para las
+-- invitaciones del owner y del admin de empresa (lo hace el controlador). Idempotente: DROP NOT NULL sobre una columna ya nula no hace nada.
+ALTER TABLE invitaciones ALTER COLUMN invitado_por DROP NOT NULL;
+
+-- Solicitud de alta de una empresa nueva. El correo se verifica porque el enlace de continuación solo llega a esa bandeja; el borrador se guarda
+-- en la fila para poder retomar el asistente desde otro equipo con el mismo enlace. Solo el SHA-256 del token vive en la base.
+CREATE TABLE IF NOT EXISTS onboarding_solicitudes (
+  id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  email          VARCHAR(254) NOT NULL,
+  empresa_nombre VARCHAR(150) NOT NULL,
+  token_hash     CHAR(64) NOT NULL UNIQUE,
+  estado         VARCHAR(10) NOT NULL DEFAULT 'abierta' CHECK (estado IN ('abierta', 'invitada')),
+  borrador       JSONB NOT NULL DEFAULT '{}'::jsonb,
+  empresa_id     UUID REFERENCES empresas(id) ON DELETE SET NULL,
+  sucursal_id    UUID REFERENCES sucursales(id) ON DELETE SET NULL,
+  invitacion_id  UUID REFERENCES invitaciones(id) ON DELETE SET NULL,
+  reenvios       INTEGER NOT NULL DEFAULT 0,
+  ip_origen      VARCHAR(64),
+  expira_en      TIMESTAMPTZ NOT NULL,
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Los topes anti-abuso consultan «solicitudes de este correo / esta IP en las últimas horas».
+CREATE INDEX IF NOT EXISTS idx_onboarding_email ON onboarding_solicitudes(email, created_at);
+CREATE INDEX IF NOT EXISTS idx_onboarding_ip    ON onboarding_solicitudes(ip_origen, created_at);
+
 SELECT 'SecureGate DB inicializada correctamente' AS mensaje;

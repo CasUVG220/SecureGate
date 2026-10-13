@@ -70,3 +70,28 @@ describe('otroPortal', () => {
     expect(RUTA_PORTAL.residente).toBe('/residente');
   });
 });
+
+describe('rutas públicas del alta autoservicio (T12)', () => {
+  const token = 'abcdefghijklmnopqrstuvwxyz0123456789_-ABCDE';
+
+  it('/registro se reconoce con o sin barra final y sin importar mayúsculas', async () => {
+    const { esRutaRegistro } = await import('../portales');
+    for (const r of ['/registro', '/registro/', '/REGISTRO']) expect([r, esRutaRegistro(r)]).toEqual([r, true]);
+    for (const r of ['/', '/registro/otra', '/personal', '/registrov']) expect([r, esRutaRegistro(r)]).toEqual([r, false]);
+  });
+
+  it('/onboarding/<token> entrega el token tal cual (distingue mayúsculas) y rechaza lo demás', async () => {
+    const { tokenDeOnboarding } = await import('../portales');
+    expect(tokenDeOnboarding(`/onboarding/${token}`)).toBe(token);
+    expect(tokenDeOnboarding(`/onboarding/${token}/`)).toBe(token);
+    for (const r of ['/onboarding', '/onboarding/', '/onboarding/corto', `/onboarding/${token}/extra`, `/Onboarding/${token}`, `/onboarding/${token}?x=1`, `/onboarding/${token}%20`, `/invitacion/${token}`]) {
+      expect([r, tokenDeOnboarding(r)]).toEqual([r, null]);
+    }
+  });
+
+  it('no son rutas de ningún portal (la corrección automática las deja en paz)', async () => {
+    const { portalDeRuta } = await import('../portales');
+    expect(portalDeRuta('/registro')).toBeNull();
+    expect(portalDeRuta(`/onboarding/${token}`)).toBeNull();
+  });
+});

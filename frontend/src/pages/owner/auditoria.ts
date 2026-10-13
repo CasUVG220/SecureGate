@@ -11,12 +11,12 @@ export const GRUPOS: GrupoAuditoria[] = ['sesion', 'empresas', 'personas', 'gari
 const REGLAS: Array<[RegExp, GrupoAuditoria]> = [
   [/^(LOGIN|LOGOUT|REFRESH_|LIMITE_|ACCESO_DENEGADO|TWOFA_)/, 'sesion'],
   [/^INVITACION_QR_/, 'garita'],
-  [/^(EMPRESA_|ADMIN_|SUCURSAL_|INVITACION_)/, 'empresas'],
+  [/^(EMPRESA_|ADMIN_|SUCURSAL_|INVITACION_|ONBOARDING_|SUSCRIPCION_)/, 'empresas'],
   [/^(USUARIO_|RESIDENTE_)/, 'personas'],
   [/^(LICENCIA_|REGISTRO_|PREAUTORIZACION_|BLACKLIST_|CONFIG_QR_|OCR_)/, 'garita'],
-  [/^(PAGO_|CARGO_)/, 'dinero'],
+  [/^(PAGO_|CARGO_|PLAN_|FACTURA_|FACTURAS_)/, 'dinero'],
   [/^(ANUNCIO_|AREA_|CREAR_RESERVA|RESERVA_|CONFIG_RESERVAS_|TICKET_)/, 'comunidad'],
-  [/^REPORTE_/, 'datos'],
+  [/^(REPORTE_|DATOS_)/, 'datos'],
   [/^JOB_/, 'sistema'],
 ];
 

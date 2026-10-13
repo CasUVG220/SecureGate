@@ -78,3 +78,16 @@ export function tokenDeInvitacion(pathname: string): string | null {
   const m = /^\/invitacion\/([A-Za-z0-9_-]{20,})\/?$/.exec(pathname);
   return m ? m[1] : null;
 }
+
+/**
+ * Rutas públicas del alta autoservicio (T12): /registro (pedir el alta) y /onboarding/<token> (el asistente, al que llega el enlace del correo).
+ * Como /invitacion/<token>, no pertenecen a ningún portal.
+ */
+export function esRutaRegistro(pathname: string): boolean {
+  return normalizarRuta(pathname) === '/registro';
+}
+
+export function tokenDeOnboarding(pathname: string): string | null {
+  const m = /^\/onboarding\/([A-Za-z0-9_-]{20,})\/?$/.exec(pathname);
+  return m ? m[1] : null;
+}

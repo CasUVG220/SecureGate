@@ -16,6 +16,7 @@ import configuracionCargosRouter from './configuracion-cargos.routes';
 import empresasRouter from './empresas.routes';
 import planesRouter from './planes.routes';
 import facturasRouter from './facturas.routes';
+import onboardingRouter from './onboarding.routes';
 import sucursalesRouter from './sucursales.routes';
 import usuariosRouter from './usuarios.routes';
 import blacklistRouter from './blacklist.routes';
@@ -44,6 +45,8 @@ router.use('/auth', authRouter);
 router.use('/empresas',   verifyToken, empresasRouter);
 router.use('/planes',     verifyToken, planesRouter);
 router.use('/facturas-saas', verifyToken, facturasRouter);
+// Alta autoservicio: pública (con límites propios por ruta) salvo /progreso.
+router.use('/onboarding', onboardingRouter);
 router.use('/sucursales', verifyToken, requireAdminEmpresa,    sucursalesRouter);
 // El guard de administración va ruta por ruta: /usuarios/me/preferencias lo
 // usa cualquier usuario para guardar su tema e idioma.

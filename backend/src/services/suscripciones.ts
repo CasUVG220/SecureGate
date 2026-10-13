@@ -291,6 +291,37 @@ export async function mesActual(db: Consultable): Promise<Mes> {
   return { anio: r.rows[0].anio, mes: r.rows[0].mes };
 }
 
+/** Hoy en Guatemala: mes calendario y día del mes (el día 1 es el primero; sirve para proyectar el consumo del mes en curso). */
+export async function hoyEnGuatemala(db: Consultable): Promise<Mes & { dia: number; diasDelMes: number }> {
+  const r = await db.query(
+    `SELECT EXTRACT(YEAR FROM NOW() AT TIME ZONE $1)::int AS anio, EXTRACT(MONTH FROM NOW() AT TIME ZONE $1)::int AS mes,
+            EXTRACT(DAY FROM NOW() AT TIME ZONE $1)::int AS dia,
+            EXTRACT(DAY FROM (date_trunc('month', NOW() AT TIME ZONE $1) + interval '1 month - 1 day'))::int AS dias`,
+    [APP_TZ],
+  );
+  const f = r.rows[0];
+  return { anio: f.anio, mes: f.mes, dia: f.dia, diasDelMes: f.dias };
+}
+
+export interface Proyeccion {
+  visitas_proyectadas: number;
+  excedente_proyectado: number;
+  excedente_proyectado_centavos: number;
+}
+
+/**
+ * Proyección lineal del mes: el ritmo de lo que va del mes (`visitas` en `dia` días) se extiende a `diasDelMes`. Redondea hacia arriba la
+ * visita proyectada (mejor avisar de más que de menos). Es una estimación, no una factura: no distingue fines de semana ni eventos.
+ */
+export function proyectarMes(visitas: number, dia: number, diasDelMes: number, incluidas: number | null, precioExtraCentavos: number): Proyeccion {
+  if (!Number.isInteger(visitas) || visitas < 0 || !Number.isInteger(dia) || dia < 1 || !Number.isInteger(diasDelMes) || dia > diasDelMes) {
+    throw new Error('proyectarMes: valores inválidos');
+  }
+  const proyectadas = Math.floor((visitas * diasDelMes + dia - 1) / dia);
+  const excedente = incluidas === null ? 0 : Math.max(0, proyectadas - incluidas);
+  return { visitas_proyectadas: proyectadas, excedente_proyectado: excedente, excedente_proyectado_centavos: excedente * precioExtraCentavos };
+}
+
 /** Visitas AUTORIZADAS de una empresa en un mes calendario de Guatemala. Un `id_cliente` repetido cuenta una vez. */
 export async function visitasDelMes(db: Consultable, empresaId: string, m: Mes): Promise<number> {
   const sig = mesSiguiente(m);

@@ -3,8 +3,12 @@ import pool from '../db/pool';
 import { esUuid, serverError } from '../utils/http';
 import {
   ESTADOS, EstadoSuscripcion, listarPlanes, planPorId, planPorCodigo, validarPlan, crearPlan, actualizarPlan,
-  suscripcionDe, asignarSuscripcion, historialDe, parsearMes, mesActual, usoDeEmpresa, visitasPorEmpresa, periodoTexto,
+  suscripcionDe, asignarSuscripcion, historialDe, parsearMes, mesActual, usoDeEmpresa, visitasPorEmpresa, periodoTexto, hoyEnGuatemala, proyectarMes, usoDeLimites,
 } from '../services/suscripciones';
+import { listarFacturas } from '../services/facturacion';
+import { progresoDeEmpresa } from '../services/onboarding';
+import { exportarEmpresa } from '../services/exportacion';
+import { ZipStream } from '../utils/zip';
 
 /** GET /planes — catálogo. Cualquier admin ve los activos; el owner también los inactivos con ?todos=1. */
 export const getPlanes = async (req: Request, res: Response) => {
@@ -159,11 +163,18 @@ export const getUsoTodas = async (req: Request, res: Response) => {
     const [visitas, filas] = await Promise.all([
       visitasPorEmpresa(pool, m),
       pool.query(
-        `SELECT e.id AS empresa_id, e.nombre, s.estado, p.codigo AS plan, p.visitas_incluidas,
-                p.precio_visita_extra_centavos::float8 AS precio_extra
+        `SELECT e.id AS empresa_id, e.nombre, e.activo, e.suspendida, s.estado, p.codigo AS plan, p.nombre AS plan_nombre, p.visitas_incluidas,
+                p.precio_visita_extra_centavos::float8 AS precio_extra,
+                COALESCE(f.pendientes, 0)::int AS facturas_pendientes, COALESCE(f.vencidas, 0)::int AS facturas_vencidas,
+                COALESCE(f.monto, 0)::float8 AS pendiente_centavos
            FROM empresas e
            LEFT JOIN suscripciones s ON s.empresa_id = e.id
            LEFT JOIN planes p ON p.id = s.plan_id
+           LEFT JOIN (SELECT empresa_id,
+                             COUNT(*) FILTER (WHERE estado IN ('pendiente', 'vencida')) AS pendientes,
+                             COUNT(*) FILTER (WHERE estado = 'vencida') AS vencidas,
+                             SUM(total_centavos) FILTER (WHERE estado IN ('pendiente', 'vencida')) AS monto
+                        FROM facturas_saas GROUP BY empresa_id) f ON f.empresa_id = e.id
           ORDER BY e.nombre`),
     ]);
     res.json({
@@ -172,12 +183,80 @@ export const getUsoTodas = async (req: Request, res: Response) => {
         const v = visitas.get(f.empresa_id) ?? 0;
         const exc = f.visitas_incluidas === null ? 0 : Math.max(0, v - f.visitas_incluidas);
         return {
-          empresa_id: f.empresa_id, nombre: f.nombre, estado: f.estado, plan: f.plan, visitas: v,
+          empresa_id: f.empresa_id, nombre: f.nombre, activo: f.activo, suspendida: f.suspendida, estado: f.estado, plan: f.plan, plan_nombre: f.plan_nombre, visitas: v,
+          facturas_pendientes: f.facturas_pendientes, facturas_vencidas: f.facturas_vencidas, pendiente_centavos: f.pendiente_centavos,
           incluidas: f.visitas_incluidas, excedente: exc, excedente_centavos: exc * (f.precio_extra ?? 0),
         };
       }),
     });
   } catch (error) {
     serverError(res, error, 'Error al obtener el consumo');
+  }
+};
+
+/**
+ * GET /empresas/:id/panel — todo lo que muestra el panel del cliente en una sola llamada: plan, consumo del mes contra lo incluido, proyección
+ * de excedente, límites usados, facturas y lo que se debe. El admin de empresa solo ve la suya.
+ */
+export const getPanelEmpresa = async (req: Request, res: Response) => {
+  const id = accesoAEmpresa(req, res);
+  if (!id) return;
+  try {
+    const emp = await pool.query('SELECT id, nombre FROM empresas WHERE id = $1', [id]);
+    if (emp.rows.length === 0) return res.status(404).json({ error: 'Empresa no encontrada' });
+    const [susc, uso, hoy, limites, facturas, progreso] = await Promise.all([
+      suscripcionDe(pool, id), usoDeEmpresa(pool, id), hoyEnGuatemala(pool), usoDeLimites(pool, id), listarFacturas(pool, { empresaId: id, limite: 12 }),
+      progresoDeEmpresa(pool, id),
+    ]);
+    const proyeccion = susc
+      ? proyectarMes(uso.visitas, hoy.dia, hoy.diasDelMes, susc.plan.visitas_incluidas, susc.plan.precio_visita_extra_centavos)
+      : null;
+    const pendiente = facturas.filter(f => f.estado === 'pendiente' || f.estado === 'vencida');
+    res.json({
+      empresa: emp.rows[0],
+      suscripcion: susc,
+      uso: { ...uso, dia_del_mes: hoy.dia, dias_del_mes: hoy.diasDelMes },
+      proyeccion,
+      limites: {
+        sucursales: { usadas: limites.sucursales, maximo: susc?.plan.max_sucursales ?? null },
+        garitas: { usadas: limites.garitas, maximo: susc?.plan.max_garitas ?? null },
+      },
+      facturas,
+      pendiente_centavos: pendiente.reduce((a, f) => a + f.total_centavos, 0),
+      facturas_vencidas: facturas.filter(f => f.estado === 'vencida').length,
+      progreso,
+    });
+  } catch (error) {
+    serverError(res, error, 'Error al obtener el panel');
+  }
+};
+
+/**
+ * GET /empresas/:id/exportar — descarga un .zip con los datos de la empresa (CSV). Owner o el admin de ESA empresa (cruce = 404).
+ * La respuesta se escribe en streaming; si algo falla a medias, la conexión se corta (el archivo incompleto no abre) y queda en el registro.
+ */
+export const exportarDatos = async (req: Request, res: Response) => {
+  const id = accesoAEmpresa(req, res);
+  if (!id) return;
+  try {
+    const emp = await pool.query('SELECT nombre FROM empresas WHERE id = $1', [id]);
+    if (emp.rows.length === 0) return res.status(404).json({ error: 'Empresa no encontrada' });
+    const nombre: string = emp.rows[0].nombre;
+    const slug = nombre.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^A-Za-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40) || 'empresa';
+    const fecha = new Date().toISOString().slice(0, 10);
+    res.status(200);
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Disposition', `attachment; filename="securegate-datos-${slug}-${fecha}.zip"`);
+    res.setHeader('Cache-Control', 'no-store');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+
+    const zip = new ZipStream(res);
+    const resumen = await exportarEmpresa(pool, id, nombre, zip);
+    res.locals.auditoria = { archivos: resumen.archivos };
+    await zip.finalizar();
+  } catch (error) {
+    console.error('[exportar] Falló la exportación:', (error as Error).message);
+    if (!res.headersSent) serverError(res, error, 'Error al exportar los datos');
+    else res.destroy(error as Error);
   }
 };

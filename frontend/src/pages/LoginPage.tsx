@@ -217,6 +217,14 @@ export default function LoginPage({ onLogin, portal = 'personal', onCambiarPorta
         {/* Quien llegue a la puerta equivocada tiene la otra a un clic, en vez
             de tener que conocer la dirección de memoria. Se oculta si el intento
             de acceso ya ofreció el mismo enlace como botón. */}
+        {onCambiarPortal && portal === 'personal' && !portalSugerido && !desafio && (
+          <p className="mt-5 text-center text-xs text-gray-400">
+            {t('login.registerQ')}{' '}
+            <button type="button" onClick={() => onCambiarPortal('/registro')} className="font-semibold text-brand-400 underline-offset-4 hover:underline">
+              {t('login.register')}
+            </button>
+          </p>
+        )}
         {onCambiarPortal && !portalSugerido && !desafio && (
           <p className="mt-6 border-t border-gray-700 pt-5 text-center text-xs text-gray-400">
             <button

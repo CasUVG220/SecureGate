@@ -42,14 +42,15 @@ const NOMBRE_ROL: Record<RolInvitado, string> = {
   admin_sucursal: 'Administrador de sucursal',
 };
 
-interface FilaInvitacion {
+export interface FilaInvitacion {
   id: string;
   email: string;
   rol_invitado: RolInvitado;
   empresa_id: string | null;
   empresa_nombre: string | null;
   sucursal_id: string | null;
-  invitado_por: string;
+  /** `null` en las invitaciones de autoservicio (T12): nadie las emitió, las pidió el propio invitado. */
+  invitado_por: string | null;
   estado: 'pendiente' | 'aceptada' | 'expirada' | 'revocada';
   expira_en: Date;
   created_at: Date;
@@ -84,7 +85,7 @@ export const estadoEfectivo = (
   return vencida ? 'expirada' : inv.estado;
 };
 
-const SELECT_INVITACION = `
+export const SELECT_INVITACION = `
   SELECT i.*,
          (i.expira_en <= NOW())              AS vencida,
          e.nombre AS empresa_nombre_actual,
@@ -122,14 +123,16 @@ const describirAlcance = (i: FilaInvitacion): string =>
 const escHtml = (v: string): string =>
   v.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 
-const enviarCorreoInvitacion = async (i: FilaInvitacion, token: string): Promise<void> => {
+export const enviarCorreoInvitacion = async (i: FilaInvitacion, token: string): Promise<void> => {
   const enlace = enlaceInvitacion(token);
   const rol = NOMBRE_ROL[i.rol_invitado];
   const alcance = describirAlcance(i);
   const texto = [
     `Hola,`,
     ``,
-    `${i.invitado_por_nombre ?? 'Un administrador'} te invitó a SecureGate como ${rol} de ${alcance}.`,
+    i.invitado_por === null
+      ? `Pediste crear ${alcance} en SecureGate; tu cuenta será ${rol}.`
+      : `${i.invitado_por_nombre ?? 'Un administrador'} te invitó a SecureGate como ${rol} de ${alcance}.`,
     ``,
     `Para crear tu cuenta abre este enlace (válido ${INVITACION_TTL_HORAS} horas, un solo uso):`,
     enlace,
@@ -142,7 +145,7 @@ const enviarCorreoInvitacion = async (i: FilaInvitacion, token: string): Promise
     text: texto,
     // Nombres de empresa/sucursal/persona son texto libre: se escapan antes de
     // ir dentro del HTML del correo.
-    html: `<p>Hola,</p><p>${escHtml(i.invitado_por_nombre ?? 'Un administrador')} te invitó a SecureGate como <strong>${escHtml(rol)}</strong> de <strong>${escHtml(alcance)}</strong>.</p><p><a href="${escHtml(enlace)}">Crear mi cuenta</a> (válido ${INVITACION_TTL_HORAS} horas, un solo uso)</p><p>Si no esperabas esta invitación, ignora este correo.</p>`,
+    html: `<p>Hola,</p><p>${i.invitado_por === null ? `Pediste crear <strong>${escHtml(alcance)}</strong> en SecureGate; tu cuenta será <strong>${escHtml(rol)}</strong>.` : `${escHtml(i.invitado_por_nombre ?? 'Un administrador')} te invitó a SecureGate como <strong>${escHtml(rol)}</strong> de <strong>${escHtml(alcance)}</strong>.`}</p><p><a href="${escHtml(enlace)}">Crear mi cuenta</a> (válido ${INVITACION_TTL_HORAS} horas, un solo uso)</p><p>Si no esperabas esta invitación, ignora este correo.</p>`,
   });
 };
 

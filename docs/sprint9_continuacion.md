@@ -23,6 +23,7 @@ No se tocó producción, la VM, Cloud SQL ni secretos. Las pruebas de base de da
 | T9 | Celular como cámara y medición de recursos | HECHO (sin probar con un celular ni equipo real) |
 | T10 | Planes, suscripciones y medición de uso | HECHO |
 | T11 | Facturación automática y avisos de pago vencido | HECHO |
+| T12 | Paneles, onboarding y portabilidad (núcleo SaaS) | HECHO |
 
 ## Línea base (antes de tocar nada, con las 2 correcciones de T0)
 
@@ -178,4 +179,16 @@ Detalle, ejemplos de cálculo y decisiones en `docs/saas_nucleo.md` (secciones 6
 - Cambio colateral en T10: salir del estado `prueba` fija `prueba_hasta` en ese momento (la facturación cobra desde ahí).
 - **Pruebas:** unitarias +35 (cálculo: cuota, excedente, mes parcial, redondeo, ventana por prueba/cancelación/zona horaria, dinero, proveedores de cobro, configuración) y programación +cinco tareas; integración **I-25** +18 (idempotencia, correlativo sin huecos, mes parcial, aislamiento y cruce, cobro manual, Visanet 503, vencimientos, aviso único tras la gracia sin suspender) y I-25b +1 (límite de tasa) y +4 casos en I-11.
 - Nota de proceso: el commit de T10 (`f584bc3`) quedó con las líneas `Co-Authored-By`/`Claude-Session` que la consigna prohibe; no se reescribió la historia (no se permite `push --force`). Desde T11 los commits van sin ellas.
+
+## T12 — Paneles, onboarding y portabilidad · **HECHO**
+Detalle en `docs/saas_nucleo.md` (secciones 7 a 9, con el **modelo de amenazas** del alta pública).
+- **Panel del cliente «Mi plan»** (administrador de empresa; `GET /api/empresas/:id/panel`): plan y estado, consumo del mes contra lo incluido (barra), **proyección de excedente** (función pura con pruebas), límites usados, historial de facturas, deuda, primeros pasos y descarga de datos. **Panel del owner «Planes y cobros»**: todas las empresas con plan, estado, consumo, excedente y por cobrar; facturas por cobrar; **cambiar plan** (con motivo), **marcar pagada**, anular, generar facturas y revisar vencimientos (confirmación con el diálogo de la app).
+- **Alta autoservicio** reutilizando las invitaciones en cascada: `/registro` (pública) → enlace al correo → asistente `/onboarding/<token>` (empresa, sucursal, plan, revisar; **borrador guardado en el servidor: retomable**) → una transacción crea empresa + sucursal + suscripción en prueba + invitación de administrador; la cuenta nace al aceptarla; la **primera garita** se crea ya con sesión desde «Mi plan». El progreso se **deriva de los datos**. Reenvío de la invitación (tope 3).
+- **Ruta pública protegida**: límites por IP (5/h solicitar, 10/h completar/reenviar, 60/15 min consultar) + 3 por correo cada 24 h, **campo trampa**, respuesta idéntica exista o no la cuenta, token de 256 bits guardado como SHA-256, validación estricta (campos desconocidos rechazados, sin `<>` ni caracteres de control), todo auditado, también los bloqueos. Las cinco rutas públicas se agregaron **a propósito** a la lista blanca de `security.routes.contract.test.ts`.
+- **Exportación** `GET /api/empresas/:id/exportar`: .zip de CSV (sucursales, personal, residentes, visitas, pagos, garitas, facturas, LEEME) **solo de esa empresa**, sin secretos, fórmulas neutralizadas (inyección de CSV), por lotes y en streaming con un escritor ZIP propio (sin dependencia nueva), 3 por hora por persona, auditada (`DATOS_EMPRESA_EXPORTADOS`).
+- **Acciones nuevas** (en `acciones_sensibles.md` e I-11): `ONBOARDING_SOLICITADO`, `ONBOARDING_BORRADOR_GUARDADO`, `ONBOARDING_COMPLETADO`, `ONBOARDING_INVITACION_REENVIADA`, `DATOS_EMPRESA_EXPORTADOS`. Se corrigió un hueco de T10/T11: las acciones `PLAN_*`, `SUSCRIPCION_*` y `FACTURA*_SAAS_*` no tenían nombre legible ni grupo en el panel de auditoría del owner (la prueba del frontend lo detectó); ya los tienen en español e inglés.
+- **Kit de UI y glosario**: solo componentes de `components/ui` (Button, Card, Modal, DataTable, RowActions, Input/Select…), sin `window.confirm`; claves es/en (`plan.*`, `saas.*`, `reg.*`, `onb.*`) con la misma lista en las dos lenguas (prueba), plurales con `.one/.other`, términos nuevos en `docs/glosario.md`; dinero en centavos y siempre con dos decimales (`Q250.00`).
+- **Pruebas**: backend unit +ZIP/CSV (11) +alta/proyección (28); integración **I-26** alta autoservicio (19), **I-27** panel/exportación (13) y **I-27b** tope de exportación (1), +5 casos en I-11; frontend +MiPlan (13), +Planes y cobros (12), +registro/asistente (12), +utilidades (7), +rutas y navegación (6).
+- **No se hizo** (fuera de alcance, según el texto): PWA, notificaciones push, marca por subdominio ni panel de monitoreo.
+- Riesgos que quedan (en `saas_nucleo.md` §8–9): sin CAPTCHA; empresas de autoservicio nunca aceptadas se quedan sin administrador (falta un trabajo de limpieza); el correo es un stub (hasta conectar un proveedor, el enlace solo aparece en el registro del servidor).
 

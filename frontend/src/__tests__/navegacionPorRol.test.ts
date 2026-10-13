@@ -40,3 +40,39 @@ describe('navegación por rol', () => {
     expect(translations.en['nav.group.account']).toBeTruthy();
   });
 });
+
+/** T12: «Mi plan» es del administrador de empresa y «Planes y cobros» del owner; nadie más los ve. */
+describe('navegación SaaS (T12)', () => {
+  const paginas = (rol: string) => navForRole(rol).flatMap(g => g.items.map(i => i.key as string));
+
+  it('el administrador de empresa ve «Mi plan» y el owner ve «Planes y cobros», cada uno solo el suyo', () => {
+    expect(paginas('admin_empresa')).toContain('ae-plan');
+    expect(paginas('admin_empresa')).not.toContain('owner-saas');
+    expect(paginas('owner')).toContain('owner-saas');
+    expect(paginas('owner')).not.toContain('ae-plan');
+  });
+
+  it('ni el administrador de sucursal, ni el residente, ni el personal de garita ven los cobros', () => {
+    for (const rol of ['admin_sucursal', 'residente', 'agente', 'desconocido']) {
+      expect([rol, paginas(rol)]).toEqual([rol, expect.not.arrayContaining(['ae-plan', 'owner-saas'])]);
+    }
+  });
+
+  it('los rótulos existen en español e inglés', () => {
+    for (const k of ['nav.saas', 'nav.myPlan', 'login.register']) {
+      expect(translations.es[k], `es ${k}`).toBeTruthy();
+      expect(translations.en[k], `en ${k}`).toBeTruthy();
+    }
+    expect(translations.es['nav.myPlan']).toBe('Mi plan');
+  });
+});
+
+describe('traducciones de T10–T12: mismas claves en las dos lenguas', () => {
+  it('toda clave plan.* saas.* reg.* onb.* existe en español e inglés (y viceversa)', () => {
+    const prefijos = /^(plan|saas|reg|onb)\./;
+    const es = Object.keys(translations.es).filter(k => prefijos.test(k)).sort();
+    const en = Object.keys(translations.en).filter(k => prefijos.test(k)).sort();
+    expect(es.length).toBeGreaterThan(100);
+    expect(en).toEqual(es);
+  });
+});
