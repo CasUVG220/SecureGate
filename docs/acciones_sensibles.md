@@ -35,6 +35,10 @@ Dos pruebas mantienen esta lista honesta:
 | `EMPRESA_REACTIVADA` | Levanta la suspensión | `PATCH /api/empresas/:id/reactivar` | owner | — |
 | `EMPRESA_ELIMINADA_DEFINITIVO` | Borrado físico e irreversible, con la contraseña del owner | `POST /api/empresas/:id/eliminar-definitivo` | owner | 5/15 min por usuario; los bloqueos se auditan |
 | `ADMIN_EMPRESA_ASIGNADO` | Asigna el administrador de una empresa | `POST /api/empresas/:id/admin` | owner | — |
+| **Planes y suscripciones** (SaaS, T10) | | | | |
+| `PLAN_CREADO` | Alta de un plan del catálogo (precio mensual, visitas incluidas, excedente, límites) | `POST /api/planes` | owner | — |
+| `PLAN_ACTUALIZADO` | Cambio de precios, cupos o estado de un plan | `PUT /api/planes/:id` | owner | — |
+| `SUSCRIPCION_ACTUALIZADA` | Asigna o cambia el plan y/o el estado (prueba/activa/vencida/cancelada) de una empresa; escribe además `suscripcion_historial` | `PUT /api/empresas/:id/suscripcion` | owner | — |
 | **Sucursales** | | | | |
 | `SUCURSAL_CREADA` | Alta de sucursal | `POST /api/sucursales` | admin de empresa | — |
 | `SUCURSAL_ACTUALIZADA` | Edición de sucursal | `PUT /api/sucursales/:id` | admin de empresa | — |

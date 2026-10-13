@@ -193,6 +193,17 @@ const CASOS: Caso[] = [
     ejecutar: async () => post('owner', `/api/empresas/${await empresaNueva()}/admin`, { usuario_id: await usuarioNuevo('agente', fx.sucursales.A1, null) }),
   },
 
+  // ── Planes y suscripciones (T10) ──
+  { accion: 'PLAN_CREADO', quien: 'owner', ejecutar: () => post('owner', '/api/planes', { codigo: `aud-${uid()}`.slice(0, 30), nombre: 'AUD plan', precio_mensual_centavos: 10000, visitas_incluidas: 100, precio_visita_extra_centavos: 10 }) },
+  {
+    accion: 'PLAN_ACTUALIZADO', quien: 'owner',
+    ejecutar: async () => {
+      const c = await post('owner', '/api/planes', { codigo: `aud-${uid()}`.slice(0, 30), nombre: 'AUD plan', precio_mensual_centavos: 10000, visitas_incluidas: 100, precio_visita_extra_centavos: 10 });
+      return put('owner', `/api/planes/${c.body.id}`, { nombre: 'AUD plan editado' });
+    },
+  },
+  { accion: 'SUSCRIPCION_ACTUALIZADA', quien: 'owner', ejecutar: async () => put('owner', `/api/empresas/${await empresaNueva()}/suscripcion`, { plan_codigo: 'basico', motivo: 'Prueba de auditoría' }) },
+
   // ── Sucursales (admin de empresa) ──
   { accion: 'SUCURSAL_CREADA', quien: 'adminEmpA', ejecutar: () => post('adminEmpA', '/api/sucursales', { empresa_id: fx.empresas.A, nombre: `AUD Suc ${uid()}` }) },
   {

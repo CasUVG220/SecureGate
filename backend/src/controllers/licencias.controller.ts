@@ -8,6 +8,7 @@ import {
   LICENCIA_HEADER, HEARTBEAT_INTERVALO_MIN, GRACIA_OFFLINE_HORAS,
 } from '../middleware/licencia.middleware';
 import { serverError } from '../utils/http';
+import { reservarCupo, mensajeLimite } from '../services/suscripciones';
 
 /**
  * Código legible para dictar por teléfono: 4 grupos de 4, sin caracteres
@@ -37,10 +38,11 @@ export const crearLicencia = async (req: Request, res: Response) => {
   }
   const sucursal_id = sucResuelta.id;
 
+  const client = await pool.connect();
   try {
     // Un admin de empresa sólo emite para sucursales de su empresa (misma
     // regla que ownershipClause, aplicada a la propia fila de sucursales).
-    const propia = await pool.query(
+    const propia = await client.query(
       `SELECT 1 FROM sucursales s
        WHERE s.id = $1
          AND ($2::text = 'owner'
@@ -52,15 +54,27 @@ export const crearLicencia = async (req: Request, res: Response) => {
       return res.status(403).json({ error: 'Sin acceso a esa sucursal' });
     }
 
-    const result = await pool.query(
+    // Cupo de garitas del plan: revisión + alta en la misma transacción, con candado por empresa.
+    await client.query('BEGIN');
+    const empresa = await client.query('SELECT empresa_id FROM sucursales WHERE id = $1', [sucursal_id]);
+    const cupo = await reservarCupo(client, empresa.rows[0].empresa_id, 'garitas');
+    if (!cupo.ok) {
+      await client.query('ROLLBACK');
+      return res.status(403).json({ error: mensajeLimite('garitas', cupo), codigo: 'LIMITE_PLAN', limite: cupo.limite, usados: cupo.usados });
+    }
+    const result = await client.query(
       `INSERT INTO licencias_dispositivo (sucursal_id, codigo_activacion, etiqueta, creado_por)
        VALUES ($1, $2, $3, $4)
        RETURNING id, sucursal_id, codigo_activacion, etiqueta, estado, created_at`,
       [sucursal_id, generarCodigo(), etiqueta?.trim() || null, req.user!.id],
     );
+    await client.query('COMMIT');
     res.status(201).json(result.rows[0]);
   } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
     serverError(res, error, 'Error al crear licencia');
+  } finally {
+    client.release();
   }
 };
 

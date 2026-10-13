@@ -808,4 +808,74 @@ BEGIN
   END LOOP;
 END $$;
 
+-- ── SaaS · planes, suscripciones y medición de uso (T10, Sprint 9 continuación) ───────────────────────
+-- Los planes y sus precios viven AQUÍ, en una tabla (nunca en el código). Dinero en CENTAVOS enteros (BIGINT), moneda GTQ.
+-- Los tres planes de abajo son SUPUESTOS A CONFIRMAR por el equipo (no existe en el repositorio un análisis del modelo de negocio
+-- del que tomarlos): por eso `supuesto = TRUE`. El owner los ajusta con PUT /api/planes/:id sin tocar código.
+-- Todas las columnas de fecha son TIMESTAMPTZ (S-17).
+CREATE TABLE IF NOT EXISTS planes (
+  id                           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  codigo                       VARCHAR(30) NOT NULL UNIQUE CHECK (codigo ~ '^[a-z0-9_-]{2,30}$'),
+  nombre                       VARCHAR(80) NOT NULL,
+  descripcion                  VARCHAR(300),
+  precio_mensual_centavos      BIGINT NOT NULL CHECK (precio_mensual_centavos >= 0),
+  visitas_incluidas            INTEGER NOT NULL CHECK (visitas_incluidas >= 0),
+  precio_visita_extra_centavos BIGINT NOT NULL CHECK (precio_visita_extra_centavos >= 0),
+  max_sucursales               INTEGER CHECK (max_sucursales IS NULL OR max_sucursales > 0),   -- NULL = sin límite
+  max_garitas                  INTEGER CHECK (max_garitas IS NULL OR max_garitas > 0),         -- NULL = sin límite
+  dias_prueba                  INTEGER NOT NULL DEFAULT 14 CHECK (dias_prueba BETWEEN 0 AND 90),
+  moneda                       CHAR(3) NOT NULL DEFAULT 'GTQ',
+  supuesto                     BOOLEAN NOT NULL DEFAULT TRUE,
+  activo                       BOOLEAN NOT NULL DEFAULT TRUE,
+  orden                        INTEGER NOT NULL DEFAULT 0,
+  created_at                   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at                   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+INSERT INTO planes (codigo, nombre, descripcion, precio_mensual_centavos, visitas_incluidas, precio_visita_extra_centavos, max_sucursales, max_garitas, dias_prueba, supuesto, orden)
+VALUES
+  ('basico',     'Básico',        'Una sucursal y una garita. SUPUESTO a confirmar por el equipo.',                 25000,  500,  50, 1,    1,    14, TRUE, 1),
+  ('estandar',   'Estándar',      'Hasta 3 sucursales y 3 garitas. SUPUESTO a confirmar por el equipo.',            60000,  2000, 35, 3,    3,    14, TRUE, 2),
+  ('profesional','Profesional',   'Hasta 10 sucursales y 10 garitas. SUPUESTO a confirmar por el equipo.',         150000,  8000, 25, 10,   10,   14, TRUE, 3)
+ON CONFLICT (codigo) DO NOTHING;
+
+-- Una suscripción vigente por empresa. `ciclo` es mensual por calendario (America/Guatemala): la cuota y el consumo se cuentan por mes calendario.
+CREATE TABLE IF NOT EXISTS suscripciones (
+  id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  empresa_id    UUID NOT NULL UNIQUE REFERENCES empresas(id) ON DELETE RESTRICT,
+  plan_id       UUID NOT NULL REFERENCES planes(id) ON DELETE RESTRICT,
+  estado        VARCHAR(12) NOT NULL DEFAULT 'prueba' CHECK (estado IN ('prueba', 'activa', 'vencida', 'cancelada')),
+  ciclo         VARCHAR(10) NOT NULL DEFAULT 'mensual' CHECK (ciclo IN ('mensual')),
+  inicio_en     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  prueba_hasta  TIMESTAMPTZ,
+  cancelada_en  TIMESTAMPTZ,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_suscripciones_plan   ON suscripciones(plan_id);
+CREATE INDEX IF NOT EXISTS idx_suscripciones_estado ON suscripciones(estado);
+
+-- Histórico de cambios de plan y de estado (quién, cuándo y por qué). No se borra: es la evidencia de por qué se facturó lo que se facturó.
+CREATE TABLE IF NOT EXISTS suscripcion_historial (
+  id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  suscripcion_id   UUID NOT NULL REFERENCES suscripciones(id) ON DELETE RESTRICT,
+  empresa_id       UUID NOT NULL REFERENCES empresas(id) ON DELETE RESTRICT,
+  plan_anterior_id UUID REFERENCES planes(id) ON DELETE RESTRICT,
+  plan_nuevo_id    UUID NOT NULL REFERENCES planes(id) ON DELETE RESTRICT,
+  estado_anterior  VARCHAR(12),
+  estado_nuevo     VARCHAR(12) NOT NULL,
+  motivo           VARCHAR(300),
+  cambiado_por     UUID REFERENCES usuarios(id) ON DELETE SET NULL,
+  created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_suscripcion_historial_empresa ON suscripcion_historial(empresa_id, created_at);
+
+-- Medición de uso: visitas por empresa y mes calendario. Una visita = una fila de registros_acceso (la salida actualiza la misma fila). Este índice
+-- sirve a la consulta «de las sucursales de la empresa, las visitas autorizadas entre dos instantes».
+CREATE INDEX IF NOT EXISTS idx_registros_acceso_sucursal_entrada
+  ON registros_acceso(sucursal_id, timestamp_entrada) WHERE autorizado = TRUE;
+
+
 SELECT 'SecureGate DB inicializada correctamente' AS mensaje;

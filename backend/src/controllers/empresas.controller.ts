@@ -359,6 +359,8 @@ export const eliminarEmpresaDefinitivo = async (req: Request, res: Response) => 
       ['residentes',                    `DELETE FROM residentes WHERE id = ANY($1::uuid[])`, [R]],
       ['usuarios',                      `DELETE FROM usuarios WHERE id = ANY($1::uuid[])`, [U]],
       ['sucursales',                    `DELETE FROM sucursales WHERE id = ANY($1::uuid[])`, [S]],
+      ['suscripcion_historial',         `DELETE FROM suscripcion_historial WHERE empresa_id = $1`, [id]],
+      ['suscripciones',                 `DELETE FROM suscripciones WHERE empresa_id = $1`, [id]],
       ['empresas',                      `DELETE FROM empresas WHERE id = $1`, [id]],
     ];
     const eliminado: Record<string, number> = {};

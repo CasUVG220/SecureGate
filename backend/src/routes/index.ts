@@ -14,6 +14,7 @@ import ocrRouter from './ocr.routes';
 import reportesRouter from './reportes.routes';
 import configuracionCargosRouter from './configuracion-cargos.routes';
 import empresasRouter from './empresas.routes';
+import planesRouter from './planes.routes';
 import sucursalesRouter from './sucursales.routes';
 import usuariosRouter from './usuarios.routes';
 import blacklistRouter from './blacklist.routes';
@@ -40,6 +41,7 @@ const router = Router();
 // Los límites de intentos viven en auth.routes.ts (por IP y por cuenta).
 router.use('/auth', authRouter);
 router.use('/empresas',   verifyToken, empresasRouter);
+router.use('/planes',     verifyToken, planesRouter);
 router.use('/sucursales', verifyToken, requireAdminEmpresa,    sucursalesRouter);
 // El guard de administración va ruta por ruta: /usuarios/me/preferencias lo
 // usa cualquier usuario para guardar su tema e idioma.

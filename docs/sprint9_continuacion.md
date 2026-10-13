@@ -21,6 +21,7 @@ No se tocó producción, la VM, Cloud SQL ni secretos. Las pruebas de base de da
 | T7 | Modelo de cámaras, credenciales y puente local | HECHO (sin probar con hardware real; el `ffmpeg.exe` de Windows no se ejecutó) |
 | T8 | Descubrimiento ONVIF, alta de cámaras y visor | HECHO (sin probar con hardware real) |
 | T9 | Celular como cámara y medición de recursos | HECHO (sin probar con un celular ni equipo real) |
+| T10 | Planes, suscripciones y medición de uso | HECHO |
 
 ## Línea base (antes de tocar nada, con las 2 correcciones de T0)
 
@@ -153,4 +154,14 @@ Código en `desktop/src-tauri/src/camaras/` (diseño en `docs/camaras_ip_diseno.
 - **Medidor** `desktop/scripts/medir-recursos.mjs` (modo `puente`: lectores ffmpeg contra cámaras RTSP simuladas; modo `app`: muestrea el **árbol de procesos** de la app real —WebView2, OCR, ffmpeg— mientras se encienden 1 y 2 flujos) con reporte `.md/.json`; el muestreo usa `ps` (Linux/macOS) o PowerShell (Windows; **no ejecutado**, probado con salidas de ejemplo).
   Plantilla para repetirlo en un equipo de 6–8 GB: `docs/plantilla_medicion_camaras.md`. **Resultado en la nube** (4 vCPU Xeon, 16 GB): 1 flujo 7,1 % de un núcleo y 48 MB; 2 flujos 14,2 % y 95 MB, a 9,6–9,7 fps.
 - **Interfaz `FuenteFotogramas` + `esperar_fotograma`** (el más reciente y nuevo, saltando intermedios; distingue «caída» de «sin imagen»): la usa la captura puntual del OCR y queda lista para el OCR continuo del Sprint 10. **ANPR no se implementó.** +2 pruebas de Rust.
-- Pruebas: Rust 197 (4 de ffmpeg real se omiten solas sin mediamtx), vitest 156, node del medidor 7.
+- Pruebas: Rust 196 (4 de ffmpeg real se omiten solas sin mediamtx), vitest 156, node del medidor 7.
+
+## T10 — Planes, suscripciones y medición de uso · **HECHO**
+Detalle en `docs/saas_nucleo.md`.
+- **Fuente de verdad:** se buscó el análisis de modelo de negocio SaaS en `docs/` y `PRODUCT.md`: **no existe** (`PRODUCT.md` no está en el repo; QA ítem 19 «NO HECHO»). Se definieron **tres planes parametrizables en la tabla `planes`** (Básico, Estándar, Profesional), marcados `supuesto = TRUE` = «supuestos a confirmar por el equipo». Ningún precio está en el código; la siembra es `ON CONFLICT DO NOTHING` (no pisa precios editados).
+- **Esquema (idempotente, TIMESTAMPTZ):** `planes` (centavos `BIGINT`, visitas incluidas, precio por visita excedente, `max_sucursales`/`max_garitas`, días de prueba), `suscripciones` (1 por empresa; prueba/activa/vencida/cancelada; ciclo mensual), `suscripcion_historial`; índice parcial `idx_registros_acceso_sucursal_entrada`.
+- **API:** `GET/POST/PUT /api/planes` (catálogo; edita solo el owner), `GET /api/planes/uso`, `GET/PUT /api/empresas/:id/suscripcion`, `…/suscripcion/historial`, `…/uso?mes=AAAA-MM`. El admin de empresa solo ve lo suyo (cruce = 404). Acciones nuevas auditadas: `PLAN_CREADO`, `PLAN_ACTUALIZADO`, `SUSCRIPCION_ACTUALIZADA` (en `docs/acciones_sensibles.md` y en I-11).
+- **Medición:** visita = fila de `registros_acceso` autorizada (la salida no suma otra); mes calendario de **America/Guatemala** con `make_timestamptz(..., 'America/Guatemala')`; sin rechazados; el duplicado idempotente por `id_cliente` cuenta una vez.
+- **Límites del plan hechos cumplir** en `POST /api/sucursales` y `POST /api/licencias` (403 `LIMITE_PLAN`), con candado por empresa: 8 altas simultáneas con tope 3 dejan 3. Sin suscripción = sin límites (empresas anteriores). `eliminar-definitivo` borra también suscripción e histórico.
+- **Pruebas:** unitarias +21 (validación de dinero en centavos enteros, meses, cupos); integración **I-24** +18 (migración idempotente ejecutada dos veces sin pisar precios; aislamiento y cruce entre empresas A/B; frontera de mes 30-sep 23:59:59-06 vs 1-oct 00:00:00-06 —también expresada en UTC—; rechazados; duplicado por `id_cliente`; excedente en centavos; límites y concurrencia) y +3 casos en I-11.
+- Decisión: `POST /api/empresas` no crea suscripción sola (no se cambia el flujo existente); la crea el owner o el asistente de T12.

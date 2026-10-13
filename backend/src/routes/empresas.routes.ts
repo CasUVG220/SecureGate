@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import * as ctrl from '../controllers/empresas.controller';
+import * as planes from '../controllers/planes.controller';
 import { requireOwner, requireAdminEmpresa } from '../middleware/auth.middleware';
 import { auditLog } from '../middleware/audit.middleware';
 import { crearLimitador } from '../middleware/limitadores';
@@ -34,6 +35,11 @@ export const eliminarLimiter = crearLimitador({
 });
 router.post('/:id/eliminar-definitivo', requireOwner, eliminarLimiter,
   auditLog({ accion: 'EMPRESA_ELIMINADA_DEFINITIVO', tabla: 'empresas' }), ctrl.eliminarEmpresaDefinitivo);
+// Suscripción al plan SaaS y consumo (T10). El admin de empresa solo ve la suya; cambiarla es del owner.
+router.get('/:id/suscripcion',           requireAdminEmpresa, planes.getSuscripcion);
+router.get('/:id/suscripcion/historial', requireAdminEmpresa, planes.getHistorialSuscripcion);
+router.get('/:id/uso',                   requireAdminEmpresa, planes.getUsoEmpresa);
+router.put('/:id/suscripcion',           requireOwner,        auditLog({ accion: 'SUSCRIPCION_ACTUALIZADA', tabla: 'suscripciones' }), planes.putSuscripcion);
 router.patch('/:id/reactivar', requireOwner,       auditLog({ accion: 'EMPRESA_REACTIVADA', tabla: 'empresas' }), ctrl.reactivarEmpresa);
 
 export default router;
