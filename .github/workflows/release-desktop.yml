@@ -1,0 +1,197 @@
+name: Publicar escritorio (firmado)
+
+# T13 · Compila el instalador de Windows, lo FIRMA para el actualizador y crea un release en BORRADOR con el instalador, su firma y `latest.json`.
+#
+# ⚠ SIN EJECUTAR: escrito y revisado con actionlint, nunca corrido (no hay llave de firma en este repositorio, a propósito). Antes de la primera
+# publicación real, seguir docs/actualizaciones_firmadas.md (generar las llaves, guardar la privada, probar la actualización entre dos versiones).
+#
+# Secretos y variables que necesita (Settings → Secrets and variables → Actions):
+#   secreto   TAURI_SIGNING_PRIVATE_KEY            llave PRIVADA de firma (contenido del archivo que crea `tauri signer generate`)
+#   secreto   TAURI_SIGNING_PRIVATE_KEY_PASSWORD   su contraseña (si se protegió; si no, puede ir vacío)
+#   variable  TAURI_UPDATER_PUBKEY                 llave PÚBLICA (esa sí puede ser pública; se compila dentro del instalador)
+# La llave privada NUNCA se escribe en un archivo del repositorio ni en el registro del flujo.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Versión a publicar (la misma que ya está en desktop/src-tauri/tauri.conf.json y Cargo.toml, p. ej. 0.2.0)'
+        required: true
+        type: string
+      notas:
+        description: 'Notas de la versión (lo que verá el agente al actualizar)'
+        required: true
+        type: string
+        default: 'Mejoras y correcciones.'
+
+permissions:
+  contents: write   # crear el release en borrador
+
+concurrency:
+  group: release-desktop
+  cancel-in-progress: false
+
+env:
+  NODE_VERSION: '20.19.0'
+  RUST_VERSION: '1.97.0'
+
+jobs:
+  ffmpeg-windows:
+    name: ffmpeg mínimo para Windows (cruzado en Linux)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4.2.2
+
+      - name: Caché del binario
+        id: cache
+        uses: actions/cache@v4.2.3
+        with:
+          path: |
+            desktop/src-tauri/binaries/ffmpeg-x86_64-pc-windows-msvc.exe
+            desktop/src-tauri/binaries/ffmpeg-LICENSE.txt
+          key: ffmpeg-windows-${{ hashFiles('desktop/scripts/build-ffmpeg-min.sh') }}
+
+      - name: Compilar ffmpeg.exe
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends build-essential nasm yasm make curl xz-utils gcc-mingw-w64-x86-64
+          bash desktop/scripts/build-ffmpeg-min.sh windows
+
+      - name: Subir ffmpeg.exe
+        uses: actions/upload-artifact@v4.6.2
+        with:
+          name: ffmpeg-windows
+          path: |
+            desktop/src-tauri/binaries/ffmpeg-x86_64-pc-windows-msvc.exe
+            desktop/src-tauri/binaries/ffmpeg-LICENSE.txt
+          if-no-files-found: error
+          retention-days: 1
+
+  publicar:
+    name: Compilar, firmar y crear el release en borrador
+    needs: ffmpeg-windows
+    runs-on: windows-2022
+    timeout-minutes: 90
+
+    defaults:
+      run:
+        shell: pwsh
+        working-directory: desktop
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4.2.2
+
+      # Falla pronto y con un mensaje claro si falta algo, ANTES de compilar 30 minutos.
+      - name: Comprobar versión, llave pública y secreto
+        env:
+          VERSION: ${{ inputs.version }}
+          PUBKEY: ${{ vars.TAURI_UPDATER_PUBKEY }}
+          TIENE_LLAVE: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY != '' }}
+        run: |
+          if ($env:VERSION -notmatch '^\d+\.\d+\.\d+$') { throw "La versión debe ser X.Y.Z (recibí '$env:VERSION')." }
+          $conf = Get-Content src-tauri/tauri.conf.json -Raw | ConvertFrom-Json
+          if ($conf.version -ne $env:VERSION) { throw "tauri.conf.json dice $($conf.version) y pediste publicar $env:VERSION: sube la versión (tauri.conf.json, Cargo.toml y package.json) en un commit antes." }
+          $cargo = Select-String -Path src-tauri/Cargo.toml -Pattern '^version = "(.+)"' | Select-Object -First 1
+          if ($cargo.Matches[0].Groups[1].Value -ne $env:VERSION) { throw "Cargo.toml no tiene la versión $env:VERSION." }
+          if ([string]::IsNullOrWhiteSpace($env:PUBKEY)) { throw 'Falta la variable TAURI_UPDATER_PUBKEY (la llave PÚBLICA de firma). Ver docs/actualizaciones_firmadas.md.' }
+          if ($env:TIENE_LLAVE -ne 'true') { throw 'Falta el secreto TAURI_SIGNING_PRIVATE_KEY (la llave PRIVADA de firma). Ver docs/actualizaciones_firmadas.md.' }
+          "Versión $env:VERSION: lista para publicar."
+
+      - name: Node
+        uses: actions/setup-node@v4.4.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+
+      - name: Perl y NASM
+        run: |
+          if (-not (Get-Command perl -ErrorAction SilentlyContinue)) { throw 'Falta perl en el runner.' }
+          if (-not (Get-Command nasm -ErrorAction SilentlyContinue)) {
+            choco install nasm --version=2.16.03 -y --no-progress
+            "C:\Program Files\NASM" | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
+          }
+
+      - name: Rust ${{ env.RUST_VERSION }}
+        run: |
+          rustup toolchain install $env:RUST_VERSION --profile minimal --no-self-update
+          rustup default $env:RUST_VERSION
+
+      - name: Caché de cargo
+        uses: actions/cache@v4.2.3
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            desktop/src-tauri/target
+          key: cargo-release-${{ runner.os }}-${{ env.RUST_VERSION }}-${{ hashFiles('desktop/src-tauri/Cargo.lock') }}
+          restore-keys: cargo-release-${{ runner.os }}-${{ env.RUST_VERSION }}-
+
+      - name: Instalar dependencias y probar
+        run: |
+          npm ci
+          npm test
+
+      - name: Preparar el sidecar de OCR para Windows
+        run: npm run sidecar:prepare:windows
+
+      - name: Traer ffmpeg.exe
+        uses: actions/download-artifact@v4.3.0
+        with:
+          name: ffmpeg-windows
+          path: desktop/src-tauri/binaries
+
+      - name: Pruebas de Rust
+        working-directory: desktop/src-tauri
+        run: cargo test --lib --locked
+
+      # `createUpdaterArtifacts` genera los `.sig`; la llave pública se inyecta aquí (en el repositorio queda vacía a propósito).
+      # La llave privada la lee el CLI de Tauri de la variable de entorno; no se imprime ni se guarda en disco.
+      - name: Compilar y firmar el instalador
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          PUBKEY: ${{ vars.TAURI_UPDATER_PUBKEY }}
+        run: |
+          $override = @{ bundle = @{ createUpdaterArtifacts = $true }; plugins = @{ updater = @{ pubkey = $env:PUBKEY } } } | ConvertTo-Json -Depth 6 -Compress
+          npm run tauri -- build --bundles nsis,msi --config $override
+
+      - name: Armar latest.json y comprobar las firmas
+        env:
+          VERSION: ${{ inputs.version }}
+          NOTAS: ${{ inputs.notas }}
+          REPO: ${{ github.repository }}
+        run: |
+          $nsis = Get-ChildItem src-tauri/target/release/bundle/nsis -Filter *.exe | Select-Object -First 1
+          $msi  = Get-ChildItem src-tauri/target/release/bundle/msi  -Filter *.msi | Select-Object -First 1
+          if (-not $nsis -or -not $msi) { throw 'No se generaron los dos instaladores.' }
+          $sigNsis = "$($nsis.FullName).sig"
+          if (-not (Test-Path $sigNsis)) { throw "No hay firma ($sigNsis): ¿falló TAURI_SIGNING_PRIVATE_KEY o createUpdaterArtifacts?" }
+          if (-not (Test-Path "$($msi.FullName).sig")) { throw 'No hay firma del MSI.' }
+          $tag = "desktop-v$env:VERSION"
+          $url = "https://github.com/$env:REPO/releases/download/$tag/$([uri]::EscapeDataString($nsis.Name))"
+          $manifiesto = [ordered]@{
+            version  = $env:VERSION
+            notes    = $env:NOTAS
+            pub_date = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')
+            platforms = [ordered]@{ 'windows-x86_64' = [ordered]@{ signature = (Get-Content $sigNsis -Raw).Trim(); url = $url } }
+          }
+          New-Item -ItemType Directory -Force -Path salida | Out-Null
+          $manifiesto | ConvertTo-Json -Depth 6 | Set-Content -Path salida/latest.json -Encoding utf8
+          Copy-Item $nsis.FullName, "$($nsis.FullName).sig", $msi.FullName, "$($msi.FullName).sig" -Destination salida
+          Get-ChildItem salida | Select-Object Name, Length
+          "tag=$tag" >> $env:GITHUB_ENV
+
+      - name: Crear el release en borrador
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ inputs.version }}
+          NOTAS: ${{ inputs.notas }}
+        run: |
+          gh release create $env:tag --target $env:GITHUB_SHA --draft --title "SecureGate Garita $env:VERSION" --notes "$env:NOTAS" (Get-ChildItem salida | ForEach-Object { $_.FullName })
+          "Release en BORRADOR creado: $env:tag. Revísalo y publícalo a mano (docs/actualizaciones_firmadas.md)." >> $env:GITHUB_STEP_SUMMARY

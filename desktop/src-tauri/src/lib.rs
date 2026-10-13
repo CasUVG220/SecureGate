@@ -15,6 +15,7 @@
 //! La captura de cámara no pasa por Rust: `getUserMedia` corre en el WebView
 //! y la imagen capturada llega a `ocr` ya codificada.
 
+mod actualizador;
 mod api;
 mod auth;
 mod camaras;
@@ -175,6 +176,8 @@ pub fn construir_estado_en(dir_datos: PathBuf) -> AppState {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
+        // T13: actualizaciones firmadas. La llave pública y el manifiesto vienen de `plugins.updater` en tauri.conf.json (ver actualizador.rs).
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(
             tauri_plugin_log::Builder::new()
                 .level(if cfg!(debug_assertions) { log::LevelFilter::Debug } else { log::LevelFilter::Info })
@@ -203,6 +206,7 @@ pub fn run() {
                 }
             }
 
+            app.manage(actualizador::Pendiente::default());
             camera::configurar(&handle);
             sync::iniciar_tareas(handle.clone());
             // Precalentar el OCR en segundo plano para que la primera captura
@@ -263,6 +267,9 @@ pub fn run() {
             camaras::camaras_apagar,
             camaras::camaras_estado,
             camaras::camara_ip_fotograma,
+            actualizador::actualizacion_estado,
+            actualizador::actualizacion_buscar,
+            actualizador::actualizacion_instalar,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

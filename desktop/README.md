@@ -197,6 +197,12 @@ npm run sidecar:prepare:windows   # descarga node.exe + node_modules win32-x64 +
 npm run tauri build               # genera NSIS y MSI en src-tauri/target/release/bundle/
 ```
 
+## Actualizaciones firmadas y CI de Windows
+
+- Las actualizaciones las verifica `tauri-plugin-updater` con la llave pública del instalador; instalar es siempre una decisión del agente y se bloquea con accesos sin enviar o una captura en curso. Guía completa (llaves, publicar, probar, certificado de firma de código): [`docs/actualizaciones_firmadas.md`](../docs/actualizaciones_firmadas.md).
+- El flujo `Escritorio · Windows` (`.github/workflows/desktop-windows.yml`) compila el instalador en un runner de Windows, lo instala en silencio y comprueba que arranca; `Publicar escritorio (firmado)` (`release-desktop.yml`, manual) crea el release en borrador. **Ninguno se ha ejecutado todavía.** Plantilla para validar en un equipo real: [`docs/validacion_windows.md`](../docs/validacion_windows.md).
+- `npm run sidecar:prepare:windows` también funciona desde Windows (usa Node para el SHA-256 y prueba `unzip`, `tar` y PowerShell para descomprimir).
+
 ## Estructura
 
 ```

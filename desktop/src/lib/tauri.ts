@@ -49,6 +49,20 @@ export interface EstadoSync {
   sincronizando: boolean;
 }
 
+export interface EstadoActualizador {
+  /** ¿El instalador trae la llave pública de firmas? Sin ella no se busca nada. */
+  configurada: boolean;
+  version_actual: string;
+  endpoint: string | null;
+}
+
+export interface ResultadoBusquedaActualizacion {
+  disponible: boolean;
+  version: string | null;
+  notas: string | null;
+  fecha: string | null;
+}
+
 export interface EstadoOcr {
   disponible: boolean;
   ms_carga: number | null;
@@ -402,6 +416,14 @@ export const api = {
   sync: {
     estado: () => invoke<EstadoSync>('sync_estado'),
     ahora: () => invoke<EstadoSync>('sync_ahora'),
+  },
+
+  /** T13: actualizaciones firmadas. Buscar es automático; instalar solo lo pide una persona y Rust lo rechaza con accesos sin enviar. */
+  actualizacion: {
+    estado: () => invoke<EstadoActualizador>('actualizacion_estado'),
+    buscar: () => invoke<ResultadoBusquedaActualizacion>('actualizacion_buscar'),
+    /** Descarga, verifica la firma, instala y reinicia. `capturaEnCurso`: la pantalla dice si hay una captura a medias. */
+    instalar: (capturaEnCurso: boolean) => invoke<void>('actualizacion_instalar', { capturaEnCurso }),
   },
 
   ocr: {

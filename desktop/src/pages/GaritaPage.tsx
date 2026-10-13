@@ -8,6 +8,7 @@ import { LogoMark } from '../components/shared/Logo';
 import { Button, Card, StatusText } from '../components/ui';
 import { CameraPanel } from '../components/garita/CameraPanel';
 import { EstadoStrip } from '../components/garita/EstadoStrip';
+import { ActualizacionBanner } from '../components/garita/ActualizacionBanner';
 import { PlacaOcrDialog } from '../components/garita/PlacaOcrDialog';
 import { RecientesList } from '../components/garita/RecientesList';
 import { SalidaDialog } from '../components/garita/SalidaDialog';
@@ -267,6 +268,11 @@ export function GaritaPage({ estado, refrescar, onLogout }: Props) {
 
       <div className="shrink-0 space-y-3 px-5 pt-4">
         <EstadoStrip estado={estado} />
+        {/* Actualizar reinicia la app: no se ofrece con accesos sin enviar ni con una captura a medias. */}
+        <ActualizacionBanner
+          pendientes={estado.sync.pendientes}
+          capturaEnCurso={capturando !== null || qrOcupado || ocrResultado !== null || salida !== null}
+        />
         {estado.licencia.estado === 'en_gracia' && (
           <Alert tone="warn">
             Sin contacto con el servidor. Puedes seguir trabajando: los accesos se guardan aquí y se enviarán solos al volver la conexión.

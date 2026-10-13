@@ -51,6 +51,7 @@ chrono = { version = "0.4", features = ["serde", "clock"] }
 base64 = "0.22"
 serialport = { version = "4", default-features = false }
 ureq = { version = "3", default-features = false }
+tauri-plugin-updater = "2"
 
 [target.'cfg(windows)'.dependencies]
 windows-native-keyring-store = "1"
@@ -63,6 +64,7 @@ windows = { version = "0.61", features = ["Win32_Foundation"] }
 apple-native-keyring-store = { version = "1", features = ["keychain"] }
 
 [dev-dependencies]
+tauri = { version = "2", features = ["test"] }
 tempfile = "3"
 tokio = { version = "1", features = ["sync", "time", "macros", "net", "io-util", "rt", "rt-multi-thread", "process", "test-util"] }
 

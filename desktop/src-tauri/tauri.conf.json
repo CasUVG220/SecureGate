@@ -40,5 +40,12 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ]
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "",
+      "endpoints": ["https://github.com/chatio/SecureGate/releases/latest/download/latest.json"],
+      "windows": { "installMode": "passive" }
+    }
   }
 }

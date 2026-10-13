@@ -24,6 +24,7 @@ No se tocó producción, la VM, Cloud SQL ni secretos. Las pruebas de base de da
 | T10 | Planes, suscripciones y medición de uso | HECHO |
 | T11 | Facturación automática y avisos de pago vencido | HECHO |
 | T12 | Paneles, onboarding y portabilidad (núcleo SaaS) | HECHO |
+| T13 | CI de Windows y actualizador firmado | HECHO en código y documentos; **SIN EJECUTAR** en Windows ni contra un release real |
 
 ## Línea base (antes de tocar nada, con las 2 correcciones de T0)
 
@@ -191,4 +192,72 @@ Detalle en `docs/saas_nucleo.md` (secciones 7 a 9, con el **modelo de amenazas**
 - **Pruebas**: backend unit +ZIP/CSV (11) +alta/proyección (28); integración **I-26** alta autoservicio (19), **I-27** panel/exportación (13) y **I-27b** tope de exportación (1), +5 casos en I-11; frontend +MiPlan (13), +Planes y cobros (12), +registro/asistente (12), +utilidades (7), +rutas y navegación (6).
 - **No se hizo** (fuera de alcance, según el texto): PWA, notificaciones push, marca por subdominio ni panel de monitoreo.
 - Riesgos que quedan (en `saas_nucleo.md` §8–9): sin CAPTCHA; empresas de autoservicio nunca aceptadas se quedan sin administrador (falta un trabajo de limpieza); el correo es un stub (hasta conectar un proveedor, el enlace solo aparece en el registro del servidor).
+
+## T13 — CI de Windows y actualizador firmado · **HECHO en código y documentos, SIN EJECUTAR en Windows**
+Documentos: **`docs/actualizaciones_firmadas.md`** y **`docs/validacion_windows.md`**. Todos los flujos pasan **actionlint 1.7.7** (descargado de su página de releases).
+- **Flujo `Escritorio · Windows`** (`.github/workflows/desktop-windows.yml`, en pull request —solo si cambia `desktop/**` o el propio flujo— y a mano): `npm ci` + `npm test`, `sidecar:prepare:windows`, `cargo test --lib --locked`, compila el instalador **NSIS y MSI**, lo sube como artefacto (`instaladores-windows`), y después una **instalación silenciosa** de cada uno (NSIS `/S /D=…`, MSI `msiexec /qn`) que comprueba que el `.exe` existe, que junto a él están `node`, `ffmpeg` y `sidecar-ocr`, y que **arranca** (sigue vivo a los 20 s, con tiempo límite de 10 min por paso). Si algo falla, imprime los registros de la app. El `ffmpeg.exe` mínimo se compila **cruzado en un job de Linux** y se pasa como artefacto (con caché por el hash del script); si ese job falla, el de Windows sigue con un archivo vacío y un aviso.
+  - **Versiones fijas:** runner `windows-2022` (no el alias `windows-latest`, por la misma razón que el resto del CI usa `ubuntu-24.04`: un alias que se mueve rompe el CI sin avisar — **se apartó del texto literal «windows-latest» a propósito**), acciones con versión exacta (`checkout 4.2.2`, `setup-node 4.4.0`, `cache 4.2.3`, `upload-artifact 4.6.2`, `download-artifact 4.3.0`), Node 20.19.0 y Rust 1.97.0 (el que corrió las pruebas aquí).
+  - **⚠ La primera corrida real hay que revisarla a mano** (anotado en el encabezado del flujo, en `validacion_windows.md` §5 y en el PR): Perl/NASM del runner, tiempo de la compilación (SQLCipher+OpenSSL), el nombre del `.exe` instalado, y si el arranque a los 20 s sufre por la falta de sesión de escritorio o de WebView2 en el runner (un posible falso negativo).
+- **Actualizador (`tauri-plugin-updater`)**: `src-tauri/src/actualizador.rs` + `ActualizacionBanner` en la garita. La llave pública y la dirección del manifiesto salen de **`tauri.conf.json` → `plugins.updater`** (el repositorio trae `pubkey` **vacía** y como dirección el placeholder `https://github.com/chatio/SecureGate/releases/latest/download/latest.json`, a ajustar). Con la llave vacía la función queda **apagada**: ninguna petición. Un equipo puede cambiar la dirección en su `config.json` (solo `https://`), **pero no la llave** (va compilada). **Nunca se generó ni se versionó una llave privada.**
+  - **Buscar** es automático (a los 30 s y cada 6 h); **instalar** lo decide una persona (botón + confirmación) y **Rust lo rechaza** con `accesos_pendientes` si hay accesos sin enviar en la cola offline o con `captura_en_curso` si hay una captura a medias; la pantalla lo bloquea y explica el motivo. Nunca reinicia sola.
+  - Hallazgo de la prueba: el plugin **exige** su bloque en `tauri.conf.json` (sin él, `build()` falla y la app ni arranca); hay una prueba con una app simulada que arranca el plugin con la configuración real del repositorio y comprueba ambos casos.
+- **Flujo manual `Publicar escritorio (firmado)`** (`release-desktop.yml`): valida versión (coincide con `tauri.conf.json` y `Cargo.toml`), variable `TAURI_UPDATER_PUBKEY` (pública) y secreto **`TAURI_SIGNING_PRIVATE_KEY`** (+ contraseña) *antes* de compilar; compila con `createUpdaterArtifacts` (solo en este flujo, para que el CI de pull request no necesite la llave), arma `latest.json` y crea un **release en borrador** con instalador, firmas y manifiesto. **Nunca se ejecutó.**
+- `docs/actualizaciones_firmadas.md`: cómo funciona, **generar las llaves** (`tauri signer generate`), **dónde guardar la privada** (secreto + copia fuera de línea; perderla deja sin actualizar a todos los equipos), **publicar una versión**, **probar una actualización entre dos versiones en Windows** (incluye las pruebas de bloqueo y la negativa de firma alterada), **trámite del certificado de firma de código** (OV/EV, llave en hardware o nube, documentos de la empresa, SmartScreen) y endurecimiento pendiente. `docs/validacion_windows.md`: plantilla de 20 minutos para medir OCR de placa/DPI (RNF-03, p95 < 5 s) y RAM (RNF-13, < 1,5 GB — la meta se infirió y está marcada «a confirmar»: el texto original del RNF no está en el repositorio).
+- Cambio colateral: `prepare-sidecar.mjs` ya no depende de `shasum` ni de `unzip` (SHA-256 con Node; extracción con `unzip`, `tar` o PowerShell, en ese orden) para que corra también en Windows; verificado en Linux con `--target windows`.
+- **Pruebas:** Rust +9 (política de bloqueo, endpoint https sin credenciales, llave de fábrica = apagado, cola real contra una BD en memoria, arranque del plugin con la configuración del repositorio); pantalla del escritorio +12 (búsqueda a los 30 s y cada 6 h, sin llave no hace nada, bloqueo por cola o captura y su liberación, confirmación, rechazo de Rust, cancelar).
+
+---
+
+## Resultado final: suites antes y después
+
+| Suite | Antes (línea base) | Después (final) |
+|---|---|---|
+| Backend `npm test` (unitarias) | 35 suites · 701 | **40 suites · 834** |
+| Backend `tsc --noEmit` | limpio | limpio |
+| Backend integración + regresión (`npm run test:ci`) | 23 suites · 322 | **29 suites · 427** |
+| Frontend `npm test` · build | 57 archivos · 443 · build verde | **62 archivos · 497** · build verde |
+| Desktop `npm test` · build | 15 archivos · 109 · build verde | **24 archivos · 168** · build verde |
+| Rust `cargo test --lib --locked` | 97 (2 ignoradas) | **205** (2 ignoradas) |
+| Node del sidecar y scripts (`node --test`) | — | sidecar 38 · eval-dpi 7 · medir-recursos 7 |
+
+Las cifras de integración incluyen los casos nuevos de la prueba I-11 (una fila de auditoría por acción sensible). Dos pruebas con fallas intermitentes **ya existentes** (I-19 `refresh.reuso`, I-11 `RESERVA_RECHAZADA`) pasan al repetir; no se tocaron.
+
+## Hecho / parcial / bloqueado
+
+| | Tareas |
+|---|---|
+| **Hechas** (código, pruebas y documentos) | T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13 |
+| **Parciales** (hechas pero lo esencial falta probarlo fuera de la nube) | T2 (Visanet sin integración, solo punto de enchufe), T4 (precisión del DPI con datos reales), T7–T9 (sin cámaras, celular ni equipo reales), T11 (cobro real y correo real), T12 (correo real, CAPTCHA), **T13 (nada se corrió en Windows ni con una llave real)** |
+| **Bloqueadas** | ninguna: no hubo que revertir ninguna tarea |
+
+## Pendientes para humanos
+
+**Dinero y negocio**
+- [ ] **Confirmar los tres planes y sus precios** (hoy son *supuestos*, tabla `planes`, `docs/saas_nucleo.md` §1) y decidir IVA, bloques de visitas, plan a la medida, días de prueba.
+- [ ] **Visanet / NeoNet:** contrato de comercio, credenciales, documentación oficial y decisión de qué se cobra con tarjeta (`docs/visanet_integracion.md`); luego implementar `ProveedorPago` y `ProveedorCobro`. Mientras tanto todo es simulado o manual.
+- [ ] **Documento fiscal:** la factura de SecureGate es *interna*. Si se va a cobrar formalmente: certificador FEL, datos fiscales de cada empresa (NIT, nombre fiscal, dirección).
+- [ ] **Correo real:** conectar un proveedor en `services/email.ts` (hoy solo escribe en el registro del servidor). Sin eso nadie recibe avisos de factura, ni enlaces del alta autoservicio, ni invitaciones.
+- [ ] Decidir si borrar definitivamente una empresa debe **conservar sus facturas** (hoy las borra).
+
+**Alta pública**
+- [ ] Textos reales de términos de uso y tratamiento de datos; CAPTCHA u otra verificación antes de abrir `/registro` al público; un trabajo que dé de baja las empresas de autoservicio que nunca aceptaron la invitación (`saas_nucleo.md` §8).
+
+**Hardware real**
+- [ ] Probar con **cámaras IP reales** (Digest, H.265, ruta de video por ONVIF `GetStreamUri`, `rtsps://`), con un **celular** (IP Webcam / DroidCam) y medir en un **equipo de 6–8 GB** (`docs/plantilla_medicion_camaras.md`, `docs/validacion_windows.md`).
+- [ ] Ejecutar `ffmpeg.exe` y el instalador en un Windows real; confirmar RNF-13 (el texto original del RNF no está en el repositorio).
+
+**OCR del DPI**
+- [ ] Conjunto **real** de DPI con consentimiento y revisión legal; medir precisión real (hoy solo hay datos sintéticos).
+- [ ] Algoritmo del **dígito verificador del CUI** (no se inventó) y **catálogo de municipios por departamento**.
+
+**Windows, firma y actualizaciones (T13)**
+- [ ] **Revisar a mano la primera corrida** del flujo `Escritorio · Windows` (rutas, nombre del `.exe`, Perl/NASM, tiempos, falso negativo del arranque).
+- [ ] **Generar las llaves de firma** (`tauri signer generate`), guardar la privada (secreto `TAURI_SIGNING_PRIVATE_KEY` + copia fuera de línea) y la pública (variable `TAURI_UPDATER_PUBKEY`); decidir el repositorio/URL definitivo de publicación (el placeholder dice `chatio/SecureGate`).
+- [ ] Probar una **actualización entre dos versiones** en Windows (`actualizaciones_firmadas.md` §4) y decidir si se activa `requireSignedVersion`.
+- [ ] **Certificado de firma de código de Windows** (trámite de semanas; OV/EV, llave en hardware o nube).
+
+**Seguridad y proceso**
+- [ ] Hallazgos documentados en T7: credenciales visibles en la línea de comandos de ffmpeg (para el mismo usuario), validación de redirecciones RTSP por el texto del registro, `rtsps://` sin soporte.
+- [ ] **Commit de T10 (`f584bc3`)** quedó con las líneas `Co-Authored-By` / `Claude-Session` que la consigna prohibe (se añadieron por una instrucción automática del entorno); no se reescribió la historia (no se permite `push --force`). Si molesta, un humano puede limpiar el mensaje al hacer *squash* del PR.
+- [ ] Revisar el PR #7 completo antes de mezclar: son 14 tareas.
 

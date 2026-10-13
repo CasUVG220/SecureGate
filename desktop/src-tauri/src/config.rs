@@ -16,6 +16,11 @@ pub struct Config {
     /// local no alcanzó Y hay red. Apagarla deja el DPI 100 % en el equipo (la captura manual sigue disponible).
     #[serde(default = "dpi_remoto_respaldo_por_defecto")]
     pub dpi_remoto_respaldo: bool,
+    /// T13: dirección del manifiesto de actualizaciones (`latest.json`) de ESTE equipo, para un canal de pruebas o un espejo en la red
+    /// del condominio. Sin valor se usa la de `tauri.conf.json` (`plugins.updater.endpoints`). Solo `https://`. La llave pública que
+    /// verifica las firmas NO se puede cambiar desde aquí: va dentro del instalador (así un archivo editado no puede colar otra firma).
+    #[serde(default)]
+    pub actualizador_endpoint: Option<String>,
 }
 
 fn dpi_remoto_respaldo_por_defecto() -> bool {
@@ -27,6 +32,7 @@ impl Default for Config {
         Self {
             api_url: std::env::var("SECUREGATE_API_URL").unwrap_or_else(|_| API_URL_DEFAULT.to_string()),
             dpi_remoto_respaldo: dpi_remoto_respaldo_por_defecto(),
+            actualizador_endpoint: None,
         }
     }
 }
