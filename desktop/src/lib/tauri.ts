@@ -248,6 +248,61 @@ export interface AccesoPendiente {
   registro_id?: string | null;
 }
 
+// ── Cámaras IP y celular (T7) ────────────────────────────────────────────────
+
+export type TipoCamara = 'usb' | 'ip' | 'celular';
+
+/**
+ * Una cámara guardada en este equipo. NO tiene campos de usuario ni contraseña: viven en el llavero del sistema y el frontend solo
+ * sabe si existen (`con_credenciales`).
+ */
+export interface CamaraRed {
+  id: string;
+  tipo: TipoCamara;
+  nombre: string;
+  /** Dirección SIN credenciales (null en las USB). */
+  url: string | null;
+  device_id: string | null;
+  /** Tareas de la garita que la usan: qr, placa, dpi, salida. */
+  tareas: string[];
+  con_credenciales: boolean;
+  creada_en: string;
+}
+
+/** Lo que se envía al guardar o probar. `usuario` y `clave` solo van de ida: no hay comando que los devuelva. */
+export interface EntradaCamara {
+  id?: string | null;
+  tipo: TipoCamara;
+  nombre: string;
+  url?: string | null;
+  device_id?: string | null;
+  usuario?: string | null;
+  clave?: string | null;
+  quitar_credenciales?: boolean;
+}
+
+export type EstadoFuente =
+  | { estado: 'detenida' }
+  | { estado: 'conectando' }
+  | { estado: 'conectada' }
+  | { estado: 'reconectando'; intento: number; proximo_en_s: number; motivo: string }
+  | { estado: 'caida'; motivo: string; intentos: number; reintentando: boolean };
+
+export interface ResultadoPrueba {
+  ok: boolean;
+  mensaje: string;
+  ms: number;
+  ancho: number | null;
+  alto: number | null;
+}
+
+export interface FotogramaCapturado {
+  /** JPEG en base64 (sin prefijo data:), listo para `ocr.placa` / `ocr.dpi`. */
+  jpeg_base64: string;
+  seq: number;
+  edad_ms: number;
+}
+
 export interface ItemOcr {
   texto: string;
   confianza: number;
@@ -307,6 +362,22 @@ export const api = {
     buscarSalida: (placa: string) => invoke<AccesoActivo | null>('garita_buscar_salida', { placa }),
     registrarSalida: (registroId: string) =>
       invoke<{ registro: unknown; apertura: ResultadoApertura }>('garita_registrar_salida', { registroId }),
+  },
+
+  camaras: {
+    listar: () => invoke<CamaraRed[]>('camaras_listar'),
+    guardar: (entrada: EntradaCamara) => invoke<CamaraRed>('camaras_guardar', { entrada }),
+    eliminar: (id: string) => invoke<boolean>('camaras_eliminar', { id }),
+    /** Deja estas tareas en la cámara y se las quita a las demás (una tarea usa una sola cámara). */
+    asignar: (id: string, tareas: string[]) => invoke<CamaraRed>('camaras_asignar', { id, tareas }),
+    /** «Probar conexión»: intenta recibir una imagen SIN guardar nada. */
+    probar: (entrada: EntradaCamara) => invoke<ResultadoPrueba>('camaras_probar', { entrada }),
+    puente: () => invoke<{ puerto: number; token: string }>('camaras_puente_info'),
+    encender: (id: string) => invoke<EstadoFuente>('camaras_encender', { id }),
+    apagar: (id: string) => invoke<void>('camaras_apagar', { id }),
+    estado: () => invoke<Record<string, EstadoFuente>>('camaras_estado'),
+    /** Un fotograma para el OCR: el mismo JPEG que se manda a `ocr.placa` / `ocr.dpi`, igual que con la webcam. */
+    fotograma: (id: string) => invoke<FotogramaCapturado>('camara_ip_fotograma', { id }),
   },
 
   hardware: {

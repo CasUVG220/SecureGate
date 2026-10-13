@@ -17,6 +17,7 @@
 
 mod api;
 mod auth;
+mod camaras;
 mod camera;
 mod config;
 mod db;
@@ -59,6 +60,8 @@ pub struct AppState {
     /// `config_hardware`) y al guardar una configuración nueva. Sin
     /// configuración es `SinDriver`: la apertura física es opcional.
     pub hardware: RwLock<std::sync::Arc<dyn hardware::TalanqueraDriver>>,
+    /// Puente de video local y cámaras IP/celular encendidas (T7).
+    pub camaras: camaras::Gestor,
 }
 
 impl AppState {
@@ -164,6 +167,7 @@ pub fn construir_estado_en(dir_datos: PathBuf) -> AppState {
         ultimo_push_ok: RwLock::new(None),
         ultimo_error: RwLock::new(None),
         hardware: RwLock::new(std::sync::Arc::new(hardware::SinDriver)),
+        camaras: camaras::Gestor::default(),
     }
 }
 
@@ -212,6 +216,7 @@ pub fn run() {
         })
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::Destroyed = event {
+                window.state::<AppState>().camaras.detener_todas();
                 ocr::detener(&window.state::<AppState>());
             }
         })
@@ -247,6 +252,16 @@ pub fn run() {
             ocr::ocr_dpi,
             ocr::ocr_dpi_config,
             ocr::ocr_dpi_configurar,
+            camaras::camaras_listar,
+            camaras::camaras_guardar,
+            camaras::camaras_eliminar,
+            camaras::camaras_asignar,
+            camaras::camaras_probar,
+            camaras::camaras_puente_info,
+            camaras::camaras_encender,
+            camaras::camaras_apagar,
+            camaras::camaras_estado,
+            camaras::camara_ip_fotograma,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -124,6 +124,13 @@ if (key === 'windows') {
   copyFileSync(path.join(extractDir, 'bin', 'node'), binPath);
   chmodSync(binPath, 0o755);
 }
+// ffmpeg del puente de video (T6/T7): un build mínimo LGPL que se compila con scripts/build-ffmpeg-min.sh (no se descarga: el popular es GPL y pesa 80 MB).
+const ffmpegBin = path.join(BIN_OUT, `ffmpeg-${t.triple}${t.exe}`);
+if (!existsSync(ffmpegBin) || statSync(ffmpegBin).size < 1_000_000) {
+  console.warn(`  ⚠ falta ${path.basename(ffmpegBin)}: las cámaras IP y el celular no funcionarán hasta compilarlo (desktop/scripts/build-ffmpeg-min.sh ${key === 'windows' ? 'windows' : 'linux'}). La webcam USB no lo necesita.`);
+} else {
+  console.log(`  ${path.basename(ffmpegBin)} presente (${(statSync(ffmpegBin).size / 2 ** 20).toFixed(1)} MB)`);
+}
 console.log(`  ${binName} ← nodejs.org ${NODE_VERSION} ${dist} (sha256 verificado)`);
 
 const size = dir => readdirSync(dir, { recursive: true }).reduce((n, f) => {

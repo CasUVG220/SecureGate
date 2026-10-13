@@ -18,6 +18,7 @@ No se tocó producción, la VM, Cloud SQL ni secretos. Las pruebas de base de da
 | T4 | Extractor local del DPI en el sidecar | HECHO (precisión real SIN medir: solo hay datos sintéticos) |
 | T5 | Integración en el escritorio (Rust + UI) y privacidad | HECHO |
 | T6 | Decisión de diseño del puente de video | HECHO |
+| T7 | Modelo de cámaras, credenciales y puente local | HECHO (sin probar con hardware real; el `ffmpeg.exe` de Windows no se ejecutó) |
 
 ## Línea base (antes de tocar nada, con las 2 correcciones de T0)
 
@@ -113,3 +114,20 @@ Documento: **`docs/camaras_ip_diseno.md`** (comparación, números, decisión, r
 - Se escribió y se **probó** `desktop/scripts/build-ffmpeg-min.sh` (Linux nativo ejecutado; Windows cruzado con mingw-w64: ejecutable PE válido de 3,3 MB, **no ejecutado**: no hay Windows ni Wine).
 - Hallazgos útiles para T7: ffmpeg 6.1 no tiene `-rw_timeout` para RTSP (se usa un vigilante de inactividad propio); sigue redirecciones RTSP por su cuenta (`Status 30x: Redirecting to …` en stderr) → se vigila y se mata; mediamtx se descarga como asset de GitHub Releases (sirve de servidor RTSP de prueba).
 - Alternativas descartadas: biblioteca nativa en Rust (sin decodificador H.264 libre de riesgo ni H.265, y sin forma de probarla aquí), mediamtx/go2rtc, GStreamer, libVLC, HLS y WebRTC directo.
+
+## T7 — Modelo de cámaras, credenciales y puente local · **HECHO**
+Código en `desktop/src-tauri/src/camaras/` (diseño en `docs/camaras_ip_diseno.md`). **Sin probar con hardware real**: ninguna cámara física ni Windows participaron.
+- **`ssrf.rs`**: solo redes privadas (10/8, 172.16/12, 192.168/16) y link-local (169.254/16 salvo 169.254.169.254, el servicio de metadatos); IPv6 ULA/link-local. Rechaza localhost/loopback (salvo el puente propio, con puerto exacto), IP públicas, 0.0.0.0, multicast, broadcast, CGNAT, esquemas
+  distintos de rtsp/http/https, `usuario:clave@` en la URL, nombres que resuelvan a UNA sola IP pública, y redirecciones a otro host. Se conecta a la **IP ya validada** (contra DNS rebinding) y se revalida en cada reconexión. Hallazgo: con esquemas «no especiales» como `rtsp://` la biblioteca
+  `url` NO normaliza `2130706433` / `0x7f.0.0.1` / `127.1`: se re-analiza el host como `http://` para verlas como la IP real.
+- **`credenciales.rs`**: usuario y clave **solo en el llavero** del sistema (`camara:<id>`); `Debug` ocultos; el frontend recibe `con_credenciales: bool`; no hay comando que las devuelva. **`modelo.rs`**: tabla `camaras` en el SQLite cifrado (tipo usb/ip/celular, nombre, URL, tareas, `device_id`) con un `CHECK` que impide `usuario@` en la URL y sin columnas
+  de credenciales (se prueba). Una tarea usa una sola cámara.
+- **`fuente.rs`**: interfaz `FuenteFotogramas` (último fotograma + estado + suscripción; base del OCR continuo del Sprint 10, **sin ANPR**), `Supervisor` con **reconexión con backoff exponencial** (1, 2, 4… 30 s ± jitter), estados `conectando / conectada / reconectando / caída`, **vigilante de inactividad** (10 s sin imagen → reconecta),
+  y errores **permanentes** (credenciales malas, redirección, 404) que no se reintentan (reintentar bloquearía la cuenta de la cámara). Conector **RTSP** (ffmpeg como sidecar, vigila `Redirecting to` en stderr y mata el proceso) y **MJPEG/HTTP** (celular; `reqwest` con redirecciones manuales y misma IP).
+- **`puente.rs`**: servidor en **127.0.0.1**, puerto aleatorio, **token efímero** de 256 bits (comparación en tiempo constante), valida `Host` (anti DNS-rebinding) y `Origin`, solo GET, encabezados ≤ 8 KB, 16 conexiones; `/v/<id>` (multipart para `<img>`) y `/f/<id>` (un JPEG). Comandos: `camaras_listar/guardar/eliminar/asignar/probar/puente_info/encender/apagar/estado` y
+  `camara_ip_fotograma` (el JPEG para el OCR). CSP: solo se agregó `img-src http://127.0.0.1:*`.
+- **Pruebas (+45 de Rust, 182 en total)**: 13 de SSRF (cada rechazo, trucos de URL, redirecciones), credenciales (llavero, tabla, JSON, Debug), 22 del divisor JPEG/backoff/supervisor (con reloj pausado: espera exponencial, caída, recuperación, vigilante, error permanente), 12 del puente (token, Host, Origin, métodos, rutas, 431/400, multipart),
+  y 11 de integración: servidor **MJPEG simulado** (auth, redirecciones, 404, cortes, reconexión) y **ffmpeg mínimo real + mediamtx + cámara `testsrc2`** (JPEG válidos de 640×360, reconexión tras caer y volver, ruta inexistente = error permanente, puerto cerrado = temporal). Estas 4 se **omiten solas** si faltan `SG_FFMPEG` (por defecto
+  `binaries/ffmpeg-<triple>`), `SG_MEDIAMTX` o un `ffmpeg` con libx264; aquí corrieron con mediamtx 1.12.0 (asset de GitHub Releases).
+- Riesgos que quedan: la URL con credenciales va a ffmpeg por línea de comandos (visible para el mismo usuario de Windows mientras corre; mejora: proxy RTSP local); la validación de redirecciones RTSP depende del texto del log de ffmpeg; `rtsps://` no soportado (el ffmpeg mínimo no lleva TLS).
+- `ffmpeg` mínimo: `tauri.conf.json` lo declara como `externalBin`; el CI de Rust crea un archivo vacío para compilar (como el de Node) y `prepare-sidecar` avisa si falta.

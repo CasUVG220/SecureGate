@@ -181,6 +181,8 @@ pub fn aplicar_esquema(conn: &Connection) -> AppResult<()> {
         );
         "#,
     )?;
+    // T7: cámaras IP y celular (sin credenciales: esas van al llavero del sistema).
+    conn.execute_batch(crate::camaras::modelo::ESQUEMA)?;
     migrar_blacklist_placa(conn)?;
     migrar_pendientes_invitacion_qr(conn)?;
     migrar_pendientes_origen_dpi(conn)?;
@@ -399,6 +401,6 @@ mod tests {
         let n: i64 = conn
             .query_row("SELECT count(*) FROM sqlite_master WHERE type='table'", [], |r| r.get(0))
             .unwrap();
-        assert_eq!(n, 7, "meta, residentes, blacklist, preautorizaciones, invitaciones_qr, accesos_pendientes, config_hardware");
+        assert_eq!(n, 8, "meta, residentes, blacklist, preautorizaciones, invitaciones_qr, accesos_pendientes, config_hardware, camaras");
     }
 }
