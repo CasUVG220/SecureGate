@@ -98,7 +98,7 @@ export const getAuditAcciones = async (_req: Request, res: Response) => {
   try {
     const r = await pool.query(
       `SELECT accion, COUNT(*)::int AS total, MAX(created_at) AS ultima
-         FROM audit_logs GROUP BY accion ORDER BY accion`);
+         FROM audit_logs GROUP BY accion ORDER BY accion COLLATE "C"`);
     res.json({ acciones: r.rows });
   } catch (error) {
     serverError(res, error, 'Error al obtener las acciones de auditoría');

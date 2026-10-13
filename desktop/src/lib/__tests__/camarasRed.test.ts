@@ -47,7 +47,8 @@ describe('cámaras de red', () => {
 
 /** Guardas del código: las credenciales de una cámara no existen del lado del frontend más que en el formulario de alta. */
 const fuentes = import.meta.glob(['../../**/*.ts', '../../**/*.tsx', '!../../**/__tests__/**'], { query: '?raw', import: 'default', eager: true }) as Record<string, string>;
-const tauriTs = (Object.entries(fuentes).find(([ruta]) => ruta.endsWith('/tauri.ts')) ?? ['', ''])[1];
+// En Windows git entrega los archivos con CRLF: se normaliza para que los cortes por `\n}\n` funcionen igual (lo detectó el CI de Windows).
+const tauriTs = (Object.entries(fuentes).find(([ruta]) => ruta.endsWith('/tauri.ts')) ?? ['', ''])[1].replace(/\r\n/g, '\n');
 
 describe('las credenciales de las cámaras no llegan al frontend', () => {
   const bloque = (nombre: string) => {
