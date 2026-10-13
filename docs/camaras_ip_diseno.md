@@ -99,3 +99,8 @@ Apps como «IP Webcam» (Android) entregan `multipart/x-mixed-replace` por HTTP 
 - Servidor RTSP de prueba: **mediamtx** (asset de GitHub Releases, descargable aquí) + `ffmpeg -f lavfi -i testsrc2 … -f rtsp` publicando; servidor **MJPEG simulado propio** (Node/Rust) para el celular; ONVIF/WS-Discovery **simulado** (respondedor UDP propio).
 - Pruebas unitarias de SSRF, credenciales (nunca llegan al frontend), reconexión/backoff con reloj inyectado, vigilante y redirección; y de punta a punta (si hay `ffmpeg` y mediamtx): descubrir/alta → fotograma → mismo OCR de placa/DPI.
 - Todo lo que dependa de una cámara física, de Windows o de WebView2 real queda marcado **«sin probar con hardware real»**.
+
+## 8. Estado de la implementación (T7–T9, 11/10/2026)
+- Puente, SSRF, llavero, supervisor y comandos: `desktop/src-tauri/src/camaras/` (T7). ONVIF, alta, visor y captura para el OCR: T8. Celular y medición: T9 (`docs/celular_como_camara.md`, `desktop/scripts/medir-recursos.mjs`, `docs/plantilla_medicion_camaras.md`).
+- **Interfaz para el OCR continuo del Sprint 10**: `FuenteFotogramas` + `esperar_fotograma` (entrega el más reciente y nuevo, sin colas). **ANPR no está implementado.**
+- Medición del puente con el script (mismo escenario que §2, 960 px de salida): 1 flujo 7,1 % de un núcleo y 48 MB; 2 flujos 14,2 % y 95 MB (Xeon 2,1 GHz). Falta repetirla en un equipo real de 6 a 8 GB.

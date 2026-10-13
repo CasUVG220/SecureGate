@@ -20,6 +20,7 @@ No se tocó producción, la VM, Cloud SQL ni secretos. Las pruebas de base de da
 | T6 | Decisión de diseño del puente de video | HECHO |
 | T7 | Modelo de cámaras, credenciales y puente local | HECHO (sin probar con hardware real; el `ffmpeg.exe` de Windows no se ejecutó) |
 | T8 | Descubrimiento ONVIF, alta de cámaras y visor | HECHO (sin probar con hardware real) |
+| T9 | Celular como cámara y medición de recursos | HECHO (sin probar con un celular ni equipo real) |
 
 ## Línea base (antes de tocar nada, con las 2 correcciones de T0)
 
@@ -145,3 +146,11 @@ Código en `desktop/src-tauri/src/camaras/` (diseño en `docs/camaras_ip_diseno.
   vitest +31 (visor: en vivo, captura, error de captura, conectando, reconectando, caída permanente, cámara que no enciende, apagado con cuenta de usos; alta: prueba obligatoria, credenciales solo de ida, edición, rechazo de Rust, descubrimiento; configuración: lista, selector, confirmación; y **guardas** que impiden que una credencial de cámara aparezca en los tipos que devuelve Rust o en otro componente).
 - Decisión: el `useCamara` USB y su localStorage no cambiaron; la asignación de cámaras de red vive en Rust (`tareas`) y el resolvedor de pantalla mira primero ahí. Nota de pruebas: un `beforeEach` que *devuelve* una función la ejecuta al terminar (con `mockReset()` eso llamaba al mock): se escriben con llaves.
 - Pendiente (hardware real): cámaras reales con Digest, perfiles ONVIF raros, H.265 de fabricantes concretos, `rtsps://` (no soportado), y la ruta del video por ONVIF (GetStreamUri).
+
+## T9 — Celular como cámara y medición de recursos · **HECHO** (sin celular ni equipo de 6–8 GB reales)
+- **Celular = cámara IP más** (ya cubierta por T7/T8): alta por la dirección del flujo con **Probar conexión**; **guía en pantalla** (`GuiaCelular`, texto sin jerga: misma red Wi-Fi, iniciar el servidor, escribir la dirección con `/video`, probar); `docs/celular_como_camara.md` con las apps sugeridas y **qué se probó y qué no**
+  (IP Webcam y DroidCam por lo que documentan; **ninguna probada con la app real**). Nuevas pruebas del flujo MJPEG: partes sin `Content-Length`, otra frontera y `Transfer-Encoding: chunked`. Prueba de pantalla: el celular funciona en **las 4 tareas** (placa, DPI, salida: «Leer…» entrega su fotograma; QR: el escáner pide fotogramas solo cuando está en vivo).
+- **Medidor** `desktop/scripts/medir-recursos.mjs` (modo `puente`: lectores ffmpeg contra cámaras RTSP simuladas; modo `app`: muestrea el **árbol de procesos** de la app real —WebView2, OCR, ffmpeg— mientras se encienden 1 y 2 flujos) con reporte `.md/.json`; el muestreo usa `ps` (Linux/macOS) o PowerShell (Windows; **no ejecutado**, probado con salidas de ejemplo).
+  Plantilla para repetirlo en un equipo de 6–8 GB: `docs/plantilla_medicion_camaras.md`. **Resultado en la nube** (4 vCPU Xeon, 16 GB): 1 flujo 7,1 % de un núcleo y 48 MB; 2 flujos 14,2 % y 95 MB, a 9,6–9,7 fps.
+- **Interfaz `FuenteFotogramas` + `esperar_fotograma`** (el más reciente y nuevo, saltando intermedios; distingue «caída» de «sin imagen»): la usa la captura puntual del OCR y queda lista para el OCR continuo del Sprint 10. **ANPR no se implementó.** +2 pruebas de Rust.
+- Pruebas: Rust 197 (4 de ffmpeg real se omiten solas sin mediamtx), vitest 156, node del medidor 7.

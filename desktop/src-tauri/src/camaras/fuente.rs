@@ -93,6 +93,50 @@ pub trait Conector: Send + Sync + 'static {
     fn conectar(&self) -> impl Future<Output = Result<Self::Flujo, ErrorFuente>> + Send;
 }
 
+/// Por qué no se pudo conseguir un fotograma útil.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum FaltaFotograma {
+    /// La cámara está caída (error permanente o sin señal tras varios intentos): no tiene caso esperar.
+    Caida(String),
+    /// Pasó el tiempo sin recibir uno nuevo.
+    SinImagen(String),
+}
+
+/// **La pieza que usará el OCR continuo del Sprint 10** (y que ya usa la captura puntual del OCR): espera hasta `espera` por un
+/// fotograma NUEVO (`seq` mayor que `desde_seq`) y suficientemente fresco (`max_edad_ms`); entrega el más reciente, saltándose los
+/// intermedios. Así un consumidor lento (el OCR tarda ~0,5 s por imagen) nunca acumula una cola ni lee imágenes viejas:
+///
+/// ```ignore
+/// let mut visto = 0;
+/// loop {
+///     let f = esperar_fotograma(&*fuente, visto, Duration::from_secs(5), 2_000).await?;
+///     visto = f.seq;
+///     leer_con_ocr(&f.jpeg);            // Sprint 10: ANPR continuo. NO está implementado aquí.
+/// }
+/// ```
+pub async fn esperar_fotograma(fuente: &dyn FuenteFotogramas, desde_seq: u64, espera: Duration, max_edad_ms: u64) -> Result<Fotograma, FaltaFotograma> {
+    let t0 = tokio::time::Instant::now();
+    let mut rx = fuente.suscribir();
+    loop {
+        if let Some(f) = fuente.ultimo() {
+            if f.seq > desde_seq && ahora_ms().saturating_sub(f.recibido_ms) <= max_edad_ms {
+                return Ok(f);
+            }
+        }
+        if let EstadoFuente::Caida { motivo, .. } = fuente.estado() {
+            return Err(FaltaFotograma::Caida(motivo));
+        }
+        let resto = espera.saturating_sub(t0.elapsed());
+        if resto.is_zero() || tokio::time::timeout(resto, rx.changed()).await.is_err() {
+            let motivo = match fuente.estado() {
+                EstadoFuente::Reconectando { motivo, .. } => motivo,
+                _ => "La cámara no envió imagen a tiempo.".into(),
+            };
+            return Err(FaltaFotograma::SinImagen(motivo));
+        }
+    }
+}
+
 // ── Supervisor ───────────────────────────────────────────────────────────────────────────────────────────
 
 #[derive(Clone)]
@@ -762,6 +806,41 @@ mod tests {
         avanzar(1100).await;
         assert_eq!(intentos.load(Ordering::SeqCst), 2);
         assert_eq!(s.estado(), EstadoFuente::Conectada);
+    }
+
+    // ── esperar_fotograma (base del OCR continuo) ──
+    #[tokio::test]
+    async fn esperar_fotograma_entrega_el_mas_reciente_y_nunca_uno_ya_visto() {
+        let (c, _) = ConectorFalso::nuevo(vec![Guion::Fotogramas(vec![foto(1), foto(2), foto(3)], Duration::from_millis(20))], Guion::Muda);
+        let s = Supervisor::iniciar(c, cfg());
+        let f = esperar_fotograma(&s, 0, Duration::from_secs(2), 5_000).await.unwrap();
+        assert!(f.seq >= 1);
+        let visto = f.seq;
+        // Un consumidor lento se salta los intermedios: lo siguiente es lo más nuevo, con seq mayor.
+        tokio::time::sleep(Duration::from_millis(200)).await;
+        let g = esperar_fotograma(&s, visto, Duration::from_secs(2), 5_000).await;
+        match g {
+            Ok(g) => assert!(g.seq > visto),
+            Err(_) => assert_eq!(visto, 3, "solo falla si ya se había visto el último"),
+        }
+    }
+
+    #[tokio::test]
+    async fn esperar_fotograma_rechaza_los_viejos_y_distingue_caida_de_falta_de_imagen() {
+        let (c, _) = ConectorFalso::nuevo(vec![Guion::Fotogramas(vec![foto(1)], Duration::from_millis(1))], Guion::Muda);
+        let s = Supervisor::iniciar(c, cfg());
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        // El fotograma existe pero «max_edad 0» lo considera viejo: no se entrega.
+        let e = esperar_fotograma(&s, 0, Duration::from_millis(150), 0).await.unwrap_err();
+        assert!(matches!(e, FaltaFotograma::SinImagen(_)));
+        // Una cámara con error permanente avisa de inmediato: no se espera en vano.
+        let (c, _) = ConectorFalso::nuevo(vec![Guion::FallaPermanente("credenciales")], Guion::Muda);
+        let caida = Supervisor::iniciar(c, cfg());
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        let t0 = std::time::Instant::now();
+        let e = esperar_fotograma(&caida, 0, Duration::from_secs(5), 5_000).await.unwrap_err();
+        assert_eq!(e, FaltaFotograma::Caida("credenciales".into()));
+        assert!(t0.elapsed() < Duration::from_secs(1));
     }
 
     // ── interpretación de ffmpeg ──

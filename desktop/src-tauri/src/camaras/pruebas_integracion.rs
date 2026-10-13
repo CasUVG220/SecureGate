@@ -10,7 +10,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::net::{TcpListener, TcpStream};
+use tokio::net::TcpListener;
 
 use super::credenciales::Credenciales;
 use super::fuente::pruebas::cfg;
@@ -43,6 +43,23 @@ async fn servidor_mjpeg() -> Mjpeg {
                 let ruta = req.split(' ').nth(1).unwrap_or("/").to_string();
                 // pedro:s3cr3t en base64; el nombre del encabezado puede llegar en minúsculas (reqwest), el valor no se toca.
                 let auth_ok = req.lines().any(|l| l.split_once(':').map_or(false, |(k, v)| k.eq_ignore_ascii_case("authorization") && v.trim() == "Basic cGVkcm86czNjcjN0"));
+                // Variantes de apps reales: partes SIN Content-Length y con otra frontera (como emiten varias apps de celular), y la
+                // respuesta entera en `Transfer-Encoding: chunked`. El divisor busca el inicio y el fin de cada JPEG, no el encuadre multipart.
+                if ruta == "/sin-largo" || ruta == "/chunked" {
+                    let trozo = ruta == "/chunked";
+                    let cab = format!("HTTP/1.1 200 OK\r\nContent-Type: multipart/x-mixed-replace;boundary=myboundary\r\n{}Connection: close\r\n\r\n", if trozo { "Transfer-Encoding: chunked\r\n" } else { "" });
+                    let _ = s.write_all(cab.as_bytes()).await;
+                    for i in 0..usize::MAX {
+                        let f = jpeg_de_prueba(&[(i % 250) as u8; 16]);
+                        let mut parte = b"\r\n--myboundary\r\nContent-type: image/jpeg\r\n\r\n".to_vec();
+                        parte.extend_from_slice(&f);
+                        let datos = if trozo { let mut c = format!("{:x}\r\n", parte.len()).into_bytes(); c.extend_from_slice(&parte); c.extend_from_slice(b"\r\n"); c } else { parte };
+                        if s.write_all(&datos).await.is_err() {
+                            return;
+                        }
+                        tokio::time::sleep(Duration::from_millis(30)).await;
+                    }
+                }
                 let (estado, extra) = match ruta.as_str() {
                     "/auth" if !auth_ok => ("401 Unauthorized", "WWW-Authenticate: Basic realm=\"cam\"\r\n"),
                     "/redir" => ("302 Found", "Location: /video\r\n"),
@@ -86,6 +103,17 @@ async fn mjpeg_entrega_los_fotogramas_del_celular() {
     let mut flujo = conector(srv.addr, "/video", None).conectar().await.unwrap();
     for i in 0..3u8 {
         assert_eq!(flujo.siguiente().await.unwrap().unwrap(), jpeg_de_prueba(&[i; 16]));
+    }
+}
+
+#[tokio::test]
+async fn mjpeg_acepta_partes_sin_content_length_otra_frontera_y_transferencia_por_trozos() {
+    let srv = servidor_mjpeg().await;
+    for ruta in ["/sin-largo", "/chunked"] {
+        let mut flujo = conector(srv.addr, ruta, None).conectar().await.unwrap_or_else(|e| panic!("{ruta}: {e:?}"));
+        for i in 0..3u8 {
+            assert_eq!(flujo.siguiente().await.unwrap().unwrap(), jpeg_de_prueba(&[i; 16]), "{ruta} fotograma {i}");
+        }
     }
 }
 

@@ -420,27 +420,15 @@ pub fn camaras_estado(state: State<'_, AppState>) -> HashMap<String, EstadoFuent
 #[tauri::command]
 pub async fn camara_ip_fotograma(app: AppHandle, state: State<'_, AppState>, id: String) -> AppResult<FotogramaCapturado> {
     let sup = encender(&app, &state, &id).await?;
-    let t0 = Instant::now();
-    let mut rx = sup.suscribir();
-    loop {
-        if let Some(f) = sup.ultimo() {
-            let edad = crate::camaras::fuente_ahora_ms().saturating_sub(f.recibido_ms);
-            // Un fotograma de hace más de 5 s es de antes de que se cayera: no sirve para leer una placa de ahora.
-            if edad <= 5_000 {
-                return Ok(FotogramaCapturado { jpeg_base64: base64::engine::general_purpose::STANDARD.encode(f.jpeg.as_ref()), seq: f.seq, edad_ms: edad });
-            }
-        }
-        if let EstadoFuente::Caida { motivo, .. } = sup.estado() {
-            return Err(AppError::new("camara_caida", motivo));
-        }
-        let resto = ESPERA_CAPTURA.saturating_sub(t0.elapsed());
-        if resto.is_zero() || tokio::time::timeout(resto, rx.changed()).await.is_err() {
-            let motivo = match sup.estado() {
-                EstadoFuente::Reconectando { motivo, .. } => motivo,
-                _ => "La cámara no envió imagen a tiempo.".into(),
-            };
-            return Err(AppError::new("camara_sin_imagen", motivo));
-        }
+    // Un fotograma de hace más de 5 s es de antes de que se cayera: no sirve para leer una placa de ahora.
+    match fuente::esperar_fotograma(sup.as_ref(), 0, ESPERA_CAPTURA, 5_000).await {
+        Ok(f) => Ok(FotogramaCapturado {
+            jpeg_base64: base64::engine::general_purpose::STANDARD.encode(f.jpeg.as_ref()),
+            seq: f.seq,
+            edad_ms: fuente_ahora_ms().saturating_sub(f.recibido_ms),
+        }),
+        Err(fuente::FaltaFotograma::Caida(m)) => Err(AppError::new("camara_caida", m)),
+        Err(fuente::FaltaFotograma::SinImagen(m)) => Err(AppError::new("camara_sin_imagen", m)),
     }
 }
 

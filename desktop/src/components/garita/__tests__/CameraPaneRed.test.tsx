@@ -149,3 +149,30 @@ describe('CameraPane con una cámara de red', () => {
     expect(screen.getByText('No hay cámara disponible en este panel.')).toBeInTheDocument();
   });
 });
+
+/** SCRUM-120: el celular se comporta como una cámara IP más en las 4 tareas. */
+describe('un celular como cámara en cada una de las 4 tareas', () => {
+  const celular = (tarea: string) => cam({ id: 'c1', tipo: 'celular', nombre: 'Celular de Pedro', url: 'http://192.168.1.60:8080/video', tareas: [tarea], con_credenciales: false });
+
+  it.each([
+    ['placa', 'Leer placa'],
+    ['dpi', 'Leer DPI'],
+    ['salida', 'Dar salida'],
+  ] as const)('%s: muestra la imagen del celular y «%s» entrega su fotograma al mismo flujo de captura', async (tarea, boton) => {
+    const onCaptura = vi.fn().mockResolvedValue(undefined);
+    render(<CameraPane proposito={tarea} camarasRed={[celular(tarea)]} {...base} onCaptura={onCaptura} />);
+    await screen.findByAltText('Vista de Celular de Pedro', {}, { timeout: 4000 });
+    fireEvent.click(screen.getByRole('button', { name: boton }));
+    await waitFor(() => expect(onCaptura).toHaveBeenCalledWith(tarea, 'AAAA'));
+  });
+
+  it('qr: el escáner pide fotogramas al celular mientras está en vivo (y no antes)', async () => {
+    estado = { estado: 'conectando' };
+    render(<CameraPane proposito="qr" camarasRed={[celular('qr')]} {...base} />);
+    await screen.findByText('Conectando con la cámara…', {}, { timeout: 4000 });
+    expect(camaras.fotograma).not.toHaveBeenCalled();
+    estado = { estado: 'conectada' };
+    await screen.findByAltText('Vista de Celular de Pedro', {}, { timeout: 5000 });
+    await waitFor(() => expect(camaras.fotograma).toHaveBeenCalledWith('c1'), { timeout: 3000 });
+  });
+});
