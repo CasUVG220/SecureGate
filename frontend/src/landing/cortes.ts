@@ -6,6 +6,10 @@
 export const CORTES = {
   hero: '13 0, 100 0, 100 100, 0 100',
   heroMovil: '0 0, 100 0, 100 94, 0 100',
+  /** Tarjeta de la garita: esquina superior derecha achaflanada (≈ 45° sobre una caja 4:5). */
+  chaflan: '0 0, 88 0, 100 9.6, 100 100, 0 100',
+  /** Tarjeta de administración: borde inferior que sube hacia la derecha, como el del hero. */
+  rampa: '0 0, 100 0, 100 86, 0 100',
 } as const;
 
 /** "13 0, 100 0" → "13,0 100,0" para <polygon points>. */

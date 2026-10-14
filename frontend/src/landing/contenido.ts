@@ -38,3 +38,34 @@ export const HERO = {
     alt: 'Garita de una residencial: la cámara lee la placa de un vehículo y la barrera se levanta.',
   },
 } as const;
+
+/**
+ * Las tres partes del sistema. Las imágenes son 4:5 (1200 × 1500); cada tarjeta las recorta distinto a propósito.
+ * Los `alt` describen lo que DEBE mostrar cada foto: si la tuya muestra otra cosa, cambiá el texto.
+ */
+export const TARJETAS = [
+  {
+    clave: 'garita',
+    titulo: 'Garita',
+    soporte: 'App de escritorio · Windows',
+    texto: 'Lee placa y DPI, valida invitaciones con QR y sigue registrando sin internet.',
+    imagen: 'card-garita.jpg',
+    alt: 'Agente en la caseta frente a la pantalla de SecureGate, con la placa de un vehículo leída por la cámara.',
+  },
+  {
+    clave: 'portal',
+    titulo: 'Portal del residente',
+    soporte: 'Web, en el teléfono',
+    texto: 'Cada residente invita con QR, avisa de sus visitas y consulta y paga sus cuotas.',
+    imagen: 'card-portal.jpg',
+    alt: 'Residente mostrando en su teléfono la invitación con QR de una visita.',
+  },
+  {
+    clave: 'admin',
+    titulo: 'Administración',
+    soporte: 'Web',
+    texto: 'Residentes, cuotas y mora, reglas de QR, lista negra y reportes de entradas.',
+    imagen: 'card-admin.jpg',
+    alt: 'Panel de administración de SecureGate con la lista de residentes y el estado de sus cuotas.',
+  },
+] as const;

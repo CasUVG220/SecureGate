@@ -46,6 +46,21 @@ describe('Landing · estructura y navegación', () => {
   });
 });
 
+describe('Landing · encabezados', () => {
+  it('no saltan niveles (h1 → h2 → h3)', () => {
+    render(<Landing />);
+    const niveles = [...document.querySelectorAll('h1, h2, h3, h4')].map(h => Number(h.tagName[1]));
+    for (let i = 1; i < niveles.length; i++) expect(niveles[i] - niveles[i - 1]).toBeLessThanOrEqual(1);
+  });
+
+  it('las tres partes del sistema son h3 bajo su h2', () => {
+    render(<Landing />);
+    const seccion = screen.getByRole('heading', { level: 2, name: 'Las tres partes de SecureGate' }).closest('section')!;
+    expect(within(seccion).getAllByRole('heading', { level: 3 }).map(h => h.textContent))
+      .toEqual(['Garita', 'Portal del residente', 'Administración']);
+  });
+});
+
 describe('Landing · anti-plantilla (criterio de aceptación)', () => {
   const texto = () => {
     render(<Landing />);

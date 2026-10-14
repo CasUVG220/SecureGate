@@ -11,6 +11,7 @@ import './landing.css';
 import { useRevelar } from './componentes/useRevelar';
 import { Navegacion } from './secciones/Navegacion';
 import { Hero } from './secciones/Hero';
+import { Tarjetas } from './secciones/Tarjetas';
 
 /**
  * Landing público de SecureGate (ruta `/`). Una sola acción: pedir una demo (#contacto).
@@ -31,6 +32,7 @@ export default function Landing() {
       <Navegacion />
       <main id="contenido" tabIndex={-1} className="outline-none">
         <Hero />
+        <Tarjetas />
       </main>
     </div>
   );
