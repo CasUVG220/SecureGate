@@ -57,7 +57,7 @@ export function Precios({ tramo, onTramo, paquete, onPaquete, onPedir }: Props) 
                 <span className="l-regla-marca" aria-hidden="true" />
                 <span
                   className={cx(
-                    'mt-3 block rounded-sm pr-2 font-cifra text-detalle tabular-nums leading-tight transition-colors',
+                    'mt-3 block rounded-sm pr-1.5 font-cifra text-rotulo tabular-nums leading-tight transition-colors sm:pr-2 sm:text-detalle',
                     'peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-4 peer-focus-visible:outline-tinta',
                     tramo === t ? 'font-medium text-tinta' : 'text-tinta-suave group-hover:text-tinta',
                   )}
