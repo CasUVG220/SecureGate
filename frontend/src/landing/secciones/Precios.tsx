@@ -172,8 +172,9 @@ function Fila({ titulo, monto = false, children }: { titulo: string; monto?: boo
           key={p}
           data-col={p}
           className={cx(
-            'py-5 pr-6 align-top',
-            monto ? 'font-cifra text-entrada font-medium tabular-nums text-tinta md:text-cifra' : 'text-detalle text-tinta-suave',
+            'py-5 pr-3 align-top lg:pr-6',
+            // Las cifras crecen con el ancho de la columna: «Q 213,668.00» tiene que caber en tablet.
+            monto ? 'font-cifra text-entrada font-medium tabular-nums text-tinta lg:text-subtitulo xl:text-cifra' : 'text-detalle text-tinta-suave',
           )}
         >
           {children(p)}

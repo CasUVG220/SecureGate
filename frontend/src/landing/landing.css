@@ -231,6 +231,20 @@
     }
   }
 
+  /* Hasta 1024 px el video va de borde a borde, así que conserva el corte suave del teléfono (MediaSlot cambia de
+     corte en 768 px, que aquí sería demasiado pronto). */
+  @media (min-width: 768px) and (max-width: 1023.98px) {
+    .l-hero-medio .l-recorte {
+      clip-path: var(--l-recorte-movil);
+    }
+    .l-hero-medio .l-solo-movil {
+      display: block;
+    }
+    .l-hero-medio .l-solo-amplio {
+      display: none;
+    }
+  }
+
   .l-hero-fantasma {
     display: none;
   }
@@ -338,7 +352,7 @@
     table-layout: fixed;
   }
   .l-tarifa-paquete {
-    padding: 0 1.5rem 1.5rem 0;
+    padding: 0 0.75rem 1.5rem 0;
     vertical-align: top;
     font-weight: inherit;
   }
@@ -362,7 +376,15 @@
   @media (min-width: 768px) {
     .l-tarifa [data-col] {
       border-left: 1px solid rgb(var(--l-linea-fuerte));
+      padding-left: 1rem;
+    }
+  }
+  @media (min-width: 1024px) {
+    .l-tarifa [data-col] {
       padding-left: 1.5rem;
+    }
+    .l-tarifa-paquete {
+      padding-right: 1.5rem;
     }
   }
   /* Teléfono: solo la columna del paquete elegido (un único árbol de filas, nada duplicado). */
