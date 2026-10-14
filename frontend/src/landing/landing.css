@@ -416,6 +416,34 @@
   }
 }
 
+/* ══ Contacto ══════════════════════════════════════════════════════════════ */
+@layer components {
+  /* Campos: borde tinta-tenue (≥ 3:1 sobre papel, WCAG 1.4.11), 48 px de alto, foco con el anillo general. */
+  .l-campo {
+    @apply block w-full rounded border border-tinta-tenue bg-papel px-3.5 py-3 font-texto text-cuerpo text-tinta;
+    min-height: 3rem;
+    transition: border-color 150ms, box-shadow 150ms;
+  }
+  .l-campo:hover {
+    @apply border-tinta;
+  }
+  .l-campo:focus-visible {
+    outline: 2px solid rgb(var(--l-tinta));
+    outline-offset: 1px;
+  }
+  .l-campo[aria-invalid='true'] {
+    @apply border-error;
+    box-shadow: inset 0 0 0 1px rgb(var(--l-error));
+  }
+  .l-campo-select {
+    appearance: none;
+    padding-right: 2.5rem;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%230f172a' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 0.875rem center;
+  }
+}
+
 /* ══ Movimiento ══════════════════════════════════════════════════════════════
    Solo `transform` y `opacity`. Con `prefers-reduced-motion: reduce` no hay
    entradas, ni revelado por sección, ni video (MediaSlot deja el póster).

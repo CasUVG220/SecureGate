@@ -265,3 +265,31 @@ export const PREGUNTAS: ReadonlyArray<{
     pendiente: 'cómo se pide la factura y con qué datos',
   },
 ];
+
+/**
+ * Contacto. `whatsapp` y `correo` en `null` = faltan: la página los muestra como [POR CONFIRMAR] y el botón de
+ * WhatsApp queda deshabilitado. El WhatsApp va en formato internacional, solo dígitos (p. ej. 502 y los 8 del número).
+ */
+export const CONTACTO = {
+  titulo: 'Pedí una demo',
+  bajada:
+    'Te escribimos para coordinar una demostración con la administración o la junta directiva. ' +
+    'Con el número de hogares preparamos la cotización.',
+  whatsapp: null as string | null,
+  correo: null as string | null,
+  /** Opciones del select, alineadas con los tramos de la tabla de precios (planes.ts). */
+  hogares: [
+    { valor: '50', texto: 'Hasta 50 hogares' },
+    { valor: '100', texto: 'De 51 a 100 hogares' },
+    { valor: '200', texto: 'De 101 a 200 hogares' },
+    { valor: '500', texto: 'De 201 a 500 hogares' },
+    { valor: '1000', texto: 'De 501 a 1,000 hogares' },
+    { valor: '1000+', texto: 'Más de 1,000 hogares' },
+  ],
+  mensajes: {
+    exito: 'Recibimos tu solicitud. Te vamos a escribir para coordinar la demo.',
+    invalido: 'Revisá los campos marcados.',
+    limite: 'Recibimos varias solicitudes desde tu conexión. Intentá de nuevo en una hora o escribinos por WhatsApp.',
+    error: 'No pudimos enviar tu solicitud. Revisá tu conexión e intentá de nuevo, o escribinos por WhatsApp.',
+  },
+} as const;

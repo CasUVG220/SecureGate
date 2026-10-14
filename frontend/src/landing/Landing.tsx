@@ -16,6 +16,7 @@ import { ComoFunciona } from './secciones/ComoFunciona';
 import { QueHace } from './secciones/QueHace';
 import { Precios } from './secciones/Precios';
 import { Preguntas } from './secciones/Preguntas';
+import { Contacto } from './secciones/Contacto';
 import { PAQUETE_DESTACADO, type Paquete, type TramoHogares } from './planes';
 
 /**
@@ -26,9 +27,15 @@ export default function Landing() {
   const raiz = useRef<HTMLDivElement>(null);
   useRevelar(raiz);
 
-  // El tramo y el paquete viven aquí: cambiar de paquete (en teléfono) no pierde el tramo elegido.
+  // El tramo y el paquete viven aquí: cambiar de paquete (en teléfono) no pierde el tramo elegido, y el formulario
+  // recibe el tramo que la persona ELIGIÓ (el tramo por defecto de la tabla no se le impone al formulario).
   const [tramo, setTramo] = useState<TramoHogares>(100);
   const [paquete, setPaquete] = useState<Paquete>(PAQUETE_DESTACADO ?? 'compra');
+  const [tramoElegido, setTramoElegido] = useState<TramoHogares | null>(null);
+  const elegirTramo = (t: TramoHogares) => {
+    setTramo(t);
+    setTramoElegido(t);
+  };
 
   return (
     <div ref={raiz} className="relative min-h-screen">
@@ -44,8 +51,9 @@ export default function Landing() {
         <Tarjetas />
         <ComoFunciona />
         <QueHace />
-        <Precios tramo={tramo} onTramo={setTramo} paquete={paquete} onPaquete={setPaquete} onPedir={setTramo} />
+        <Precios tramo={tramo} onTramo={elegirTramo} paquete={paquete} onPaquete={setPaquete} onPedir={elegirTramo} />
         <Preguntas />
+        <Contacto tramoSugerido={tramoElegido} />
       </main>
     </div>
   );
