@@ -2,6 +2,7 @@
 import { StrictMode, Suspense, lazy } from 'react'
 import { createRoot } from 'react-dom/client'
 import { esRutaLanding } from './routing/portales'
+import { precargarPosterDelHero } from './landing/precarga'
 
 /*
  * Dos entradas en el mismo index.html, elegidas UNA vez al cargar el documento:
@@ -34,7 +35,10 @@ function cargarFuenteDeLaApp() {
   }
 }
 
-const Raiz = esRutaLanding(window.location.pathname) ? Landing : App
+const enLanding = esRutaLanding(window.location.pathname)
+// El póster del hero es el LCP del landing: se pide ya, en paralelo con el chunk, y no después de pintar.
+if (enLanding) precargarPosterDelHero()
+const Raiz = enLanding ? Landing : App
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

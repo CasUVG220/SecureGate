@@ -12,6 +12,8 @@
  *     rellena con un dato inventado.
  */
 
+import { POSTER_HERO } from './precarga';
+
 /** Ruta de acceso de la app (RUTA_PORTAL.personal). Desde ahí la sesión decide el portal, como siempre. */
 export const RUTA_INGRESAR = '/personal';
 
@@ -29,7 +31,7 @@ export const HERO = {
     'Control de acceso para residenciales en Guatemala: garita, portal del residente y administración. ' +
     'Si se cae el internet, la garita sigue registrando.',
   video: {
-    poster: 'hero-poster.jpg',
+    poster: POSTER_HERO,
     mp4: 'hero.mp4',
     webm: 'hero.webm',
     ancho: 1920,
