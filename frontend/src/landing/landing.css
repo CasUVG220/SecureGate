@@ -124,6 +124,8 @@
   /* Dato pendiente de confirmar: visible a propósito, para que nadie lo confunda con un dato real. */
   .l-pendiente {
     @apply rounded-sm bg-transparent px-1 font-cifra text-rotulo font-medium normal-case text-tinta;
+    -webkit-box-decoration-break: clone;
+    box-decoration-break: clone;
     box-shadow: inset 0 0 0 1px rgb(var(--l-tinta-suave));
     background-image: repeating-linear-gradient(-45deg, rgb(var(--l-acento) / 0.18) 0 4px, transparent 4px 8px);
   }
@@ -286,6 +288,89 @@
   @media (min-width: 1024px) {
     .l-que-hace-camaras {
       margin-right: calc(-1 * min(5rem, var(--l-canal) + max(0px, (100vw - 77.5rem - 2 * var(--l-canal)) / 2)));
+    }
+  }
+}
+
+/* ══ Precios ═══════════════════════════════════════════════════════════════ */
+@layer components {
+  /* Regla de hogares: una línea con una marca por tramo; el tramo elegido se llena de acento (además cambian peso y
+     color de su cifra, que es lo que lleva el contraste). */
+  .l-regla {
+    position: relative;
+  }
+  .l-regla::before {
+    content: '';
+    position: absolute;
+    inset-inline: 0;
+    top: 1.75rem;
+    height: 1px;
+    background: rgb(var(--l-tinta) / 0.35);
+  }
+  .l-regla-paso::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: calc(1.75rem - 12px);
+    width: 1px;
+    height: 12px;
+    background: rgb(var(--l-tinta) / 0.55);
+  }
+  .l-regla-marca {
+    position: absolute;
+    left: 0;
+    right: 0.375rem;
+    top: calc(1.75rem - 8px);
+    height: 8px;
+    background: rgb(var(--l-acento));
+    transform: scaleX(0);
+    transform-origin: left center;
+    transition: transform 240ms cubic-bezier(0.2, 0.7, 0.2, 1);
+  }
+  .l-regla-paso input:checked + .l-regla-marca {
+    transform: none;
+  }
+  .l-regla-paso:hover input:not(:checked) + .l-regla-marca {
+    transform: scaleX(0.12);
+  }
+
+  .l-tarifa table {
+    table-layout: fixed;
+  }
+  .l-tarifa-paquete {
+    padding: 0 1.5rem 1.5rem 0;
+    vertical-align: top;
+    font-weight: inherit;
+  }
+  .l-tarifa-destacado {
+    box-shadow: inset 0 3px 0 rgb(var(--l-acento));
+    padding-top: 1.25rem;
+  }
+  .l-tarifa-item {
+    position: relative;
+    padding-left: 0.875rem;
+  }
+  .l-tarifa-item::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0.62em;
+    width: 5px;
+    height: 5px;
+    background: rgb(var(--l-tinta-suave));
+  }
+  @media (min-width: 768px) {
+    .l-tarifa [data-col] {
+      border-left: 1px solid rgb(var(--l-linea-fuerte));
+      padding-left: 1.5rem;
+    }
+  }
+  /* Teléfono: solo la columna del paquete elegido (un único árbol de filas, nada duplicado). */
+  @media (max-width: 767px) {
+    .l-tarifa[data-paquete='compra'] [data-col]:not([data-col='compra']),
+    .l-tarifa[data-paquete='alquiler'] [data-col]:not([data-col='alquiler']),
+    .l-tarifa[data-paquete='licencia'] [data-col]:not([data-col='licencia']) {
+      display: none;
     }
   }
 }

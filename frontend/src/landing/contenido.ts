@@ -173,3 +173,41 @@ export const QUE_HACE = {
     },
   },
 } as const;
+
+/** Ficha técnica mínima del paquete Licencia. Hoy es un PDF provisional: reemplazalo en public/landing/. */
+export const FICHA_TECNICA = '/landing/ficha-tecnica.pdf';
+
+/**
+ * Precios: los montos están en planes.ts. Aquí van los nombres y lo que incluye cada paquete (texto del brief de
+ * precios). `null` = falta confirmar y se pinta «[POR CONFIRMAR]».
+ */
+export const PRECIOS = {
+  titulo: 'Precios',
+  bajada: 'Tres formas de tener SecureGate. Elegí cuántos hogares tiene tu residencial para ver los montos.',
+  paquetes: {
+    compra: { nombre: 'Compra', resumen: 'El equipo es de la residencial.' },
+    alquiler: { nombre: 'Alquiler', resumen: 'El mismo equipo, propiedad de SecureGate.' },
+    licencia: { nombre: 'Licencia', resumen: 'Solo el software; el equipo lo pone la residencial.' },
+  },
+  /** Equipo que va con Compra y con Alquiler. */
+  equipo: [
+    'Barrera vehicular de 3 m',
+    '3 cámaras IP: placa, panorámica y DPI',
+    'Lector UHF para tags',
+    'Mini PC y monitor de 24"',
+    'Switch PoE, UPS, gabinete y cableado',
+  ],
+  filas: {
+    instalacion: {
+      compra: 'Instalación, configuración del software y capacitación',
+      alquiler: 'Instalación reducida',
+      licencia: 'Instalación y configuración del software, y capacitación',
+    },
+    software: { compra: 'Incluido', alquiler: 'Incluido', licencia: 'Incluido' },
+    mantenimiento: { compra: 'Incluido', alquiler: 'Incluido, con reposición', licencia: 'No incluido' },
+    contrato: { compra: null, alquiler: '36 meses', licencia: null },
+  },
+  notaIva: 'Montos en quetzales, con IVA (12 %) incluido.',
+  notaReferencial: 'Los precios del equipo son referenciales y se confirman en la cotización.',
+  aMedida: 'Cotización a medida',
+} as const;

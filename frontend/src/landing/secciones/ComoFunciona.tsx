@@ -25,10 +25,10 @@ export function ComoFunciona() {
   return (
     <section id="como-funciona" aria-labelledby="titulo-como" className="l-oscuro l-banda-oscura bg-noche text-noche-texto">
       <div className="l-contenedor pb-24 pt-[calc(var(--l-rampa)+4.5rem)] lg:pb-32 lg:pt-[calc(var(--l-rampa)+6rem)]">
-        <header data-revelar className="grid gap-6 lg:grid-cols-12 lg:items-end">
+        <div data-revelar className="grid gap-6 lg:grid-cols-12 lg:items-end">
           <h2 id="titulo-como" className="text-titulo font-extrabold text-papel lg:col-span-5">{C.titulo}</h2>
           <p className="max-w-medida text-entrada text-noche-tenue lg:col-span-6 lg:col-start-7">{C.bajada}</p>
-        </header>
+        </div>
 
         <ol className="mt-16 grid gap-y-12 sm:grid-cols-2 lg:mt-20 lg:grid-cols-4">
           {C.pasos.map((p, i) => (

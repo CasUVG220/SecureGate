@@ -1,4 +1,4 @@
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 // Fuentes autoalojadas (@fontsource, subconjunto latino, font-display: swap). Solo los pesos que se usan.
 import '@fontsource/schibsted-grotesk/latin-700.css';
 import '@fontsource/schibsted-grotesk/latin-800.css';
@@ -14,6 +14,8 @@ import { Hero } from './secciones/Hero';
 import { Tarjetas } from './secciones/Tarjetas';
 import { ComoFunciona } from './secciones/ComoFunciona';
 import { QueHace } from './secciones/QueHace';
+import { Precios } from './secciones/Precios';
+import { PAQUETE_DESTACADO, type Paquete, type TramoHogares } from './planes';
 
 /**
  * Landing público de SecureGate (ruta `/`). Una sola acción: pedir una demo (#contacto).
@@ -22,6 +24,10 @@ import { QueHace } from './secciones/QueHace';
 export default function Landing() {
   const raiz = useRef<HTMLDivElement>(null);
   useRevelar(raiz);
+
+  // El tramo y el paquete viven aquí: cambiar de paquete (en teléfono) no pierde el tramo elegido.
+  const [tramo, setTramo] = useState<TramoHogares>(100);
+  const [paquete, setPaquete] = useState<Paquete>(PAQUETE_DESTACADO ?? 'compra');
 
   return (
     <div ref={raiz} className="relative min-h-screen">
@@ -37,6 +43,7 @@ export default function Landing() {
         <Tarjetas />
         <ComoFunciona />
         <QueHace />
+        <Precios tramo={tramo} onTramo={setTramo} paquete={paquete} onPaquete={setPaquete} onPedir={setTramo} />
       </main>
     </div>
   );

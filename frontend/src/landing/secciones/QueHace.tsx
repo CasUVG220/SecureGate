@@ -18,10 +18,10 @@ export function QueHace() {
   return (
     <section id="que-hace" aria-labelledby="titulo-que-hace" className="py-24 lg:py-36">
       <div className="l-contenedor">
-        <header data-revelar className="grid gap-6 lg:grid-cols-12 lg:items-end">
+        <div data-revelar className="grid gap-6 lg:grid-cols-12 lg:items-end">
           <h2 id="titulo-que-hace" className="text-titulo font-extrabold lg:col-span-6">{QUE_HACE.titulo}</h2>
           <p className="max-w-medida text-entrada text-tinta-suave lg:col-span-5 lg:col-start-8">{QUE_HACE.bajada}</p>
-        </header>
+        </div>
 
         <div className="mt-14 grid gap-y-10 lg:mt-20 lg:grid-cols-12 lg:gap-x-10">
           <Especificacion filas={f.slice(0, 3)} desde={0} className="lg:col-span-7" />
