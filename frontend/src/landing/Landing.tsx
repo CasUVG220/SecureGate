@@ -12,6 +12,7 @@ import { useRevelar } from './componentes/useRevelar';
 import { Navegacion } from './secciones/Navegacion';
 import { Hero } from './secciones/Hero';
 import { Tarjetas } from './secciones/Tarjetas';
+import { ComoFunciona } from './secciones/ComoFunciona';
 
 /**
  * Landing público de SecureGate (ruta `/`). Una sola acción: pedir una demo (#contacto).
@@ -33,6 +34,7 @@ export default function Landing() {
       <main id="contenido" tabIndex={-1} className="outline-none">
         <Hero />
         <Tarjetas />
+        <ComoFunciona />
       </main>
     </div>
   );

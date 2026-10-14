@@ -69,3 +69,43 @@ export const TARJETAS = [
     alt: 'Panel de administración de SecureGate con la lista de residentes y el estado de sus cuotas.',
   },
 ] as const;
+
+/**
+ * Cómo funciona. Cada paso deja un dato en el registro; `campo` dice cuál, y el registro de ejemplo de abajo los junta.
+ * Los datos del ejemplo son ficticios y la página lo dice.
+ */
+export const COMO_FUNCIONA = {
+  titulo: 'Cómo funciona',
+  bajada: 'De la invitación al registro, en cuatro pasos. Cada paso deja su dato en la bitácora.',
+  pasos: [
+    {
+      titulo: 'El residente invita',
+      texto: 'Desde el portal crea una invitación con QR, con fechas de vigencia y número de usos.',
+      campo: 'autorizó',
+    },
+    {
+      titulo: 'La garita lee placa o DPI',
+      texto: 'La cámara lee la placa y el DPI se lee en el propio equipo. Si la lectura tiene dudas, el agente la confirma antes de registrar.',
+      campo: 'placa',
+    },
+    {
+      titulo: 'Se autoriza o se rechaza',
+      texto: 'Pasa con una invitación vigente, un aviso de visita o la decisión del agente. Una invitación vencida o agotada, o alguien en la lista negra, no pasa.',
+      campo: 'resultado',
+    },
+    {
+      titulo: 'Queda en la bitácora',
+      texto: 'Hora, garita, placa o DPI, a qué casa va y quién autorizó. Sin internet se guarda cifrado en la garita y se sube al volver la conexión.',
+      campo: 'hora',
+    },
+  ],
+  /** Registro de ejemplo (ficticio). La placa usa el formato de la app (utils/placa.ts). */
+  ejemplo: {
+    rotulo: 'Ejemplo de registro · datos ficticios',
+    hora: '18:42:07',
+    garita: 'Garita 1 · entrada',
+    destino: 'Casa 14',
+    autorizo: 'Invitación con QR del residente',
+    resultado: 'Autorizado',
+  },
+} as const;

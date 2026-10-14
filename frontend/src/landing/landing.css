@@ -245,6 +245,40 @@
   }
 }
 
+/* ══ Cómo funciona (sección oscura) ═════════════════════════════════════════ */
+@layer components {
+  /* Borde superior en rampa: sube hacia la derecha con el gesto del hero. */
+  .l-banda-oscura {
+    --l-rampa: clamp(2.5rem, 6vw, 5.5rem);
+    clip-path: polygon(0 var(--l-rampa), 100% 0, 100% 100%, 0 100%);
+  }
+
+  /* Tramo de la línea de pasos: filete de la sección y, encima, el relleno de acento que se dibuja al entrar. */
+  .l-paso-linea {
+    position: relative;
+    display: block;
+    height: 1px;
+    margin-top: 1.25rem;
+    background: rgb(var(--l-noche-linea));
+  }
+  .l-paso-linea::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: -4px;
+    width: 9px;
+    height: 9px;
+    background: rgb(var(--l-acento));
+  }
+  .l-paso-linea::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: rgb(var(--l-acento));
+    transform-origin: left center;
+  }
+}
+
 /* ══ Movimiento ══════════════════════════════════════════════════════════════
    Solo `transform` y `opacity`. Con `prefers-reduced-motion: reduce` no hay
    entradas, ni revelado por sección, ni video (MediaSlot deja el póster).
@@ -259,6 +293,15 @@
   }
   .l-revelar-activo [data-revelar][data-visible] {
     opacity: 1;
+    transform: none;
+  }
+  /* La línea de pasos se llena de izquierda a derecha, un tramo tras otro. */
+  .l-revelar-activo .l-paso .l-paso-linea::after {
+    transform: scaleX(0);
+    transition: transform 700ms cubic-bezier(0.2, 0.7, 0.2, 1);
+    transition-delay: calc(var(--l-retardo, 0ms) + 250ms);
+  }
+  .l-revelar-activo .l-paso[data-visible] .l-paso-linea::after {
     transform: none;
   }
 }

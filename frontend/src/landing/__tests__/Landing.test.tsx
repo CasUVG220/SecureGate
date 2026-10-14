@@ -61,6 +61,25 @@ describe('Landing · encabezados', () => {
   });
 });
 
+describe('Landing · cómo funciona', () => {
+  it('cuatro pasos en una lista ordenada, en la sección oscura', () => {
+    render(<Landing />);
+    const seccion = document.getElementById('como-funciona')!;
+    expect(seccion).toHaveClass('l-oscuro');
+    expect(within(seccion).getAllByRole('heading', { level: 3 }).map(h => h.textContent)).toEqual([
+      'Paso 1: El residente invita', 'Paso 2: La garita lee placa o DPI', 'Paso 3: Se autoriza o se rechaza', 'Paso 4: Queda en la bitácora',
+    ]);
+    expect(seccion.querySelector('ol')!.children).toHaveLength(4);
+  });
+
+  it('el registro de ejemplo se declara ficticio y usa el formato de placa de la app', () => {
+    render(<Landing />);
+    const seccion = document.getElementById('como-funciona')!;
+    expect(within(seccion).getByText(/datos ficticios/i)).toBeInTheDocument();
+    expect(within(seccion).getByText('P-123ABC')).toBeInTheDocument();
+  });
+});
+
 describe('Landing · anti-plantilla (criterio de aceptación)', () => {
   const texto = () => {
     render(<Landing />);
