@@ -123,6 +123,17 @@ describe('Landing · preguntas frecuentes', () => {
   });
 });
 
+describe('Landing · pie', () => {
+  it('enlaza la página y la app, con el año y la razón social pendiente a la vista', () => {
+    render(<Landing />);
+    const pie = screen.getByRole('contentinfo');
+    expect(within(pie).getByRole('link', { name: 'Portal del residente' })).toHaveAttribute('href', '/residente');
+    expect(within(pie).getByRole('link', { name: /Ingresar/ })).toHaveAttribute('href', '/personal');
+    expect(pie).toHaveTextContent(String(new Date().getFullYear()));
+    expect(within(pie).getByText('[POR CONFIRMAR: razón social]')).toBeInTheDocument();
+  });
+});
+
 describe('Landing · anti-plantilla (criterio de aceptación)', () => {
   const texto = () => {
     render(<Landing />);
@@ -130,7 +141,8 @@ describe('Landing · anti-plantilla (criterio de aceptación)', () => {
   };
 
   it('sin emojis', () => {
-    expect(texto()).not.toMatch(/\p{Extended_Pictographic}/u);
+    // ©, ® y ™ son «pictográficos» para Unicode, pero no son emojis.
+    expect(texto()).not.toMatch(/(?![\u00A9\u00AE\u2122])\p{Extended_Pictographic}/u);
   });
 
   it('sin superlativos ni frases de plantilla', () => {

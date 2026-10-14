@@ -17,6 +17,7 @@ import { QueHace } from './secciones/QueHace';
 import { Precios } from './secciones/Precios';
 import { Preguntas } from './secciones/Preguntas';
 import { Contacto } from './secciones/Contacto';
+import { Pie } from './secciones/Pie';
 import { PAQUETE_DESTACADO, type Paquete, type TramoHogares } from './planes';
 
 /**
@@ -55,6 +56,7 @@ export default function Landing() {
         <Preguntas />
         <Contacto tramoSugerido={tramoElegido} />
       </main>
+      <Pie />
     </div>
   );
 }

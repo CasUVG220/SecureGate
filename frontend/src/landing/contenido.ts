@@ -293,3 +293,14 @@ export const CONTACTO = {
     error: 'No pudimos enviar tu solicitud. Revisá tu conexión e intentá de nuevo, o escribinos por WhatsApp.',
   },
 } as const;
+
+/** Pie de página. `razonSocial` en `null` = falta y se pinta [POR CONFIRMAR]. */
+export const PIE = {
+  lema: 'Control de acceso para residenciales en Guatemala.',
+  razonSocial: null as string | null,
+  /** Entradas de la app (las mismas rutas que RUTA_PORTAL en src/routing/portales.ts). */
+  app: [
+    { href: '/personal', texto: 'Ingresar (administración)' },
+    { href: '/residente', texto: 'Portal del residente' },
+  ],
+} as const;
