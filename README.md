@@ -208,7 +208,8 @@ publica de la VM si levantaste el entorno alli.
 
 | Servicio | URL | Descripcion |
 |---------|-----|-------------|
-| Frontend | http://\<IP-del-servidor\>:5173 | Aplicacion React |
+| Landing publico | http://\<IP-del-servidor\>:5173/ | Pagina de venta (ver `docs/landing.md`) |
+| Aplicacion | http://\<IP-del-servidor\>:5173/personal | Acceso de administracion (residentes: `/residente`) |
 | Backend health | http://\<IP-del-servidor\>:3000/health | Estado del servidor |
 | Backend + BD | http://\<IP-del-servidor\>:3000/api/status | Conexion a PostgreSQL |
 
@@ -227,7 +228,7 @@ gcloud compute firewall-rules create securegate-dev \
 
 **No hace falta configurar `VITE_API_URL` por servidor.** El frontend detecta
 en runtime el hostname desde el que se abrio la pagina
-(`window.location.hostname`, en `frontend/src/services/api.ts`) y arma la URL
+(`window.location.hostname`, en `frontend/src/services/baseUrl.ts`) y arma la URL
 del backend contra ese mismo host. Abrir `http://34.16.22.9:5173` hace que las
 peticiones vayan a `http://34.16.22.9:3000` automaticamente.
 
