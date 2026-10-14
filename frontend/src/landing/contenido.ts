@@ -109,3 +109,67 @@ export const COMO_FUNCIONA = {
     resultado: 'Autorizado',
   },
 } as const;
+
+/**
+ * Lo que hace hoy: SOLO lo implementado (verificado contra docs/: qr_sin_conexion, ocr_dpi_local, camaras_ip_diseno,
+ * celular_como_camara, verificacion_dos_pasos, refresh_tokens, acciones_sensibles, pagos_saldo, saas_nucleo).
+ * `tecnica` es el rótulo con el nombre de lo que usa. Las dos imágenes son 3:2 (1500 × 1000).
+ */
+export const QUE_HACE = {
+  titulo: 'Lo que hace hoy',
+  bajada: 'Solo lo que ya está implementado, con el nombre de lo que usa.',
+  funciones: [
+    {
+      nombre: 'Garita que no depende del internet',
+      detalle: 'App de escritorio para Windows con base local cifrada. Sin conexión sigue registrando; sincroniza al arrancar, cada 5 minutos y a mano.',
+      tecnica: 'SQLCipher',
+    },
+    {
+      nombre: 'Placa y DPI leídos en la garita',
+      detalle: 'Reconocimiento de texto (OCR) en el propio equipo. Si la lectura local no alcanza, hay respaldo remoto, que se puede apagar por equipo para que la foto del DPI no salga de la garita.',
+      tecnica: 'OCR local',
+    },
+    {
+      nombre: 'Cámaras IP o un teléfono',
+      detalle: 'Cámaras ONVIF/RTSP, o un teléfono que transmita video en la red local. Vista de 1, 2 o 4 cámaras.',
+      tecnica: 'ONVIF · RTSP · MJPEG',
+    },
+    {
+      nombre: 'Invitaciones con QR sin conexión',
+      detalle: 'Cada garita guarda una copia de las invitaciones vigentes y, sin internet, valida fechas, usos y revocación. Al volver la red, cada uso se descuenta una sola vez.',
+      tecnica: 'QR',
+    },
+    {
+      nombre: 'Acceso de administradores',
+      detalle: 'Verificación en dos pasos con app de autenticación, cierre de la sesión si se reutiliza un token de renovación y límite de intentos.',
+      tecnica: 'TOTP',
+    },
+    {
+      nombre: 'Bitácora de auditoría',
+      detalle: 'Cada acción sensible queda con persona, fecha, IP y resultado, también los intentos rechazados. Filtros por acción, resultado, persona y fechas.',
+      tecnica: 'Auditoría',
+    },
+    {
+      nombre: 'Cobros y pagos',
+      detalle: 'Cuotas y cargos por mora. Cada pago, en efectivo o por transferencia, descuenta del saldo de la casa. La pasarela de pago con tarjeta es intercambiable.',
+      tecnica: 'Pagos',
+    },
+    {
+      nombre: 'Planes y facturación',
+      detalle: 'Planes, suscripciones y facturación mensual de la residencial, y exportación de todos sus datos en CSV.',
+      tecnica: 'CSV',
+    },
+  ],
+  imagenes: {
+    camaras: {
+      archivo: 'seccion-camaras.jpg',
+      alt: 'Pantalla de la garita con la vista de cuatro cámaras: entrada, salida, placa y DPI.',
+      pie: 'Vista de 4 cámaras en la garita.',
+    },
+    qr: {
+      archivo: 'seccion-qr.jpg',
+      alt: 'Agente de garita leyendo con la cámara la invitación con QR que una visita muestra en su teléfono.',
+      pie: 'Invitación con QR leída en la garita.',
+    },
+  },
+} as const;

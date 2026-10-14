@@ -80,6 +80,28 @@ describe('Landing · cómo funciona', () => {
   });
 });
 
+describe('Landing · lo que hace hoy', () => {
+  it('es una lista de especificación (dl), no tarjetas: ocho funciones con su rótulo técnico', () => {
+    render(<Landing />);
+    const seccion = document.getElementById('que-hace')!;
+    const nombres = [...seccion.querySelectorAll('dt')].map(dt => dt.textContent?.replace(/^\d{2}/, ''));
+    expect(nombres).toHaveLength(8);
+    expect(nombres[0]).toBe('Garita que no depende del internet');
+    for (const tecnica of ['SQLCipher', 'OCR local', 'ONVIF · RTSP · MJPEG', 'TOTP']) {
+      expect(within(seccion).getByText(tecnica)).toBeInTheDocument();
+    }
+  });
+
+  it('las dos imágenes intercaladas tienen texto alternativo y pie', () => {
+    render(<Landing />);
+    const seccion = document.getElementById('que-hace')!;
+    const imgs = within(seccion).getAllByRole('img');
+    expect(imgs.map(i => i.getAttribute('src'))).toEqual(['/landing/seccion-camaras.jpg', '/landing/seccion-qr.jpg']);
+    for (const i of imgs) expect(i.getAttribute('alt')!.length).toBeGreaterThan(20);
+    expect(seccion.querySelectorAll('figcaption')).toHaveLength(2);
+  });
+});
+
 describe('Landing · anti-plantilla (criterio de aceptación)', () => {
   const texto = () => {
     render(<Landing />);

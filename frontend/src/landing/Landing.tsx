@@ -13,6 +13,7 @@ import { Navegacion } from './secciones/Navegacion';
 import { Hero } from './secciones/Hero';
 import { Tarjetas } from './secciones/Tarjetas';
 import { ComoFunciona } from './secciones/ComoFunciona';
+import { QueHace } from './secciones/QueHace';
 
 /**
  * Landing público de SecureGate (ruta `/`). Una sola acción: pedir una demo (#contacto).
@@ -35,6 +36,7 @@ export default function Landing() {
         <Hero />
         <Tarjetas />
         <ComoFunciona />
+        <QueHace />
       </main>
     </div>
   );

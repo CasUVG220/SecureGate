@@ -196,7 +196,7 @@ function Hueco({ faltan, ancho, alto, alt, puntos, puntosMovil, parcial }: Props
   }
 
   const contorno = (p: string, clase?: string) => (
-    <svg className={cx('absolute inset-2 h-[calc(100%-1rem)] w-[calc(100%-1rem)] text-tinta-suave', clase)} viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+    <svg className={cx('absolute inset-2 h-[calc(100%-1rem)] w-[calc(100%-1rem)] text-tinta-suave', clase)} viewBox="0 0 100 100" preserveAspectRatio="none" overflow="visible" aria-hidden="true">
       <polygon points={puntosSvg(p)} fill="none" stroke="currentColor" strokeWidth="1.25" strokeDasharray="6 5" vectorEffect="non-scaling-stroke" />
     </svg>
   );

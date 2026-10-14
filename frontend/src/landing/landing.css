@@ -279,6 +279,17 @@
   }
 }
 
+/* ══ Lo que hace hoy ═══════════════════════════════════════════════════════ */
+@layer components {
+  /* La imagen de las cámaras se sale hacia el borde derecho, como el video del hero (sin llegar a la orilla en
+     pantallas muy anchas). */
+  @media (min-width: 1024px) {
+    .l-que-hace-camaras {
+      margin-right: calc(-1 * min(5rem, var(--l-canal) + max(0px, (100vw - 77.5rem - 2 * var(--l-canal)) / 2)));
+    }
+  }
+}
+
 /* ══ Movimiento ══════════════════════════════════════════════════════════════
    Solo `transform` y `opacity`. Con `prefers-reduced-motion: reduce` no hay
    entradas, ni revelado por sección, ni video (MediaSlot deja el póster).
