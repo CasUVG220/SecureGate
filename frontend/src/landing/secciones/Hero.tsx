@@ -6,11 +6,11 @@ import { CORTES, puntosSvg } from '../cortes';
 export function Hero() {
   const v = HERO.video;
   return (
-    <section id="inicio" aria-labelledby="titulo-hero" className="relative -mt-[var(--l-barra)] pt-[var(--l-barra)]">
+    <section id="inicio" aria-labelledby="titulo-hero" className="relative">
       <div className="l-fondo-hero" aria-hidden="true" />
 
       <div className="l-contenedor relative grid items-center gap-y-12 pb-16 pt-8 sm:pt-12 lg:grid-cols-12 lg:gap-x-10 lg:pb-28 lg:pt-20">
-        <div className="lg:col-span-6">
+        <div className="lg:col-span-7 xl:col-span-6">
           <h1 id="titulo-hero" className="l-entrada text-mega font-extrabold text-tinta">
             {HERO.titular} <span className="l-subrayado">{HERO.remate}</span>
           </h1>
@@ -28,7 +28,7 @@ export function Hero() {
           </div>
         </div>
 
-        <div className="l-hero-medio l-entrada-lateral lg:col-span-6" style={{ ['--l-retardo' as string]: '160ms' }}>
+        <div className="l-hero-medio l-entrada-lateral lg:col-span-5 xl:col-span-6" style={{ ['--l-retardo' as string]: '160ms' }}>
           {/* Contorno desplazado detrás del video: profundidad de plano técnico, sin sombra ni desenfoque. */}
           <svg className="l-hero-fantasma" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
             <polygon points={puntosSvg(CORTES.hero)} fill="none" stroke="currentColor" strokeWidth="1" vectorEffect="non-scaling-stroke" />

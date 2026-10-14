@@ -25,8 +25,9 @@ export const NAVEGACION = [
 ] as const;
 
 export const HERO = {
-  titular: 'Quién entra, a qué hora y quién lo autorizó.',
-  remate: 'Todo registrado.',
+  // El remate es la parte subrayada en el azul de la marca; juntos forman una sola frase.
+  titular: 'Nos encargamos de que todo fluya',
+  remate: 'sin arriesgar seguridad',
   bajada:
     'Control de acceso para residenciales en Guatemala: garita, portal del residente y administración. ' +
     'Si se cae el internet, la garita sigue registrando.',

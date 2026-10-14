@@ -40,7 +40,7 @@ export function ComoFunciona() {
               </h3>
               <p className="mt-3 max-w-[34ch] text-detalle text-noche-tenue">{p.texto}</p>
               <p className="mt-5 font-cifra text-rotulo text-noche-tenue">
-                <span className="text-acento">→</span> registra: <span className="text-noche-texto">{p.campo}</span>
+                <span className="text-papel">→</span> registra: <span className="text-noche-texto">{p.campo}</span>
               </p>
             </li>
           ))}
@@ -53,7 +53,7 @@ export function ComoFunciona() {
               <div key={r.etiqueta} className="bg-noche-alta px-4 py-4">
                 <dt className="flex items-baseline justify-between gap-2 text-rotulo text-noche-tenue">
                   {r.etiqueta}
-                  <span className="text-acento" aria-label={`del paso ${pasoDe(r.campo) + 1}`}>{numero(pasoDe(r.campo))}</span>
+                  <span className="text-papel" aria-label={`del paso ${pasoDe(r.campo) + 1}`}>{numero(pasoDe(r.campo))}</span>
                 </dt>
                 <dd className="mt-2 text-detalle font-medium text-papel">{r.valor}</dd>
               </div>

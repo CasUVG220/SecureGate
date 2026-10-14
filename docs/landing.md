@@ -154,18 +154,18 @@ No hay variables nuevas obligatorias: con las de siempre (`PUBLIC_URL` en produc
 
 ## Diseño (por qué se ve así)
 
-- **Colores:** salen de los tokens de la app (`src/styles/tokens.ts`): neutros pizarra del tema claro para texto y
-  grises, el lienzo claro de la app como fondo y el azul noche del tema **oscuro** de la app para la única sección
-  oscura («Cómo funciona»). El logo es el de la app (chip carbón, escudo blanco). La app no tiene color de acento (su
-  marca es carbón a propósito), así que el único color propio del landing es el cian `#00B8D9` de la propuesta
-  **[POR CONFIRMAR: hex real de la marca]**. Se usa poco: botón primario, el subrayado de «Todo registrado», el estado
-  activo de la barra y de la regla de hogares. Sobre claro nunca va como texto (2.4:1): el botón lleva texto tinta (7.5:1).
-  `__tests__/tokens.test.ts` mide el contraste AA de cada pareja que usa la página.
+- **Colores:** ninguno es propio; todos salen de los tokens de la app (`src/styles/tokens.ts`) y
+  `__tests__/tokens.test.ts` falla si aparece uno que la app no tenga. Fondo blanco (el «papel» de la app); grises
+  pizarra del tema claro; el **azul SecureGate** es `#16243d`, la parte alta del lienzo del tema oscuro de la app (el
+  azul marino del acceso en `/personal`): barra de navegación, botones de «Pedir demo» y «Enviar solicitud», el
+  subrayado del titular y la marca de la regla de hogares. La única sección oscura («Cómo funciona») usa el lienzo
+  oscuro de la app y ahí los acentos son blancos, como en ese tema. El logo es el de la app (chip carbón, escudo
+  blanco). `__tests__/tokens.test.ts` también mide el contraste AA de cada pareja que usa la página.
 - **Tipografía:** Schibsted Grotesk 700/800 en titulares, Instrument Sans 400–600 en el cuerpo e IBM Plex Mono en cifras
   y rótulos técnicos; autoalojadas, subconjunto latino, `font-display: swap`. Escala cerrada de nueve pasos en
   `tailwind.landing.config.ts` (no hay tamaños sueltos).
 - **Firma visual:** el corte diagonal (la talanquera a medio subir) en el video, las tarjetas y el borde de la sección
-  oscura; cuadrícula técnica tenue con cruces de registro detrás del hero; contorno desplazado en vez de sombras.
+  oscura, sobre fondo blanco liso; contorno desplazado detrás del video en vez de sombras.
 - **Movimiento:** una entrada orquestada en el hero y un fundido hacia arriba por bloque con IntersectionObserver; solo
   `transform` y `opacity`. Con `prefers-reduced-motion: reduce` no hay animaciones ni video (queda el póster). El video
   tiene botón de pausa (WCAG 2.2.2).
@@ -191,7 +191,6 @@ fuentes (woff2 de 15 a 25 KB cada una, se bajan solo las que se usan). React (61
 
 Visibles en la página hasta que se completen:
 
-- Hex real del acento de la marca (hoy `#00B8D9`, en `tokens.ts` y `landing.css`).
 - Número de WhatsApp y correo de contacto (`CONTACTO`).
 - Razón social (`PIE`).
 - Contrato mínimo de Compra y de Licencia (`PRECIOS.filas.contrato`).

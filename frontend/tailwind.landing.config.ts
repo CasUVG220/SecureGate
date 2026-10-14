@@ -29,7 +29,7 @@ export default {
     },
     fontSize: {
       // Titular del hero y numerales de los pasos: fluidos entre 360 y 1440 px, con tope.
-      mega:      ['clamp(2.5rem, 1.55rem + 4.1vw, 4.75rem)', { lineHeight: '1.02', letterSpacing: '-0.035em' }],
+      mega:      ['clamp(2.5rem, 1.55rem + 4.1vw, 4.25rem)', { lineHeight: '1.02', letterSpacing: '-0.035em' }],
       numeral:   ['clamp(3.5rem, 2.4rem + 4.5vw, 6.5rem)', { lineHeight: '0.9', letterSpacing: '-0.04em' }],
       titulo:    ['clamp(2rem, 1.45rem + 2.3vw, 3.25rem)', { lineHeight: '1.05', letterSpacing: '-0.03em' }],
       subtitulo: ['1.5rem', { lineHeight: '1.2', letterSpacing: '-0.015em' }],

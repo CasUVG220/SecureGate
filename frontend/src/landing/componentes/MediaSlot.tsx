@@ -164,7 +164,7 @@ export function MediaSlot({
           type="button"
           onClick={alternarPausa}
           className="absolute bottom-3 right-3 inline-flex min-h-10 items-center gap-2 rounded bg-noche/80 px-3 font-texto text-detalle font-medium text-noche-texto transition-colors hover:bg-noche"
-          style={{ ['--l-foco' as string]: 'var(--l-acento)' }}
+          style={{ ['--l-foco' as string]: 'var(--l-papel)' }}
         >
           <Icono nombre={enPausa ? 'reproducir' : 'pausa'} tamano={16} />
           {enPausa ? 'Reproducir video' : 'Pausar video'}
@@ -189,7 +189,7 @@ interface PropsHueco {
 function Hueco({ faltan, ancho, alto, alt, puntos, puntosMovil, parcial }: PropsHueco) {
   if (parcial) {
     return (
-      <p className="l-pendiente absolute left-3 top-3 bg-papel/90">
+      <p className="l-pendiente absolute right-3 top-3 bg-papel/90">
         Falta {faltan.join(' y ')}
       </p>
     );

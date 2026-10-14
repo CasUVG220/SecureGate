@@ -7,7 +7,17 @@ describe('Landing · estructura y navegación', () => {
     render(<Landing />);
     const h1s = screen.getAllByRole('heading', { level: 1 });
     expect(h1s).toHaveLength(1);
-    expect(h1s[0]).toHaveTextContent('Quién entra, a qué hora y quién lo autorizó. Todo registrado.');
+    expect(h1s[0]).toHaveTextContent('Nos encargamos de que todo fluya sin arriesgar seguridad');
+  });
+
+  it('la barra de navegación va en el azul de la marca y «Pedir demo» es un botón de marca en toda la página', () => {
+    render(<Landing />);
+    expect(screen.getByRole('banner')).toHaveClass('bg-marca');
+    const demos = screen.getAllByRole('link', { name: /Pedir demo/ });
+    expect(demos[0]).toHaveClass('text-marca');                           // invertido sobre la barra azul
+    const botones = demos.slice(1).filter(a => !a.closest('footer'));     // en el pie es un enlace de texto
+    expect(botones.length).toBeGreaterThanOrEqual(2);
+    for (const a of botones) expect(a).toHaveClass('l-boton-primario');
   });
 
   it('el enlace para saltar al contenido apunta al <main>', () => {
