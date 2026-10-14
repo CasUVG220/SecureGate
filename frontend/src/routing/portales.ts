@@ -39,6 +39,17 @@ export function normalizarRuta(pathname: string): string {
   return limpia === '' ? '/' : limpia;
 }
 
+/**
+ * Página pública (landing) en `/`. Antes `/` redirigía al portal del personal; ahora es la entrada pública y la app
+ * se carga solo en las demás rutas (ver main.tsx). Los portales, sus alias y las rutas públicas de invitación y alta
+ * no cambian: el botón «Ingresar» del landing lleva a RUTA_PORTAL.personal y desde ahí la sesión manda como siempre.
+ */
+export const RUTA_LANDING = '/';
+
+export function esRutaLanding(pathname: string): boolean {
+  return normalizarRuta(pathname) === RUTA_LANDING;
+}
+
 /** Portal que le corresponde a un rol. Todo lo que no es residente es personal. */
 export function portalDeRol(rol: string): Portal {
   return rol === 'residente' ? 'residente' : 'personal';

@@ -17,7 +17,8 @@ const neutral = cssVarRamp('neutral');
 const border  = cssVarRamp('border');
 
 export default {
-  content: ['./index.html', './src/**/*.{js,ts,jsx,tsx}'],
+  // El landing (src/landing) tiene su propio Tailwind: tailwind.landing.config.ts.
+  content: ['./index.html', './src/**/*.{js,ts,jsx,tsx}', '!./src/landing/**'],
   darkMode: 'class',
   theme: {
     extend: {

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  RUTA_PORTAL, normalizarRuta, otroPortal, portalDeRol, portalDeRuta,
+  RUTA_PORTAL, esRutaLanding, normalizarRuta, otroPortal, portalDeRol, portalDeRuta,
 } from '../portales';
 
 describe('portalDeRol', () => {
@@ -93,5 +93,22 @@ describe('rutas públicas del alta autoservicio (T12)', () => {
     const { portalDeRuta } = await import('../portales');
     expect(portalDeRuta('/registro')).toBeNull();
     expect(portalDeRuta(`/onboarding/${token}`)).toBeNull();
+  });
+});
+
+describe('esRutaLanding', () => {
+  it('la raíz es el landing público', () => {
+    expect(esRutaLanding('/')).toBe(true);
+    expect(esRutaLanding('')).toBe(true);
+  });
+
+  it('los portales, sus alias y las rutas públicas de la app no son el landing', () => {
+    for (const ruta of ['/personal', '/residente', '/staff', '/admin', '/portal', '/registro', '/invitacion/abc', '/onboarding/abc', '/x']) {
+      expect([ruta, esRutaLanding(ruta)]).toEqual([ruta, false]);
+    }
+  });
+
+  it('la raíz y los portales siguen sin cruzarse: «/» no es la entrada de ningún portal', () => {
+    expect(portalDeRuta('/')).toBeNull();
   });
 });

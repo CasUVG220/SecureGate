@@ -1,0 +1,167 @@
+@config "../../tailwind.landing.config.ts";
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ══════════════════════════════════════════════════════════════════════════
+   SecureGate — landing (página pública en `/`)
+   ──────────────────────────────────────────────────────────────────────────
+   Solo se carga en `/`: la app autenticada tiene su propia hoja (index.css) y
+   ninguna de las dos llega al otro lado (ver main.tsx).
+
+   Los valores salen de `src/landing/tokens.ts` (que a su vez sale de los tokens
+   de la app). `__tests__/tokens.test.ts` falla si este bloque y ese archivo se
+   separan. Formato "R G B" para que Tailwind pueda aplicar opacidad.
+   ══════════════════════════════════════════════════════════════════════════ */
+:root {
+  --l-tinta: 15 23 42;
+  --l-tinta-suave: 71 85 105;
+  --l-tinta-tenue: 100 116 139;
+  --l-lienzo: 244 246 249;
+  --l-lienzo-hondo: 238 242 246;
+  --l-lavado: 219 232 247;
+  --l-papel: 255 255 255;
+  --l-linea: 226 232 240;
+  --l-linea-fuerte: 203 213 225;
+  --l-noche: 11 18 32;
+  --l-noche-alta: 19 28 43;
+  --l-noche-linea: 42 56 80;
+  --l-noche-texto: 226 232 240;
+  --l-noche-tenue: 148 163 184;
+  --l-logo: 39 39 42;
+  --l-logo-tinta: 255 255 255;
+  --l-acento: 0 184 217;
+  --l-acento-hondo: 2 165 196;
+  --l-exito: 4 120 87;
+  --l-error: 185 28 28;
+
+  /* Anillo de foco: tinta sobre claro; las secciones oscuras lo cambian a acento. */
+  --l-foco: var(--l-tinta);
+  /* Alto de la barra fija: las anclas (#precios…) caen debajo de ella. */
+  --l-barra: 4.5rem;
+  color-scheme: light;
+}
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+    scroll-padding-top: calc(var(--l-barra) + 1rem);
+    -webkit-text-size-adjust: 100%;
+    background: rgb(var(--l-lienzo));
+  }
+
+  body {
+    @apply bg-lienzo font-texto text-cuerpo text-tinta antialiased;
+    font-kerning: normal;
+    /* La sangría del video del hero no debe abrir scroll horizontal. */
+    overflow-x: clip;
+  }
+
+  h1, h2, h3 {
+    @apply font-titular;
+    text-wrap: balance;
+  }
+
+  p, li, dd, summary {
+    text-wrap: pretty;
+  }
+
+  :focus-visible {
+    outline: 2px solid rgb(var(--l-foco));
+    outline-offset: 3px;
+    border-radius: 2px;
+  }
+
+  ::selection {
+    background: rgb(var(--l-acento) / 0.3);
+  }
+}
+
+@layer components {
+  /* Contenedor: 16 px de margen en teléfono, 1240 px de ancho útil en escritorio. */
+  .l-contenedor {
+    width: 100%;
+    max-width: calc(77.5rem + 2 * var(--l-canal));
+    margin-inline: auto;
+    padding-inline: var(--l-canal);
+    --l-canal: 1rem;
+  }
+  @media (min-width: 768px) { .l-contenedor { --l-canal: 1.5rem; } }
+  @media (min-width: 1024px) { .l-contenedor { --l-canal: 2.5rem; } }
+
+  /* Sección oscura: invierte el anillo de foco y la selección. */
+  .l-oscuro {
+    --l-foco: var(--l-acento);
+    color-scheme: dark;
+  }
+
+  /* ── Botones ──
+     Radio corto (son controles, no tarjetas) y 48 px de alto: el público son administradores, no todos con buen pulso.
+     El primario es acento con texto tinta (7.5:1); el blanco sobre este cian no llega a 2.5:1. */
+  .l-boton {
+    @apply inline-flex min-h-12 items-center justify-center gap-2.5 rounded px-5 font-texto text-cuerpo font-semibold leading-none no-underline transition-colors duration-150;
+  }
+  .l-boton-primario {
+    @apply bg-acento text-tinta hover:bg-acento-hondo;
+  }
+  .l-boton-secundario {
+    @apply text-tinta hover:bg-tinta/5;
+    box-shadow: inset 0 0 0 1.5px rgb(var(--l-tinta));
+  }
+  .l-boton .l-flecha {
+    transition: transform 160ms ease-out;
+  }
+  .l-boton:hover .l-flecha {
+    transform: translateX(3px);
+  }
+
+  /* Rótulo técnico (cifras, nombres de protocolo, metadatos): mono, pequeño, con tracking. */
+  .l-rotulo {
+    @apply font-cifra text-rotulo uppercase;
+  }
+
+  /* Dato pendiente de confirmar: visible a propósito, para que nadie lo confunda con un dato real. */
+  .l-pendiente {
+    @apply rounded-sm bg-transparent px-1 font-cifra text-rotulo font-medium normal-case text-tinta;
+    box-shadow: inset 0 0 0 1px rgb(var(--l-tinta-suave));
+    background-image: repeating-linear-gradient(-45deg, rgb(var(--l-acento) / 0.18) 0 4px, transparent 4px 8px);
+  }
+  .l-oscuro .l-pendiente {
+    @apply text-noche-texto;
+    box-shadow: inset 0 0 0 1px rgb(var(--l-noche-tenue));
+  }
+
+  /* ── Huecos de medios (MediaSlot) ──
+     El recorte se define con dos variables para que el teléfono pueda llevar un corte más suave. */
+  .l-recorte {
+    clip-path: var(--l-recorte-movil, var(--l-recorte, none));
+  }
+  @media (min-width: 768px) {
+    .l-recorte { clip-path: var(--l-recorte, none); }
+  }
+  .l-solo-movil { display: block; }
+  .l-solo-amplio { display: none; }
+  @media (min-width: 768px) {
+    .l-solo-movil { display: none; }
+    .l-solo-amplio { display: block; }
+  }
+}
+
+/* ══ Movimiento ══════════════════════════════════════════════════════════════
+   Solo `transform` y `opacity`. Con `prefers-reduced-motion: reduce` no hay
+   entradas, ni revelado por sección, ni video (MediaSlot deja el póster).
+   El revelado solo se arma cuando el observador existe (clase `l-revelar-activo`
+   en <html>): sin JavaScript o sin IntersectionObserver todo queda visible. */
+@media (prefers-reduced-motion: no-preference) {
+  .l-revelar-activo [data-revelar] {
+    opacity: 0;
+    transform: translateY(18px);
+    transition: opacity 640ms cubic-bezier(0.2, 0.7, 0.2, 1), transform 640ms cubic-bezier(0.2, 0.7, 0.2, 1);
+    transition-delay: var(--l-retardo, 0ms);
+  }
+  .l-revelar-activo [data-revelar][data-visible] {
+    opacity: 1;
+    transform: none;
+  }
+}
