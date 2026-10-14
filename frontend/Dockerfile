@@ -24,6 +24,9 @@ RUN npm ci
 COPY . .
 ARG VITE_API_URL=
 ENV VITE_API_URL=${VITE_API_URL}
+# URL pública del sitio (sin barra final): og:image, og:url y canonical del landing (src/landing/seo.ts).
+ARG VITE_SITE_URL=
+ENV VITE_SITE_URL=${VITE_SITE_URL}
 RUN npm run build
 
 # ── prod ─────────────────────────────────────────────────────────────────────

@@ -114,6 +114,8 @@ services:
         # Detras de nginx el frontend y la API comparten dominio, asi que la
         # URL base es el propio origen HTTPS. Se hornea en el build.
         VITE_API_URL: ${PUBLIC_URL:?define PUBLIC_URL, p. ej. https://midominio.com}
+        # El landing (`/`) necesita la URL absoluta para la vista previa al compartir el enlace (og:image).
+        VITE_SITE_URL: ${PUBLIC_URL:?define PUBLIC_URL, p. ej. https://midominio.com}
     container_name: securegate-frontend
     restart: unless-stopped
     cap_drop: [ALL]

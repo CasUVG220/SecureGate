@@ -4,10 +4,10 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <!-- Título y descripción del landing (la ruta `/`, la única que indexan los buscadores). La app pone su propio
-         título al cargar; la fuente Outfit de la app ya no va aquí: la pide main.tsx solo fuera del landing. -->
-    <title>SecureGate · Control de acceso para residenciales</title>
-    <meta name="description" content="Control de acceso para residenciales en Guatemala: garita que funciona sin internet, invitaciones con QR, lectura de placa y DPI, y bitácora de auditoría." />
+    <!-- Título, descripción, Open Graph y JSON-LD del landing (la ruta `/`, la única que indexan los buscadores): los
+         inyecta vite.config.ts desde src/landing/seo.ts. La app pone su propio título al cargar, y su fuente (Outfit)
+         ya no va aquí: la pide main.tsx solo fuera del landing. -->
+    <!--seo-landing-->
   </head>
   <body>
     <div id="root"></div>
