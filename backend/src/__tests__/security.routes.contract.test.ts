@@ -79,6 +79,9 @@ const PUBLICAS = new Set([
   'PUT /api/onboarding/:token/borrador',
   'POST /api/onboarding/:token/completar',
   'POST /api/onboarding/:token/reenviar',
+  // Formulario «Pedir demo» del landing: público a propósito; límite por IP, campo trampa, validación estricta y auditoría.
+  // (La barra final es la del router montado en '/contacto' con su ruta '/'.)
+  'POST /api/contacto/',
 ]);
 const claveDe = (r: RutaReal) => `${r.method} /api${r.path}`;
 

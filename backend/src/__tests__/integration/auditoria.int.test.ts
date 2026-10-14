@@ -252,6 +252,13 @@ const CASOS: Caso[] = [
       return request(app).post(`/api/onboarding/${token}/reenviar`).send({});
     },
   },
+  // ── Página pública (landing) ──
+  {
+    accion: 'CONTACTO_RECIBIDO', quien: null,
+    ejecutar: () => request(app).post('/api/contacto').send({
+      nombre: 'AUD Contacto', residencial: `AUD Residencial ${uid()}`, hogares: '200', telefono: '5555 1234', email: `aud.contacto.${uid()}@inttest.local`,
+    }),
+  },
   { accion: 'DATOS_EMPRESA_EXPORTADOS', quien: 'owner', ejecutar: () => request(app).get(`/api/empresas/${fx.empresas.A}/exportar`).set(as('owner')).buffer(true).parse((res, cb) => { const t: Buffer[] = []; res.on('data', c => t.push(c)); res.on('end', () => cb(null, Buffer.concat(t))); }) },
 
   // ── Sucursales (admin de empresa) ──

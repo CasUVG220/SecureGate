@@ -967,4 +967,21 @@ CREATE TABLE IF NOT EXISTS onboarding_solicitudes (
 CREATE INDEX IF NOT EXISTS idx_onboarding_email ON onboarding_solicitudes(email, created_at);
 CREATE INDEX IF NOT EXISTS idx_onboarding_ip    ON onboarding_solicitudes(ip_origen, created_at);
 
+-- ── Landing · solicitudes de demo (formulario público de la página en `/`) ────────────────────────────────────────
+-- Cada fila es una persona que pidió una demo. Solo se guarda: el aviso al equipo comercial está pendiente (TODO en
+-- contacto.controller.ts). `hogares` es el tramo de la tabla de precios; `ip_origen` sirve para investigar abuso.
+CREATE TABLE IF NOT EXISTS contactos (
+  id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  nombre       VARCHAR(100) NOT NULL,
+  residencial  VARCHAR(150) NOT NULL,
+  hogares      VARCHAR(5)   NOT NULL CHECK (hogares IN ('50', '100', '200', '500', '1000', '1000+')),
+  telefono     VARCHAR(20)  NOT NULL,
+  email        VARCHAR(254) NOT NULL,
+  mensaje      VARCHAR(1000),
+  ip_origen    VARCHAR(64),
+  created_at   TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_contactos_created ON contactos(created_at);
+
 SELECT 'SecureGate DB inicializada correctamente' AS mensaje;

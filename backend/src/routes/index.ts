@@ -30,6 +30,7 @@ import configReservasRouter from './config-reservas.routes';
 import licenciasRouter from './licencias.routes';
 import syncRouter from './sync.routes';
 import invitacionesRouter from './invitaciones.routes';
+import contactoRouter from './contacto.routes';
 import { verifyToken, requireOwner, requireAdminEmpresa, requireAdminSucursal, requireStaff } from '../middleware/auth.middleware';
 import { getDashboard } from '../controllers/dashboard.controller';
 import { getAuditLogs, getAuditAcciones } from '../controllers/audit.controller';
@@ -92,6 +93,8 @@ router.use('/sync',               syncRouter);
 // Aprovisionamiento en cascada (owner → admin_empresa → admin_sucursal). Va
 // sin verifyToken global: GET /:token y POST /:token/aceptar son públicos.
 router.use('/invitaciones',       invitacionesRouter);
+// Formulario «Pedir demo» de la página pública: sin sesión a propósito, con límite por IP, campo trampa y auditoría.
+router.use('/contacto',           contactoRouter);
 
 router.get('/dashboard',   verifyToken, requireStaff, getDashboard);
 router.get('/audit-logs/acciones', verifyToken, requireOwner, getAuditAcciones);
