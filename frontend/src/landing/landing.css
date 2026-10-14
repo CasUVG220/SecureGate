@@ -375,6 +375,47 @@
   }
 }
 
+/* ══ Preguntas ═════════════════════════════════════════════════════════════ */
+@layer components {
+  .l-pregunta summary::-webkit-details-marker {
+    display: none;
+  }
+  /* Más/menos dibujado con dos barras: la vertical se pliega (scaleY) al abrir. */
+  .l-mas {
+    position: relative;
+    flex: none;
+    width: 1rem;
+    height: 1rem;
+  }
+  .l-mas::before,
+  .l-mas::after {
+    content: '';
+    position: absolute;
+    background: rgb(var(--l-tinta));
+    transition: transform 200ms cubic-bezier(0.2, 0.7, 0.2, 1);
+  }
+  .l-mas::before {
+    left: 0;
+    right: 0;
+    top: calc(50% - 1px);
+    height: 2px;
+  }
+  .l-mas::after {
+    top: 0;
+    bottom: 0;
+    left: calc(50% - 1px);
+    width: 2px;
+  }
+  .l-pregunta[open] .l-mas::after {
+    transform: scaleY(0);
+  }
+  .l-pregunta summary:hover {
+    text-decoration: underline;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 0.2em;
+  }
+}
+
 /* ══ Movimiento ══════════════════════════════════════════════════════════════
    Solo `transform` y `opacity`. Con `prefers-reduced-motion: reduce` no hay
    entradas, ni revelado por sección, ni video (MediaSlot deja el póster).

@@ -211,3 +211,57 @@ export const PRECIOS = {
   notaReferencial: 'Los precios del equipo son referenciales y se confirman en la cotización.',
   aMedida: 'Cotización a medida',
 } as const;
+
+/**
+ * Preguntas frecuentes. `respuesta`: lo que se sabe y se puede afirmar; `pendiente`: lo que falta confirmar (se pinta
+ * «[POR CONFIRMAR: …]»); `enlace`: opcional. Una pregunta sin respuesta conocida lleva solo `pendiente`.
+ */
+export const PREGUNTAS: ReadonlyArray<{
+  pregunta: string;
+  respuesta?: string;
+  pendiente?: string;
+  enlace?: { href: string; texto: string };
+}> = [
+  {
+    pregunta: '¿Qué pasa si se cae el internet?',
+    respuesta:
+      'La garita sigue registrando en su base local cifrada (SQLCipher) y valida las invitaciones con QR con la copia que guarda de las vigentes. ' +
+      'Cuando vuelve la conexión sube lo pendiente, y cada uso de un QR se descuenta una sola vez. El portal del residente y el panel de administración sí necesitan internet.',
+  },
+  {
+    pregunta: '¿Quién es dueño de los datos?',
+    respuesta: 'La residencial. Desde el panel, el administrador descarga todos los datos de la residencial en archivos CSV cuando quiera.',
+    pendiente: 'dónde se alojan los datos y cuánto tiempo se conservan al terminar el contrato',
+  },
+  {
+    pregunta: '¿Qué equipo se necesita?',
+    respuesta:
+      'Con Compra o Alquiler el equipo va incluido: barrera vehicular de 3 m, tres cámaras IP (placa, panorámica y DPI), lector UHF para tags, ' +
+      'mini PC con monitor de 24", switch PoE, UPS, gabinete y cableado. Con Licencia lo pone la residencial y tiene que cumplir la ficha técnica mínima; ' +
+      'las cámaras deben funcionar con ONVIF o RTSP, y un teléfono también puede servir de cámara.',
+    enlace: { href: FICHA_TECNICA, texto: 'Ficha técnica mínima (PDF)' },
+  },
+  {
+    pregunta: '¿Cuánto tarda la instalación?',
+    pendiente: 'días de instalación por caseta, desde la firma del contrato',
+  },
+  {
+    pregunta: '¿Qué incluye el mantenimiento?',
+    respuesta:
+      'En Compra, la mensualidad cubre el software, el soporte, las actualizaciones y el mantenimiento del equipo. En Alquiler cubre además la reposición del equipo. ' +
+      'En Licencia hay soporte y actualizaciones del software, sin mantenimiento de hardware.',
+    pendiente: 'frecuencia de las visitas de mantenimiento y tiempo de respuesta ante una falla',
+  },
+  {
+    pregunta: '¿Cuál es el contrato mínimo del alquiler?',
+    respuesta: '36 meses. Durante el contrato el equipo es de SecureGate y la renta cubre su mantenimiento y reposición.',
+  },
+  {
+    pregunta: '¿Qué cuenta como un hogar para el cobro?',
+    pendiente: 'qué cuenta como hogar (por ejemplo, lotes sin construir o casas desocupadas)',
+  },
+  {
+    pregunta: '¿Cómo se pide factura?',
+    pendiente: 'cómo se pide la factura y con qué datos',
+  },
+];

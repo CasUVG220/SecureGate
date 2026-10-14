@@ -102,6 +102,27 @@ describe('Landing · lo que hace hoy', () => {
   });
 });
 
+describe('Landing · preguntas frecuentes', () => {
+  it('ocho preguntas en <details>/<summary> nativos, cerradas al cargar', () => {
+    render(<Landing />);
+    const detalles = document.querySelectorAll('#preguntas details');
+    expect(detalles).toHaveLength(8);
+    for (const d of detalles) {
+      expect(d.querySelector('summary')).not.toBeNull();
+      expect(d).not.toHaveAttribute('open');
+    }
+  });
+
+  it('lo que no se sabe queda visible como [POR CONFIRMAR], no inventado', () => {
+    render(<Landing />);
+    const resumen = (texto: string) => [...document.querySelectorAll('#preguntas summary')].find(s => s.textContent === texto)!;
+    for (const q of ['¿Cuánto tarda la instalación?', '¿Qué cuenta como un hogar para el cobro?', '¿Cómo se pide factura?']) {
+      expect(resumen(q).parentElement!.textContent).toMatch(/\[POR CONFIRMAR: .+\]/);
+    }
+    expect(resumen('¿Cuál es el contrato mínimo del alquiler?').parentElement!.textContent).toContain('36 meses');
+  });
+});
+
 describe('Landing · anti-plantilla (criterio de aceptación)', () => {
   const texto = () => {
     render(<Landing />);
@@ -122,10 +143,11 @@ describe('Landing · anti-plantilla (criterio de aceptación)', () => {
     }
   });
 
-  it('voseo consistente: sin imperativos de tuteo en lo que se lee', () => {
-    const t = ` ${texto().toLowerCase()} `;
-    for (const tuteo of [' pide ', ' escríbenos ', ' elige ', ' déjanos ', ' revisa ', ' puedes ', ' tienes ', ' contáctanos ']) {
-      expect([tuteo.trim(), t.includes(tuteo)]).toEqual([tuteo.trim(), false]);
+  it('voseo consistente: sin imperativos ni formas de tuteo en lo que se lee', () => {
+    const t = texto().toLowerCase();
+    // «se pide» (impersonal) no es tuteo: solo cuenta el imperativo suelto.
+    for (const tuteo of [/(?<!se )\bpide\b/, /\bescríbenos\b/, /\belige\b/, /\bdéjanos\b/, /\brevisa\b/, /\bpuedes\b/, /\btienes\b/, /\bcontáctanos\b/]) {
+      expect([String(tuteo), tuteo.test(t)]).toEqual([String(tuteo), false]);
     }
   });
 });

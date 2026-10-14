@@ -15,6 +15,7 @@ import { Tarjetas } from './secciones/Tarjetas';
 import { ComoFunciona } from './secciones/ComoFunciona';
 import { QueHace } from './secciones/QueHace';
 import { Precios } from './secciones/Precios';
+import { Preguntas } from './secciones/Preguntas';
 import { PAQUETE_DESTACADO, type Paquete, type TramoHogares } from './planes';
 
 /**
@@ -44,6 +45,7 @@ export default function Landing() {
         <ComoFunciona />
         <QueHace />
         <Precios tramo={tramo} onTramo={setTramo} paquete={paquete} onPaquete={setPaquete} onPedir={setTramo} />
+        <Preguntas />
       </main>
     </div>
   );
