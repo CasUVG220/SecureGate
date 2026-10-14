@@ -148,6 +148,103 @@
   }
 }
 
+/* ══ Barra ═════════════════════════════════════════════════════════════════ */
+@layer components {
+  /* Enlace activo: barra de acento debajo (decorativa: el estado también cambia peso y color del texto). */
+  .l-enlace-nav {
+    position: relative;
+    padding-block: 0.375rem;
+  }
+  .l-enlace-nav::after {
+    content: '';
+    position: absolute;
+    inset-inline: 0;
+    bottom: -0.25rem;
+    height: 3px;
+    background: rgb(var(--l-acento));
+    transform: scaleX(0);
+    transform-origin: left center;
+    transition: transform 220ms cubic-bezier(0.2, 0.7, 0.2, 1);
+  }
+  .l-enlace-nav[aria-current]::after {
+    transform: scaleX(1);
+  }
+}
+
+/* ══ Hero ══════════════════════════════════════════════════════════════════ */
+@layer components {
+  /* Fondo: el lavado claro de la app arriba y una cuadrícula de plano técnico que se apaga hacia abajo, con una cruz
+     de registro cada cuatro celdas. Sin degradados de color, sin manchas, sin desenfoque. */
+  .l-fondo-hero {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    background: linear-gradient(to bottom, rgb(var(--l-lavado)) 0%, rgb(var(--l-lienzo)) 78%);
+    pointer-events: none;
+  }
+  .l-fondo-hero::before,
+  .l-fondo-hero::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    -webkit-mask-image: linear-gradient(to bottom, #000 0%, #000 45%, transparent 92%);
+    mask-image: linear-gradient(to bottom, #000 0%, #000 45%, transparent 92%);
+  }
+  .l-fondo-hero::before {
+    background-image:
+      linear-gradient(to right, rgb(var(--l-tinta) / 0.055) 1px, transparent 1px),
+      linear-gradient(to bottom, rgb(var(--l-tinta) / 0.055) 1px, transparent 1px);
+    background-size: 2.5rem 2.5rem;
+    background-position: center top;
+  }
+  .l-fondo-hero::after {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cpath d='M0 -6V6M-6 0H6M160 154v12M154 160h12M0 154v12M-6 160H6M160 -6V6M154 0h12' stroke='%230f172a' stroke-opacity='.32' stroke-width='1'/%3E%3C/svg%3E");
+    background-size: 10rem 10rem;
+    background-position: center top;
+  }
+
+  /* «Todo registrado.»: el único subrayado de acento de la página. Va por debajo de las letras y se parte bien si
+     el remate cae en dos renglones. */
+  .l-subrayado {
+    background-image: linear-gradient(rgb(var(--l-acento)), rgb(var(--l-acento)));
+    background-repeat: no-repeat;
+    background-size: 100% 0.16em;
+    background-position: 0 92%;
+    -webkit-box-decoration-break: clone;
+    box-decoration-break: clone;
+    padding-inline: 0.02em;
+  }
+
+  .l-hero-medio {
+    position: relative;
+    /* Teléfono y tablet: el video va debajo del titular, de borde a borde. */
+    margin-inline: calc(-1 * var(--l-canal));
+  }
+  @media (min-width: 1024px) {
+    .l-hero-medio {
+      margin-left: 0;
+      /* Se sale del contenedor hacia el borde derecho: hasta la orilla en pantallas normales, y como mucho 7.5 rem
+         más allá del contenedor en pantallas muy anchas. */
+      margin-right: calc(-1 * min(7.5rem, var(--l-canal) + max(0px, (100vw - 77.5rem - 2 * var(--l-canal)) / 2)));
+    }
+  }
+
+  .l-hero-fantasma {
+    display: none;
+  }
+  @media (min-width: 1024px) {
+    .l-hero-fantasma {
+      display: block;
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      color: rgb(var(--l-tinta) / 0.28);
+      transform: translate(-1.25rem, 1.25rem);
+    }
+  }
+}
+
 /* ══ Movimiento ══════════════════════════════════════════════════════════════
    Solo `transform` y `opacity`. Con `prefers-reduced-motion: reduce` no hay
    entradas, ni revelado por sección, ni video (MediaSlot deja el póster).
@@ -164,4 +261,24 @@
     opacity: 1;
     transform: none;
   }
+}
+
+/* Entrada del hero: una sola, orquestada (titular → video → bajada → botones). */
+@media (prefers-reduced-motion: no-preference) {
+  .l-entrada {
+    animation: l-entrar 720ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+    animation-delay: var(--l-retardo, 0ms);
+  }
+  .l-entrada-lateral {
+    animation: l-entrar-lateral 900ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+    animation-delay: var(--l-retardo, 0ms);
+  }
+}
+
+@keyframes l-entrar {
+  from { opacity: 0; transform: translateY(14px); }
+}
+
+@keyframes l-entrar-lateral {
+  from { opacity: 0; transform: translateX(32px); }
 }

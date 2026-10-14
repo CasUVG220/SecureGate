@@ -2,6 +2,7 @@ import { useCallback, useRef, useState, type CSSProperties } from 'react';
 import { cx } from '../../components/ui/cx';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
 import { Icono } from './Icono';
+import { puntosSvg } from '../cortes';
 
 /**
  * Hueco de medios del landing.
@@ -45,8 +46,6 @@ interface Props {
 const poligonoCss = (puntos?: string) =>
   puntos ? `polygon(${puntos.split(',').map(p => p.trim().split(/\s+/).map(n => `${n}%`).join(' ')).join(', ')})` : undefined;
 
-/** "0 0, 100 0" → "0,0 100,0" para <polygon points>. */
-const poligonoSvg = (puntos: string) => puntos.split(',').map(p => p.trim().split(/\s+/).join(',')).join(' ');
 
 const RECTANGULO = '0 0, 100 0, 100 100, 0 100';
 
@@ -198,7 +197,7 @@ function Hueco({ faltan, ancho, alto, alt, puntos, puntosMovil, parcial }: Props
 
   const contorno = (p: string, clase?: string) => (
     <svg className={cx('absolute inset-2 h-[calc(100%-1rem)] w-[calc(100%-1rem)] text-tinta-suave', clase)} viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
-      <polygon points={poligonoSvg(p)} fill="none" stroke="currentColor" strokeWidth="1.25" strokeDasharray="6 5" vectorEffect="non-scaling-stroke" />
+      <polygon points={puntosSvg(p)} fill="none" stroke="currentColor" strokeWidth="1.25" strokeDasharray="6 5" vectorEffect="non-scaling-stroke" />
     </svg>
   );
 
@@ -211,7 +210,9 @@ function Hueco({ faltan, ancho, alto, alt, puntos, puntosMovil, parcial }: Props
         </>
       ) : contorno(puntos)}
       <div className="relative max-w-[28ch] font-cifra text-rotulo text-tinta-suave" aria-hidden="true">
-        <p className="font-medium text-tinta">{faltan.join(' · ')}</p>
+        <ul className="font-medium text-tinta">
+          {faltan.map(f => <li key={f}>{f}</li>)}
+        </ul>
         <p className="mt-1">
           {proporcionLegible(ancho, alto)} · {ancho} × {alto} px
         </p>

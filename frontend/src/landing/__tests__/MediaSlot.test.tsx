@@ -81,7 +81,7 @@ describe('MediaSlot · video', () => {
     fireEvent.error(container.querySelectorAll('source')[1]);
     fireEvent.error(container.querySelector('img')!);
     expect(container.querySelector('video')).toBeNull();
-    expect(screen.getByText('hero.mp4 · hero.webm · hero-poster.jpg')).toBeInTheDocument();
+    expect([...container.querySelectorAll('li')].map(li => li.textContent)).toEqual(['hero.mp4', 'hero.webm', 'hero-poster.jpg']);
     expect(screen.getByText('16:9 · 1920 × 1080 px')).toBeInTheDocument();
   });
 

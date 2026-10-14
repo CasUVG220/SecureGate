@@ -9,6 +9,8 @@ import '@fontsource/ibm-plex-mono/latin-400.css';
 import '@fontsource/ibm-plex-mono/latin-500.css';
 import './landing.css';
 import { useRevelar } from './componentes/useRevelar';
+import { Navegacion } from './secciones/Navegacion';
+import { Hero } from './secciones/Hero';
 
 /**
  * Landing público de SecureGate (ruta `/`). Una sola acción: pedir una demo (#contacto).
@@ -19,14 +21,17 @@ export default function Landing() {
   useRevelar(raiz);
 
   return (
-    <div ref={raiz} className="min-h-screen">
+    <div ref={raiz} className="relative min-h-screen">
       <a
         href="#contenido"
         className="sr-only z-50 rounded bg-tinta px-4 py-3 font-semibold text-papel focus:not-sr-only focus:fixed focus:left-4 focus:top-4"
       >
         Saltar al contenido
       </a>
-      <main id="contenido" tabIndex={-1} className="outline-none" />
+      <Navegacion />
+      <main id="contenido" tabIndex={-1} className="outline-none">
+        <Hero />
+      </main>
     </div>
   );
 }
