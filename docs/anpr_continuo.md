@@ -72,15 +72,35 @@ verificación del agente con la evidencia. Un evento por pista; 60 s de enfriami
 | 7 | `desktop/scripts/medir-anpr.mjs` | reporte reproducible |
 | 8 | E2E con clip de ffmpeg, CI, documentación final | — |
 
-## 5. Deuda técnica encontrada (para el informe)
+## 5. Tarea 1 — Movimiento y ROI por carril
+
+Código: `desktop/sidecar-ocr/src/anpr/{reloj,roi,movimiento,imagen}.js`. Pruebas: `movimiento.test.js` (fotogramas sintéticos
+de 160×90 con ruido determinista y `RelojFalso`).
+
+- **ROI**: polígono normalizado (0–1), de 3 a 32 vértices; sin ROI = todo el cuadro. Un ROI mal escrito es un error, no «todo el
+  cuadro» en silencio. `fraccionDentro(caja)` (rejilla de 5×5) lo usa el detector de vehículos para descartar el carril de al lado.
+- **Movimiento**: el cuadro se reduce a 160 px de ancho en gris, se suaviza (caja 3×3) y se resta del anterior **solo dentro
+  del ROI**, descontando la diferencia media (un cambio de exposición o una nube no es movimiento). `cambio` = fracción de píxeles
+  del ROI con diferencia > `umbralPixel` (18).
+- **Histéresis** por cuadros: `framesActivar` = 3 (al restar cuadros, un destello de UN cuadro produce DOS diferencias; con 2 se
+  colaba), `framesDesactivar` = 6 (~1,2 s a 5 fps).
+- **Ritmo**: 1 fps en reposo y 5 fps con movimiento; el primer cuadro sospechoso ya pide 5 fps para confirmar en ~0,4 s en vez
+  de 3 s. `Ritmo` descarta los cuadros que llegan antes de tiempo. Quien entrega los cuadros (Rust) respeta el fps pedido.
+- **Salida**: `movimiento_inicio` / `movimiento_fin` (con `duracion_ms`) con la hora del reloj inyectado.
+- Costo medido en la prueba: < 1 ms por cuadro de 160×90 en este Xeon (tope de la prueba: 15 ms, para runners lentos).
+
+Límite conocido: restar cuadros no ve un vehículo **detenido**. Por eso el carril (tarea 4) mantiene despierto el detector
+mientras haya una pista sin decidir, aunque el movimiento haya terminado.
+
+## 6. Deuda técnica encontrada (para el informe)
 
 Se llena con cada `refactor(...)` que haga falta.
 
-## 6. Estado por tarea
+## 7. Estado por tarea
 
 | Tarea | Estado | Bandera | Pendiente |
 |---|---|---|---|
-| 1 Movimiento y ROI | pendiente | — | — |
+| 1 Movimiento y ROI | hecho | — | Calibrar `umbralCambio`/`umbralPixel` con la cámara real (lluvia, noche, faros) |
 | 2 Detector | pendiente | — | — |
 | 3 Tracker | pendiente | — | — |
 | 4 Consenso y evidencia | pendiente | — | — |
