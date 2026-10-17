@@ -200,6 +200,49 @@ test('asociación: por IoU primero; por centroide si el salto es grande pero el 
   assert.equal(t.activas().length, 2);
 });
 
+test('una pista vieja y chica NO se pega a un vehículo grande que llega al mismo lugar aunque se solapen', () => {
+  // Caso real del clip «dos_seguidos»: la pista del primero (ya decidida) quedó a la izquierda y el segundo llegó solapándola
+  // (IoU 0,23) con el doble y medio de área. Antes la heredaba y el segundo vehículo pasaba sin decisión.
+  const reloj = new RelojFalso();
+  const t = new Tracker({ framesConfirmar: 1, perdida_ms: 60_000, framesPerdida: 50 }, reloj);
+  t.actualizar([caja(10, 253, 377, 206)], W, H);
+  const viejo = t.activas()[0].id;
+  t.marcarLeyendo(viejo);
+  t.confirmar(viejo, 'P555TRK');
+  reloj.avanzar(200);
+  t.actualizar([], W, H);
+  reloj.avanzar(200);
+  t.actualizar([caja(53, 296, 831, 244)], W, H);
+  const ids = t.activas().map(p => p.id);
+  assert.equal(ids.length, 2, 'una pista nueva para el vehículo que llega');
+  assert.ok(ids.includes(viejo));
+});
+
+test('pérdida por tiempo: a 1 fps (vigilancia) una pista que no se ve por más de 2 s termina, sin esperar 8 cuadros', () => {
+  const reloj = new RelojFalso();
+  const t = new Tracker({ framesConfirmar: 1 }, reloj);
+  t.actualizar([caja(300, 200)], W, H);
+  const eventos = [];
+  for (let i = 0; i < 3; i++) { reloj.avanzar(1000); eventos.push(...t.actualizar([], W, H)); }
+  assert.equal(eventos.filter(e => e.evento === 'fin').length, 1);
+  assert.equal(t.activas().length, 0);
+});
+
+test('un vehículo que sale por el borde del cuadro termina a los 2 cuadros sin verlo y no se reabre', () => {
+  const reloj = new RelojFalso();
+  const t = new Tracker({ framesConfirmar: 1 }, reloj);
+  t.actualizar([caja(0, 250, 300, 180)], W, H);
+  reloj.avanzar(200);
+  t.actualizar([], W, H);
+  assert.equal(t.activas().length, 1);
+  reloj.avanzar(200);
+  const ev = t.actualizar([], W, H);
+  assert.deepEqual(ev.filter(e => e.evento === 'fin').map(e => e.motivo), ['salio_del_cuadro']);
+  reloj.avanzar(200);
+  t.actualizar([caja(0, 250, 300, 180)], W, H);
+  assert.equal(t.activas()[0].cuadros, 1, 'pista nueva, no reabierta');
+});
+
 test('configuración inválida y reloj obligatorio', () => {
   assert.throws(() => configurar({ iouMin: 0 }), /iouMin/);
   assert.throws(() => configurar({ tiempoMaxLectura_ms: 100 }), /tiempoMaxLectura_ms/);

@@ -9,7 +9,10 @@
  *       └──(se pierde)──▶ PERDIDO                 └──(se pierde)──▶ PERDIDO       CONFIRMADO / ILEGIBLE ──(se va)──▶ PASO
  *
  * Asociación por cuadro: primero por IoU (mayor primero, ≥ `iouMin`); lo que queda, por distancia de centroides (≤ `distanciaMax`
- * de la diagonal del cuadro y tamaño parecido). Una pista que deja de verse aguanta `framesPerdida` cuadros; después termina, pero
+ * de la diagonal del cuadro). En los dos casos el tamaño debe ser parecido: una pista vieja y chica no se pega a un vehículo
+ * grande que llega al mismo lugar. Una pista que deja de verse aguanta `framesPerdida` cuadros **y** `perdida_ms` (lo que pase
+ * primero: en vigilancia el detector corre a 1 fps y 8 cuadros serían 8 s); si la última vez tocaba el borde del cuadro (salió),
+ * basta con 2 cuadros sin verla. Después termina, pero
  * durante `ventanaReapertura_ms` una detección en el mismo lugar la **reabre** con el mismo id (oclusión larga de un vehículo
  * DETENIDO: un camión pasa por delante) en vez de crear una pista nueva. Solo se reabre una pista que estaba casi quieta y no
  * tocaba el borde del cuadro: la de un vehículo que se iba no se reabre, para que el SIGUIENTE vehículo que llega al mismo lugar
@@ -39,6 +42,8 @@ const POR_DEFECTO = Object.freeze({
   distanciaMax: 0.12,
   framesConfirmar: 2,
   framesPerdida: 8,
+  /** Tiempo máximo sin ver una pista antes de terminarla, aunque no se hayan procesado `framesPerdida` cuadros. */
+  perdida_ms: 2000,
   ventanaReapertura_ms: 5000,
   tiempoMaxLectura_ms: 4000,
   enfriamiento_ms: 60_000,
@@ -53,6 +58,7 @@ function configurar(cfg = {}) {
   rango('distanciaMax', 0.01, 1);
   rango('framesConfirmar', 1, 30);
   rango('framesPerdida', 1, 300);
+  rango('perdida_ms', 200, 60_000);
   rango('ventanaReapertura_ms', 0, 120_000);
   rango('tiempoMaxLectura_ms', 500, 60_000);
   rango('enfriamiento_ms', 0, 3_600_000);
@@ -128,7 +134,7 @@ class Tracker {
     for (const p of vivas) {
       detecciones.forEach((d, i) => {
         const v = iou(p.bbox, d.bbox);
-        if (v >= this.cfg.iouMin) pares.push([v, p, i]);
+        if (v >= this.cfg.iouMin && tamanoParecido(p.bbox, d.bbox)) pares.push([v, p, i]);
       });
     }
     pares.sort((a, b) => b[0] - a[0]);
@@ -149,8 +155,8 @@ class Tracker {
     this.terminadas = this.terminadas.filter(p => p.reabrible && ts - p.fin_ts <= this.cfg.ventanaReapertura_ms);
     for (const i of libresD) {
       const d = detecciones[i];
-      const k = this.terminadas.findIndex(p => iou(p.bbox, d.bbox) >= this.cfg.iouMin
-        || (this.#distancia(p.bbox, d.bbox) <= this.cfg.distanciaMax * diag && tamanoParecido(p.bbox, d.bbox)));
+      const k = this.terminadas.findIndex(p => tamanoParecido(p.bbox, d.bbox)
+        && (iou(p.bbox, d.bbox) >= this.cfg.iouMin || this.#distancia(p.bbox, d.bbox) <= this.cfg.distanciaMax * diag));
       if (k >= 0) {
         const p = this.terminadas.splice(k, 1)[0];
         p.estado = p.estadoAntesDeTerminar;
@@ -188,7 +194,10 @@ class Tracker {
       const p = this.pistas.get(id);
       p.perdidos++;
       p.seguidos = 0;
-      if (p.perdidos > this.cfg.framesPerdida) this.#terminar(p, ts, eventos, 'se_fue', ancho, alto);
+      const salio = enBorde(p.bbox, ancho, alto) && p.perdidos >= 2;
+      if (p.perdidos > this.cfg.framesPerdida || ts - p.ultima_ts > this.cfg.perdida_ms || salio) {
+        this.#terminar(p, ts, eventos, salio ? 'salio_del_cuadro' : 'se_fue', ancho, alto);
+      }
     }
 
     // 5) Tiempo máximo de lectura.
@@ -267,9 +276,7 @@ class Tracker {
     // ¿Se podrá reabrir? Solo si estaba casi quieta (≤ 1 % de la diagonal por cuadro) y lejos del borde del cuadro.
     const h = p.historial;
     const velocidad = h.length > 1 ? Math.hypot(h[h.length - 1][0] - h[0][0], h[h.length - 1][1] - h[0][1]) / (h.length - 1) : 0;
-    const b = p.bbox;
-    const enBorde = b.x <= 2 || b.y <= 2 || b.x + b.w >= ancho - 2 || b.y + b.h >= alto - 2;
-    p.reabrible = velocidad <= 0.01 * Math.hypot(ancho, alto) && !enBorde;
+    p.reabrible = velocidad <= 0.01 * Math.hypot(ancho, alto) && !enBorde(p.bbox, ancho, alto);
     // Se fue mientras se leía: el agente debe saber que pasó un vehículo sin placa leída.
     if (p.estado === ESTADOS.LEYENDO && !p.decidida) {
       p.decidida = true;
@@ -296,6 +303,11 @@ class Tracker {
     const [bx, by] = centro(b);
     return Math.hypot(ax - bx, ay - by);
   }
+}
+
+/** ¿La caja toca el borde del cuadro (el vehículo está entrando o saliendo)? */
+function enBorde(b, ancho, alto) {
+  return b.x <= 2 || b.y <= 2 || b.x + b.w >= ancho - 2 || b.y + b.h >= alto - 2;
 }
 
 /** Dos cajas de tamaño parecido (área entre la mitad y el doble): evita pegar una moto a la pista de un bus. */
