@@ -127,17 +127,54 @@ A 5 fps con movimiento son ~12–17 % de un núcleo; en reposo el detector no co
 `carril_vecino`) no hay ninguna detección aceptada; con el vehículo en el ROI se detecta en todos los cuadros en que está
 completo (`00000111…11100000`), siempre una sola caja.
 
-## 7. Deuda técnica encontrada (para el informe)
+## 7. Tarea 3 — Seguimiento (tracker) y máquina de estados
+
+Código: `desktop/sidecar-ocr/src/anpr/tracker.js`. Pruebas: `tracker.test.js` (trayectorias sintéticas, `RelojFalso`).
+
+```mermaid
+stateDiagram-v2
+    [*] --> DETECTADO
+    DETECTADO --> SIGUIENDO: framesConfirmar cuadros seguidos (2)
+    DETECTADO --> PERDIDO: deja de verse
+    SIGUIENDO --> LEYENDO: el carril manda la primera lectura
+    SIGUIENDO --> PERDIDO: deja de verse
+    LEYENDO --> CONFIRMADO: consenso de lecturas (tarea 4)
+    LEYENDO --> ILEGIBLE: sin consenso, 4 s sin lectura o se fue leyendo
+    CONFIRMADO --> PASO: deja de verse
+    ILEGIBLE --> PASO: deja de verse
+    PASO --> CONFIRMADO: reapertura (vehículo detenido tapado un rato)
+```
+
+- **Asociación**: IoU (≥ 0,2, el mayor primero) y, para lo que quede, distancia de centroides (≤ 12 % de la diagonal) con
+  tamaño parecido (área entre ½ y 2×: una moto no se pega a la pista de un bus).
+- **Pérdida tolerada**: 8 cuadros (~1,6 s a 5 fps) sin verla antes de terminar la pista (oclusión corta = misma pista).
+- **Reapertura**: durante 5 s una detección en el mismo lugar reabre la pista con su mismo id y su decisión. **Solo** si la
+  pista estaba casi quieta (≤ 1 % de la diagonal por cuadro) y lejos del borde: la de un vehículo que se iba no se reabre, para
+  que el siguiente que llega al mismo punto no herede su decisión (prueba «(c′)»).
+- **Una decisión por pista** (`decidida`). Si una pista que se estaba leyendo se va sin consenso, se emite `ilegible` con
+  motivo `se_fue_sin_lectura`: el agente se entera de que pasó un vehículo sin placa leída.
+- **Enfriamiento de 60 s por placa**, contado desde la ÚLTIMA vez que se vio el vehículo con esa placa (no desde la
+  confirmación): un carro estacionado que se re-detecta tras perderse no genera otro evento.
+- **Tiempo máximo de lectura**: 4 s (configurable) desde que la pista pasa a LEYENDO → ILEGIBLE.
+- Todos los tiempos salen del reloj inyectado; los eventos de transición se entregan en orden por `actualizar()` /
+  `tomarEventos()`.
+
+Aceptación cubierta: (a) un carro cruzando = un evento; (b) detenido 2 min (con pérdidas cortas) = un evento, y (b′) tapado
+más que la tolerancia = reapertura sin segundo evento; (c) dos carros seguidos = dos pistas y dos eventos, y (c′) el segundo
+no hereda la pista del primero; (d) oclusión corta no parte la pista; (e) la misma placa dentro de 60 s se ignora y después
+no.
+
+## 8. Deuda técnica encontrada (para el informe)
 
 Se llena con cada `refactor(...)` que haga falta.
 
-## 8. Estado por tarea
+## 9. Estado por tarea
 
 | Tarea | Estado | Bandera | Pendiente |
 |---|---|---|---|
 | 1 Movimiento y ROI | hecho | — | Calibrar `umbralCambio`/`umbralPixel` con la cámara real (lluvia, noche, faros) |
 | 2 Detector | hecho | — | Exactitud con cámara real (noche, lluvia, motos); aviso de licencia Apache-2.0 en el instalador |
-| 3 Tracker | pendiente | — | — |
+| 3 Tracker | hecho | — | Ajustar `iouMin`, pérdida y reapertura con video real (motos entre carros, colas en la talanquera) |
 | 4 Consenso y evidencia | pendiente | — | — |
 | 5 Decisión y actuador | pendiente | — | — |
 | 6 Interfaz | pendiente | — | — |
