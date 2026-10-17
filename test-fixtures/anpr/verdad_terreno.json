@@ -1,0 +1,119 @@
+{
+  "descripcion": "Verdad de terreno de los clips sintéticos del ANPR (generados por generar.mjs).",
+  "resolucion": [
+    960,
+    540
+  ],
+  "roi": [
+    [
+      0.2,
+      0.3
+    ],
+    [
+      0.72,
+      0.3
+    ],
+    [
+      0.86,
+      1
+    ],
+    [
+      0.06,
+      1
+    ]
+  ],
+  "clips": [
+    {
+      "archivo": "clips/entrada_p123abc.mp4",
+      "fps": 10,
+      "cuadros": 82,
+      "descripcion": "Sedán plateado entra, se detiene 1,5 s en la talanquera y sale.",
+      "vehiculos": [
+        {
+          "placa": "P123ABC",
+          "legible": true
+        }
+      ]
+    },
+    {
+      "archivo": "clips/entrada_c458dfg.mp4",
+      "fps": 10,
+      "cuadros": 82,
+      "descripcion": "Sedán negro entra, se detiene 1,5 s y sale.",
+      "vehiculos": [
+        {
+          "placa": "C458DFG",
+          "legible": true
+        }
+      ]
+    },
+    {
+      "archivo": "clips/detenido_m771klm.mp4",
+      "fps": 10,
+      "cuadros": 267,
+      "descripcion": "Vehículo que se queda 20 s detenido dentro del ROI: un solo evento.",
+      "vehiculos": [
+        {
+          "placa": "M771KLM",
+          "legible": true
+        }
+      ]
+    },
+    {
+      "archivo": "clips/dos_seguidos.mp4",
+      "fps": 10,
+      "cuadros": 149,
+      "descripcion": "Dos vehículos seguidos con 2 s entre uno y otro: dos pistas, dos eventos.",
+      "vehiculos": [
+        {
+          "placa": "P555TRK",
+          "legible": true
+        },
+        {
+          "placa": "U318BCD",
+          "legible": true
+        }
+      ]
+    },
+    {
+      "archivo": "clips/vacio.mp4",
+      "fps": 10,
+      "cuadros": 80,
+      "descripcion": "Carril vacío con ruido y un cambio de brillo (nube): sin vehículos ni movimiento.",
+      "vehiculos": []
+    },
+    {
+      "archivo": "clips/carril_vecino.mp4",
+      "fps": 10,
+      "cuadros": 60,
+      "descripcion": "Un vehículo pasa por el carril vecino (derecha), fuera del ROI: no cuenta ni despierta el pipeline.",
+      "vehiculos": []
+    },
+    {
+      "archivo": "clips/ilegible.mp4",
+      "fps": 10,
+      "cuadros": 97,
+      "descripcion": "Placa ilegible (texto muy borroso): debe terminar en verificación del agente, nunca en una placa inventada.",
+      "vehiculos": [
+        {
+          "placa": null,
+          "legible": false
+        }
+      ]
+    }
+  ],
+  "imagenes": [
+    {
+      "archivo": "imagenes/carro_en_roi.jpg",
+      "vehiculos_en_roi": 1
+    },
+    {
+      "archivo": "imagenes/vacio.jpg",
+      "vehiculos_en_roi": 0
+    },
+    {
+      "archivo": "imagenes/carro_fuera_roi.jpg",
+      "vehiculos_en_roi": 0
+    }
+  ]
+}
