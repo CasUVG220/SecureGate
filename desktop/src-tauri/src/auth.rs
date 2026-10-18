@@ -286,6 +286,9 @@ pub async fn jwt_vigente(state: &AppState) -> AppResult<String> {
 
 /// Limpia la sesión del almacén seguro (no sólo de memoria).
 pub fn cerrar_sesion_local(state: &AppState) -> AppResult<()> {
+    // Sin agente de turno nadie atiende las verificaciones ni las alertas: el ANPR se detiene (cerrar turno, o empresa
+    // suspendida) y vuelve a arrancar cuando la pantalla de la garita se abra con el siguiente login.
+    state.anpr.detener();
     guardar(state, None)
 }
 

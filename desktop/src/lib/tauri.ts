@@ -260,7 +260,122 @@ export interface AccesoPendiente {
   origen_dpi?: OrigenDpi | null;
   /** Id del registro en el servidor; vacío mientras el acceso siga pendiente de enviar. */
   registro_id?: string | null;
+  /** `anpr` si lo registró el reconocimiento continuo de placas (Sprint 10); vacío en los de siempre. */
+  origen?: 'anpr' | null;
 }
+
+// ── ANPR continuo (Sprint 10, ver src-tauri/src/anpr/ y docs/anpr_continuo.md) ──────────────────
+
+export type ModoCarril = 'apagado' | 'verificacion' | 'automatico';
+export type SentidoCarril = 'entrada' | 'salida';
+
+/** Lo que no se llena usa el valor por defecto del sidecar (ver docs/anpr_continuo.md). */
+export interface UmbralesCarril {
+  /** Fracción de píxeles del área que deben cambiar para «hay movimiento». */
+  umbral_cambio?: number | null;
+  /** Lecturas iguales para confirmar (1–5). */
+  min_coincidencias?: number | null;
+  /** Confianza agregada mínima (0,50–1). */
+  confianza_min?: number | null;
+  tiempo_max_lectura_ms?: number | null;
+  /** fps con movimiento: bajarlo alivia la CPU en equipos lentos. */
+  fps_activo?: number | null;
+}
+
+/** JSON etiquetado por `tipo`, igual que `actuador::ConfigActuador`. */
+export type ConfigActuador =
+  | { tipo: 'simulado' }
+  | { tipo: 'rele_http'; url: string; metodo: MetodoHttp; timeout_ms: number; cuerpo: string | null }
+  | { tipo: 'talanquera' };
+
+export interface Carril {
+  id: string;
+  nombre: string;
+  camara_id: string | null;
+  sentido: SentidoCarril;
+  modo: ModoCarril;
+  /** Polígono normalizado (0–1) sobre la imagen. Vacío = todo el cuadro. */
+  roi: [number, number][];
+  umbrales: UmbralesCarril;
+  actuador: ConfigActuador;
+  actualizado_en?: string | null;
+}
+
+export type EstadoCarril =
+  | { estado: 'iniciando' }
+  | { estado: 'activo'; fps: number }
+  | { estado: 'sin_camara'; motivo: string }
+  | { estado: 'error'; motivo: string }
+  | { estado: 'detenido' };
+
+export type CarrilConEstado = Carril & { estado: EstadoCarril };
+
+export interface EstadoAnpr {
+  pausado: boolean;
+  proceso_activo: boolean;
+  error: string | null;
+  carriles: CarrilConEstado[];
+  /** Eventos que esperan al agente. */
+  pendientes: number;
+}
+
+export type EstadoEventoAnpr =
+  | 'automatico' | 'verificacion_pendiente' | 'alerta_lista_negra' | 'ilegible' | 'resuelto' | 'descartado';
+
+export interface LecturaAnpr {
+  texto: string;
+  valida: boolean;
+  correcciones: number;
+  confianza: number;
+}
+
+export interface EventoAnpr {
+  id: string;
+  carril_id: string;
+  track_id: string;
+  sentido: SentidoCarril;
+  placa: string | null;
+  placa_probable: string | null;
+  resultado: 'confirmada' | 'ilegible' | string;
+  estado: EstadoEventoAnpr;
+  /** Motivo de la verificación (`desconocida`, `lectura_corregida`…) o razón del bloqueo. */
+  motivo: string | null;
+  confianza: number | null;
+  lecturas: LecturaAnpr[];
+  requiere_verificacion: boolean;
+  vehiculo_id: string | null;
+  residente_id: string | null;
+  residente_casa: string | null;
+  residente_nombre: string | null;
+  id_cliente: string | null;
+  /** `abierta` | `simulada` | `fallo: …` | null (no se mandó abrir). */
+  apertura: string | null;
+  ms_desde_legible: number | null;
+  creado_en: string;
+  resuelto_por: string | null;
+  resuelto_en: string | null;
+  resolucion: ResolucionAnpr | null;
+  evidencia_placa: boolean;
+  evidencia_vehiculo: boolean;
+}
+
+export type ResolucionAnpr = 'autorizar' | 'registro_manual' | 'descartar' | 'enterado';
+
+/** Una pista del seguimiento, en píxeles del cuadro que recibió el sidecar. */
+export interface PistaAnpr {
+  id: string;
+  estado: 'DETECTADO' | 'SIGUIENDO' | 'LEYENDO' | 'CONFIRMADO' | 'ILEGIBLE' | 'PASO' | 'PERDIDO' | string;
+  bbox: { x: number; y: number; w: number; h: number };
+  clase: string | null;
+  placa: string | null;
+}
+
+/** Lo que Rust emite por `sg://anpr`. */
+export type MensajeAnpr =
+  | { tipo: 'fotograma'; carril: string; pistas: PistaAnpr[] | null; tamano: [number, number] | null; movimiento: unknown; ms: Record<string, number> | null; fps: number | null }
+  | { tipo: 'evento'; carril: string; evento: EventoAnpr; alerta: boolean }
+  | { tipo: 'estado'; carril: string; estado: EstadoCarril }
+  | { tipo: 'apertura'; carril: string; evento_id: string; ok: boolean; simulada: boolean; error: string | null };
 
 // ── Cámaras IP y celular (T7) ────────────────────────────────────────────────
 
@@ -426,6 +541,26 @@ export const api = {
     instalar: (capturaEnCurso: boolean) => invoke<void>('actualizacion_instalar', { capturaEnCurso }),
   },
 
+  /** ANPR continuo. El modo por clic no depende de nada de esto: si el ANPR está pausado o caído, la garita sigue igual. */
+  anpr: {
+    estado: () => invoke<EstadoAnpr>('anpr_estado'),
+    /** La pantalla de la garita lo llama al abrirse con sesión: arranca los carriles habilitados. */
+    iniciar: () => invoke<EstadoAnpr>('anpr_iniciar'),
+    detener: () => invoke<void>('anpr_detener'),
+    /** «Pausar ANPR» (interruptor de emergencia del equipo). */
+    pausar: (pausado: boolean) => invoke<EstadoAnpr>('anpr_pausar', { pausado }),
+    carriles: () => invoke<Carril[]>('anpr_carriles'),
+    guardarCarril: (carril: Carril) => invoke<Carril>('anpr_carril_guardar', { carril }),
+    eliminarCarril: (id: string) => invoke<boolean>('anpr_carril_eliminar', { id }),
+    eventos: (limite = 50) => invoke<EventoAnpr[]>('anpr_eventos', { limite }),
+    /** JPEG en base64 de la evidencia, o null si ya se purgó. */
+    evidencia: (eventoId: string, tipo: 'placa' | 'vehiculo') => invoke<string | null>('anpr_evidencia', { eventoId, tipo }),
+    resolver: (eventoId: string, resolucion: ResolucionAnpr, placa?: string | null) =>
+      invoke<EventoAnpr>('anpr_resolver', { eventoId, resolucion, placa: placa ?? null }),
+    /** Pulso de prueba sin registrar nada; devuelve el texto para mostrar. */
+    probarActuador: (config: ConfigActuador) => invoke<string>('anpr_probar_actuador', { config }),
+  },
+
   ocr: {
     placa: (imagenBase64: string) => invoke<ResultadoOcr>('ocr_placa', { imagenBase64 }),
     precalentar: () => invoke<EstadoOcr>('ocr_precalentar'),
@@ -444,3 +579,7 @@ export const api = {
 /** Rust emite este evento tras cada sync / heartbeat / push. */
 export const onEstadoSync = (cb: (e: EstadoSync) => void): Promise<UnlistenFn> =>
   listen<EstadoSync>('sg://estado', ev => cb(ev.payload));
+
+/** Pistas, decisiones, estado de los carriles y resultado de la barrera del ANPR. */
+export const onAnpr = (cb: (m: MensajeAnpr) => void): Promise<UnlistenFn> =>
+  listen<MensajeAnpr>('sg://anpr', ev => cb(ev.payload));

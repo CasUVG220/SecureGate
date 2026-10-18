@@ -333,11 +333,36 @@ flowchart LR
   los accesos ANPR de residentes **no aparecen** ahí (sí en la bitácora y en la base). Mostrarlos requiere `LEFT JOIN` y una
   columna «vehículo de residente» en la tabla; se deja para un sprint del panel web.
 
-## 10. Deuda técnica encontrada (para el informe)
+## 10. Tarea 6 — Interfaz de la garita y configuración por carril
+
+Todo en `desktop/src/` (español, sin tocar el kit de UI copiado de la web: `npm run ui:check` sigue en verde).
+
+| Pieza | Qué hace |
+|---|---|
+| `lib/tauri.ts` | Tipos espejo de los DTO de Rust (`Carril`, `EstadoAnpr`, `EventoAnpr`, `MensajeAnpr`…), `api.anpr.*` y `onAnpr` (evento `sg://anpr`). `AccesoPendiente.origen`. |
+| `lib/anpr.ts` | Textos (motivos, estado del carril, resultado de la barrera), geometría de la superposición (cajas en % del cuadro), ROI (clic → punto 0–1, validación igual a Rust), carril nuevo **apagado**, validación de la URL del relé, sonido de alerta (Web Audio, tres pitidos; sin audio no hace nada). |
+| `hooks/useAnpr.ts` | Arranca los carriles al abrir la garita con sesión (`anpr_iniciar`), escucha `sg://anpr` (pistas por carril, evento nuevo arriba, estado de cada carril, resultado de la barrera), deriva alertas de lista negra, fallas de barrera y pendientes; `resolver`, `pausar`. |
+| `components/anpr/AnprPanel.tsx` | En la columna de cámaras: estado de cada carril y **vista en vivo** (MJPEG del puente local) con el área del carril y una caja por vehículo con su estado o su placa. Texto `sr-only` con lo que hay en el carril. |
+| `components/anpr/AnprEventos.tsx` | Lista en tiempo real (`aria-live="polite"`) con placa, residente, carril, confianza, tiempo desde la primera lectura legible, estado, resultado de la barrera y evidencia (se pide solo al mostrarse). Si espera al agente: **Autorizar** (un toque), **Corregir** (placa escrita → Rust revisa de nuevo todas las barandas), **Registro manual** (la placa pasa al formulario de siempre), **Descartar**. |
+| `components/anpr/AnprAlertas.tsx` | **Lista negra**: banda roja (`role="alert"` en región `aria-live="assertive"`, pulso solo con `motion-safe`) + sonido; queda hasta «Enterado». **Barrera que no respondió**: banda persistente que dice que el acceso ya quedó registrado y que se abra a mano, hasta «Entendido». |
+| `components/anpr/AnprConfigDialog.tsx` | Carriles del equipo: nombre, cámara de red (las USB no sirven: las abre el WebView), sentido, modo (casilla «Reconocer placas en este carril»: al marcarla propone **Automático**; un carril nuevo nace apagado), **área dibujable** con clics sobre una foto de la cámara (deshacer, todo el cuadro), ajustes avanzados (vacío = recomendado) y barrera (simulada, relé HTTP, talanquera del equipo) con «Probar barrera». Se guarda en el SQLCipher del equipo vía Rust. |
+| `pages/GaritaPage.tsx` | Botón global **«Pausar ANPR» / «Reanudar ANPR»** en el encabezado (con `aria-pressed`, visible si hay carriles), alertas bajo la tira de estado, panel ANPR bajo las cámaras y eventos sobre «Registrados en este equipo». |
+| `RecientesList.tsx` | Las filas del ANPR dicen «Vehículo de residente · ANPR» (sin DPI) y no ofrecen «Dar salida»: la salida de un residente la registra el carril de salida. |
+
+Rust: `auth::cerrar_sesion_local` ahora también detiene el ANPR (cerrar turno o empresa suspendida): sin agente nadie atiende
+las verificaciones. Vuelve a arrancar cuando la garita se abre con el siguiente login.
+
+Pruebas (Vitest + Testing Library): `lib/__tests__/anpr.test.ts` (14), `hooks/__tests__/useAnpr.test.tsx` (7),
+`components/anpr/__tests__/` (`AnprEventos` + `AnprAlertas` 10, `AnprPanel` 4, `AnprConfigDialog` 6) y un caso nuevo en
+`RecientesList.test.tsx`. Cubren regiones vivas, alerta asertiva, «Corregir» con validación y rechazo de Rust, ROI por clics,
+relé con prueba sin guardar, y que un carril nuevo nace apagado. Revisión visual: la pantalla se levantó con `vite` e `invoke`
+simulado (datos sintéticos) en Chromium, tema oscuro y claro; las capturas no se suben al repositorio.
+
+## 11. Deuda técnica encontrada (para el informe)
 
 Se llena con cada `refactor(...)` que haga falta.
 
-## 11. Estado por tarea
+## 12. Estado por tarea
 
 | Tarea | Estado | Bandera | Pendiente |
 |---|---|---|---|
@@ -346,6 +371,6 @@ Se llena con cada `refactor(...)` que haga falta.
 | 3 Tracker | hecho | — | Ajustar `iouMin`, pérdida y reapertura con video real (motos entre carros, colas en la talanquera) |
 | 4 Consenso y evidencia | hecho | — | Validar umbrales (0,90, 3 de 5) y el corte de cabina de la evidencia con la cámara real |
 | 5 Decisión y actuador | hecho | Carril nuevo `apagado`; «Pausar ANPR» | Probar `ReleHttp` con el relé real del integrador; decidir facturación y listados web (9.4) |
-| 6 Interfaz | pendiente | — | — |
+| 6 Interfaz | hecho | «Pausar ANPR» global | Probar con el agente real: tamaño de la alerta, volumen del sonido y lectura de la superposición en el monitor de la garita |
 | 7 Medición | pendiente | — | — |
 | 8 Pruebas integradas y docs | pendiente | — | — |

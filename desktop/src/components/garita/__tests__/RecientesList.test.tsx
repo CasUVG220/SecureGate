@@ -80,4 +80,20 @@ describe('RecientesList — buscar y dar salida', () => {
     render(<RecientesList accesos={LISTA} />);
     expect(screen.queryByRole('button', { name: /Dar salida/ })).toBeNull();
   });
+
+  it('ANPR: vehículo de residente sin DPI, con su origen, y sin «Dar salida» (la salida es del carril de salida)', () => {
+    render(<RecientesList
+      accesos={[
+        acceso({ id_cliente: 'a1', nombre_visitante: 'Ana Residente', numero_dpi: '', origen: 'anpr' }),
+        acceso({ id_cliente: 'a2', nombre_visitante: 'Luis Residente', numero_dpi: '', origen: 'anpr', capturado_manualmente: true, placa: 'M771KLM' }),
+      ]}
+      enLinea
+      onSalida={vi.fn()}
+    />);
+    expect(screen.getByText(/A-12 · Vehículo de residente · P-123ABC/)).toBeInTheDocument();
+    expect(screen.getByText('ANPR, confirmado por el agente')).toBeInTheDocument();
+    expect(screen.queryByText(/DPI/)).toBeNull();
+    expect(screen.queryByText(/manual/)).toBeNull();
+    expect(screen.queryByRole('button', { name: /Dar salida/ })).toBeNull();
+  });
 });

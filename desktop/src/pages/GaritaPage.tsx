@@ -13,6 +13,11 @@ import { PlacaOcrDialog } from '../components/garita/PlacaOcrDialog';
 import { RecientesList } from '../components/garita/RecientesList';
 import { SalidaDialog } from '../components/garita/SalidaDialog';
 import { HardwareConfigDialog } from '../components/garita/HardwareConfigDialog';
+import { AnprAlertas } from '../components/anpr/AnprAlertas';
+import { AnprConfigDialog } from '../components/anpr/AnprConfigDialog';
+import { AnprEventos } from '../components/anpr/AnprEventos';
+import { AnprPanel } from '../components/anpr/AnprPanel';
+import { useAnpr } from '../hooks/useAnpr';
 import { textoApertura } from '../lib/talanquera';
 import { VisitanteForm, type VisitanteFormHandle } from '../components/garita/VisitanteForm';
 import { ThemeToggle } from '../context/ThemeContext';
@@ -34,6 +39,8 @@ interface Props {
 const ICON_SYNC = 'M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15';
 const ICON_LOGOUT = 'M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9';
 const ICON_GATE = 'M3 21V9l9-6 9 6v12M9 21v-8h6v8';
+const ICON_PAUSA = 'M10 4H6v16h4zM18 4h-4v16h4z';
+const ICON_PLAY = 'M6 4l14 8-14 8z';
 
 export function GaritaPage({ estado, refrescar, onLogout }: Props) {
   const form = useRef<VisitanteFormHandle>(null);
@@ -53,6 +60,7 @@ export function GaritaPage({ estado, refrescar, onLogout }: Props) {
   const { disposicion, cambiarLayout, cambiarPanel } = useCamarasLayout();
   const [abriendo, setAbriendo] = useState(false);
   const [configHardware, setConfigHardware] = useState(false);
+  const [configAnpr, setConfigAnpr] = useState(false);
   const hayDriver = estado.hardware.estado !== 'sin_driver';
 
   /**
@@ -187,6 +195,15 @@ export function GaritaPage({ estado, refrescar, onLogout }: Props) {
 
   const habilitado = (estado.licencia.estado === 'activa' || estado.licencia.estado === 'en_gracia') && !!estado.sesion.usuario;
   const enLinea = estado.sync.en_linea;
+  const anpr = useAnpr(!!estado.sesion.usuario);
+  const hayCarriles = (anpr.estado?.carriles.length ?? 0) > 0;
+
+  /** «Registro manual» desde un evento del ANPR: la placa leída pasa al formulario de siempre. */
+  const registroManualAnpr = (placa: string | null) => {
+    if (placa) form.current?.setPlaca(placa);
+    form.current?.enfocarPlaca();
+    setAviso({ tone: 'info', texto: 'Completa el registro con el formulario: la placa ya está escrita.' });
+  };
 
   /**
    * Modo salida: con una sola vista de cámara y la tarea «Salida», el panel de la
@@ -241,6 +258,21 @@ export function GaritaPage({ estado, refrescar, onLogout }: Props) {
           >
             {hayDriver ? 'Abrir talanquera' : 'Talanquera'}
           </Button>
+          {hayCarriles && (
+            <Button
+              variant={anpr.estado?.pausado ? 'primary' : 'ghost'}
+              size="sm"
+              loading={anpr.pausando}
+              aria-pressed={!!anpr.estado?.pausado}
+              icon={<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={anpr.estado?.pausado ? ICON_PLAY : ICON_PAUSA} /></svg>}
+              onClick={() => void anpr.pausar(!anpr.estado?.pausado)}
+              title={anpr.estado?.pausado
+                ? 'Volver a reconocer placas en los carriles configurados'
+                : 'Detiene el reconocimiento en todos los carriles: ninguno abre solo. La captura por clic sigue igual.'}
+            >
+              {anpr.estado?.pausado ? 'Reanudar ANPR' : 'Pausar ANPR'}
+            </Button>
+          )}
           <Button
             variant="ghost"
             size="sm"
@@ -268,6 +300,13 @@ export function GaritaPage({ estado, refrescar, onLogout }: Props) {
 
       <div className="shrink-0 space-y-3 px-5 pt-4">
         <EstadoStrip estado={estado} />
+        <AnprAlertas
+          alertas={anpr.alertas}
+          fallas={anpr.fallas}
+          nombreCarril={anpr.nombreCarril}
+          onEnterado={id => anpr.resolver(id, 'enterado')}
+          onVerFalla={anpr.verFalla}
+        />
         {/* Actualizar reinicia la app: no se ofrece con accesos sin enviar ni con una captura a medias. */}
         <ActualizacionBanner
           pendientes={estado.sync.pendientes}
@@ -301,6 +340,7 @@ export function GaritaPage({ estado, refrescar, onLogout }: Props) {
             onEscribirPlaca={() => form.current?.enfocarPlaca()}
             onSalidaManual={() => setSalida({ placa: '' })}
           />
+          <AnprPanel estado={anpr.estado} pistas={anpr.pistas} error={anpr.error} onConfigurar={() => setConfigAnpr(true)} />
         </div>
         <div className="min-h-0 space-y-4 overflow-y-auto">
           <Card
@@ -340,6 +380,15 @@ export function GaritaPage({ estado, refrescar, onLogout }: Props) {
           </Card>
         </div>
         <div className="min-h-0 space-y-4 overflow-y-auto">
+          {(hayCarriles || anpr.eventos.length > 0) && (
+            <AnprEventos
+              eventos={anpr.eventos}
+              pendientes={anpr.pendientes}
+              nombreCarril={anpr.nombreCarril}
+              onResolver={async (id, r, placa) => { await anpr.resolver(id, r, placa); cargarRecientes(); }}
+              onRegistroManual={registroManualAnpr}
+            />
+          )}
           <RecientesList accesos={recientes} enLinea={enLinea} onSalida={salidaDeLista} />
           <Card title="Equipo">
             <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-sm">
@@ -366,6 +415,10 @@ export function GaritaPage({ estado, refrescar, onLogout }: Props) {
           onCerrar={() => setConfigHardware(false)}
           onGuardada={() => { setConfigHardware(false); void refrescar(); }}
         />
+      )}
+
+      {configAnpr && (
+        <AnprConfigDialog onCerrar={() => setConfigAnpr(false)} onCambio={() => void anpr.refrescar()} />
       )}
 
       {salida !== null && (
