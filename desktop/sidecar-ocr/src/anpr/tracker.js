@@ -277,11 +277,14 @@ class Tracker {
     const h = p.historial;
     const velocidad = h.length > 1 ? Math.hypot(h[h.length - 1][0] - h[0][0], h[h.length - 1][1] - h[0][1]) / (h.length - 1) : 0;
     p.reabrible = velocidad <= 0.01 * Math.hypot(ancho, alto) && !enBorde(p.bbox, ancho, alto);
-    // Se fue mientras se leía: el agente debe saber que pasó un vehículo sin placa leída.
-    if (p.estado === ESTADOS.LEYENDO && !p.decidida) {
+    // Se fue mientras se leía, o era un vehículo de verdad (se siguió ≥ `framesConfirmar` + 1 cuadros) del que nunca hubo un
+    // recorte útil: el agente debe saber que pasó un vehículo sin placa leída.
+    const vehiculoReal = p.estado === ESTADOS.SIGUIENDO && p.cuadros > this.cfg.framesConfirmar;
+    if ((p.estado === ESTADOS.LEYENDO || vehiculoReal) && !p.decidida) {
+      const motivo = p.estado === ESTADOS.LEYENDO ? 'se_fue_sin_lectura' : 'sin_recorte_util';
       p.decidida = true;
       this.#cambiar(p, ESTADOS.ILEGIBLE, ts, eventos);
-      eventos.push({ tipo: 'decision', resultado: 'ilegible', id: p.id, motivo: 'se_fue_sin_lectura', ts });
+      eventos.push({ tipo: 'decision', resultado: 'ilegible', id: p.id, motivo, ts });
     }
     p.estadoAntesDeTerminar = p.estado;
     p.fin_ts = ts;

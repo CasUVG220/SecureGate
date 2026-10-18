@@ -145,9 +145,10 @@ stateDiagram-v2
     PASO --> CONFIRMADO: reapertura (vehículo detenido tapado un rato)
 ```
 
-- **Asociación**: IoU (≥ 0,2, el mayor primero) y, para lo que quede, distancia de centroides (≤ 12 % de la diagonal) con
-  tamaño parecido (área entre ½ y 2×: una moto no se pega a la pista de un bus).
-- **Pérdida tolerada**: 8 cuadros (~1,6 s a 5 fps) sin verla antes de terminar la pista (oclusión corta = misma pista).
+- **Asociación**: IoU (≥ 0,2, el mayor primero) y, para lo que quede, distancia de centroides (≤ 12 % de la diagonal); en los dos
+  casos con tamaño parecido (área entre ½ y 2×: una moto no se pega a la pista de un bus, ni una pista vieja al vehículo siguiente).
+- **Pérdida tolerada**: 8 cuadros (~1,6 s a 5 fps) **o** 2 s sin verla, lo que pase primero (oclusión corta = misma pista); si
+  la última vez tocaba el borde del cuadro (salió), 2 cuadros. Ver el fallo corregido en la tarea 4.
 - **Reapertura**: durante 5 s una detección en el mismo lugar reabre la pista con su mismo id y su decisión. **Solo** si la
   pista estaba casi quieta (≤ 1 % de la diagonal por cuadro) y lejos del borde: la de un vehículo que se iba no se reabre, para
   que el siguiente que llega al mismo punto no herede su decisión (prueba «(c′)»).
@@ -164,18 +165,92 @@ más que la tolerancia = reapertura sin segundo evento; (c) dos carros seguidos 
 no hereda la pista del primero; (d) oclusión corta no parte la pista; (e) la misma placa dentro de 60 s se ignora y después
 no.
 
-## 8. Deuda técnica encontrada (para el informe)
+## 8. Tarea 4 — Consenso de lecturas y evidencia
+
+Código (sidecar): `anpr/consenso.js`, `anpr/placa.js` (+ `placa.d.ts`), `anpr/evidencia.js`, `anpr/carril.js` (une todo por
+cámara) y `anpr/servidor.js` (el proceso ANPR). Pruebas: `consenso.test.js`, `carril.test.js` (detector, OCR y reloj falsos
+sobre JPEG sintéticos), `servidor.test.js` (incluye la corrida real con los clips), `ocr-clic.regresion.test.js` y, en el
+escritorio, `src/lib/__tests__/placa.paridad.test.ts`.
+
+**Calidad del recorte** (0–1): 45 % tamaño del vehículo en el cuadro, 40 % nitidez (varianza del Laplaciano de la parte baja
+del vehículo, en escala log), 15 % posición (centrado). Una caja que toca el borde vale 0 (la placa puede estar cortada). Por
+pista se guardan los 5 mejores recortes y se lee como mucho **uno por cuadro**, siempre el mejor pendiente; recortes con calidad
+< 0,25 no gastan OCR. La pista pasa a LEYENDO —y empieza a contar su tiempo máximo de 4 s— con el **primer recorte útil**: un
+vehículo que entra tocando el borde no gasta ese tiempo esperando. Un vehículo seguido varios cuadros del que nunca hubo un
+recorte útil también avisa al agente (`ilegible`, motivo `sin_recorte_util`).
+
+**Lectura**: el MISMO OCR de la captura por clic (`server.js::recognize`, PP-OCRv5) sobre la parte baja del vehículo (desde el
+30 % de su altura, con un 12 % de margen a cada lado: la caja de YOLOX se queda corta en una vista de tres cuartos y dejaba la
+placa en el borde); su detector de texto ubica la placa. Cuando una lectura ya ubicó la placa, las siguientes recortan alrededor
+de ella (±60 %, ampliado a ≥ 240 px de ancho si queda más chico): en `dos_seguidos` la primera lectura tardó 160–230 ms y las
+siguientes 50–165 ms. Si la relectura no encuentra la placa donde se esperaba, la siguiente vuelve a la parte baja completa. Después, la regex
+guatemalteca (`placa.js`, copia de `lib/placa.ts`; la prueba de paridad compara las dos sobre 32 textos y 6 juegos de fragmentos).
+
+**Consenso** (configurable):
+
+- confirma cuando **≥ 3** lecturas válidas dan la misma placa **y** la confianza agregada **≥ 0,90**;
+- confianza agregada = media de la confianza del OCR en las lecturas que coinciden × fracción de lecturas válidas que coinciden.
+  Es conservadora a propósito: con el umbral por defecto una sola lectura **válida** discrepante entre 4–5 impide confirmar
+  (ante la duda, verificación del agente). Las lecturas sin forma de placa no votan;
+- dos cupos: **5 lecturas válidas** y **8 intentos** en total. Una lectura sin forma de placa (recorte movido, «GUATEMALA» pegado
+  al texto) no es evidencia de OTRA placa: no gasta el cupo de válidas, sí el de intentos;
+- se declara **ilegible** en cuanto ni con todas las lecturas restantes perfectas se llegaría (cota optimista), o al agotar un cupo;
+- **corrección por posición**: si el consenso **necesita** alguna lectura corregida (menos de 3 lecturas literales en el grupo
+  ganador) o el prefijo no es conocido → `requiere_verificacion = true` (nunca abre solo). Tres lecturas literales más una
+  corregida que coincide no la necesitan. `alguna_correccion` registra si cualquier lectura se corrigió.
+
+**Evidencia**: recorte de la placa (con 20 % de margen, JPEG calidad 85) y de la **parte baja** del vehículo (desde el 45 % de
+la altura de su caja: deja fuera parabrisas, medallón y cabina, donde podría verse una cara; máximo 480 px de ancho, calidad
+70), del mejor cuadro leído. Viajan en base64 dentro de la decisión hacia Rust, que los guarda cifrados; `expira_ms` = hora de
+la decisión + 7 días (la purga la hace Rust, tarea 5). El sidecar sigue sin escribir a disco (la guarda de privacidad cubre
+`src/anpr/`). Es una regla geométrica, no un detector de caras: hay que validarla con el encuadre de la cámara real.
+
+**El carril** (`carril.js`): ritmo (1 fps en reposo), movimiento, detector solo con movimiento o con pistas sin decidir, y en
+«vigilancia» (pistas ya decididas, sin movimiento) a 1 fps hasta que terminen. Devuelve por cuadro los eventos (`movimiento_*`,
+`pista`, `decision`, `ignorada`), las pistas para la superposición y los ms por etapa (`decodificar`, `movimiento`, `detector`,
+`tracker`, `ocr`), que usa la medición de la tarea 7.
+
+**Decisión** (lo que recibe Rust): `{tipo: 'decision', carril, track_id, resultado: 'confirmada'|'ilegible', placa,
+placa_probable, confianza, votos, lecturas[], requiere_verificacion, alguna_correccion, motivo, clase, ts, ms_desde_legible,
+evidencia: {placa_jpeg, vehiculo_jpeg, expira_ms}}`. Ilegible siempre lleva `requiere_verificacion = true` y `placa = null`.
+
+**El OCR por clic no cambia**: `server.js` no se tocó (el ANPR corre en `servidor.js`, otro proceso que solo *importa* su
+`recognize`), y `ocr-clic.regresion.test.js` fija por el protocolo real lo que devuelve hoy sobre `test-assets/` (texto exacto
+por fragmento, confianza ±0,02). La suite del clic (Vitest de `lib/placa.ts`, DPI, cámara) sigue en verde.
+
+**Corrida real** (proceso ANPR aparte, YOLOX-Nano + OCR, clips reproducidos en tiempo real como los entrega el puente; este
+contenedor):
+
+| Clip | Resultado | ms desde la primera lectura legible |
+|---|---|---|
+| `entrada_p123abc` | confirmada `P123ABC` | 368 |
+| `dos_seguidos` | confirmada `P555TRK`, confirmada `U318BCD` | 333 / 384 |
+| `ilegible` | ilegible → verificación del agente | — |
+| `vacio`, `carril_vecino` | ninguna decisión, ni siquiera despierta | — |
+
+**Robustez bajo carga.** Con la suite del sidecar corriendo en paralelo (CPU saturada) el clip `dos_seguidos` terminaba en
+ilegible: la placa del sedán negro quedaba en el borde del recorte (caja de YOLOX corta), las relecturas eran recortes de
+~90 px y las lecturas vacías gastaban el cupo. Tras los cuatro ajustes de arriba (margen lateral, ampliar relecturas, cupos
+separados, reloj de lectura desde el primer recorte útil) la corrida real pasa 3 de 3 veces con la suite en paralelo y también
+con 3 procesos quemando CPU a la vez (latencias de 321 a 1 536 ms desde la primera lectura legible; objetivo < 2 s).
+
+**Fallo encontrado y corregido** durante esta tarea (commit `fix(anpr)` aparte): en `dos_seguidos` el segundo vehículo
+**heredaba la pista ya decidida del primero** (la pista vieja seguía viva a 1 fps y se asoció por IoU 0,23 a una caja 2,6 veces
+más grande), así que pasaba sin decisión ni aviso. Ahora la asociación exige tamaño parecido también por IoU, una pista termina
+por tiempo (2 s sin verla) además de por cuadros, y una que salió por el borde termina a los 2 cuadros.
+
+## 9. Deuda técnica encontrada (para el informe)
 
 Se llena con cada `refactor(...)` que haga falta.
 
-## 9. Estado por tarea
+## 10. Estado por tarea
 
 | Tarea | Estado | Bandera | Pendiente |
 |---|---|---|---|
 | 1 Movimiento y ROI | hecho | — | Calibrar `umbralCambio`/`umbralPixel` con la cámara real (lluvia, noche, faros) |
 | 2 Detector | hecho | — | Exactitud con cámara real (noche, lluvia, motos); aviso de licencia Apache-2.0 en el instalador |
 | 3 Tracker | hecho | — | Ajustar `iouMin`, pérdida y reapertura con video real (motos entre carros, colas en la talanquera) |
-| 4 Consenso y evidencia | pendiente | — | — |
+| 4 Consenso y evidencia | hecho | — | Validar umbrales (0,90, 3 de 5) y el corte de cabina de la evidencia con la cámara real |
 | 5 Decisión y actuador | pendiente | — | — |
 | 6 Interfaz | pendiente | — | — |
 | 7 Medición | pendiente | — | — |

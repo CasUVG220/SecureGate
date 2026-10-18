@@ -41,13 +41,13 @@ function acotarCaja(caja, ancho, alto) {
 }
 
 /**
- * Recorta `caja` (píxeles de la imagen original) a un canvas nuevo, reducido si pasa de `maxAncho`. Devuelve `null` si la caja
- * queda fuera de la imagen.
+ * Recorta `caja` (píxeles de la imagen original) a un canvas nuevo, reducido si pasa de `maxAncho` o ampliado si no llega a
+ * `minAncho` (un recorte de placa de 90 px se lee mejor ampliado). Devuelve `null` si la caja queda fuera de la imagen.
  */
-function recortar(img, caja, maxAncho = Infinity) {
+function recortar(img, caja, maxAncho = Infinity, minAncho = 0) {
   const c0 = acotarCaja(caja, img.width, img.height);
   if (!c0) return null;
-  const escala = Math.min(1, maxAncho / c0.w);
+  const escala = c0.w < minAncho ? minAncho / c0.w : Math.min(1, maxAncho / c0.w);
   const w = Math.max(1, Math.round(c0.w * escala));
   const h = Math.max(1, Math.round(c0.h * escala));
   const c = createCanvas(w, h);

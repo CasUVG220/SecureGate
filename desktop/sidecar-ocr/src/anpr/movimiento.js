@@ -111,7 +111,8 @@ class DetectorMovimiento {
 
   /**
    * Procesa un cuadro reducido en gris `{ancho, alto, gris: Uint8Array}`.
-   * @returns {{activo: boolean, cambio: number, eventos: Array<{tipo: string, ts: number, cambio: number, duracion_ms?: number}>, fpsDeseado: number}}
+   * `sospecha` = hubo cambio en este cuadro pero aún no alcanza para `movimiento_inicio` (el carril ya despierta al detector).
+   * @returns {{activo: boolean, sospecha: boolean, cambio: number, eventos: Array<{tipo: string, ts: number, cambio: number, duracion_ms?: number}>, fpsDeseado: number}}
    */
   procesar(cuadro) {
     const { ancho, alto, gris } = cuadro;
@@ -130,7 +131,7 @@ class DetectorMovimiento {
     const actual = suavizar(gris, ancho, alto, this.cfg.radioSuavizado);
     const anterior = this.anterior;
     this.anterior = actual;
-    if (!anterior || this.pixelesRoi === 0) return { activo: this.activo, cambio: 0, eventos: [], fpsDeseado: this.fpsDeseado };
+    if (!anterior || this.pixelesRoi === 0) return { activo: this.activo, sospecha: false, cambio: 0, eventos: [], fpsDeseado: this.fpsDeseado };
 
     const m = this.mascara;
     let suma = 0;
@@ -160,7 +161,7 @@ class DetectorMovimiento {
         this.inicio = null;
       }
     }
-    return { activo: this.activo, cambio: redondear(cambio), eventos, fpsDeseado: this.fpsDeseado };
+    return { activo: this.activo, sospecha: !this.activo && this.seguidosArriba > 0, cambio: redondear(cambio), eventos, fpsDeseado: this.fpsDeseado };
   }
 }
 

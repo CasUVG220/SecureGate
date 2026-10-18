@@ -161,6 +161,16 @@ test('se va mientras se leía: ILEGIBLE (el agente debe saber que pasó un vehí
   assert.equal(eventos.find(e => e.evento === 'fin').estado, ESTADOS.PASO);
 });
 
+test('un vehículo seguido varios cuadros del que nunca hubo un recorte útil también sale ILEGIBLE (sin_recorte_util)', () => {
+  const reloj = new RelojFalso();
+  const t = new Tracker({}, reloj);
+  const eventos = [];
+  // Nadie llama a marcarLeyendo: el carril nunca encontró un recorte útil (p. ej. siempre tocando el borde).
+  for (const dets of [...cruzando(6), ...vacios(12)]) { eventos.push(...t.actualizar(dets, W, H)); reloj.avanzar(PASO_MS); }
+  assert.deepEqual(eventos.filter(e => e.tipo === 'decision').map(e => e.motivo), ['sin_recorte_util']);
+  assert.equal(eventos.find(e => e.evento === 'fin').estado, ESTADOS.PASO);
+});
+
 test('una detección suelta (un cuadro) no llega a SIGUIENDO, no se lee y termina PERDIDA sin decisión', () => {
   const reloj = new RelojFalso();
   const t = new Tracker({}, reloj);

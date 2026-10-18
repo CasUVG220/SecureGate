@@ -56,4 +56,37 @@ function leerClip(ruta, { fps = 10, ancho = 960, binario = 'ffmpeg' } = {}, porC
   });
 }
 
-module.exports = { leerClip, hayFfmpeg };
+/** Todos los cuadros de un clip, en memoria (los clips de prueba son cortos: ~5 MB). */
+async function cuadrosDeClip(ruta, opciones = {}) {
+  const cuadros = [];
+  await leerClip(ruta, opciones, (jpeg) => { cuadros.push(jpeg); });
+  return cuadros;
+}
+
+/**
+ * Reproduce `cuadros` en TIEMPO REAL como lo haría el puente de cámaras: a cada envío le toca el cuadro que corresponde a la hora
+ * actual (si el consumidor tardó, los intermedios se saltan; nunca hay cola), y entre envíos se espera lo que pida el consumidor
+ * (`fps_deseado` de la respuesta), igual que Rust (`desktop/src-tauri/src/anpr/`).
+ * @param {(jpeg: Buffer, indice: number) => Promise<{fps_deseado?: number}>} enviar
+ * @returns {Promise<{enviados: number, saltados: number, ms: number}>}
+ */
+async function reproducir(cuadros, fpsClip, enviar, { ahora = () => Date.now(), dormir = (ms) => new Promise(r => setTimeout(r, ms)) } = {}) {
+  const t0 = ahora();
+  let enviados = 0;
+  let ultimo = -1;
+  for (;;) {
+    const indice = Math.floor(((ahora() - t0) * fpsClip) / 1000);
+    if (indice >= cuadros.length) break;
+    if (indice === ultimo) { await dormir(5); continue; }
+    const tEnvio = ahora();
+    const r = await enviar(cuadros[indice], indice);
+    enviados++;
+    ultimo = indice;
+    const fps = r && r.fps_deseado > 0 ? Math.min(r.fps_deseado, fpsClip) : fpsClip;
+    const espera = tEnvio + 1000 / fps - ahora();
+    if (espera > 0) await dormir(espera);
+  }
+  return { enviados, saltados: cuadros.length - enviados, ms: ahora() - t0 };
+}
+
+module.exports = { leerClip, hayFfmpeg, cuadrosDeClip, reproducir };
