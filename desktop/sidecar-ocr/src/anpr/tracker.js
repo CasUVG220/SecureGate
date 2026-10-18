@@ -24,7 +24,7 @@
  */
 'use strict';
 
-const { iou } = require('./detector');
+const { iou, contencion, mismaFamilia } = require('./detector');
 
 const ESTADOS = Object.freeze({
   DETECTADO: 'DETECTADO',
@@ -38,6 +38,8 @@ const ESTADOS = Object.freeze({
 
 const POR_DEFECTO = Object.freeze({
   iouMin: 0.2,
+  /** Una detección sin pista que cae en esta fracción (o más) dentro de una pista viva no abre otra (es parte del mismo vehículo). */
+  contencionMax: 0.6,
   /** Fracción de la diagonal del cuadro. */
   distanciaMax: 0.12,
   framesConfirmar: 2,
@@ -55,6 +57,7 @@ function configurar(cfg = {}) {
     if (!Number.isFinite(c[k]) || c[k] < min || c[k] > max) throw new Error(`Configuración del seguimiento inválida: ${k}=${c[k]} (entre ${min} y ${max})`);
   };
   rango('iouMin', 0.01, 0.99);
+  rango('contencionMax', 0.1, 1);
   rango('distanciaMax', 0.01, 1);
   rango('framesConfirmar', 1, 30);
   rango('framesPerdida', 1, 300);
@@ -173,6 +176,10 @@ class Tracker {
         this.#vista(p, d, ts, eventos);
         continue;
       }
+      // Una caja que cae casi entera dentro de un vehículo que se ve en ESTE cuadro es un pedazo de él (el detector a veces suma
+      // una caja sobre su mitad trasera), no otro: no abre una pista nueva (sería un segundo evento del mismo carro). Una moto
+      // dentro de la caja de un carro sí es otro vehículo.
+      if (vivas.some(p => !libresP.has(p.id) && mismaFamilia(p, d) && contencion(d.bbox, p.bbox) >= this.cfg.contencionMax)) continue;
       const p = {
         id: `${this.prefijo}-${ts.toString(36)}-${++this.secuencia}`,
         estado: ESTADOS.DETECTADO,

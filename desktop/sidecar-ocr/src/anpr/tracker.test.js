@@ -244,6 +244,26 @@ test('asociación: por IoU primero; por centroide si el salto es grande pero el 
   assert.equal(t.activas().length, 2);
 });
 
+test('una caja extra dentro del vehículo que ya se sigue (su mitad trasera) no abre una segunda pista: un vehículo, un evento', () => {
+  const reloj = new RelojFalso();
+  const t = new Tracker({}, reloj);
+  // Caso real (clip «entrada_c458dfg»): el carro y, a ratos, una caja débil sobre su mitad trasera (contenida ~70 %).
+  const cuadros = Array.from({ length: 30 }, (_, i) => {
+    const carro = caja(130 - i * 2, 320 - i * 3, 620, 218);
+    const mitad = { clase: 'carro', confianza: 0.4, bbox: { x: carro.bbox.x + 300, y: carro.bbox.y - 6, w: 396, h: 189 } };
+    return i % 3 === 0 ? [carro] : [carro, mitad];
+  });
+  const { decisiones, eventos } = correr(t, reloj, [...cuadros, ...vacios(12)], lecturaEn(3));
+  assert.equal(eventos.filter(e => e.evento === 'nueva').length, 1);
+  assert.equal(decisiones.length, 1);
+  // Un segundo vehículo de verdad al lado (fuera de la caja del primero) sí abre su pista, y una moto delante del carro también.
+  const t2 = new Tracker({}, reloj);
+  const moto = { clase: 'moto', confianza: 0.8, bbox: { x: 150, y: 350, w: 80, h: 100 } };
+  const dos = Array.from({ length: 6 }, () => [caja(100, 300, 300, 180), caja(500, 300, 300, 180), moto]);
+  const r2 = correr(t2, reloj, dos, () => null);
+  assert.equal(r2.eventos.filter(e => e.evento === 'nueva').length, 3);
+});
+
 test('una pista vieja y chica NO se pega a un vehículo grande que llega al mismo lugar aunque se solapen', () => {
   // Caso real del clip «dos_seguidos»: la pista del primero (ya decidida) quedó a la izquierda y el segundo llegó solapándola
   // (IoU 0,23) con el doble y medio de área. Antes la heredaba y el segundo vehículo pasaba sin decisión.

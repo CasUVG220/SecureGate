@@ -8,7 +8,7 @@ const path = require('node:path');
 const { createCanvas } = require('@napi-rs/canvas');
 
 const {
-  DetectorVehiculos, letterbox, rgbaABgrChw, decodificar, nms, iou, filtrarRoi, CLASES_VEHICULO, ARCHIVO_MODELO,
+  DetectorVehiculos, letterbox, rgbaABgrChw, decodificar, nms, iou, contencion, filtrarRoi, CLASES_VEHICULO, ARCHIVO_MODELO,
 } = require('./detector');
 const { cargar } = require('./imagen');
 const { leerClip, hayFfmpeg } = require('./clip');
@@ -73,6 +73,25 @@ test('NMS sin distinguir clase: una pickup vista como carro y camión es UN veh�
   assert.equal(iou(a.bbox, c.bbox), 0);
   assert.ok(Math.abs(iou({ x: 0, y: 0, w: 10, h: 10 }, { x: 5, y: 0, w: 10, h: 10 }) - 50 / 150) < 1e-9);
   assert.equal(iou({ x: 0, y: 0, w: 0, h: 0 }, { x: 0, y: 0, w: 0, h: 0 }), 0);
+});
+
+test('NMS: una caja débil contenida en su mayor parte dentro del carro (IoU baja) es el mismo vehículo; uno parcialmente tapado al lado queda', () => {
+  // Caso real (clip «entrada_c458dfg», cuadro 21): carro 0,785 y una caja de 0,361 sobre su mitad trasera, IoU 0,39, contenida 79 %.
+  const carro = { clase: 'carro', confianza: 0.785, bbox: { x: 131, y: 322, w: 624, h: 218 } };
+  const mitad = { clase: 'carro', confianza: 0.361, bbox: { x: 432, y: 316, w: 396, h: 189 } };
+  assert.ok(iou(carro.bbox, mitad.bbox) < 0.45, 'el NMS por IoU solo no la quitaba');
+  assert.ok(contencion(mitad.bbox, carro.bbox) > 0.75);
+  assert.deepEqual(nms([mitad, carro]).map(c => c.confianza), [0.785]);
+  // Una moto delante del carro (toda dentro de su caja): son dos vehículos, quedan los dos.
+  const moto = { clase: 'moto', confianza: 0.5, bbox: { x: 300, y: 380, w: 120, h: 140 } };
+  assert.ok(contencion(moto.bbox, carro.bbox) > 0.6);
+  assert.deepEqual(nms([moto, carro]).map(c => c.clase), ['carro', 'moto']);
+  // Solo se descarta la contenida MENOS confiable: una caja grande y débil que contiene a una chica y fuerte sigue (la chica no
+  // la contiene a ella).
+  const grande = { ...carro, confianza: 0.3 };
+  const chica = { ...mitad, confianza: 0.9 };
+  assert.deepEqual(nms([grande, chica]).map(c => c.confianza), [0.9, 0.3]);
+  assert.equal(contencion({ x: 0, y: 0, w: 0, h: 0 }, carro.bbox), 0);
 });
 
 test('filtro por ROI: fuera no cuenta, las cajas se acotan al cuadro y se redondean', () => {

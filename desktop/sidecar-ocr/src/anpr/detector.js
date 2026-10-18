@@ -12,7 +12,10 @@
  * Post-proceso:
  *  - decodificar: `cx = (dx + gx) · s`, `cy = (dy + gy) · s`, `w = e^lw · s`, `h = e^lh · s`, con `s` el paso de la rejilla;
  *  - puntaje = objetualidad × la mejor de las clases de vehículo (las demás clases no cuentan);
- *  - NMS **sin distinguir clase** (una pickup puede salir a la vez como `car` y `truck`: es UN vehículo);
+ *  - NMS **sin distinguir clase** (una pickup puede salir a la vez como `car` y `truck`: es UN vehículo), y además se descarta
+ *    la caja que queda en su mayor parte DENTRO de otra más confiable (YOLOX-Nano a veces suma una caja débil sobre la mitad
+ *    trasera del mismo carro: su IoU con la buena es baja, pero está contenida en ella; sin esto nacía una segunda pista y el
+ *    vehículo daba dos eventos). Una moto dentro de la caja de un carro NO se descarta: son dos vehículos de verdad;
  *  - volver a coordenadas del cuadro original (÷ escala del letterbox) y filtrar por ROI.
  *
  * Todo lo puro (decodificar, NMS, IoU, filtro ROI) está separado de ONNX para probarlo con tensores fijos.
@@ -35,6 +38,8 @@ const POR_DEFECTO = Object.freeze({
   tamano: 416,
   umbralConfianza: 0.35,
   umbralNms: 0.45,
+  /** Una caja contenida en esta fracción (o más) dentro de otra más confiable es la misma cosa. */
+  umbralContencion: 0.6,
   /** Fracción mínima de la caja dentro del ROI para aceptar la detección. */
   fraccionRoiMin: 0.3,
   /** Hilos de ONNX Runtime para este modelo (1 = mitigación de CPU; ver tarea 7). */
@@ -114,12 +119,28 @@ function iou(a, b) {
   return union > 0 ? inter / union : 0;
 }
 
-/** Supresión de no-máximos sin distinguir clase: de cada grupo que se solapa más que `umbral` queda la más confiable. */
-function nms(cajas, umbral = POR_DEFECTO.umbralNms) {
+/** Fracción de la caja `a` que queda dentro de `b` (1 = toda adentro). */
+function contencion(a, b) {
+  const x0 = Math.max(a.x, b.x);
+  const y0 = Math.max(a.y, b.y);
+  const x1 = Math.min(a.x + a.w, b.x + b.w);
+  const y1 = Math.min(a.y + a.h, b.y + b.h);
+  const area = a.w * a.h;
+  return area > 0 ? (Math.max(0, x1 - x0) * Math.max(0, y1 - y0)) / area : 0;
+}
+
+/** ¿Pueden ser el mismo vehículo por contención? Una moto y un carro (o bus, camión) nunca: la moto cabe en la caja del otro. */
+const mismaFamilia = (a, b) => (a.clase === 'moto') === (b.clase === 'moto');
+
+/**
+ * Supresión de no-máximos sin distinguir clase: de cada grupo que se solapa más que `umbral` queda la más confiable, y una caja
+ * contenida en `umbralContencion` o más dentro de una ya aceptada (más confiable, de la misma familia) también se descarta.
+ */
+function nms(cajas, umbral = POR_DEFECTO.umbralNms, umbralContencion = POR_DEFECTO.umbralContencion) {
   const orden = [...cajas].sort((a, b) => b.confianza - a.confianza);
   const quedan = [];
   for (const c of orden) {
-    if (quedan.every(q => iou(q.bbox, c.bbox) <= umbral)) quedan.push(c);
+    if (quedan.every(q => iou(q.bbox, c.bbox) <= umbral && !(mismaFamilia(q, c) && contencion(c.bbox, q.bbox) >= umbralContencion))) quedan.push(c);
   }
   return quedan;
 }
@@ -177,7 +198,7 @@ class DetectorVehiculos {
     const tensor = new this.ort.Tensor('float32', datos, [1, 3, this.cfg.tamano, this.cfg.tamano]);
     const r = await this.sesion.run({ [this.entrada]: tensor });
     const crudas = decodificar(r[this.salida].data, { tamano: this.cfg.tamano, escala, umbralConfianza: this.cfg.umbralConfianza });
-    const unicas = nms(crudas, this.cfg.umbralNms);
+    const unicas = nms(crudas, this.cfg.umbralNms, this.cfg.umbralContencion);
     const cajas = filtrarRoi(unicas, normalizarPoligono(roi), img.width, img.height, fraccionRoiMin);
     return { cajas, descartadas: unicas.length - cajas.length, ms: Math.round((performance.now() - t0) * 10) / 10 };
   }
@@ -187,4 +208,4 @@ class DetectorVehiculos {
   }
 }
 
-module.exports = { DetectorVehiculos, letterbox, rgbaABgrChw, decodificar, nms, iou, filtrarRoi, CLASES_VEHICULO, ARCHIVO_MODELO, POR_DEFECTO };
+module.exports = { DetectorVehiculos, letterbox, rgbaABgrChw, decodificar, nms, iou, contencion, mismaFamilia, filtrarRoi, CLASES_VEHICULO, ARCHIVO_MODELO, POR_DEFECTO };
