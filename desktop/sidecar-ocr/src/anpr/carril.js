@@ -13,6 +13,8 @@
  *  4. OCR: como mucho UNA lectura por cuadro (acota la latencia del cuadro), del mejor candidato aún no leído. La primera lectura de
  *     una pista usa la parte baja del vehículo; cuando ya se ubicó la placa, las siguientes recortan alrededor de ella (más rápido).
  *  5. Consenso: confirmada → `tracker.confirmar` (una decisión por pista, enfriamiento por placa); ilegible → `marcarIlegible`.
+ *     Si al agotarse el tiempo (o al irse el vehículo) el consenso era confirmable pero solo con una corrección, el tracker lo
+ *     cierra CONFIRMADO vía `alCerrarLectura` y la decisión sale con `requiere_verificacion`.
  *     Cada decisión sale con su evidencia (recorte de placa y de la parte baja del vehículo).
  *
  * El OCR es el MISMO de la captura por clic (`server.js::recognize`), inyectado como función.
@@ -65,6 +67,10 @@ class Carril {
     this.cfgEvidencia = config.evidencia ?? {};
     this.movimiento = new DetectorMovimiento({ ...(config.movimiento ?? {}), roi }, this.reloj);
     this.tracker = new Tracker(config.tracker ?? {}, this.reloj, this.id);
+    this.tracker.alCerrarLectura = (id) => {
+      const r = this.lecturas.get(id)?.consenso.cerrar();
+      return r?.estado === 'confirmada' ? r.placa : null;
+    };
     this.ritmo = new Ritmo(this.reloj);
     /** track_id → estado de lectura. */
     this.lecturas = new Map();
@@ -201,7 +207,13 @@ class Carril {
     for (const e of evTracker) {
       if (e.tipo === 'decision') {
         const l = this.lecturas.get(e.id) ?? { consenso: new Consenso(this.cfgConsenso) };
-        out.push(this.#decision(e.id, l, 'ilegible', { ...l.consenso.resultado(), motivo: e.motivo }));
+        if (e.resultado === 'confirmada') {
+          // Confirmable que esperaba una lectura literal más: sale confirmada CON verificación (`cerrar`).
+          if (e.enfriamiento) out.push({ tipo: 'ignorada', carril: this.id, track_id: e.id, placa: e.placa, motivo: 'enfriamiento', ts: e.ts });
+          else out.push(this.#decision(e.id, l, 'confirmada', { ...l.consenso.cerrar(), motivo: e.motivo }));
+        } else {
+          out.push(this.#decision(e.id, l, 'ilegible', { ...l.consenso.resultado(), motivo: e.motivo }));
+        }
       } else {
         const { id, ...resto } = e;
         out.push({ ...resto, track_id: id, carril: this.id });

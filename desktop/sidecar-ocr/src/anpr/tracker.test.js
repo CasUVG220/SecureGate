@@ -161,6 +161,40 @@ test('se va mientras se leía: ILEGIBLE (el agente debe saber que pasó un vehí
   assert.equal(eventos.find(e => e.evento === 'fin').estado, ESTADOS.PASO);
 });
 
+test('al cerrar sin consenso, si el carril ya tenía una placa confirmable (alCerrarLectura) la pista sale CONFIRMADA y entra al enfriamiento', () => {
+  const reloj = new RelojFalso();
+  const t = new Tracker({ tiempoMaxLectura_ms: 4000 }, reloj);
+  const consultadas = [];
+  t.alCerrarLectura = (id) => { consultadas.push(id); return 'P123ABC'; };
+  const quieto = Array.from({ length: 30 }, () => [caja(250, 260)]);
+  const primero = correr(t, reloj, [...quieto, ...vacios(12)], () => null);
+  const dec = primero.eventos.filter(e => e.tipo === 'decision');
+  assert.deepEqual(dec.map(e => [e.resultado, e.placa, e.motivo, e.enfriamiento]), [['confirmada', 'P123ABC', 'tiempo_max_lectura', false]]);
+  assert.equal(consultadas.length, 1);
+  assert.ok(primero.eventos.some(e => e.estado === ESTADOS.CONFIRMADO));
+  assert.equal(primero.eventos.find(e => e.evento === 'fin').estado, ESTADOS.PASO);
+
+  // La misma placa poco después (pasada la ventana de reapertura, dentro de los 60 s), ahora cerrando porque se va: sale
+  // marcada en enfriamiento (el carril no la decide otra vez).
+  reloj.avanzar(10_000);
+  const segundo = correr(t, reloj, [...cruzando(8), ...vacios(12)], () => null);
+  assert.deepEqual(segundo.eventos.filter(e => e.tipo === 'decision').map(e => [e.resultado, e.motivo, e.enfriamiento]),
+    [['confirmada', 'se_fue_sin_lectura', true]]);
+
+  // Sin placa confirmable (null) todo sigue como antes: ILEGIBLE. Y a una pista que nunca se leyó no se le pregunta.
+  const t2 = new Tracker({}, reloj);
+  t2.alCerrarLectura = () => null;
+  const r2 = correr(t2, reloj, [...cruzando(8), ...vacios(12)], () => null);
+  assert.deepEqual(r2.decisiones.map(d => [d.resultado, d.motivo]), [['ilegible', 'se_fue_sin_lectura']]);
+  const t3 = new Tracker({}, reloj);
+  let preguntas = 0;
+  t3.alCerrarLectura = () => { preguntas++; return 'P123ABC'; };
+  const ev3 = [];
+  for (const dets of [...cruzando(6), ...vacios(12)]) { ev3.push(...t3.actualizar(dets, W, H)); reloj.avanzar(PASO_MS); }
+  assert.deepEqual(ev3.filter(e => e.tipo === 'decision').map(e => [e.resultado, e.motivo]), [['ilegible', 'sin_recorte_util']]);
+  assert.equal(preguntas, 0);
+});
+
 test('un vehículo seguido varios cuadros del que nunca hubo un recorte útil también sale ILEGIBLE (sin_recorte_util)', () => {
   const reloj = new RelojFalso();
   const t = new Tracker({}, reloj);

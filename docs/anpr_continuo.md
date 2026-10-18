@@ -191,13 +191,21 @@ guatemalteca (`placa.js`, copia de `lib/placa.ts`; la prueba de paridad compara 
 - confirma cuando **≥ 3** lecturas válidas dan la misma placa **y** la confianza agregada **≥ 0,90**;
 - confianza agregada = media de la confianza del OCR en las lecturas que coinciden × fracción de lecturas válidas que coinciden.
   Es conservadora a propósito: con el umbral por defecto una sola lectura **válida** discrepante entre 4–5 impide confirmar
-  (ante la duda, verificación del agente). Las lecturas sin forma de placa no votan;
+  (ante la duda, verificación del agente). Las lecturas sin forma de placa no votan, ni las que tienen forma de placa pero
+  confianza del OCR **< 0,75** (`confianzaVoto`): el propio OCR no las cree. Caso real con el equipo muy cargado: `P555TRK` a
+  0,93 y después «E055STR» a 0,57; antes esa lectura débil volvía inalcanzable el 0,90 y la pista salía ilegible a la segunda
+  lectura;
 - dos cupos: **5 lecturas válidas** y **8 intentos** en total. Una lectura sin forma de placa (recorte movido, «GUATEMALA» pegado
   al texto) no es evidencia de OTRA placa: no gasta el cupo de válidas, sí el de intentos;
 - se declara **ilegible** en cuanto ni con todas las lecturas restantes perfectas se llegaría (cota optimista), o al agotar un cupo;
 - **corrección por posición**: si el consenso **necesita** alguna lectura corregida (menos de 3 lecturas literales en el grupo
   ganador) o el prefijo no es conocido → `requiere_verificacion = true` (nunca abre solo). Tres lecturas literales más una
-  corregida que coincide no la necesitan. `alguna_correccion` registra si cualquier lectura se corrigió.
+  corregida que coincide no la necesitan. `alguna_correccion` registra si cualquier lectura se corrigió;
+- **una lectura literal más antes de rendirse**: si el consenso ya alcanzaría pero solo gracias a una corrección, y el cupo da
+  para las literales que faltan, la pista sigue leyendo (`pendiente`, `confirmable`). Si llega la literal, confirma sin
+  verificación; si se agota el cupo, el tiempo de lectura o el vehículo se va, sale **confirmada con verificación** (el tracker
+  lo cierra CONFIRMADO vía `alCerrarLectura` y entra al enfriamiento). Con el equipo cargado se leen menos cuadros y la corrida
+  real a veces cerraba con 2 literales + 1 corregida: ahora espera una más.
 
 **Evidencia**: recorte de la placa (con 20 % de margen, JPEG calidad 85) y de la **parte baja** del vehículo (desde el 45 % de
 la altura de su caja: deja fuera parabrisas, medallón y cabina, donde podría verse una cara; máximo 480 px de ancho, calidad

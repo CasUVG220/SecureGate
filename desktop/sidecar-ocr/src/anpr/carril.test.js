@@ -143,7 +143,32 @@ test('corrección por posición necesaria para el consenso → confirmada pero r
   assert.equal(decisiones.length, 1);
   const d = decisiones[0];
   assert.deepEqual([d.resultado, d.placa, d.requiere_verificacion, d.alguna_correccion], ['confirmada', 'P123ABC', true, true]);
-  assert.deepEqual(d.lecturas.map(l => l.correcciones), [1, 0, 1]);
+  // A la tercera ya era confirmable, pero con una sola literal: se leyó una más por si salía literal (salió corregida otra vez).
+  assert.deepEqual(d.lecturas.map(l => l.correcciones), [1, 0, 1, 1]);
+});
+
+test('una lectura literal más evita la verificación: corregida + 3 literales → confirmada sin verificación', async () => {
+  const reloj = new RelojFalso();
+  const det = detectorFalso();
+  const ocr = ocrFalso(['P 123A8C', 'P 123ABC', 'P 123ABC', 'P 123ABC']);
+  const carril = new Carril({ id: 'c1', config: CFG, reloj, detector: det, ocr });
+  const { decisiones } = await correr(carril, det, reloj, guion());
+  assert.equal(decisiones.length, 1);
+  assert.deepEqual([decisiones[0].resultado, decisiones[0].placa, decisiones[0].requiere_verificacion], ['confirmada', 'P123ABC', false]);
+  assert.deepEqual(decisiones[0].lecturas.map(l => l.correcciones), [1, 0, 0, 0]);
+});
+
+test('confirmable que esperaba otra literal y el vehículo se va: confirmada CON verificación (nunca abre sola) y con evidencia', async () => {
+  const reloj = new RelojFalso();
+  const det = detectorFalso();
+  // Se ve 4 cuadros: el primero solo lo detecta y en los otros tres se lee (corregida, literal, literal).
+  const ocr = ocrFalso(['P 123A8C', 'P 123ABC', 'P 123ABC']);
+  const carril = new Carril({ id: 'c1', config: CFG, reloj, detector: det, ocr });
+  const { decisiones } = await correr(carril, det, reloj, guion(0).slice(0, 4));
+  assert.equal(decisiones.length, 1);
+  const d = decisiones[0];
+  assert.deepEqual([d.resultado, d.placa, d.requiere_verificacion, d.motivo], ['confirmada', 'P123ABC', true, 'se_fue_sin_lectura']);
+  assert.ok(esJpeg(d.evidencia.placa_jpeg) && esJpeg(d.evidencia.vehiculo_jpeg));
 });
 
 test('sin movimiento el detector no corre y el carril pide el fps de reposo', async () => {

@@ -57,9 +57,18 @@ test('corrección por posición: si el consenso NECESITA una lectura corregida, 
   c.agregar(L('P123ABC'));
   c.agregar(L('P123ABC', 0.95, 1)); // «P123A8C» corregida a P123ABC
   const r = c.agregar(L('P123ABC'));
-  assert.equal(r.estado, 'confirmada');
+  assert.equal(r.estado, 'pendiente', 'confirmable, pero el cupo da para una lectura literal más: se sigue leyendo');
+  assert.equal(r.confirmable, true);
   assert.equal(r.requiere_verificacion, true, 'solo 2 lecturas literales: la corrección fue necesaria');
   assert.equal(r.alguna_correccion, true);
+  // Si se acaba el tiempo o el vehículo se va, sale confirmada CON verificación.
+  const cerrada = c.cerrar();
+  assert.deepEqual([cerrada.estado, cerrada.placa, cerrada.requiere_verificacion, 'confirmable' in cerrada], ['confirmada', 'P123ABC', true, false]);
+  // Otra corrección: todavía cabe una literal en el cupo (2 + 1 = 3) → sigue leyendo. La quinta, corregida también, agota el
+  // cupo de válidas → se cierra confirmada con verificación.
+  assert.equal(c.agregar(L('P123ABC', 0.95, 1)).estado, 'pendiente');
+  const r1 = c.agregar(L('P123ABC', 0.95, 1));
+  assert.deepEqual([r1.estado, r1.requiere_verificacion], ['confirmada', true]);
 
   // Tres literales + una corregida que coincide: la corrección no hace falta para el consenso.
   const c2 = new Consenso();
@@ -68,6 +77,19 @@ test('corrección por posición: si el consenso NECESITA una lectura corregida, 
   assert.equal(r2.estado, 'confirmada');
   assert.equal(r2.requiere_verificacion, false);
   assert.equal(r2.alguna_correccion, true, 'igual queda registrado que hubo una corrección');
+
+  // El cupo de válidas se acaba con la confirmable: se cierra ahí, con verificación (no hay de dónde sacar otra literal).
+  const c3 = new Consenso({ maxLecturas: 3 });
+  for (const l of [L('P123ABC'), L('P123ABC', 0.95, 1)]) c3.agregar(l);
+  assert.deepEqual([c3.agregar(L('P123ABC')).estado, c3.resultado().requiere_verificacion], ['confirmada', true]);
+
+  // Una lectura discrepante mientras se esperaba la literal baja la confianza: deja de ser confirmable y `cerrar` no inventa
+  // una confirmación (queda para el agente como cualquier otra sin consenso).
+  const c4 = new Consenso();
+  for (const l of [L('P123ABC'), L('P123ABC', 0.95, 1), L('P123ABC')]) c4.agregar(l);
+  const r4 = c4.agregar(L('P128ABC'));
+  assert.equal(r4.confirmable, undefined);
+  assert.notEqual(c4.cerrar().estado, 'confirmada');
 });
 
 test('prefijo desconocido: aunque haya consenso, requiere verificación', () => {
@@ -90,6 +112,26 @@ test('las lecturas inválidas no votan; sin ninguna válida → ilegible «sin_l
   vacio.agregar(L(null)); vacio.agregar(L(null));
   const r = vacio.agregar(L(null));
   assert.deepEqual([r.estado, r.motivo, r.placa], ['ilegible', 'sin_lectura_valida', null]);
+});
+
+test('una lectura con forma de placa pero de confianza baja (< 0,75) no vota: ni veta la buena ni rebaja su confianza', () => {
+  // Caso real (clip «dos_seguidos» con la máquina muy cargada): P555TRK a 0,93 y luego «E055STR» a 0,57. Antes, esa lectura
+  // débil hacía imposible llegar a 0,90 y la pista salía ilegible en la segunda lectura.
+  const c = new Consenso();
+  c.agregar(L('P555TRK', 0.93));
+  const r = c.agregar(L('E055STR', 0.57, 2));
+  assert.deepEqual([r.estado, r.validas, r.total], ['pendiente', 1, 2]);
+  c.agregar(L('P555TRK', 0.95));
+  const ok = c.agregar(L('P555TRK', 0.94));
+  assert.deepEqual([ok.estado, ok.placa, ok.votos, ok.requiere_verificacion], ['confirmada', 'P555TRK', 3, false]);
+  assert.ok(ok.confianza >= 0.9, 'la débil no entra al promedio');
+  // Una discrepante CONFIABLE sigue vetando como siempre (3 de 4 no llega a 0,90).
+  const v = new Consenso();
+  for (const l of [L('P555TRK', 0.93), L('P555TPK', 0.9), L('P555TRK', 0.95), L('P555TRK', 0.94)]) v.agregar(l);
+  assert.notEqual(v.resultado().estado, 'confirmada');
+  // Configurable.
+  assert.equal(configurar({ confianzaVoto: 0.5 }).confianzaVoto, 0.5);
+  assert.throws(() => configurar({ confianzaVoto: 2 }), /confianzaVoto/);
 });
 
 test('las lecturas sin forma de placa no gastan el cupo de las válidas, pero sí el de intentos', () => {

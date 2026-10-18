@@ -9,12 +9,19 @@
  *    propósito (ante la duda, verificación del agente).
  * Si con las lecturas que quedan ya no se puede llegar al mínimo, la pista es ILEGIBLE sin esperar más. Hay dos cupos: `maxLecturas`
  * (5) lecturas VÁLIDAS y `maxIntentos` (8) lecturas en total: una lectura sin forma de placa (un recorte movido, el texto
- * «GUATEMALA» pegado a la placa) no es evidencia de OTRA placa, así que no gasta el cupo de las válidas, pero sí el total.
+ * «GUATEMALA» pegado a la placa) no es evidencia de OTRA placa, así que no gasta el cupo de las válidas, pero sí el total. Lo
+ * mismo una lectura con forma de placa pero con confianza del OCR < `confianzaVoto` (0,75): el propio OCR no la cree (recorte
+ * movido o lejano, típico con el equipo cargado), así que no vota ni a favor ni en contra.
  *
  * Corrección por posición: una lectura corregida (O→0, B→8…) vota, pero si el consenso NECESITA alguna corrección —menos de
  * `minCoincidencias` lecturas LITERALES (sin corregir) en el grupo ganador— o el prefijo no es uno conocido, el resultado lleva
  * `requiere_verificacion = true` y **nunca** abre solo. Tres lecturas literales iguales más una corregida que coincide no
  * necesitan la corrección: no se marca. Se registra además si ALGUNA lectura (ganadora o no) se corrigió.
+ *
+ * Un consenso que solo necesita la corrección por falta de lecturas literales NO se cierra mientras el cupo dé para las que
+ * faltan: queda `pendiente` con `confirmable = true` y se sigue leyendo (con el equipo cargado se leen menos cuadros, y una
+ * lectura literal más cambia «verificación» por «entra solo» sin bajar ninguna vara). Si se acaba el tiempo de lectura o el
+ * vehículo se va antes, `cerrar()` lo entrega confirmado CON verificación.
  */
 'use strict';
 
@@ -26,6 +33,8 @@ const POR_DEFECTO = Object.freeze({
   confianzaMin: 0.9,
   maxLecturas: 5,
   maxIntentos: 8,
+  /** Confianza mínima del OCR para que una lectura vote. */
+  confianzaVoto: 0.75,
   /** Calidad mínima (0–1) de un recorte para gastar una lectura en él. */
   calidadMin: 0.25,
 });
@@ -39,6 +48,7 @@ function configurar(cfg = {}) {
   rango('confianzaMin', 0.5, 1);
   rango('maxLecturas', 1, 20);
   rango('maxIntentos', 1, 40);
+  rango('confianzaVoto', 0, 1);
   rango('calidadMin', 0, 1);
   c.minCoincidencias = Math.round(c.minCoincidencias);
   c.maxLecturas = Math.round(c.maxLecturas);
@@ -141,11 +151,11 @@ class Consenso {
 
   /**
    * @returns {{estado: 'pendiente'|'confirmada'|'ilegible', placa: string|null, confianza: number, votos: number, validas: number,
-   *            total: number, requiere_verificacion: boolean, alguna_correccion: boolean, motivo?: string}}
+   *            total: number, requiere_verificacion: boolean, alguna_correccion: boolean, motivo?: string, confirmable?: boolean}}
    */
   resultado() {
-    const { minCoincidencias, confianzaMin, maxLecturas, maxIntentos } = this.cfg;
-    const validas = this.lecturas.filter((l) => l.valida && l.placa);
+    const { minCoincidencias, confianzaMin, maxLecturas, maxIntentos, confianzaVoto } = this.cfg;
+    const validas = this.lecturas.filter((l) => l.valida && l.placa && l.confianza >= confianzaVoto);
     const grupos = new Map();
     for (const l of validas) {
       const g = grupos.get(l.placa) ?? [];
@@ -167,9 +177,14 @@ class Consenso {
         && (ganadoras.filter((l) => l.correcciones === 0).length < minCoincidencias || ganadoras.some((l) => !l.prefijo_conocido)),
       alguna_correccion: this.lecturas.some((l) => l.correcciones > 0),
     };
-    if (votos >= minCoincidencias && confianza >= confianzaMin) return { estado: 'confirmada', ...base };
     // Lecturas válidas que todavía pueden llegar: lo que queda del cupo de válidas, sin pasarse del cupo total de intentos.
     const quedan = Math.max(0, Math.min(maxLecturas - validas.length, maxIntentos - this.lecturas.length));
+    if (votos >= minCoincidencias && confianza >= confianzaMin) {
+      const literales = ganadoras.filter((l) => l.correcciones === 0).length;
+      const soloPorCorreccion = base.requiere_verificacion && ganadoras.every((l) => l.prefijo_conocido);
+      if (soloPorCorreccion && literales + quedan >= minCoincidencias) return { estado: 'pendiente', confirmable: true, ...base };
+      return { estado: 'confirmada', ...base };
+    }
     if (quedan <= 0) return { estado: 'ilegible', ...base, motivo: votos ? 'lecturas_divergentes' : 'sin_lectura_valida' };
     // Cota optimista: todas las que quedan coinciden con confianza 1. Si ni así se llega, no se gasta más OCR.
     const suma = ganadoras.reduce((a, l) => a + l.confianza, 0);
@@ -178,6 +193,20 @@ class Consenso {
       return { estado: 'ilegible', ...base, motivo: votos ? 'lecturas_divergentes' : 'sin_lectura_valida' };
     }
     return { estado: 'pendiente', ...base };
+  }
+
+  /**
+   * Resultado al cerrar la lectura sin más oportunidades (tiempo máximo agotado o la pista se fue): lo que era confirmable
+   * sale `confirmada` con `requiere_verificacion = true`; lo demás, tal cual (`pendiente` aquí significa que no se llegó).
+   */
+  cerrar() {
+    const r = this.resultado();
+    if (r.estado === 'pendiente' && r.confirmable) {
+      const salida = { ...r, estado: 'confirmada' };
+      delete salida.confirmable;
+      return salida;
+    }
+    return r;
   }
 }
 

@@ -88,6 +88,11 @@ class Tracker {
     this.placasVistas = new Map();
     /** Eventos producidos y aún no entregados (también los de `marcarLeyendo`/`confirmar`/`marcarIlegible`). */
     this.cola = [];
+    /**
+     * Lo consulta el tracker al cerrar una lectura sin consenso (tiempo máximo o la pista se fue): `(id) => placa | null`. El
+     * carril devuelve la placa si el consenso ya era confirmable y solo esperaba una lectura literal más.
+     */
+    this.alCerrarLectura = null;
   }
 
   /** Entrega (y vacía) los eventos pendientes. `actualizar` ya los incluye; esto sirve justo después de confirmar. */
@@ -203,9 +208,7 @@ class Tracker {
     // 5) Tiempo máximo de lectura.
     for (const p of this.pistas.values()) {
       if (p.estado === ESTADOS.LEYENDO && ts - p.lectura_inicio_ts >= this.cfg.tiempoMaxLectura_ms) {
-        this.#cambiar(p, ESTADOS.ILEGIBLE, ts, eventos);
-        p.decidida = true;
-        eventos.push({ tipo: 'decision', resultado: 'ilegible', id: p.id, motivo: 'tiempo_max_lectura', ts });
+        this.#cerrarLectura(p, ts, eventos, 'tiempo_max_lectura');
       }
     }
     return this.tomarEventos();
@@ -281,10 +284,7 @@ class Tracker {
     // recorte útil: el agente debe saber que pasó un vehículo sin placa leída.
     const vehiculoReal = p.estado === ESTADOS.SIGUIENDO && p.cuadros > this.cfg.framesConfirmar;
     if ((p.estado === ESTADOS.LEYENDO || vehiculoReal) && !p.decidida) {
-      const motivo = p.estado === ESTADOS.LEYENDO ? 'se_fue_sin_lectura' : 'sin_recorte_util';
-      p.decidida = true;
-      this.#cambiar(p, ESTADOS.ILEGIBLE, ts, eventos);
-      eventos.push({ tipo: 'decision', resultado: 'ilegible', id: p.id, motivo, ts });
+      this.#cerrarLectura(p, ts, eventos, p.estado === ESTADOS.LEYENDO ? 'se_fue_sin_lectura' : 'sin_recorte_util');
     }
     p.estadoAntesDeTerminar = p.estado;
     p.fin_ts = ts;
@@ -292,6 +292,26 @@ class Tracker {
     this.#cambiar(p, final, ts, eventos);
     eventos.push({ tipo: 'pista', evento: 'fin', id: p.id, estado: final, motivo, ts });
     this.terminadas.push(p);
+  }
+
+  /**
+   * Última palabra de una pista que se quedó sin consenso: ILEGIBLE, salvo que el carril ya tuviera una placa confirmable
+   * (`alCerrarLectura`), que sale CONFIRMADO —el carril la marca para verificación— y entra al enfriamiento como cualquier otra.
+   */
+  #cerrarLectura(p, ts, eventos, motivo) {
+    p.decidida = true;
+    const placa = (p.estado === ESTADOS.LEYENDO && this.alCerrarLectura?.(p.id)) || null;
+    if (!placa) {
+      this.#cambiar(p, ESTADOS.ILEGIBLE, ts, eventos);
+      eventos.push({ tipo: 'decision', resultado: 'ilegible', id: p.id, motivo, ts });
+      return;
+    }
+    const vista = this.placasVistas.get(placa);
+    p.placa = placa;
+    this.#cambiar(p, ESTADOS.CONFIRMADO, ts, eventos);
+    this.placasVistas.set(placa, ts);
+    const enfriamiento = vista != null && ts - vista < this.cfg.enfriamiento_ms;
+    eventos.push({ tipo: 'decision', resultado: 'confirmada', id: p.id, placa, motivo, enfriamiento, ts });
   }
 
   #cambiar(p, estado, ts, eventos) {
