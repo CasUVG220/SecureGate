@@ -382,8 +382,8 @@ pub async fn camaras_puente_info(state: State<'_, AppState>) -> AppResult<InfoPu
     Ok(InfoPuente { puerto: p.puerto(), token: p.token().to_string() })
 }
 
-/// Enciende una cámara (si no lo estaba) y la registra en el puente. Idempotente.
-async fn encender(app: &AppHandle, state: &AppState, id: &str) -> AppResult<Arc<Supervisor>> {
+/// Enciende una cámara (si no lo estaba) y la registra en el puente. Idempotente. También la usa el ANPR (Sprint 10).
+pub(crate) async fn encender(app: &AppHandle, state: &AppState, id: &str) -> AppResult<Arc<Supervisor>> {
     if let Some(s) = state.camaras.activas.lock().unwrap().get(id) {
         if !matches!(s.estado(), EstadoFuente::Detenida) {
             return Ok(s.clone());

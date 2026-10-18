@@ -247,11 +247,97 @@ con 3 procesos quemando CPU a la vez (latencias de 321 a 1 536 ms desde la prime
 más grande), así que pasaba sin decisión ni aviso. Ahora la asociación exige tamaño parecido también por IoU, una pista termina
 por tiempo (2 s sin verla) además de por cuadros, y una que salió por el borde termina a los 2 cuadros.
 
-## 9. Deuda técnica encontrada (para el informe)
+## 9. Tarea 5 — Decisión, registro `anpr` y actuador
+
+### 9.1 Modelo de datos (backend, `database/init.sql`, idempotente)
+
+| Objeto | Para qué |
+|---|---|
+| `vehiculos_residentes` | Vehículos **autorizados** de cada residente: placa normalizada (`P123ABC`, CHECK `^[A-Z0-9]{3,20}$`), vigencia (`vigente_desde`/`vigente_hasta`, DATE), `activo` (una baja nunca es DELETE), `version` de una secuencia. Una placa activa por sucursal (índice único parcial). |
+| Disparadores de versión | La versión sube con cada UPDATE de la fila, con cualquier cambio de un bloqueo **por placa** en `visitante_blacklist` de esa sucursal y con la baja/alta del usuario del residente: la garita se entera en el pull incremental. |
+| `registros_acceso` | Columnas nuevas `confianza` (0–1), `track_id`, `evidencia_ref` (`anpr:<id_cliente>`), `vehiculo_residente_id`, `verificado_por` (agente que confirmó con un toque) e `id_cliente_salida` (salida idempotente). `visitante_id` admite NULL **solo** si hay `vehiculo_residente_id` (CHECK). `origen` admite `'anpr'`. |
+| `anpr_eventos` | Lo que no es un acceso pero va a la bitácora: `alerta_lista_negra`, `verificacion_resuelta`, `ilegible`, `actuador_fallo`. PK = `id_cliente` de la garita (idempotente). |
+| `evidencias_anpr` | JPEG de placa y de vehículo (≤ 256 KB, `UNIQUE (id_cliente, tipo)`), `expira_en` a 7 días; los purga la tarea programada `anpr.evidencias`. |
+
+Borrado definitivo de una empresa (`empresas.controller.ts`): se agregaron los pasos para `evidencias_anpr`, `anpr_eventos` y
+`vehiculos_residentes`, en el orden que exigen las llaves foráneas.
+
+### 9.2 API (`backend/src/routes/anpr.routes.ts`)
+
+| Ruta | Quién | Notas |
+|---|---|---|
+| `GET/POST /api/anpr/vehiculos`, `PATCH/DELETE /api/anpr/vehiculos/:id` | admin de sucursal o superior, con `tenantFilter` | Alta valida residente de la misma sucursal, placa plausible y vigencia; DELETE = baja (`activo = FALSE`). Bitácora `VEHICULO_RESIDENTE_*`. |
+| `POST /api/anpr/accesos` | agente + licencia del equipo (`verifyLicencia`: empresa suspendida → **423**) | Idempotente por `id_cliente`. El servidor **vuelve a validar** (vehículo activo y vigente el día del registro, residente activo, sin bloqueo por placa): si algo cambió mientras la garita estaba sin red responde 409/403 y la cola lo marca «rechazado», igual que con visitantes. Bitácora `ANPR_ACCESO_AUTOMATICO` o `ANPR_ACCESO_VERIFICADO` según el modo. |
+| `POST /api/anpr/salidas` | ídem | Cierra el registro abierto más reciente de ese vehículo; idempotente por `id_cliente_salida`. Sin registro abierto → 404 y la cola lo marca «rechazado» (el agente lo ve en «Registrados en este equipo»). |
+| `POST /api/anpr/eventos` | ídem | Alerta de lista negra, verificación resuelta, ilegible, falla del actuador. Bitácora con su acción (`ANPR_ALERTA_LISTA_NEGRA`, …). |
+| `POST /api/anpr/evidencias` | ídem | Solo para un acceso o evento **ya recibido** de la misma sucursal; JPEG real (firma `FF D8 FF`), ≤ 256 KB, SHA-256 verificado; reenvío idempotente. La ruta usa el límite de cuerpo mayor de `app.ts` (el mismo del logo); el resto de la API sigue con el chico. |
+| `GET /api/anpr/evidencias/:id_cliente/:tipo` | personal de la sucursal | Devuelve el JPEG mientras no caduque. |
+| `GET /api/sync/garita?vehiculos_desde=N` | (existente) | Agrega `vehiculos: { modo: completo|cambios, version, filas }`. Sin parámetro o `0` → lista completa de los que hoy pueden entrar; con versión → solo lo que cambió (bajas como `activo: false`). Respeta multi-tenant y 423 como el resto del snapshot. |
+
+Las acciones nuevas están en `docs/acciones_sensibles.md`, en la tabla de auditoría del owner (`frontend/src/pages/owner/auditoria.ts`)
+y en la prueba I-11 (`auditoria.int.test.ts`), que exige un caso por acción. La matriz de roles de
+`security.routes.contract.test.ts` cubre las 9 rutas nuevas.
+
+### 9.3 Garita (Rust, `desktop/src-tauri/src/anpr/`)
+
+```mermaid
+flowchart LR
+  cam[FuenteFotogramas<br/>puente de cámaras] -->|JPEG más nuevo| motor[motor.rs<br/>bucle por carril]
+  motor -->|JSON por líneas| side[servidor.js<br/>sidecar ANPR]
+  side -->|decision + evidencia| motor
+  motor --> dec[decision.rs<br/>barandas, sin red]
+  dec --> reg[registro.rs<br/>SQLCipher]
+  reg -->|accesos_pendientes.ruta| sync[sync.rs<br/>push con backoff]
+  reg -->|Abrir| act[actuador.rs]
+  reg -->|sg://anpr| ui[pantalla de garita]
+  sync --> api[(backend /anpr/*)]
+```
+
+- **Espejo local** (`vehiculos_autorizados_local`): `sync.rs` pide `vehiculos_desde` con la versión guardada y aplica los
+  cambios; cada 30 min pide la lista completa (cubre una carrera entre dos cambios casi simultáneos y los residentes eliminados).
+- **Decisión** (`decision.rs::decidir`), en este orden: carril apagado → nada; no confirmada por consenso → verificación
+  (ilegible); **lista negra → alerta, nunca abre** (antes que todo, también con lectura corregida); misma placa en el carril
+  hace < 60 s → se ignora; licencia que no permite operar (suspendida, revocada, gracia vencida) → verificación; lectura con
+  corrección por posición → verificación; placa desconocida, vehículo dado de baja, fuera de vigencia o residente que ya no está
+  en la copia → verificación; todo en orden → `automatico` abre, `verificacion` espera el toque del agente. Hay una prueba
+  exhaustiva que recorre todas las combinaciones y comprueba que **ninguna** abre con lista negra, licencia bloqueada o lectura
+  corregida.
+- **Registro** (`registro.rs`): cada decisión deja un `anpr_eventos_local` y su evidencia **cifrada en SQLCipher**. Lo que va al
+  backend usa la cola de siempre (`accesos_pendientes`) con la columna nueva `ruta` (`/anpr/accesos`, `/anpr/salidas`,
+  `/anpr/eventos`; lista blanca en `sync.rs`) y `visible = 0` para que los eventos no aparezcan en «Registrados en este equipo».
+  El `id_cliente` es el de la fila: los reintentos sin red no duplican. La evidencia sube **después** de que su acceso o evento
+  quedó sincronizado (`push_evidencias`, con SHA-256) y se purga a los 7 días (eventos resueltos también).
+- **Resolución del agente** (`anpr_resolver`): `Autorizar` (con placa leída o corregida) vuelve a correr **todas** las barandas
+  con la placa final: con lista negra, licencia bloqueada o vehículo no autorizado/vigente se rechaza con un mensaje claro y el
+  agente usa el registro manual de siempre. `RegistroManual`, `Descartar` y `Enterado` cierran el evento (los dos primeros van a la
+  bitácora como `verificacion_resuelta`).
+- **Carril de salida**: la placa autorizada encola `/anpr/salidas` y abre la barrera (si el carril está en automático); el
+  backend cierra el registro abierto.
+- **Actuador** (`actuador.rs`): trait `ActuadorBarrera` con `Simulado` (por defecto), `ReleHttp` (URL `http://` con IP privada
+  literal —mismo validador SSRF que las cámaras—, `GET`/`POST`, timeout configurable, **un** reintento) y `Talanquera` (la ya
+  configurada del equipo). Se llama en `spawn_blocking` **después** de encolar el acceso: una falla queda en el evento
+  (`apertura = 'fallo: …'`), se encola `actuador_fallo` para la bitácora y la pantalla muestra el aviso, pero el acceso registrado
+  no se toca. No se inventó ningún protocolo de relé: el cuerpo y el método son los que configure el integrador.
+- **Comandos Tauri**: `anpr_estado`, `anpr_iniciar`, `anpr_detener`, `anpr_pausar`, `anpr_carriles`, `anpr_carril_guardar`,
+  `anpr_carril_eliminar`, `anpr_eventos`, `anpr_evidencia`, `anpr_resolver`, `anpr_probar_actuador`; evento `sg://anpr` hacia la
+  pantalla (`estado` del carril y `evento` nuevo, con `alerta: true` si es lista negra). Al cerrar la ventana se detiene el
+  proceso.
+
+### 9.4 Pendiente de decisión (no tocado por la regla del sprint)
+
+- **Facturación**: `visitasDelMes`, `visitasPorEmpresa` (`services/suscripciones.ts`) y `visitasEnRango`
+  (`services/facturacion.ts`) cuentan **toda** fila autorizada de `registros_acceso`; con el ANPR, las entradas de vehículos de
+  residentes contarían como visitas. La regla del sprint dice no tocar la facturación, así que queda así y se decide aparte. El
+  cambio propuesto es una línea en cada consulta: `AND ra.visitante_id IS NOT NULL`.
+- **Listados web de accesos** (`accesos.controller.ts`, `dashboard.controller.ts`, `exportacion.ts`) hacen `JOIN visitantes`:
+  los accesos ANPR de residentes **no aparecen** ahí (sí en la bitácora y en la base). Mostrarlos requiere `LEFT JOIN` y una
+  columna «vehículo de residente» en la tabla; se deja para un sprint del panel web.
+
+## 10. Deuda técnica encontrada (para el informe)
 
 Se llena con cada `refactor(...)` que haga falta.
 
-## 10. Estado por tarea
+## 11. Estado por tarea
 
 | Tarea | Estado | Bandera | Pendiente |
 |---|---|---|---|
@@ -259,7 +345,7 @@ Se llena con cada `refactor(...)` que haga falta.
 | 2 Detector | hecho | — | Exactitud con cámara real (noche, lluvia, motos); aviso de licencia Apache-2.0 en el instalador |
 | 3 Tracker | hecho | — | Ajustar `iouMin`, pérdida y reapertura con video real (motos entre carros, colas en la talanquera) |
 | 4 Consenso y evidencia | hecho | — | Validar umbrales (0,90, 3 de 5) y el corte de cabina de la evidencia con la cámara real |
-| 5 Decisión y actuador | pendiente | — | — |
+| 5 Decisión y actuador | hecho | Carril nuevo `apagado`; «Pausar ANPR» | Probar `ReleHttp` con el relé real del integrador; decidir facturación y listados web (9.4) |
 | 6 Interfaz | pendiente | — | — |
 | 7 Medición | pendiente | — | — |
 | 8 Pruebas integradas y docs | pendiente | — | — |

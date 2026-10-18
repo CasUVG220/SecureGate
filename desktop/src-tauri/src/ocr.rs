@@ -78,7 +78,7 @@ pub struct EstadoOcr {
 /// Dónde están server.js y los modelos. En desarrollo se usan directamente
 /// los de `src-tauri/resources/`; empaquetada, los que Tauri copió a
 /// `resource_dir()`.
-fn dir_sidecar(app: &AppHandle) -> Option<PathBuf> {
+pub(crate) fn dir_sidecar(app: &AppHandle) -> Option<PathBuf> {
     let mut candidatos = Vec::new();
     if let Ok(res) = app.path().resource_dir() {
         candidatos.push(res.join("sidecar-ocr"));

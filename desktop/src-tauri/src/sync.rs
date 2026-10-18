@@ -9,6 +9,9 @@
 //!   (blacklist, residente inexistente…) la marca `rechazado` y no se
 //!   reintenta: el agente lo ve en la lista con el motivo.
 //! - **Heartbeat** de licencia, en su propio bucle.
+//! - **ANPR** (Sprint 10): el pull baja los vehículos autorizados con versión (solo los cambios; la lista completa cada 30 min
+//!   por las dudas); la cola sube cada fila a su `ruta` (`/accesos` o `/anpr/*`) y, ya sincronizado el acceso o el evento, sube
+//!   su evidencia.
 //!
 //! Regla de oro: ningún bucle retiene el mutex de la BD mientras espera la
 //! red. Se lee, se suelta, se llama, se vuelve a tomar para escribir.
@@ -149,6 +152,13 @@ fn aplicar_snapshot(conn: &Connection, snap: &Value, inicio: &str) -> AppResult<
             ],
         )?;
     }
+    // Vehículos autorizados del ANPR (Sprint 10). Un servidor que no los manda deja la copia como estaba.
+    if let Some(version) = crate::anpr::registro::aplicar_vehiculos(&tx, &snap["vehiculos"])? {
+        if snap["vehiculos"]["modo"].as_str() == Some("completo") {
+            db::meta_escribir(&tx, "vehiculos_completo_en", &Utc::now().to_rfc3339())?;
+        }
+        log::debug!("vehículos ANPR al día (versión {version})");
+    }
     db::meta_escribir(&tx, "qr_snapshot_desde", inicio)?;
     db::meta_escribir(&tx, "ultima_sync_ok", &Utc::now().to_rfc3339())?;
     tx.commit()?;
@@ -161,7 +171,8 @@ pub async fn pull(state: &AppState) -> AppResult<(usize, usize, usize, usize)> {
     let cred = Credenciales { jwt: Some(&jwt), licencia: Some(&lic) };
     // El instante se toma ANTES de pedir el snapshot: lo que se sincronice mientras tanto se cuenta de más, nunca de menos.
     let inicio = Utc::now().to_rfc3339();
-    let snap: Value = match state.api.get(&base, "/sync/garita", &cred).await {
+    let desde = con_db(state, |c| vehiculos_desde(c, Utc::now()))?;
+    let snap: Value = match state.api.get_con(&base, "/sync/garita", &[("vehiculos_desde", desde.as_str())], &cred).await {
         Ok(v) => v,
         Err(e) => {
             registrar_error_red(state, &e);
@@ -174,23 +185,40 @@ pub async fn pull(state: &AppState) -> AppResult<(usize, usize, usize, usize)> {
     Ok(n)
 }
 
+/// Desde qué versión pedir los vehículos del ANPR: la guardada, o `0` (lista completa) si no hay o si la última lista completa
+/// tiene más de 30 minutos (corrige cualquier cambio que se haya perdido entre versiones).
+pub fn vehiculos_desde(conn: &Connection, ahora: DateTime<Utc>) -> AppResult<String> {
+    let completo = db::meta_leer(conn, "vehiculos_completo_en")?
+        .and_then(|s| DateTime::parse_from_rfc3339(&s).ok())
+        .map(|d| d.with_timezone(&Utc));
+    let version = db::meta_leer(conn, "vehiculos_version")?.filter(|v| !v.is_empty() && v.chars().all(|c| c.is_ascii_digit()));
+    Ok(match (completo, version) {
+        (Some(c), Some(v)) if ahora - c < Duration::minutes(30) => v,
+        _ => "0".into(),
+    })
+}
+
 // ── Push ────────────────────────────────────────────────────────────────────
+
+/// Rutas a las que puede ir una fila de la cola (la columna `ruta`; lo demás no se envía).
+pub const RUTAS_COLA: [&str; 4] = ["/accesos", "/anpr/accesos", "/anpr/salidas", "/anpr/eventos"];
 
 #[derive(Debug, Clone)]
 struct Pendiente {
     id_cliente: String,
     payload: String,
     intentos: i64,
+    ruta: String,
 }
 
 fn pendientes_vencidos(conn: &Connection, ahora: &str, limite: usize) -> AppResult<Vec<Pendiente>> {
     let mut st = conn.prepare(
-        "SELECT id_cliente, payload, intentos FROM accesos_pendientes
+        "SELECT id_cliente, payload, intentos, ruta FROM accesos_pendientes
          WHERE estado = 'pendiente' AND (proximo_intento_en IS NULL OR proximo_intento_en <= ?1)
          ORDER BY registrado_en ASC LIMIT ?2",
     )?;
     let rows = st.query_map(params![ahora, limite as i64], |r| {
-        Ok(Pendiente { id_cliente: r.get(0)?, payload: r.get(1)?, intentos: r.get(2)? })
+        Ok(Pendiente { id_cliente: r.get(0)?, payload: r.get(1)?, intentos: r.get(2)?, ruta: r.get(3)? })
     })?;
     Ok(rows.collect::<Result<_, _>>()?)
 }
@@ -226,10 +254,13 @@ pub fn programar_reintento(conn: &Connection, id_cliente: &str, intentos_previos
 /// conservan siempre (los rechazados son evidencia para el admin).
 pub fn purgar(conn: &Connection, ahora: DateTime<Utc>) -> AppResult<usize> {
     let limite = (ahora - Duration::days(RETENCION_SINCRONIZADOS_DIAS)).to_rfc3339();
-    Ok(conn.execute(
+    let n = conn.execute(
         "DELETE FROM accesos_pendientes WHERE estado = 'sincronizado' AND sincronizado_en < ?1",
         [limite],
-    )?)
+    )?;
+    // Evidencia del ANPR vencida (7 días) y eventos ya resueltos de más de 7 días.
+    crate::anpr::registro::purgar(conn, ahora)?;
+    Ok(n)
 }
 
 /// Clasifica el resultado de un POST para decidir qué hacer con la fila.
@@ -270,8 +301,12 @@ pub async fn push_pendientes(state: &AppState) -> AppResult<usize> {
 
     let mut subidos = 0;
     for p in lote {
+        if !RUTAS_COLA.contains(&p.ruta.as_str()) {
+            con_db(state, |c| marcar_rechazado(c, &p.id_cliente, "ruta desconocida en la cola local"))?;
+            continue;
+        }
         let body: Value = serde_json::from_str(&p.payload)?;
-        let resultado = state.api.post::<Value>(&base, "/accesos", &body, &cred).await;
+        let resultado = state.api.post::<Value>(&base, &p.ruta, &body, &cred).await;
         match clasificar(resultado) {
             Desenlace::Sincronizado(id) => {
                 con_db(state, |c| marcar_sincronizado(c, &p.id_cliente, id.as_deref()))?;
@@ -295,7 +330,43 @@ pub async fn push_pendientes(state: &AppState) -> AppResult<usize> {
         }
     }
     con_db(state, |c| purgar(c, ahora))?;
+    if let Err(e) = push_evidencias(state).await {
+        log::debug!("evidencia del ANPR pendiente de subir: {}", e.mensaje);
+    }
     Ok(subidos)
+}
+
+/// Sube la evidencia del ANPR de lo que ya está en el servidor (máximo 10 por vuelta). Un 4xx (el acceso fue rechazado, la
+/// imagen no pasa los límites) la marca como no subible; sin red, espera a la próxima vuelta.
+pub async fn push_evidencias(state: &AppState) -> AppResult<usize> {
+    use base64::Engine;
+    use sha2::{Digest, Sha256};
+    let lote = con_db(state, |c| crate::anpr::registro::evidencias_por_subir(c, Utc::now(), 10))?;
+    if lote.is_empty() {
+        return Ok(0);
+    }
+    let (jwt, lic) = auth::credenciales(state).await?;
+    let base = state.api_url();
+    let cred = Credenciales { jwt: Some(&jwt), licencia: Some(&lic) };
+    let mut subidas = 0;
+    for e in lote {
+        let body = serde_json::json!({
+            "id_cliente": e.id_cliente, "tipo": e.tipo,
+            "jpeg": base64::engine::general_purpose::STANDARD.encode(&e.jpeg), "sha256": hex::encode(Sha256::digest(&e.jpeg)),
+        });
+        match state.api.post::<Value>(&base, "/anpr/evidencias", &body, &cred).await {
+            Ok(_) => {
+                con_db(state, |c| crate::anpr::registro::marcar_evidencia(c, &e.evento_id, &e.tipo, 1))?;
+                subidas += 1;
+            }
+            Err(err) if matches!(err.status, Some(s) if (400..500).contains(&s) && s != 401 && s != 429) => {
+                log::warn!("evidencia del ANPR no aceptada ({}): {}", err.status.unwrap_or(0), err.mensaje);
+                con_db(state, |c| crate::anpr::registro::marcar_evidencia(c, &e.evento_id, &e.tipo, 2))?;
+            }
+            Err(err) => return Err(err),
+        }
+    }
+    Ok(subidas)
 }
 
 fn registrar_error_red(state: &AppState, e: &AppError) {
@@ -440,6 +511,34 @@ mod tests {
             .unwrap();
         }
         c
+    }
+
+    #[test]
+    fn los_vehiculos_se_piden_por_cambios_salvo_la_primera_vez_o_cada_30_minutos() {
+        let c = Connection::open_in_memory().unwrap();
+        db::aplicar_esquema(&c).unwrap();
+        let t0 = Utc::now();
+        assert_eq!(vehiculos_desde(&c, t0).unwrap(), "0", "sin versión: lista completa");
+        db::meta_escribir(&c, "vehiculos_version", "42").unwrap();
+        db::meta_escribir(&c, "vehiculos_completo_en", &t0.to_rfc3339()).unwrap();
+        assert_eq!(vehiculos_desde(&c, t0 + Duration::minutes(5)).unwrap(), "42");
+        assert_eq!(vehiculos_desde(&c, t0 + Duration::minutes(31)).unwrap(), "0", "cada 30 min, la lista completa");
+        db::meta_escribir(&c, "vehiculos_version", "4x").unwrap();
+        assert_eq!(vehiculos_desde(&c, t0).unwrap(), "0", "una versión rara no se manda");
+    }
+
+    #[test]
+    fn la_cola_trae_la_ruta_de_cada_fila() {
+        let c = db_con_pendientes(1);
+        c.execute(
+            "INSERT INTO accesos_pendientes (id_cliente, payload, registrado_en, nombre_visitante, numero_dpi, ruta, visible, origen)
+             VALUES ('anpr-1', '{}', '2026-09-01T00:00:00+00:00', '', '', '/anpr/eventos', 0, 'anpr')",
+            [],
+        ).unwrap();
+        let p = pendientes_vencidos(&c, "2099-01-01T00:00:00+00:00", 10).unwrap();
+        let rutas: Vec<&str> = p.iter().map(|x| x.ruta.as_str()).collect();
+        assert!(rutas.contains(&"/accesos") && rutas.contains(&"/anpr/eventos"));
+        assert!(rutas.iter().all(|r| RUTAS_COLA.contains(r)));
     }
 
     #[test]

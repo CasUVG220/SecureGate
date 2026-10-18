@@ -153,6 +153,8 @@ pub struct AccesoPendiente {
     /// Id del registro en el servidor, una vez sincronizado: con él se puede dar la
     /// salida desde la lista sin buscar por placa. `None` mientras siga pendiente.
     pub registro_id: Option<String>,
+    /// `anpr` si lo registró el reconocimiento de placas (Sprint 10); `None` en los de siempre.
+    pub origen: Option<String>,
 }
 
 // ── Consultas ───────────────────────────────────────────────────────────────
@@ -236,7 +238,8 @@ pub fn evaluar_visitante(
 
     let conocido: Option<String> = conn
         .query_row(
-            "SELECT nombre_visitante FROM accesos_pendientes WHERE numero_dpi = ?1 ORDER BY registrado_en DESC LIMIT 1",
+            // Las filas del ANPR (vehículos de residentes) no llevan DPI: un DPI vacío nunca «conoce» a nadie.
+            "SELECT nombre_visitante FROM accesos_pendientes WHERE numero_dpi = ?1 AND numero_dpi <> '' ORDER BY registrado_en DESC LIMIT 1",
             [dpi],
             |r| r.get(0),
         )
@@ -331,8 +334,8 @@ pub fn encolar_acceso(conn: &Connection, agente_id: &str, a: &NuevoAcceso) -> Ap
 pub fn listar_recientes(conn: &Connection, limite: usize) -> AppResult<Vec<AccesoPendiente>> {
     let mut st = conn.prepare(
         "SELECT id_cliente, registrado_en, estado, intentos, ultimo_error, sincronizado_en,
-                nombre_visitante, numero_dpi, placa, residente_casa, capturado_manualmente, registro_id, origen_dpi
-         FROM accesos_pendientes ORDER BY registrado_en DESC LIMIT ?1",
+                nombre_visitante, numero_dpi, placa, residente_casa, capturado_manualmente, registro_id, origen_dpi, origen
+         FROM accesos_pendientes WHERE visible = 1 ORDER BY registrado_en DESC LIMIT ?1",
     )?;
     let rows = st.query_map([limite as i64], |r| {
         Ok(AccesoPendiente {
@@ -349,6 +352,7 @@ pub fn listar_recientes(conn: &Connection, limite: usize) -> AppResult<Vec<Acces
             capturado_manualmente: r.get::<_, i64>(10)? != 0,
             registro_id: r.get(11)?,
             origen_dpi: r.get(12)?,
+            origen: r.get(13)?,
         })
     })?;
     Ok(rows.collect::<Result<_, _>>()?)
