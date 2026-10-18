@@ -186,6 +186,15 @@ const SOLO_OWNER = ['residente', 'agente', 'admin_sucursal', 'admin_empresa'];
 
 const MATRIZ: Array<[string, string, string[]]> = [
   // Autenticadas pero de personal: un residente no debe verlas
+  ['POST', '/api/anpr/accesos', RESIDENTE],
+  ['POST', '/api/anpr/salidas', RESIDENTE],
+  ['POST', '/api/anpr/eventos', RESIDENTE],
+  ['POST', '/api/anpr/evidencias', RESIDENTE],
+  ['GET', `/api/anpr/evidencias/${UUID}/${UUID}`, RESIDENTE],
+  ['GET', '/api/anpr/vehiculos', SOLO_ADMIN_SUC_ARRIBA],
+  ['POST', '/api/anpr/vehiculos', SOLO_ADMIN_SUC_ARRIBA],
+  ['PATCH', `/api/anpr/vehiculos/${UUID}`, SOLO_ADMIN_SUC_ARRIBA],
+  ['DELETE', `/api/anpr/vehiculos/${UUID}`, SOLO_ADMIN_SUC_ARRIBA],
   ['GET', '/api/dashboard', RESIDENTE],
   ['GET', '/api/blacklist', RESIDENTE],
   ['GET', '/api/residentes', RESIDENTE],

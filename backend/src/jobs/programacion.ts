@@ -5,6 +5,7 @@ import { expirarInvitaciones } from './invitaciones.job';
 import { APP_TZ } from '../utils/reservas';
 import pool from '../db/pool';
 import { ejecutarFacturacionMensual, revisarVencimientos } from '../services/facturacion';
+import { purgarEvidenciasAnpr } from '../controllers/anpr.controller';
 
 /**
  * Tareas programadas del backend. Viven aquí (y no en index.ts) para poder comprobar con una prueba que las
@@ -67,6 +68,14 @@ export const TAREAS: TareaProgramada[] = [
     ejecutar: () => revisarVencimientos(pool),
     resumen: (r: Awaited<ReturnType<typeof revisarVencimientos>>) =>
       `Facturas vencidas: ${r.vencidas}, avisos de pago vencido: ${r.avisos.vencidas}`,
+  },
+  {
+    // Evidencia del ANPR (recortes de placa y vehículo) con más de 7 días: se borra a diario a las 03:40 hora local (Sprint 10).
+    nombre: 'anpr.evidencias',
+    expresion: '40 3 * * *',
+    timezone: APP_TZ,
+    ejecutar: () => purgarEvidenciasAnpr(pool),
+    resumen: (r: Awaited<ReturnType<typeof purgarEvidenciasAnpr>>) => `Evidencias del ANPR purgadas: ${r.purgadas}`,
   },
 ];
 

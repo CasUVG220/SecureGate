@@ -31,6 +31,7 @@ import licenciasRouter from './licencias.routes';
 import syncRouter from './sync.routes';
 import invitacionesRouter from './invitaciones.routes';
 import contactoRouter from './contacto.routes';
+import anprRouter from './anpr.routes';
 import { verifyToken, requireOwner, requireAdminEmpresa, requireAdminSucursal, requireStaff } from '../middleware/auth.middleware';
 import { getDashboard } from '../controllers/dashboard.controller';
 import { getAuditLogs, getAuditAcciones } from '../controllers/audit.controller';
@@ -56,6 +57,8 @@ router.use('/usuarios',   verifyToken, usuariosRouter);
 // rol ruta por ruta (hay rutas /me y /mis abiertas al residente).
 router.use('/residentes', residentesRouter);
 router.use('/accesos', accesosRouter);
+// ANPR continuo (Sprint 10): vehículos de residentes y lo que la garita registra sola. Guards ruta por ruta.
+router.use('/anpr', anprRouter);
 // Configuración de cargos por sucursal: sólo administración. Antes /cargos no
 // tenía NINGÚN middleware de autenticación.
 router.use('/cargos', verifyToken, requireAdminSucursal, cargosRouter);

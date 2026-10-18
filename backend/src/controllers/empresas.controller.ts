@@ -340,6 +340,9 @@ export const eliminarEmpresaDefinitivo = async (req: Request, res: Response) => 
     const pasos: Array<[string, string, unknown[]]> = [
       ['cargos_automaticos',            `DELETE FROM cargos_automaticos WHERE residente_id = ANY($1::uuid[]) OR registro_acceso_id IN (SELECT id FROM registros_acceso WHERE sucursal_id = ANY($2::uuid[]))`, [R, S]],
       ['registros_acceso',              `DELETE FROM registros_acceso WHERE sucursal_id = ANY($1::uuid[]) OR residente_id = ANY($2::uuid[]) OR agente_id = ANY($3::uuid[])`, [S, R, U]],
+      ['evidencias_anpr',               `DELETE FROM evidencias_anpr WHERE sucursal_id = ANY($1::uuid[])`, [S]],
+      ['anpr_eventos',                  `DELETE FROM anpr_eventos WHERE sucursal_id = ANY($1::uuid[])`, [S]],
+      ['vehiculos_residentes',          `DELETE FROM vehiculos_residentes WHERE sucursal_id = ANY($1::uuid[]) OR residente_id = ANY($2::uuid[])`, [S, R]],
       ['reservas_areas',                `DELETE FROM reservas_areas WHERE residente_id = ANY($1::uuid[]) OR area_id IN (SELECT id FROM areas_comunes WHERE sucursal_id = ANY($2::uuid[]))`, [R, S]],
       ['areas_comunes',                 `DELETE FROM areas_comunes WHERE sucursal_id = ANY($1::uuid[])`, [S]],
       ['pagos',                         `DELETE FROM pagos WHERE sucursal_id = ANY($1::uuid[]) OR residente_id = ANY($2::uuid[]) OR registrado_por = ANY($3::uuid[])`, [S, R, U]],

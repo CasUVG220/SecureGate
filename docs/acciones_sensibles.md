@@ -84,6 +84,18 @@ Dos pruebas mantienen esta lista honesta:
 | `LICENCIA_HEARTBEAT` | Sólo los bloqueos por límite (429); el latido normal está exento | `POST /api/licencias/heartbeat` | Equipo | 60/15 min por IP |
 | **Garita y visitantes** | | | | |
 | `REGISTRO_ENTRADA` | Entrada de un visitante (también las que llegan de la cola offline) | `POST /api/accesos` | personal | — |
+| `ANPR_ACCESO_AUTOMATICO` | Entrada de un vehículo de residente que la garita abrió sola (ANPR, Sprint 10). Lleva placa, pista, carril y confianza | `POST /api/anpr/accesos` | personal + licencia del equipo | — |
+| `ANPR_ACCESO_VERIFICADO` | Igual, pero el agente confirmó con un toque (modo verificación o verificación resuelta) | `POST /api/anpr/accesos` | personal + licencia | — |
+| `ANPR_SALIDA` | Salida automática por placa (carril de salida): cierra el acceso abierto de esa placa | `POST /api/anpr/salidas` | personal + licencia | — |
+| `ANPR_EVENTO` | Evento del ANPR con un tipo desconocido (rechazado con 400; los válidos usan las cuatro acciones siguientes) | `POST /api/anpr/eventos` | personal + licencia | — |
+| `ANPR_ALERTA_LISTA_NEGRA` | La garita leyó una placa bloqueada: alerta al agente, nunca abre | `POST /api/anpr/eventos` | personal + licencia | — |
+| `ANPR_VERIFICACION_RESUELTA` | El agente resolvió una verificación del ANPR sin registrar un acceso automático (registro manual o descartada) | `POST /api/anpr/eventos` | personal + licencia | — |
+| `ANPR_ILEGIBLE` | Pasó un vehículo cuya placa no se pudo leer | `POST /api/anpr/eventos` | personal + licencia | — |
+| `ANPR_ACTUADOR_FALLO` | El actuador de la barrera no respondió (el acceso ya estaba registrado) | `POST /api/anpr/eventos` | personal + licencia | — |
+| `ANPR_EVIDENCIA` | Recorte de placa o de vehículo de un acceso o evento del ANPR (se borra a los 7 días) | `POST /api/anpr/evidencias` | personal + licencia | — |
+| `VEHICULO_RESIDENTE_CREADO` | Alta de un vehículo autorizado de un residente (lo deja entrar solo por ANPR) | `POST /api/anpr/vehiculos` | admin. de sucursal ↑ | — |
+| `VEHICULO_RESIDENTE_ACTUALIZADO` | Cambio de vigencia, descripción o estado de un vehículo autorizado | `PATCH /api/anpr/vehiculos/:id` | admin. de sucursal ↑ | — |
+| `VEHICULO_RESIDENTE_DADO_DE_BAJA` | Baja de un vehículo autorizado (deja de entrar solo) | `DELETE /api/anpr/vehiculos/:id` | admin. de sucursal ↑ | — |
 | `REGISTRO_SALIDA` | Salida de un visitante | `PATCH`/`PUT /api/accesos/:id/salida` | personal | — |
 | `PREAUTORIZACION_CREADA` | Aviso de visita (administrador o residente) | `POST /api/preautorizaciones`, `/mis` | admin / residente | — |
 | `PREAUTORIZACION_ELIMINADA` | Elimina un aviso o un visitante guardado | `DELETE /api/preautorizaciones/:id`, `/mis/:id` | admin / residente | — |

@@ -105,9 +105,11 @@ const jsonPequeno = express.json({ limit: '100kb' });
 const jsonConImagen = express.json({ limit: '8mb' });
 // Logo de empresa: una imagen de hasta 200 KB en base64 (~270 KB de texto). Margen propio, mucho menor que el de las fotos.
 const jsonConLogo = express.json({ limit: '400kb' });
+// Evidencia del ANPR (Sprint 10): un JPEG de hasta 256 KB en base64 (~342 KB de texto). Mismo margen que el logo.
+const RUTA_EVIDENCIA_ANPR = '/api/anpr/evidencias';
 app.use((req, res, next) => {
   const conImagen = RUTAS_CON_IMAGEN.some(p => req.path === p || req.path.startsWith(`${p}/`));
-  const conLogo = req.path === '/api/empresas' || /^\/api\/empresas\/[^/]+$/.test(req.path);
+  const conLogo = req.path === '/api/empresas' || /^\/api\/empresas\/[^/]+$/.test(req.path) || req.path === RUTA_EVIDENCIA_ANPR;
   return (conImagen ? jsonConImagen : conLogo ? jsonConLogo : jsonPequeno)(req, res, next);
 });
 app.use(express.urlencoded({ limit: '100kb', extended: false }));
