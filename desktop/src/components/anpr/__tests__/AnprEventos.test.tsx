@@ -32,13 +32,13 @@ describe('AnprEventos', () => {
     expect(screen.getByText('Sin eventos todavía')).toBeInTheDocument();
   });
 
-  it('un acceso automático muestra placa, residente, carril, confianza, resultado de la barrera y no pide nada', () => {
+  it('un acceso automático muestra placa, residente, carril, confianza, resultado de la talanquera y no pide nada', () => {
     montar([evento({ apertura: 'simulada' })]);
     expect(screen.getByText('P-123ABC')).toBeInTheDocument();
     expect(screen.getByText(/Casa 12 · Ana Prueba/)).toBeInTheDocument();
     expect(screen.getByText(/Entrada principal · Entrada · confianza 95 %/)).toBeInTheDocument();
     expect(screen.getByText('Entró automático')).toBeInTheDocument();
-    expect(screen.getByText('Barrera abierta (simulada)')).toBeInTheDocument();
+    expect(screen.getByText('Talanquera abierta (simulada)')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Corregir/ })).not.toBeInTheDocument();
     // La evidencia se pide solo al abrirla.
     expect(evidencia).not.toHaveBeenCalled();
@@ -92,9 +92,9 @@ describe('AnprEventos', () => {
     expect(screen.queryByRole('button', { name: /Autorizar|Corregir/ })).not.toBeInTheDocument();
   });
 
-  it('una barrera que falló se ve en el evento', () => {
+  it('una talanquera que falló se ve en el evento', () => {
     montar([evento({ apertura: 'fallo: el relé no respondió' })]);
-    expect(screen.getByText('La barrera no respondió: el relé no respondió')).toBeInTheDocument();
+    expect(screen.getByText('La talanquera no respondió: el relé no respondió')).toBeInTheDocument();
   });
 });
 
@@ -105,7 +105,7 @@ describe('AnprAlertas', () => {
     const alerta = screen.getByRole('alert');
     expect(alerta.parentElement).toHaveAttribute('aria-live', 'assertive');
     expect(alerta).toHaveTextContent('Lista negra · P-123ABC');
-    expect(alerta).toHaveTextContent('Entrada principal: la barrera NO se abrió. Robo reportado.');
+    expect(alerta).toHaveTextContent('Entrada principal: la talanquera NO se abrió. Robo reportado.');
     fireEvent.click(screen.getByRole('button', { name: /Enterado/ }));
     await waitFor(() => expect(onEnterado).toHaveBeenCalledWith('ln'));
   });
@@ -118,10 +118,10 @@ describe('AnprAlertas', () => {
     expect(screen.getByText(/Lista negra · P-123ABC/)).toBeInTheDocument();
   });
 
-  it('falla de la barrera: banda persistente que dice que el acceso quedó registrado; «Entendido» la quita', () => {
+  it('falla de la talanquera: banda persistente que dice que el acceso quedó registrado; «Entendido» la quita', () => {
     const onVerFalla = vi.fn();
     render(<AnprAlertas alertas={[]} fallas={[{ evento_id: 'e1', carril: 'c1', error: 'el relé no respondió' }]} nombreCarril={nombre} onEnterado={vi.fn()} onVerFalla={onVerFalla} />);
-    expect(screen.getByRole('alert')).toHaveTextContent('La barrera de «Entrada principal» no respondió (el relé no respondió). El acceso quedó registrado: ábrela a mano.');
+    expect(screen.getByRole('alert')).toHaveTextContent('La talanquera de «Entrada principal» no respondió (el relé no respondió). El acceso quedó registrado: ábrela a mano.');
     fireEvent.click(screen.getByRole('button', { name: 'Entendido' }));
     expect(onVerFalla).toHaveBeenCalledWith('e1');
   });

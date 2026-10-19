@@ -58,13 +58,13 @@ export function placaVisible(e: Pick<EventoAnpr, 'placa' | 'placa_probable'>): s
   return 'Sin placa';
 }
 
-/** Resultado de la barrera de un evento, o null si no se mandó abrir. */
+/** Resultado de la talanquera de un evento, o null si no se mandó abrir. */
 export function textoApertura(apertura: string | null): { texto: string; tono: TonoAnpr } | null {
   if (!apertura) return null;
-  if (apertura === 'abierta') return { texto: 'Barrera abierta', tono: 'ok' };
-  if (apertura === 'simulada') return { texto: 'Barrera abierta (simulada)', tono: 'info' };
+  if (apertura === 'abierta') return { texto: 'Talanquera abierta', tono: 'ok' };
+  if (apertura === 'simulada') return { texto: 'Talanquera abierta (simulada)', tono: 'info' };
   const detalle = apertura.replace(/^fallo:\s*/, '');
-  return { texto: `La barrera no respondió${detalle ? `: ${detalle}` : ''}`, tono: 'bad' };
+  return { texto: `La talanquera no respondió${detalle ? `: ${detalle}` : ''}`, tono: 'bad' };
 }
 
 export function textoEstadoCarril(e: EstadoCarril | undefined, modo: ModoCarril, pausado: boolean): { texto: string; tono: TonoAnpr } {
@@ -171,9 +171,9 @@ export function carrilNuevo(existentes: Carril[], camaraId: string | null = null
 }
 
 export const ACTUADOR_TEXTO: Record<ConfigActuador['tipo'], string> = {
-  simulado: 'Simulado (no mueve nada: solo registra y avisa)',
-  rele_http: 'Relé por red (HTTP)',
-  talanquera: 'La talanquera configurada de este equipo',
+  simulado: 'Simulada (no mueve nada: solo registra y avisa)',
+  rele_http: 'Relé por red (HTTP) de este carril',
+  talanquera: 'El relé de talanquera de este equipo (Configuración de hardware)',
 };
 
 export const RELE_DEFECTO: Extract<ConfigActuador, { tipo: 'rele_http' }> = {

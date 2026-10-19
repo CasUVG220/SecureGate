@@ -4,7 +4,7 @@
  *
  * Por carril: nombre, cámara IP fija, sentido, modo (un carril nuevo nace APAGADO; al activarlo el modo propuesto es
  * Automático), el área de la imagen donde se mira (se dibuja con clics sobre una foto de la cámara), umbrales avanzados y el
- * actuador de la barrera con su prueba.
+ * actuador de la talanquera con su prueba.
  */
 import { useEffect, useMemo, useRef, useState, type FormEvent, type MouseEvent } from 'react';
 import { Button, Input, Modal, Select, StatusText } from '../ui';
@@ -205,7 +205,7 @@ function FormCarril({ inicial, camaras, existe, onGuardado, onEliminado, onCance
       <details className="rounded-lg border border-gray-700 p-4">
         <summary className="cursor-pointer text-xs font-semibold text-gray-300">Ajustes avanzados (vacío = valor recomendado)</summary>
         <div className="mt-4 grid gap-4 sm:grid-cols-3">
-          <Input label="Sensibilidad al movimiento" type="number" min={0.0001} max={1} step={0.001} placeholder="0.02"
+          <Input label="Sensibilidad al movimiento" type="number" min={0.0001} max={1} step={0.001} placeholder="0.015"
             value={c.umbrales.umbral_cambio ?? ''} onChange={e => setUmbral('umbral_cambio', e.target.value)}
             hint="Fracción del área que debe cambiar (0,0001–1)." />
           <Input label="Lecturas iguales para confirmar" type="number" min={1} max={5} placeholder="3"
@@ -340,7 +340,7 @@ function Actuador({ config, onConfig }: { config: ConfigActuador; onConfig: (c: 
 
   return (
     <fieldset className="space-y-3 rounded-lg border border-gray-700 p-4">
-      <legend className="px-1 text-xs font-semibold text-gray-300">Barrera</legend>
+      <legend className="px-1 text-xs font-semibold text-gray-300">Talanquera</legend>
       <Select label="Qué abre cuando un residente entra solo" value={config.tipo} onChange={e => cambiarTipo(e.target.value as ConfigActuador['tipo'])}>
         {(Object.keys(ACTUADOR_TEXTO) as ConfigActuador['tipo'][]).map(t => <option key={t} value={t}>{ACTUADOR_TEXTO[t]}</option>)}
       </Select>
@@ -366,11 +366,11 @@ function Actuador({ config, onConfig }: { config: ConfigActuador; onConfig: (c: 
       )}
       <div className="flex flex-wrap items-center gap-3">
         <Button size="sm" variant="secondary" loading={probando} disabled={!!rele && !!problemaUrlRele(rele.url)} onClick={() => void probar()}>
-          Probar barrera
+          Probar talanquera
         </Button>
         {resultado && <p role="status" className={`text-xs font-medium ${resultado.ok ? 'text-success-400' : 'text-danger-400'}`}>{resultado.texto}</p>}
       </div>
-      <p className="text-xs text-gray-400">Si la barrera falla, el acceso igual queda registrado y la pantalla te avisa para abrir a mano.</p>
+      <p className="text-xs text-gray-400">Si la talanquera falla, el acceso igual queda registrado y la pantalla te avisa para abrir a mano.</p>
     </fieldset>
   );
 }

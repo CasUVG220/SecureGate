@@ -2,8 +2,8 @@
  * Avisos del ANPR que no pueden pasar desapercibidos (Sprint 10):
  *
  * - **Lista negra**: banda roja con la placa, el carril y la razón, anunciada con `aria-live="assertive"` (el sonido lo da
- *   `useAnpr`). La barrera NO se abrió. Queda hasta que el agente pulsa «Enterado».
- * - **La barrera no respondió**: banda persistente; el acceso ya quedó registrado, el agente abre a mano.
+ *   `useAnpr`). La talanquera NO se abrió. Queda hasta que el agente pulsa «Enterado».
+ * - **La talanquera no respondió**: banda persistente; el acceso ya quedó registrado, el agente abre a mano.
  */
 import { useState } from 'react';
 import { Button } from '../ui';
@@ -53,7 +53,7 @@ export function AnprAlertas({ alertas, fallas, nombreCarril, onEnterado, onVerFa
                 Lista negra · {a.placa ? formatear(a.placa) : 'placa sin leer'}
               </p>
               <p className="text-sm font-semibold">
-                {nombreCarril(a.carril_id)}: la barrera NO se abrió.{a.motivo ? ` ${a.motivo}.` : ''} Avisa al supervisor según el protocolo.
+                {nombreCarril(a.carril_id)}: la talanquera NO se abrió.{a.motivo ? ` ${a.motivo}.` : ''} Avisa al supervisor según el protocolo.
               </p>
             </div>
             <Button variant="danger" loading={ocupado === a.id} onClick={() => void enterado(a.id)} aria-label={`Enterado: lista negra ${a.placa ?? ''}`}>
@@ -66,7 +66,7 @@ export function AnprAlertas({ alertas, fallas, nombreCarril, onEnterado, onVerFa
       {fallas.map(f => (
         <div key={f.evento_id} role="alert" className="flex flex-wrap items-center gap-3 rounded-lg border border-danger-500/40 bg-danger-500/10 px-4 py-3 text-sm font-medium text-danger-400">
           <span className="min-w-0 flex-1">
-            La barrera de «{nombreCarril(f.carril)}» no respondió ({f.error}). El acceso quedó registrado: ábrela a mano.
+            La talanquera de «{nombreCarril(f.carril)}» no respondió ({f.error}). El acceso quedó registrado: ábrela a mano.
           </span>
           <Button size="sm" variant="secondary" onClick={() => onVerFalla(f.evento_id)}>Entendido</Button>
         </div>

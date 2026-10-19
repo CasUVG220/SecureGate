@@ -85,7 +85,7 @@ describe('AnprConfigDialog', () => {
     a.probarActuador.mockResolvedValue('Relé HTTP 192.168.1.50: abrió.');
     render(<AnprConfigDialog onCerrar={vi.fn()} onCambio={vi.fn()} />);
     fireEvent.change(await screen.findByLabelText('Qué abre cuando un residente entra solo'), { target: { value: 'rele_http' } });
-    const probar = screen.getByRole('button', { name: 'Probar barrera' });
+    const probar = screen.getByRole('button', { name: 'Probar talanquera' });
     expect(probar).toBeDisabled();
     fireEvent.change(screen.getByLabelText('Dirección del relé'), { target: { value: 'http://rele.local/abrir' } });
     expect(screen.getByText(/Escribe la IP del relé/)).toBeInTheDocument();

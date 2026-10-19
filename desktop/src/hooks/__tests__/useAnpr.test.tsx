@@ -78,7 +78,7 @@ describe('useAnpr', () => {
     expect(r.result.current.pistas.c1).toBeUndefined();
   });
 
-  it('la barrera que falla queda como aviso persistente hasta que el agente lo ve; una que abre no', async () => {
+  it('la talanquera que falla queda como aviso persistente hasta que el agente lo ve; una que abre no', async () => {
     a.eventos.mockResolvedValue([evento({ id: 'e1' }), evento({ id: 'e2' })]);
     const r = await montar();
     act(() => emitir({ tipo: 'apertura', carril: 'c1', evento_id: 'e1', ok: false, simulada: false, error: 'el relé no respondió' }));

@@ -25,11 +25,11 @@ describe('textos del ANPR', () => {
     expect(placaVisible({ placa: null, placa_probable: null })).toBe('Sin placa');
   });
 
-  it('resultado de la barrera', () => {
+  it('resultado de la talanquera', () => {
     expect(textoApertura(null)).toBeNull();
-    expect(textoApertura('abierta')).toEqual({ texto: 'Barrera abierta', tono: 'ok' });
-    expect(textoApertura('simulada')?.texto).toBe('Barrera abierta (simulada)');
-    expect(textoApertura('fallo: el relé no respondió')).toEqual({ texto: 'La barrera no respondió: el relé no respondió', tono: 'bad' });
+    expect(textoApertura('abierta')).toEqual({ texto: 'Talanquera abierta', tono: 'ok' });
+    expect(textoApertura('simulada')?.texto).toBe('Talanquera abierta (simulada)');
+    expect(textoApertura('fallo: el relé no respondió')).toEqual({ texto: 'La talanquera no respondió: el relé no respondió', tono: 'bad' });
   });
 
   it('estado del carril: la pausa y el modo apagado mandan sobre lo que diga el motor', () => {

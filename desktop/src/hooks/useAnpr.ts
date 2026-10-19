@@ -1,6 +1,6 @@
 /**
  * Estado del ANPR continuo para la pantalla de la garita (Sprint 10): carriles y su estado, eventos en tiempo real, pistas
- * para la superposición, alertas de lista negra (con sonido) y fallas de la barrera.
+ * para la superposición, alertas de lista negra (con sonido) y fallas de la talanquera.
  *
  * Al montarse con sesión arranca los carriles habilitados (`anpr_iniciar`); al cerrar turno Rust los detiene solo. Nada de
  * esto bloquea el modo por clic: si el ANPR no arranca, la pantalla lo dice y la garita sigue igual.
@@ -103,7 +103,7 @@ export function useAnpr(habilitado: boolean) {
   /** Alertas de lista negra que nadie ha marcado «Enterado». */
   const alertas = useMemo(() => eventos.filter(e => e.estado === 'alerta_lista_negra'), [eventos]);
 
-  /** La barrera no respondió: queda a la vista hasta que el agente la marque como vista. */
+  /** La talanquera no respondió: queda a la vista hasta que el agente la marque como vista. */
   const fallas = useMemo<FallaActuador[]>(() => eventos
     .filter(e => e.apertura?.startsWith('fallo') && !fallasVistas.has(e.id))
     .map(e => ({ evento_id: e.id, carril: e.carril_id, error: e.apertura!.replace(/^fallo:\s*/, '') })), [eventos, fallasVistas]);
