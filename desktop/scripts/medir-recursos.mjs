@@ -113,7 +113,7 @@ export function reporteMarkdown(rep) {
 
 // ── Muestreo por plataforma ──────────────────────────────────────────────────────────────────────────────
 
-function listarProcesos() {
+export function listarProcesos() {
   if (process.platform === 'win32') {
     const r = spawnSync('powershell', ['-NoProfile', '-Command',
       'Get-CimInstance Win32_Process | Select-Object ProcessId,ParentProcessId,WorkingSetSize,KernelModeTime,UserModeTime | ConvertTo-Csv -NoTypeInformation'], { encoding: 'utf8' });
@@ -124,7 +124,7 @@ function listarProcesos() {
 }
 
 /** Muestrea durante `segundos` los procesos que devuelve `quienes(procesos)`; devuelve las muestras agregadas (suma del grupo). */
-async function muestrear(quienes, segundos, intervaloMs = 1000) {
+export async function muestrear(quienes, segundos, intervaloMs = 1000) {
   const muestras = [];
   let maxProcs = 0;
   const t0 = Date.now();

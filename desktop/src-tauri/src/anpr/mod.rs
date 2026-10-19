@@ -12,6 +12,8 @@ pub mod actuador;
 pub mod carriles;
 pub mod decision;
 pub mod motor;
+#[cfg(test)]
+mod pruebas_reales;
 pub mod registro;
 
 use std::collections::HashMap;
