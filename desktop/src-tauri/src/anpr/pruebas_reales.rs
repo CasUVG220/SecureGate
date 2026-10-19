@@ -572,12 +572,17 @@ async fn e2e_clip_hasta_el_backend() {
     assert!(crate::sync::push_pendientes(&state).await.unwrap_err().es_sin_conexion());
     assert_eq!(crate::sync::estado(&state).pendientes, 2);
 
-    // Vuelve la red y toca el reintento: sube todo una vez, y después la evidencia.
+    // Vuelve la red y toca el reintento: sube todo una vez y, en la misma vuelta, la evidencia de lo que ya está allá.
     *state.config.write().unwrap() = config(&api);
-    Base::App(state.clone()).con(|c| c.execute("UPDATE accesos_pendientes SET proximo_intento_en = '2000-01-01T00:00:00Z'", []).unwrap());
+    let base = Base::App(state.clone());
+    base.con(|c| c.execute("UPDATE accesos_pendientes SET proximo_intento_en = '2000-01-01T00:00:00Z'", []).unwrap());
     assert_eq!(crate::sync::push_pendientes(&state).await.expect("push"), 2);
     let est = crate::sync::estado(&state);
     assert_eq!((est.pendientes, est.rechazados), (0, 0));
-    assert!(crate::sync::push_evidencias(&state).await.expect("evidencias") >= 3, "placa y vehículo del acceso, vehículo del ilegible");
+    let (subidas, sin_subir): (i64, i64) = base.con(|c| c.query_row(
+        "SELECT count(*) FILTER (WHERE subida = 1), count(*) FILTER (WHERE subida <> 1) FROM anpr_evidencias", [], |r| Ok((r.get(0)?, r.get(1)?)),
+    ).unwrap());
+    assert!(subidas >= 3 && sin_subir == 0, "placa y vehículo del acceso, vehículo del ilegible: {subidas} subidas, {sin_subir} sin subir");
+    assert_eq!(crate::sync::push_evidencias(&state).await.expect("evidencias"), 0, "nada se sube dos veces");
     println!("E2E_ANPR {}", json!({ "acceso": acceso, "ilegible": ilegible }));
 }

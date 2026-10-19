@@ -72,6 +72,15 @@ jobs:
         if: always()
         run: npm run test:regression
 
+      # Sprint 10: las rutas del ANPR (controlador y rutas nuevas) con cobertura mínima del 80 % en sus pruebas de integración.
+      - name: Cobertura de las rutas del ANPR (≥ 80 %)
+        if: always()
+        run: >-
+          npx jest -c jest.integration.config.ts --runInBand --testPathPattern '__tests__/integration/anpr'
+          --coverage --coverageReporters=text-summary --coverageReporters=text
+          --collectCoverageFrom=src/controllers/anpr.controller.ts --collectCoverageFrom=src/routes/anpr.routes.ts
+          --coverageThreshold='{"global":{"lines":80,"statements":80,"functions":80,"branches":70}}'
+
       - name: Subir reportes JUnit
         if: always()
         uses: actions/upload-artifact@v4
@@ -138,6 +147,11 @@ jobs:
         if: always()
         run: ${{ matrix.compilar }}
 
+      # Partes puras de los medidores (recursos de cámaras y ANPR): sin procesos ni red.
+      - name: Pruebas de los scripts de medición
+        if: always() && matrix.paquete == 'desktop'
+        run: node --test scripts/*.test.mjs
+
   # Pruebas de la parte nativa del escritorio (`cargo test --lib`): la lógica de sincronización, la base cifrada, las
   # placas y las licencias. Tauri compila contra GTK/WebKit en Linux aunque aquí no se abra ninguna ventana, y exige que
   # existan tres cosas que no se versionan (el frontend compilado, el runtime de Node del sidecar y sus recursos): se
@@ -189,3 +203,142 @@ jobs:
 
       - name: Pruebas de Rust
         run: cargo test --lib --locked
+
+  # Sprint 10 (ANPR): el sidecar de OCR y del ANPR con sus pruebas COMPLETAS, incluidas las que usan los modelos de verdad
+  # (detector YOLOX-Nano, PP-OCRv5) y los clips sintéticos de test-fixtures/anpr: sin modelos esas pruebas se omiten, así que
+  # aquí se bajan (SHA-256 fijo, ver scripts/fetch-models.mjs) y se guardan en caché. Node 24 = el runtime que empaqueta la app.
+  sidecar-anpr:
+    name: Sidecar OCR + ANPR (Node 24, modelos reales)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+
+    defaults:
+      run:
+        working-directory: desktop/sidecar-ocr
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: desktop/sidecar-ocr/package-lock.json
+
+      - name: ffmpeg (decodifica los clips de prueba)
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
+
+      # Sin scripts de instalación: onnxruntime-node trae el binario de CPU en el paquete; su postinstall solo baja CUDA.
+      - name: Instalar dependencias
+        run: npm ci --ignore-scripts
+
+      - name: Caché de los modelos
+        uses: actions/cache@v4
+        with:
+          path: desktop/sidecar-ocr/models
+          key: modelos-${{ hashFiles('desktop/sidecar-ocr/scripts/fetch-models.mjs') }}
+
+      - name: Modelos (verificados por SHA-256)
+        run: node scripts/fetch-models.mjs
+
+      - name: Pruebas del sidecar
+        run: npm test
+
+  # Sprint 10 (ANPR): de punta a punta con la garita de verdad sin ventana. Un clip sintético → ffmpeg → el sidecar real →
+  # el bucle de Rust → decisión contra el SQLCipher → cola offline → el backend de este job (Postgres) → registro `anpr`
+  # (prueba de Jest `anpr.e2e.int.test.ts`, que lanza la de Rust `anpr::pruebas_reales::e2e_clip_hasta_el_backend`). Después,
+  # las dos mediciones con dos carriles y un carril, que verifican las barandas (ninguna placa inventada, nunca abre con lista
+  # negra ni con una placa desconocida, un evento por vehículo). Compila Tauri: corre donde corre `desktop-rust`.
+  anpr-e2e:
+    name: ANPR de punta a punta (clip → garita → backend)
+    if: github.event_name != 'push' || github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres   # valor de prueba del contenedor efímero del job
+          POSTGRES_DB: securegate_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d securegate_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+
+    env:
+      TZ: America/Guatemala
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/securegate_test
+      JWT_SECRET: secreto-de-prueba-ci-0123456789abcdef0123456789abcdef
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Dependencias del sistema (Tauri 2 en Ubuntu 24.04) y ffmpeg
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential pkg-config perl ffmpeg \
+            libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev libssl-dev
+
+      - name: Archivos que Tauri exige para compilar y que no se versionan
+        working-directory: desktop/src-tauri
+        run: |
+          mkdir -p ../dist resources/sidecar-ocr binaries
+          touch binaries/node-x86_64-unknown-linux-gnu binaries/ffmpeg-x86_64-unknown-linux-gnu
+
+      - name: Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Rust estable
+        run: rustup update stable --no-self-update && rustc --version
+
+      - name: Caché de cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            desktop/src-tauri/target
+          key: cargo-${{ runner.os }}-${{ hashFiles('desktop/src-tauri/Cargo.lock') }}
+          restore-keys: cargo-${{ runner.os }}-
+
+      - name: Caché de los modelos
+        uses: actions/cache@v4
+        with:
+          path: desktop/sidecar-ocr/models
+          key: modelos-${{ hashFiles('desktop/sidecar-ocr/scripts/fetch-models.mjs') }}
+
+      - name: Sidecar y modelos
+        working-directory: desktop/sidecar-ocr
+        run: npm ci --ignore-scripts && node scripts/fetch-models.mjs
+
+      - name: Backend
+        working-directory: backend
+        run: npm ci
+
+      - name: Compilar las pruebas de Rust
+        working-directory: desktop/src-tauri
+        run: cargo test --lib --locked --no-run
+
+      - name: E2E clip → garita → backend
+        working-directory: backend
+        env:
+          SG_E2E_ANPR: '1'
+        run: npx jest -c jest.integration.config.ts --runInBand --testPathPattern '__tests__/integration/anpr.e2e'
+
+      - name: Barandas con dos carriles y con uno (clips reales, tiempo real)
+        if: always()
+        working-directory: desktop/src-tauri
+        run: cargo test --lib --locked anpr::pruebas_reales::medicion -- --ignored --nocapture --test-threads 1
+

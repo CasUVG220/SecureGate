@@ -66,7 +66,9 @@ function correrGarita(api: string): Promise<number | null> {
     resultado = linea ? JSON.parse(linea.slice('E2E_ANPR '.length)) : null;
     if (codigo !== 0 || !resultado) {
       // Lo útil del log de la garita, para saber qué falló sin correrlo a mano.
-      console.error(salida.split('\n').filter(l => /panicked|assert|error|E2E_ANPR|DECISION/i.test(l)).slice(-30).join('\n'));
+      const lineas = salida.split('\n');
+      const i = lineas.findIndex(l => /panicked/.test(l));
+      console.error((i >= 0 ? lineas.slice(i, i + 12) : lineas.slice(-30)).join('\n'));
     }
     expect(codigo).toBe(0);
   }, 15 * 60_000);
