@@ -181,6 +181,8 @@ pub struct SumideroMedicion {
     pub etapas: Mutex<BTreeMap<String, Vec<f64>>>,
     pub procesados: Mutex<HashMap<String, u64>>,
     pub errores: Mutex<Vec<String>>,
+    /// Fin de cada pista e «ignorada» del sidecar (para explicar un vehículo sin decisión con `SG_ANPR_DETALLE`).
+    pub pistas: Mutex<Vec<Value>>,
 }
 
 impl SumideroMedicion {
@@ -192,6 +194,7 @@ impl SumideroMedicion {
             etapas: Mutex::new(BTreeMap::new()),
             procesados: Mutex::new(HashMap::new()),
             errores: Mutex::new(vec![]),
+            pistas: Mutex::new(vec![]),
         })
     }
 
@@ -212,6 +215,11 @@ fn tipo(d: &Decision) -> String {
 impl Sumidero for SumideroMedicion {
     fn fotograma(&self, carril: &Carril, r: &Value) {
         *self.procesados.lock().unwrap().entry(carril.id.clone()).or_default() += 1;
+        for e in r["eventos"].as_array().into_iter().flatten() {
+            if e["tipo"] == "ignorada" || (e["tipo"] == "pista" && e["evento"] != "estado") {
+                self.pistas.lock().unwrap().push(json!({ "t_s": self.segundos(), "carril": carril.id, "e": e }));
+            }
+        }
         if let Some(ms) = r["ms"].as_object() {
             let mut e = self.etapas.lock().unwrap();
             for (k, v) in ms {
@@ -504,6 +512,9 @@ async fn medir(plan: Vec<(&'static str, Vec<&'static str>)>) {
         }
         for d in corrida.decisiones() {
             println!("DECISION {d}");
+        }
+        for p in corrida.sumidero.pistas.lock().unwrap().iter() {
+            println!("PISTA {p}");
         }
     }
     corrida.verificar_barandas();

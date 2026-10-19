@@ -283,10 +283,13 @@ class Tracker {
 
   #terminar(p, ts, eventos, motivo, ancho, alto) {
     this.pistas.delete(p.id);
-    // ¿Se podrá reabrir? Solo si estaba casi quieta (≤ 1 % de la diagonal por cuadro) y lejos del borde del cuadro.
+    // ¿Se podrá reabrir? Solo si estaba casi quieta (≤ 1 % de la diagonal por cuadro), lejos del borde del cuadro y SIN placa
+    // confirmada. Una pista con placa no se reabre: si es el mismo carro, la pista nueva vuelve a leer la misma placa y el
+    // enfriamiento la ignora (sigue siendo un evento); si es OTRO que llegó al mismo lugar a los pocos segundos (una cola en la
+    // talanquera), tiene su propia decisión. Reabrirla le pegaba la decisión vieja al vehículo siguiente.
     const h = p.historial;
     const velocidad = h.length > 1 ? Math.hypot(h[h.length - 1][0] - h[0][0], h[h.length - 1][1] - h[0][1]) / (h.length - 1) : 0;
-    p.reabrible = velocidad <= 0.01 * Math.hypot(ancho, alto) && !enBorde(p.bbox, ancho, alto);
+    p.reabrible = !p.placa && velocidad <= 0.01 * Math.hypot(ancho, alto) && !enBorde(p.bbox, ancho, alto);
     // Se fue mientras se leía, o era un vehículo de verdad (se siguió ≥ `framesConfirmar` + 1 cuadros) del que nunca hubo un
     // recorte útil: el agente debe saber que pasó un vehículo sin placa leída.
     const vehiculoReal = p.estado === ESTADOS.SIGUIENDO && p.cuadros > this.cfg.framesConfirmar;

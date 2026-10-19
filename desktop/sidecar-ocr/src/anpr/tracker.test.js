@@ -77,14 +77,37 @@ test('(b) un carro detenido 2 minutos en el ROI = un evento, aunque el detector 
   assert.equal(eventos.filter(e => e.tipo === 'ignorada').length, 0, 'ni siquiera intenta decidir otra vez');
 });
 
-test('(b′) detenido y tapado MÁS que la tolerancia: la pista se reabre con el mismo id y no hay segundo evento', () => {
+test('(b′) detenido y tapado MÁS que la tolerancia: no hay segundo evento (con placa, el enfriamiento; sin placa, se reabre la pista)', () => {
+  const quieto = (n, x = 250, y = 260) => Array.from({ length: n }, () => [caja(x, y)]);
+  const cuadros = [...cruzando(10), ...quieto(30), ...vacios(12), ...quieto(30, 252, 258), ...vacios(10)];
+  // Con la placa ya confirmada: pista nueva que vuelve a leer la misma placa → «ignorada» por enfriamiento.
   const reloj = new RelojFalso();
   const t = new Tracker({ framesPerdida: 5 }, reloj);
-  const cuadros = [...cruzando(10), ...Array.from({ length: 30 }, () => [caja(250, 260)]), ...vacios(12), ...Array.from({ length: 30 }, () => [caja(252, 258)])];
-  const { decisiones, eventos } = correr(t, reloj, [...cuadros, ...vacios(10)], lecturaEn(3));
-  assert.equal(decisiones.length, 1);
-  assert.equal(eventos.filter(e => e.evento === 'nueva').length, 1);
-  assert.equal(eventos.filter(e => e.evento === 'reabierta').length, 1);
+  const r = correr(t, reloj, cuadros, lecturaEn(3));
+  assert.equal(r.decisiones.length, 1);
+  assert.equal(r.eventos.filter(e => e.evento === 'reabierta').length, 0);
+  assert.deepEqual(r.eventos.filter(e => e.tipo === 'ignorada').map(e => e.motivo), ['enfriamiento']);
+  // Ilegible (sin placa): la pista se reabre con el mismo id y no hay un segundo «ilegible».
+  const reloj2 = new RelojFalso();
+  const t2 = new Tracker({ framesPerdida: 5, tiempoMaxLectura_ms: 2000 }, reloj2);
+  const r2 = correr(t2, reloj2, cuadros, () => null);
+  assert.deepEqual(r2.decisiones.map(d => [d.resultado, d.motivo]), [['ilegible', 'tiempo_max_lectura']]);
+  assert.equal(r2.eventos.filter(e => e.evento === 'nueva').length, 1);
+  assert.equal(r2.eventos.filter(e => e.evento === 'reabierta').length, 1);
+});
+
+test('cola en la talanquera: otro carro llega al lugar donde se perdió el anterior (ya decidido) a los pocos segundos y tiene SU decisión', () => {
+  // Caso de la medición (tarea 7): P123ABC se pierde casi quieto frente a la talanquera y P555TRK aparece ahí 4–5 s después.
+  // Antes heredaba la pista ya decidida y pasaba sin evento.
+  const reloj = new RelojFalso();
+  const t = new Tracker({ framesPerdida: 5 }, reloj);
+  const placas = ['P123ABC', 'P555TRK'];
+  const ids = [];
+  const lectura = (p, k) => { if (!ids.includes(p.id)) ids.push(p.id); return k >= 3 ? placas[ids.indexOf(p.id)] : null; };
+  const quieto = Array.from({ length: 20 }, () => [caja(250, 260)]);
+  const { decisiones, eventos } = correr(t, reloj, [...cruzando(8), ...quieto, ...vacios(15), ...Array.from({ length: 20 }, () => [caja(256, 262)]), ...vacios(10)], lectura);
+  assert.deepEqual(decisiones.map(d => d.placa), ['P123ABC', 'P555TRK']);
+  assert.equal(eventos.filter(e => e.evento === 'reabierta').length, 0);
 });
 
 test('(c) dos carros seguidos = dos pistas y dos eventos', () => {
