@@ -19,7 +19,7 @@
  * el acceso en la base y mandó abrir (`ms_rust_total`). El tiempo de acercamiento del vehículo no cuenta: depende de la calle.
  */
 import { spawn, spawnSync } from 'node:child_process';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { arbol, informacionEquipo, listarProcesos, muestrear, resumirMuestras } from './medir-recursos.mjs';
@@ -47,6 +47,18 @@ export function ejecutableDePruebas(salidaJson) {
     if (m.reason === 'compiler-artifact' && m.target?.name === 'securegate_garita_lib' && m.profile?.test && m.executable) return m.executable;
   }
   return null;
+}
+
+/**
+ * Tiempo de CPU (s) de `/proc/<pid>/stat` (utime + stime, en ticks de `hz`). En Linux da centésimas de segundo; `ps` solo da
+ * segundos enteros y un proceso liviano como el de Rust salía «0,0 %». El nombre del proceso puede tener espacios: se corta
+ * después del último «)».
+ */
+export function cpuDeStat(texto, hz = 100) {
+  const resto = texto.slice(texto.lastIndexOf(')') + 2).split(' ');
+  const utime = Number(resto[11]);
+  const stime = Number(resto[12]);
+  return Number.isFinite(utime) && Number.isFinite(stime) ? (utime + stime) / hz : null;
 }
 
 /** La línea `MEDICION_ANPR {...}` de la prueba. */
@@ -127,6 +139,18 @@ function compilar(release) {
   return exe;
 }
 
+const HZ = process.platform === 'linux' ? Number(spawnSync('getconf', ['CLK_TCK'], { encoding: 'utf8' }).stdout) || 100 : 100;
+
+/** CPU precisa en Linux (`/proc`); en otros sistemas, la de `ps`/PowerShell que ya trae el proceso. */
+function cpuPrecisa(p) {
+  if (process.platform !== 'linux') return p.cpuS;
+  try {
+    return cpuDeStat(readFileSync(`/proc/${p.pid}/stat`, 'utf8'), HZ) ?? p.cpuS;
+  } catch {
+    return p.cpuS; // el proceso terminó entre la lista y la lectura
+  }
+}
+
 /** Corre una prueba de medición y muestrea Rust (el proceso de la prueba) y el sidecar (sus hijos) por separado. */
 async function correrEscenario(exe, esc, nucleos) {
   console.log(`\n▶ ${esc.nombre}`);
@@ -147,8 +171,8 @@ async function correrEscenario(exe, esc, nucleos) {
     const t = (Date.now() - t0) / 1000;
     const propio = procs.filter(p => p.pid === hijo.pid);
     const hijos = arbol(procs, hijo.pid).filter(p => p.pid !== hijo.pid);
-    if (propio.length) rust.push({ t, cpuS: propio[0].cpuS, rssKB: propio[0].rssKB });
-    if (hijos.length) sidecar.push({ t, cpuS: hijos.reduce((a, p) => a + p.cpuS, 0), rssKB: hijos.reduce((a, p) => a + p.rssKB, 0) });
+    if (propio.length) rust.push({ t, cpuS: cpuPrecisa(propio[0]), rssKB: propio[0].rssKB });
+    if (hijos.length) sidecar.push({ t, cpuS: hijos.reduce((a, p) => a + cpuPrecisa(p), 0), rssKB: hijos.reduce((a, p) => a + p.rssKB, 0) });
     await new Promise(r => setTimeout(r, 1000));
   }
   const codigo = await fin;

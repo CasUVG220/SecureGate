@@ -1,7 +1,7 @@
 // Tarea 7 (Sprint 10): partes puras del medidor del ANPR (sin procesos). Correr con: node --test desktop/scripts/
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { ejecutableDePruebas, medicionDe, mitigaciones, OBJETIVOS, percentiles, reporteMarkdown } from './medir-anpr.mjs';
+import { cpuDeStat, ejecutableDePruebas, medicionDe, mitigaciones, OBJETIVOS, percentiles, reporteMarkdown } from './medir-anpr.mjs';
 
 test('encuentra el ejecutable de pruebas de la biblioteca en la salida JSON de cargo', () => {
   const salida = [
@@ -44,4 +44,10 @@ test('el reporte deja «—» donde no hay dato (no inventa números)', () => {
   });
   assert.match(md, /\| Vacío \| — \| — \| — \| — \| 0\.0 \| — \|/);
   assert.match(md, /sin mitigación/);
+});
+
+test('CPU de /proc/<pid>/stat: utime + stime en ticks, aunque el nombre del proceso tenga espacios y paréntesis', () => {
+  const stat = '4321 (node (anpr) x) S 4300 4321 4300 0 -1 4194304 1000 0 0 0 1234 266 0 0 20 0 11 0 100 900000000 50000';
+  assert.equal(cpuDeStat(stat, 100), 15);
+  assert.equal(cpuDeStat('roto'), null);
 });
