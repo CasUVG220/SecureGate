@@ -125,7 +125,10 @@ clasificó como avión (`airplane`), por eso se usan fotos reales con licencia l
 
 A 5 fps con movimiento son ~12–17 % de un núcleo; en reposo el detector no corre. Sin vehículo en el ROI (`vacio`,
 `carril_vecino`) no hay ninguna detección aceptada; con el vehículo en el ROI se detecta en todos los cuadros en que está
-completo (`00000111…11100000`), siempre una sola caja.
+completo (`00000111…11100000`). En los clips de entrada YOLOX-Nano a veces suma una caja débil (0,36–0,41) sobre la mitad
+trasera del mismo carro (IoU 0,19–0,39 con la buena, contenida 61–79 %): desde la tarea 7 el NMS también descarta la caja
+contenida ≥ 60 % en otra más confiable de la misma familia (una moto dentro de la caja de un carro se conserva), y queda una
+sola caja por vehículo en todos los clips.
 
 ## 7. Tarea 3 — Seguimiento (tracker) y máquina de estados
 
@@ -142,7 +145,7 @@ stateDiagram-v2
     LEYENDO --> ILEGIBLE: sin consenso, 4 s sin lectura o se fue leyendo
     CONFIRMADO --> PASO: deja de verse
     ILEGIBLE --> PASO: deja de verse
-    PASO --> CONFIRMADO: reapertura (vehículo detenido tapado un rato)
+    PASO --> ILEGIBLE: reapertura (vehículo ilegible detenido, tapado un rato)
 ```
 
 - **Asociación**: IoU (≥ 0,2, el mayor primero) y, para lo que quede, distancia de centroides (≤ 12 % de la diagonal); en los dos
@@ -150,18 +153,24 @@ stateDiagram-v2
 - **Pérdida tolerada**: 8 cuadros (~1,6 s a 5 fps) **o** 2 s sin verla, lo que pase primero (oclusión corta = misma pista); si
   la última vez tocaba el borde del cuadro (salió), 2 cuadros. Ver el fallo corregido en la tarea 4.
 - **Reapertura**: durante 5 s una detección en el mismo lugar reabre la pista con su mismo id y su decisión. **Solo** si la
-  pista estaba casi quieta (≤ 1 % de la diagonal por cuadro) y lejos del borde: la de un vehículo que se iba no se reabre, para
-  que el siguiente que llega al mismo punto no herede su decisión (prueba «(c′)»).
+  pista estaba casi quieta (≤ 1 % de la diagonal por cuadro), lejos del borde y **sin placa confirmada** (desde la tarea 7): la de
+  un vehículo que se iba, o la de uno ya leído, no se reabre, para que el siguiente que llega al mismo punto no herede su
+  decisión (pruebas «(c′)» y «cola en la talanquera»).
 - **Una decisión por pista** (`decidida`). Si una pista que se estaba leyendo se va sin consenso, se emite `ilegible` con
   motivo `se_fue_sin_lectura`: el agente se entera de que pasó un vehículo sin placa leída.
 - **Enfriamiento de 60 s por placa**, contado desde la ÚLTIMA vez que se vio el vehículo con esa placa (no desde la
   confirmación): un carro estacionado que se re-detecta tras perderse no genera otro evento.
 - **Tiempo máximo de lectura**: 4 s (configurable) desde que la pista pasa a LEYENDO → ILEGIBLE.
+- **Cambios de la tarea 7** (encontrados midiendo con los clips reales): una detección sin pista contenida ≥ 60 % en un vehículo
+  de la misma familia que se ve en ese cuadro no abre pista (era un segundo evento del mismo carro); y una pista con **placa
+  confirmada no se reabre** (la reapertura le pegaba la decisión vieja al carro siguiente de una cola, que pasaba sin evento): si
+  es el mismo carro, la pista nueva relee la placa y el enfriamiento la ignora.
 - Todos los tiempos salen del reloj inyectado; los eventos de transición se entregan en orden por `actualizar()` /
   `tomarEventos()`.
 
 Aceptación cubierta: (a) un carro cruzando = un evento; (b) detenido 2 min (con pérdidas cortas) = un evento, y (b′) tapado
-más que la tolerancia = reapertura sin segundo evento; (c) dos carros seguidos = dos pistas y dos eventos, y (c′) el segundo
+más que la tolerancia = sin segundo evento (con placa ya confirmada, pista nueva que el enfriamiento ignora; ilegible, la pista
+se reabre); (c) dos carros seguidos = dos pistas y dos eventos, y (c′) el segundo
 no hereda la pista del primero; (d) oclusión corta no parte la pista; (e) la misma placa dentro de 60 s se ignora y después
 no.
 
@@ -358,11 +367,228 @@ Pruebas (Vitest + Testing Library): `lib/__tests__/anpr.test.ts` (14), `hooks/__
 relé con prueba sin guardar, y que un carril nuevo nace apagado. Revisión visual: la pantalla se levantó con `vite` e `invoke`
 simulado (datos sintéticos) en Chromium, tema oscuro y claro; las capturas no se suben al repositorio.
 
-## 11. Deuda técnica encontrada (para el informe)
+## 11. Tarea 7 — Medición de rendimiento y exactitud
 
-Se llena con cada `refactor(...)` que haga falta.
+**Cómo se mide** (`desktop/scripts/medir-anpr.mjs pipeline --release`): la prueba `anpr::pruebas_reales` corre el pipeline de
+verdad sin ventana —bucle de Rust (`motor::correr_carril`), sidecar real (`servidor.js`: movimiento, YOLOX-Nano, pista,
+PP-OCRv5, consenso, evidencia), decisión contra un SQLCipher real y actuador simulado— con los clips de `test-fixtures/anpr`
+decodificados con ffmpeg y entregados **en tiempo real** (10 fps, como el puente). El script muestrea cada segundo, por separado,
+el proceso de Rust y el del sidecar (CPU de `/proc/<pid>/stat` en Linux; RAM = RSS) desde que los modelos terminaron de cargar.
 
-## 12. Estado por tarea
+- **ms por etapa**: los que devuelve el sidecar por cuadro procesado (`decodificar`, `movimiento`, `detector`, `tracker`, `ocr`).
+  El p50 del OCR es 0 porque en la mayoría de los cuadros no se lee (una lectura por cuadro como mucho, solo de pistas en lectura).
+- **Latencia de la decisión** = desde la primera lectura **legible** de la placa hasta la decisión del sidecar
+  (`ms_desde_legible`) + lo que tarda Rust en decidir, registrar en la base y mandar abrir (`ms_rust_total`). El acercamiento del
+  vehículo no cuenta: depende de la calle, no del sistema.
+- **Exactitud**: cada decisión se compara con la verdad de terreno del clip en que ocurrió.
+
+**Equipo**: contenedor Linux en la nube, Intel Xeon @ 2,80 GHz × 4 vCPU, 15,7 GB; Rust en perfil release. **No es el equipo de la
+garita**: las filas de Windows (6–8 GB) están pendientes en `docs/plantilla_medicion_camaras.md`.
+
+Resultado (`anpr-2026-10-22T21-35-15`, la corrida final, con todos los arreglos de esta tarea):
+
+| Escenario | Rust: CPU (% de un núcleo) / RAM pico | Sidecar: CPU (% de un núcleo) / RAM pico | CPU total de la máquina | Cuadros procesados / publicados |
+|---|---|---|---|---|
+| Reposo, 2 carriles, calle vacía | 0,4 % / 32 MB | 2,2 % / 345 MB | 0,7 % | 35/355 y 35/355 (1 fps) |
+| 1 carril con tráfico (7 clips seguidos) | 0,4 % / 54 MB | 28,2 % / 390 MB | 7,2 % | 225/1052 |
+| 2 carriles con tráfico a la vez | 0,6 % / 55 MB | 42,0 % / 402 MB | 10,6 % | 148/628 y 96/634 |
+
+| ms por cuadro procesado (p50 / p95) | decodificar | movimiento | detector | tracker | OCR | total |
+|---|---|---|---|---|---|---|
+| Reposo | 5,6 / 7,8 | 1,4 / 3,1 | — | — | — | 7,1 / 9,9 |
+| 1 carril | 5,2 / 8,8 | 1,3 / 2,8 | 22,9 / 35,3 | 0,1 / 1,1 | 0 / 108,4 | 31,1 / 145,2 |
+| 2 carriles | 5,2 / 10,0 | 1,3 / 3,2 | 21,9 / 35,7 | 0,1 / 1,0 | 0 / 97,9 | 29,8 / 128,9 |
+
+| Latencia (ms) | Decisiones | Sidecar desde legible p50 / p95 / máx | Rust registro + orden de abrir p50 / p95 / máx | **Total p95** |
+|---|---|---|---|---|
+| 1 carril | 6 | 357 / 1409 / 1409 | 8,1 / 23,3 / 23,3 | **1432** |
+| 2 carriles | 6 | 641 / 926 / 926 | 7,2 / 17,9 / 17,9 | **944** |
+
+| Exactitud (verdad de terreno) | Vehículos | Abrió con la placa correcta | Al agente con la placa correcta | Ilegible (clip ilegible) | Placa equivocada | Falsas | Sin decisión |
+|---|---|---|---|---|---|---|---|
+| 1 carril | 6 | 3 | 2 (lista negra C458DFG, desconocida U318BCD) | 1 | 0 | 0 | 0 |
+| 2 carriles | 6 | 3 | 2 | 1 | 0 | 0 | 0 |
+
+Repeticiones con el mismo binario (4 corridas más de cada escenario, para no apoyarse en una sola):
+
+| Escenario | Corridas | Vehículos | Decisión correcta | Placa equivocada | Falsas | Sin decisión | Peor latencia (sidecar p95 + Rust p95) |
+|---|---|---|---|---|---|---|---|
+| 1 carril | 4 | 24 | 24 (12 abrió, 8 al agente, 4 ilegible) | 0 | 0 | 0 | 1617 + 35 = **1652 ms** |
+| 2 carriles | 4 | 24 | 24 (12 abrió, 8 al agente, 4 ilegible) | 0 | 0 | 0 | 1404 + 15 = **1419 ms** |
+
+La placa que más tarda es `P555TRK` (`dos_seguidos`): hasta 8 lecturas antes del consenso. El margen contra los 2 s existe pero
+no es enorme: hay que confirmarlo con las cámaras y el equipo reales.
+
+**Lectura de los números.** Objetivos (sprint y plantilla de cámaras): latencia < 2 s, CPU < 40 % de la máquina, RAM < 1,5 GB.
+Con dos carriles el ANPR completo (Rust + sidecar) usó **10,6 %** de la máquina y como mucho **457 MB** (suma de los dos picos); la latencia p95 fue
+**0,94–1,65 s** en las cinco corridas de cada escenario. La parte de Rust es despreciable (< 1 % de un núcleo, ≈ 55 MB): casi todo el costo es el detector y el OCR del
+sidecar. El sidecar procesa menos cuadros de los publicados a propósito: pide 1 fps en reposo y 5 fps con movimiento, y el
+puente le da siempre el más nuevo (sin cola). **Mitigación: no hizo falta en este equipo.** Si en el equipo de la garita la
+latencia o la CPU se pasan, el script lo dice y propone, en orden: bajar «Cuadros por segundo con movimiento» a 3 en los
+carriles y, si no basta, el detector con 1 hilo (opción `--hilos-detector 1` de `servidor.js`; hoy no está en la pantalla).
+
+**Lo que la medición encontró y se arregló en esta tarea** (cada uno en su commit `fix(anpr)`):
+
+1. Dos eventos para un mismo carro: YOLOX-Nano sumaba a ratos una caja débil sobre la mitad trasera del carro (IoU baja,
+   contenida 61–79 %) que abría otra pista. NMS por contención y defensa en el tracker (§6 y §7).
+2. Una pista ya decidida se reabría sobre el carro siguiente que llegaba al mismo lugar en < 5 s (una cola en la talanquera) y ese
+   carro pasaba sin evento. Una pista con placa ya no se reabre; el enfriamiento evita el doble evento del mismo carro (§7).
+3. Con el equipo cargado, el consenso se rendía con 2 lecturas literales + 1 corregida, o lo vetaba una lectura de confianza 0,57:
+   ahora espera una lectura literal más y las lecturas de confianza < 0,75 no votan (§8).
+4. El medidor mostraba «0,0 %» de CPU para Rust (`ps` da segundos enteros): ahora lee `/proc` en Linux.
+
+**Pendiente en Windows** (no se inventa nada): CPU y RAM con la app completa (WebView2 incluido) con `medir-anpr.mjs app`,
+el pipeline en el equipo de 6–8 GB, cámaras reales, noche y lluvia. Ver §13.7 y `docs/plantilla_medicion_camaras.md`.
+
+## 12. Tarea 8 — Pruebas de punta a punta, CI y documentación
+
+### 12.1 De punta a punta: clip → garita → backend
+
+`backend/src/__tests__/integration/anpr.e2e.int.test.ts` (Jest, Postgres real) siembra una empresa, da de alta el vehículo
+`P123ABC` de un residente por la API, levanta el backend en un puerto local y lanza la prueba de Rust
+`anpr::pruebas_reales::e2e_clip_hasta_el_backend`, que hace lo que hace la garita de verdad, sin ventana:
+
+1. activa la licencia con el código sembrado, inicia sesión como agente y baja el snapshot (`/sync/garita` con los vehículos);
+2. reproduce `entrada_p123abc.mp4` e `ilegible.mp4` **en tiempo real** (ffmpeg → JPEG, como el puente) por el sidecar real
+   (movimiento, YOLOX-Nano, pista, PP-OCRv5, consenso, evidencia) y el bucle de Rust;
+3. decide contra la base SQLCipher de la app: abre para `P123ABC` (actuador simulado) y deja el ilegible para el agente;
+4. con la red caída, el `push` falla y nada se pierde ni se duplica; al volver, sube el acceso (`/anpr/accesos`) y el evento
+   (`/anpr/eventos`) una sola vez, y después la evidencia;
+5. Jest verifica en Postgres: acceso `origen = 'anpr'` con su vehículo, confianza ≥ 0,90, `track_id`, `evidencia_ref` y las
+   dos evidencias; evento `ilegible` (no acceso) con la foto; un solo acceso; la bitácora (`ANPR_ACCESO_AUTOMATICO`,
+   `ANPR_ILEGIBLE`, `ANPR_EVIDENCIA`).
+
+Se omite sin `SG_E2E_ANPR=1` (necesita `cargo`, `node`, `ffmpeg` y los modelos). Para correrlo aquí:
+`SG_E2E_ANPR=1 npx jest -c jest.integration.config.ts --runInBand --testPathPattern anpr.e2e` en `backend/`.
+
+Además, `anpr::pruebas_reales::medicion_{reposo,un_carril,dos_carriles}` verifican siempre las barandas con los clips reales:
+ninguna placa inventada, nada en los clips sin vehículo, un evento por vehículo, nunca abre para la lista negra ni para una
+placa desconocida ni con una lectura que pedía verificación.
+
+### 12.2 CI (`.github/workflows/ci-integracion.yml`)
+
+| Job | Qué agrega el Sprint 10 |
+|---|---|
+| `integracion-regresion` | Integración del ANPR (`anpr.int.test.ts`, I-11 con las acciones nuevas) y un paso de **cobertura ≥ 80 %** (líneas, sentencias y funciones; ramas ≥ 70 %) de `anpr.controller.ts` y `anpr.routes.ts`. |
+| `unitarias` (backend, frontend, desktop) | Las pruebas nuevas de cada paquete; en desktop, además, `node --test scripts/*.test.mjs` (medidores). |
+| `desktop-rust` | Las 39 pruebas nuevas de `anpr::*` (sin red ni modelos); las 4 de `anpr::pruebas_reales` llevan `#[ignore]` y corren en `anpr-e2e`. |
+| `sidecar-anpr` (nuevo) | Node 24 (el runtime que empaqueta la app), ffmpeg, los modelos con SHA-256 y caché, y **todas** las pruebas del sidecar, incluidas las que usan los modelos y los clips. |
+| `anpr-e2e` (nuevo) | Postgres + backend + Rust + sidecar + modelos: el E2E de 12.1 y las tres mediciones con sus barandas. Corre donde corre `desktop-rust` (PR, `main`, a mano) porque compila Tauri. |
+
+`scripts/ci-local.sh` ya corría el sidecar; ahora también los medidores (`desktop · scripts`).
+
+## 13. Guía para operar y mantener el ANPR
+
+### 13.1 Arquitectura
+
+```mermaid
+flowchart LR
+  subgraph Garita["Equipo de la garita (Tauri, sin internet si hace falta)"]
+    cam["Cámara IP fija<br/>(1 por carril)"] --> puente["Puente de cámaras<br/>(ffmpeg → MJPEG)"]
+    puente -->|JPEG más nuevo| motor["Rust: motor.rs<br/>un bucle por carril"]
+    motor <-->|JSON por líneas| side["Sidecar Node: anpr/servidor.js<br/>movimiento · YOLOX-Nano · tracker · PP-OCRv5 · consenso · evidencia"]
+    motor --> dec["Rust: decision.rs<br/>barandas contra el espejo local"]
+    dec --> reg["Rust: registro.rs<br/>SQLCipher: eventos, evidencia cifrada, cola"]
+    reg --> act["Rust: actuador.rs<br/>Simulado · ReleHttp · Talanquera"]
+    reg -->|sg://anpr| ui["Pantalla: panel en vivo,<br/>eventos, alertas"]
+    puente -->|MJPEG| ui
+    sync["Rust: sync.rs<br/>pull (vehículos con versión) · push por ruta · evidencias"] --- reg
+  end
+  sync <-->|HTTPS, licencia + agente| api["Backend /api/anpr/* · /sync/garita"]
+  api --> pg[("Postgres: vehiculos_residentes,<br/>registros_acceso origen='anpr',<br/>anpr_eventos, evidencias_anpr, audit_logs")]
+  admin["Panel web: alta de vehículos<br/>de residentes"] --> api
+```
+
+El OCR por clic sigue en su propio proceso (`server.js`): el ANPR no le quita turnos y «Pausar ANPR» no lo toca.
+
+### 13.2 Máquina de estados de una pista
+
+Ver §7 (diagrama). Resumen: `DETECTADO → SIGUIENDO → LEYENDO → CONFIRMADO | ILEGIBLE → PASO | PERDIDO`. Una decisión por
+pista; una caja contenida dentro de un vehículo que ya se sigue no abre otra pista (§11); la misma placa no se decide otra vez
+en 60 s (sidecar y, otra vez, Rust).
+
+### 13.3 Barandas (qué nunca pasa)
+
+| Situación | Resultado | Dónde se garantiza |
+|---|---|---|
+| Placa en lista negra (bloqueo por placa de la sucursal o vehículo marcado) | Alerta roja con sonido; **nunca abre**, aunque la lectura sea dudosa o esté corregida | `decision.rs` (antes que todo), `registro::resolver` (tampoco con «Autorizar»), prueba exhaustiva |
+| Empresa suspendida / licencia revocada o sin gracia | Verificación; nunca abre. El backend responde 423 a lo que llegue | `decision.rs` + `verifyLicencia` |
+| Lectura que necesitó corrección por posición, o prefijo desconocido | Verificación del agente | `consenso.js` → `requiere_verificacion` → `decision.rs` |
+| Placa desconocida, vehículo de baja o fuera de vigencia, residente inactivo | Verificación del agente con la foto | `decision.rs`; el backend vuelve a validar al recibir |
+| Ilegible | Evento «ilegible» con la foto del vehículo | sidecar + `registro.rs` |
+| Falla de la talanquera | Aviso persistente; el acceso ya registrado **no** se deshace | `abrir_en_segundo_plano` + `actuador_fallo` |
+| Sin internet | Decide igual con el espejo; la cola reintenta con el mismo `id_cliente` (idempotente) | `registro.rs`, `sync.rs`, backend |
+
+### 13.4 Configuración por carril
+
+En la garita: **Configurar carriles** (§10). Cámara IP fija, sentido (entrada/salida), modo (`apagado` al crearse →
+`automatico` propuesto al activarlo, o `verificacion`), área del carril dibujada sobre una foto, ajustes avanzados (vacío =
+recomendado: movimiento 0,015, 3 lecturas iguales, confianza 0,90, 4 s de lectura, 5 fps con movimiento) y la talanquera del
+carril con «Probar talanquera». Todo se guarda cifrado en el equipo (`carriles_anpr`); «Pausar ANPR» queda en `meta`.
+En la web, la administración da de alta los **vehículos de los residentes** (`/api/anpr/vehiculos`; pantalla web pendiente:
+hoy por la API, ver límites).
+
+### 13.5 Privacidad de la evidencia
+
+- Solo dos recortes por decisión: la **placa** (con un 20 % de margen) y la **parte baja** del vehículo (desde el 45 % de su
+  altura: sin parabrisas ni cabina, donde podría verse una cara). Es una regla geométrica, no un detector de caras: se valida
+  con el encuadre real (§13.7).
+- El sidecar no escribe a disco (guarda de código en `privacidad.test.js`); los logs no llevan placas.
+- En el equipo: cifrada en SQLCipher, se purga a los **7 días**. En el servidor: `evidencias_anpr` (≤ 256 KB, SHA-256), se purga a
+  los **7 días** (tarea `anpr.evidencias`); solo se acepta para un acceso o evento ya recibido de la misma sucursal y solo la ve el
+  personal de esa sucursal.
+- Datos de prueba: clips e imágenes sintéticos o de dominio público (ver `test-fixtures/anpr/README.md`); placas inventadas.
+
+### 13.6 Límites conocidos
+
+- Medido solo con clips sintéticos 960×540 en un contenedor Linux (§11); faltan noche, lluvia, contraluz, motos y cámaras reales.
+- COCO no distingue «camioneta»: la clase del vehículo es informativa.
+- La evidencia «sin cabina» es geométrica (no detecta caras).
+- Un vehículo tapado en más del 60 % por otro del mismo tipo no se sigue por separado hasta que se separan (§11).
+- Las entradas ANPR cuentan como «visitas» en la facturación y no aparecen en los listados web que unen con visitantes (§9.4).
+- No hay pantalla web para dar de alta vehículos de residentes (solo la API con su bitácora).
+- El relé HTTP acepta solo IP privada literal y `http://`; no hay protocolos propietarios de barrera (no se inventaron).
+- Un solo proceso ANPR para todos los carriles: si se cae, los carriles pasan a error y la garita sigue con la captura por clic
+  (se reintenta al reabrir la pantalla o al guardar un carril).
+
+### 13.7 Qué validar con hardware real (Windows)
+
+1. `node desktop/scripts/medir-anpr.mjs pipeline --release` en el equipo de la garita (6–8 GB) y llenar las filas pendientes de
+   `docs/plantilla_medicion_camaras.md`.
+2. `node desktop/scripts/medir-anpr.mjs app --pid <PID>` con la app abierta, 1 y 2 carriles con tráfico real: RAM total con WebView2.
+3. Encuadre de cada cámara: el área del carril, la placa grande y nítida donde el vehículo se detiene, la evidencia sin cabina.
+4. Día, noche (IR), lluvia, contraluz; motos y camiones; colas de dos vehículos pegados en la talanquera.
+5. Exactitud real con suficientes pasos por carril (el equipo decide cuántos), comparando con lo que anotó el agente (abiertas correctas, verificaciones, ilegibles,
+   **cero** placas equivocadas abiertas).
+6. El relé del integrador: URL, método, tiempo de respuesta y el aviso de falla desconectándolo.
+7. Sonido y tamaño de la alerta de lista negra en el monitor y los parlantes de la garita.
+8. 8 h seguidas con 2 carriles: memoria estable (sin crecimiento) y purga de evidencia a los 7 días.
+
+### 13.8 Cómo agregar un actuador
+
+1. Una struct que implemente `ActuadorBarrera` en `desktop/src-tauri/src/anpr/actuador.rs` (`abrir()` síncrono y acotado en
+   tiempo; si habla con la red, detrás de un trait chico como `Transporte` para probarlo sin hardware).
+2. Una variante en `ConfigActuador` con sus parámetros (`#[serde(default)]` en lo nuevo) y su validación en `ConfigActuador::validar`
+   (sin red; mensajes para el agente). Nada de credenciales en la configuración: si las necesita, al llavero como las cámaras.
+3. Construirla en `actuador::crear`.
+4. La opción en la pantalla (`ACTUADOR_TEXTO` en `desktop/src/lib/anpr.ts`, sus campos en `AnprConfigDialog.tsx`, el tipo en
+   `lib/tauri.ts`).
+5. Pruebas: qué envía, qué pasa si no responde (un solo reintento como máximo), y que una falla no toca el acceso encolado.
+6. **No inventar el protocolo**: usar el documento del fabricante o del integrador y dejar su referencia en el comentario.
+
+## 14. Deuda técnica encontrada (para el informe)
+
+No hizo falta ningún `refactor(...)` aparte: los cambios a código existente fueron los mínimos de cada tarea. Queda anotado:
+
+1. **Facturación**: las entradas ANPR de residentes cuentan como «visitas» (§9.4). Decisión de negocio pendiente; el cambio es una línea.
+2. **Listados web de accesos** con `JOIN visitantes`: no muestran los accesos ANPR (§9.4).
+3. **Sin pantalla web** para los vehículos de residentes: solo la API (con su bitácora y su matriz de roles).
+4. `medir-recursos.mjs` (Sprint 9) sigue midiendo la CPU con `ps` (segundos enteros); `medir-anpr.mjs` ya usa `/proc` en Linux.
+5. `--hilos-detector` del sidecar no se puede cambiar desde la app (mitigación de CPU si hiciera falta en Windows).
+6. Las salidas de residentes por el formulario de siempre (no por un carril de salida ANPR) no encuentran el acceso ANPR abierto,
+   porque `/accesos/activo` busca por visitante; por eso «Registrados en este equipo» no ofrece «Dar salida» en esas filas.
+
+## 15. Estado por tarea
 
 | Tarea | Estado | Bandera | Pendiente |
 |---|---|---|---|
@@ -372,5 +598,5 @@ Se llena con cada `refactor(...)` que haga falta.
 | 4 Consenso y evidencia | hecho | — | Validar umbrales (0,90, 3 de 5) y el corte de cabina de la evidencia con la cámara real |
 | 5 Decisión y actuador | hecho | Carril nuevo `apagado`; «Pausar ANPR» | Probar `ReleHttp` con el relé real del integrador; decidir facturación y listados web (9.4) |
 | 6 Interfaz | hecho | «Pausar ANPR» global | Probar con el agente real: tamaño de la alerta, volumen del sonido y lectura de la superposición en el monitor de la garita |
-| 7 Medición | pendiente | — | — |
-| 8 Pruebas integradas y docs | pendiente | — | — |
+| 7 Medición | hecho | — | Filas de Windows (6–8 GB) y la app completa con WebView2 en `plantilla_medicion_camaras.md`; cámaras reales, noche y lluvia |
+| 8 Pruebas integradas y docs | hecho | — | Ver que los jobs nuevos (`sidecar-anpr`, `anpr-e2e`) pasen en GitHub Actions en el primer PR |

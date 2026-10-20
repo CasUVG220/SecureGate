@@ -64,7 +64,7 @@ Complementa lo anterior cuando la garita tiene carriles con ANPR (ver `docs/anpr
 | 1 carril con tráfico | 7,2 | 54 + 390 | 1432 | 6/6 vehículos con la decisión correcta, 0 placas equivocadas |
 | 2 carriles con tráfico a la vez | 10,6 | 55 + 402 | 944 | 6/6 vehículos con la decisión correcta, 0 placas equivocadas |
 
-Reporte: `anpr-2026-10-22T21-35-15` (detalle por etapa en `docs/anpr_continuo.md` §12). Sin WebView: la pantalla no está incluida.
+Reporte: `anpr-2026-10-22T21-35-15` (detalle por etapa en `docs/anpr_continuo.md` §11). Sin WebView: la pantalla no está incluida.
 
 ### Resultados en el equipo de la garita (llenar; **pendiente, Windows 6–8 GB**)
 
