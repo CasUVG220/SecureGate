@@ -63,10 +63,11 @@ describe('vehículos de residentes (administración)', () => {
     const r = await nuevoVehiculo(`${placa.slice(0, 1)}-${placa.slice(1).toLowerCase()}`, { descripcion: 'Sedán gris' });
     expect(r.status).toBe(201);
     expect(r.body).toMatchObject({ placa, residente_id: fx.residentes.A1, activo: true, descripcion: 'Sedán gris', vigente_hasta: null });
-    expect((await nuevoVehiculo(placa)).status).toBe(409);
+    // La bitácora del alta se espera ANTES del duplicado: las dos filas se escriben sin esperar y la más reciente podía ser la del 409.
     const audit = await esperarAuditoriaDe('VEHICULO_RESIDENTE_CREADO', fx.usuarios.adminSucA1);
     expect(audit[0]).toMatchObject({ status_code: 201, tabla_afectada: 'vehiculos_residentes' });
     expect(audit[0].datos_nuevos.placa).toBe(placa);
+    expect((await nuevoVehiculo(placa)).status).toBe(409);
   });
 
   it('aislamiento: otra empresa no ve ni registra vehículos de A1; el agente no administra', async () => {
