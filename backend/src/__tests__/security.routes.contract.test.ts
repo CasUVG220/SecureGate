@@ -192,6 +192,7 @@ const MATRIZ: Array<[string, string, string[]]> = [
   ['POST', '/api/anpr/evidencias', RESIDENTE],
   ['GET', `/api/anpr/evidencias/${UUID}/${UUID}`, RESIDENTE],
   ['GET', '/api/anpr/vehiculos', SOLO_ADMIN_SUC_ARRIBA],
+  ['GET', '/api/accesos', SOLO_ADMIN_SUC_ARRIBA],
   ['POST', '/api/anpr/vehiculos', SOLO_ADMIN_SUC_ARRIBA],
   ['PATCH', `/api/anpr/vehiculos/${UUID}`, SOLO_ADMIN_SUC_ARRIBA],
   ['DELETE', `/api/anpr/vehiculos/${UUID}`, SOLO_ADMIN_SUC_ARRIBA],

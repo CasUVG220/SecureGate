@@ -10,6 +10,7 @@
  */
 import { APP_TZ } from '../utils/reservas';
 import { BOM, filaCsv } from '../utils/csv';
+import { METODO_SQL } from '../utils/accesos';
 import { ZipStream } from '../utils/zip';
 import type { Consultable } from './suscripciones';
 
@@ -48,9 +49,10 @@ export const CONJUNTOS: ConjuntoDatos[] = [
   },
   {
     archivo: 'visitas.csv',
-    columnas: ['id', 'sucursal_id', 'residente_id', 'visitante', 'dpi', 'tipo', 'entrada', 'salida', 'autorizado', 'notas'],
+    columnas: ['id', 'sucursal_id', 'residente_id', 'visitante', 'dpi', 'tipo', 'entrada', 'salida', 'autorizado', 'notas', 'metodo'],
     sql: `SELECT ra.id, ra.sucursal_id, ra.residente_id, v.nombre AS visitante, v.numero_dpi AS dpi, ra.tipo,
-                 ${gt('ra.timestamp_entrada')} AS entrada, ${gt('ra.timestamp_salida')} AS salida, ra.autorizado, ra.notas
+                 ${gt('ra.timestamp_entrada')} AS entrada, ${gt('ra.timestamp_salida')} AS salida, ra.autorizado, ra.notas,
+                 (${METODO_SQL}) AS metodo
             FROM registros_acceso ra JOIN sucursales s ON s.id = ra.sucursal_id JOIN visitantes v ON v.id = ra.visitante_id
            WHERE s.empresa_id = $1 AND ra.id > $2 ORDER BY ra.id LIMIT $3`,
   },

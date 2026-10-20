@@ -7,6 +7,7 @@ import { tenantFilter, ownershipClause, ownershipParams } from '../utils/tenant'
 import { serverError } from '../utils/http';
 import { normalizarPlaca, sqlPlacaNormalizada } from '../utils/placa';
 import { APP_TZ } from '../utils/reservas';
+import { esMetodoAcceso, evidenciaSql, JOINS_ACCESO, METODO_SQL, PLACA_ACCESO_SQL } from '../utils/accesos';
 
 /**
  * Marca de tiempo que reporta la garita offline. Se guarda tal cual en
@@ -574,3 +575,87 @@ export const getMisAccesos = async (req: Request, res: Response) => {
     serverError(res, error, 'Error al obtener historial de accesos');
   }
 };
+
+const FECHA_RE = /^\d{4}-\d{2}-\d{2}$/;
+export const POR_PAGINA_DEFECTO = 25;
+export const POR_PAGINA_MAX = 100;
+
+const enteroEn = (v: unknown, min: number, max: number, def: number): number | null => {
+  if (v === undefined || v === '') return def;
+  if (typeof v !== 'string' || !/^\d{1,6}$/.test(v)) return null;
+  const n = Number(v);
+  return n >= min && n <= max ? n : null;
+};
+
+/**
+ * GET /api/accesos — listado de entradas para la administración (Sprint 10, seguimiento del ANPR): visitantes Y residentes (sus
+ * entradas por placas), con el método de captura, la placa, la confianza, si lo confirmó un agente y si hay evidencia. Cada rol ve lo
+ * mismo que ve hoy (tenantFilter: su sucursal, su empresa o todo para el owner).
+ *
+ * Filtros: `metodo` (manual | clic | qr | anpr), `placa` (parte de la placa, en cualquier formato), `desde`/`hasta` (AAAA-MM-DD, días de
+ * Guatemala). Paginación: `pagina` (desde 1) y `por_pagina` (1–100). Orden: la más reciente primero.
+ */
+export const listarAccesos = async (req: Request, res: Response) => {
+  const { metodo, placa, desde, hasta } = req.query as Record<string, string | undefined>;
+  if (metodo !== undefined && metodo !== '' && !esMetodoAcceso(metodo)) {
+    return res.status(400).json({ error: 'metodo debe ser manual, clic, qr o anpr' });
+  }
+  const placaBuscada = placa === undefined ? '' : normalizarPlaca(placa);
+  if (placa !== undefined && placa !== '' && (placaBuscada.length < 2 || placaBuscada.length > 12)) {
+    return res.status(400).json({ error: 'Escribe al menos 2 letras o números de la placa' });
+  }
+  for (const f of [desde, hasta]) {
+    if (f !== undefined && f !== '' && !FECHA_RE.test(f)) return res.status(400).json({ error: 'desde y hasta deben tener el formato AAAA-MM-DD' });
+  }
+  const pagina = enteroEn(req.query.pagina, 1, 100_000, 1);
+  const porPagina = enteroEn(req.query.por_pagina, 1, POR_PAGINA_MAX, POR_PAGINA_DEFECTO);
+  if (pagina === null || porPagina === null) {
+    return res.status(400).json({ error: `pagina debe ser un entero ≥ 1 y por_pagina entre 1 y ${POR_PAGINA_MAX}` });
+  }
+
+  const ts = tenantFilter(req.user!, 'ra');
+  const params: unknown[] = [...ts.params];
+  const filtros = [ts.whereClause];
+  const agregar = (sql: (n: number) => string, valor: unknown) => { params.push(valor); filtros.push(sql(params.length)); };
+  if (metodo) agregar(n => `(${METODO_SQL}) = $${n}`, metodo);
+  if (placaBuscada) agregar(n => `${PLACA_ACCESO_SQL} LIKE '%' || $${n} || '%'`, placaBuscada);
+  if (desde) agregar(n => `ra.timestamp_entrada >= ($${n}::date)::timestamp AT TIME ZONE '${APP_TZ}'`, desde);
+  if (hasta) agregar(n => `ra.timestamp_entrada < ($${n}::date + 1)::timestamp AT TIME ZONE '${APP_TZ}'`, hasta);
+  const desdeFrom = `FROM registros_acceso ra
+       ${JOINS_ACCESO}
+       JOIN sucursales s ON s.id = ra.sucursal_id
+       LEFT JOIN usuarios uv ON uv.id = ra.verificado_por
+       ${ts.joinClause}
+      WHERE ${filtros.join(' AND ')}`;
+
+  try {
+    const [filas, total] = await Promise.all([
+      pool.query(
+        `SELECT ra.id, ra.timestamp_entrada, ra.timestamp_salida, ra.autorizado, ra.origen, (${METODO_SQL}) AS metodo,
+                (ra.visitante_id IS NULL) AS es_residente, v.nombre AS visitante_nombre, v.numero_dpi,
+                r.numero_casa, ur.nombre AS residente_nombre, ${PLACA_ACCESO_SQL} AS placa,
+                ra.confianza::float8 AS confianza, (ra.verificado_por IS NOT NULL) AS verificado, uv.nombre AS verificado_por_nombre,
+                s.id AS sucursal_id, s.nombre AS sucursal_nombre, ra.id_cliente,
+                ${evidenciaSql('placa')} AS evidencia_placa, ${evidenciaSql('vehiculo')} AS evidencia_vehiculo
+           ${desdeFrom}
+          ORDER BY ra.timestamp_entrada DESC, ra.id DESC
+          LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
+        [...params, porPagina, (pagina - 1) * porPagina],
+      ),
+      pool.query(`SELECT COUNT(*)::int AS total ${desdeFrom}`, params),
+    ]);
+    res.json({
+      accesos: filas.rows.map(f => ({
+        ...f,
+        // La evidencia se pide por el id del registro en la garita; sin evidencia no hace falta exponerlo.
+        id_cliente: f.evidencia_placa || f.evidencia_vehiculo ? f.id_cliente : null,
+      })),
+      total: total.rows[0].total,
+      pagina,
+      por_pagina: porPagina,
+    });
+  } catch (error) {
+    serverError(res, error, 'Error al listar las entradas');
+  }
+};
+
