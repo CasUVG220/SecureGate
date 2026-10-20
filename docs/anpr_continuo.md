@@ -576,6 +576,51 @@ hoy por la API, ver límites).
 5. Pruebas: qué envía, qué pasa si no responde (un solo reintento como máximo), y que una falla no toca el acceso encolado.
 6. **No inventar el protocolo**: usar el documento del fabricante o del integrador y dejar su referencia en el comentario.
 
+## 16. Seguimiento del ANPR (rama `sprint10/anpr-seguimiento`)
+
+Cuatro asuntos que decidió el equipo después del sprint: las entradas de residentes no son visitas del plan, los accesos ANPR
+deben verse en la web, las placas autorizadas tienen una sola fuente y se prueba el caso de varios vehículos a la vez.
+
+### 16.1 Exploración (sin cambios de código)
+
+- **Visitas del plan, cuota y facturación**: solo tres consultas, todas sobre `registros_acceso` autorizados y sin duplicar por
+  `id_cliente`: `visitasDelMes` (uso del mes y proyección, «Mi plan»), `visitasPorEmpresa` (resumen del owner en «Planes y
+  cobros») en `services/suscripciones.ts`, y `visitasEnRango` (la factura) en `services/facturacion.ts`. Hasta el Sprint 10
+  `visitante_id` era `NOT NULL`: toda fila era de un visitante. Las entradas ANPR de residentes (`visitante_id` NULL,
+  `vehiculo_residente_id` puesto) se colaban en las tres. Las demás consultas (`dashboard`, `estadisticas`, `empresas/:id/stats`)
+  cuentan **accesos** para la operación, no visitas del plan.
+- **Listados de accesos en la web**: no hay un listado paginado. Lo que hay: «Accesos recientes» del panel (`GET /dashboard`,
+  los últimos 10, administrador de sucursal), los activos de la salida web (`GET /accesos/activos`, personal de garita), el
+  reporte de entradas en CSV (`GET /reportes/accesos`, Reportes) y `visitas.csv` en «Descargar mis datos». Todos hacen
+  `JOIN visitantes`: los accesos ANPR de residentes no aparecen. El administrador de empresa y el owner solo ven conteos.
+  El origen de captura se deduce de columnas que ya existen: ANPR = `origen = 'anpr'`, QR = `invitacion_qr_id`, manual =
+  `capturado_manualmente`, clic = el resto (DPI leído con el OCR).
+- **Casas de residentes y placas autorizadas**: la pantalla **no existe** en el repositorio (ni en esta rama ni en `main`):
+  `ResidentesPage.tsx` solo tiene casa, nombre, correo, teléfono y estado de pago; la tabla `vehiculos` es de vehículos de
+  **visitantes** (`visitante_id NOT NULL`). La única fuente de placas de residentes es `vehiculos_residentes`, por
+  `/api/anpr/vehiculos` (lo mismo que lee `GET /sync/garita` con su versión). El alta valida longitud (4–12) pero no el formato
+  guatemalteco; una placa duplicada se rechaza solo dentro de la misma sucursal (índice único parcial).
+- **Snapshot**: `GET /sync/garita?vehiculos_desde=N` lee `vehiculos_residentes` + residente + usuario (`activo` combina la baja
+  del vehículo y la del usuario) y marca `en_lista_negra`; la versión sube con cada cambio (disparadores). Borrar un residente
+  borra sus vehículos en cascada: la garita deja de abrirles porque el residente desaparece de su copia completa de residentes.
+- **Seguimiento en el sidecar**: `tracker.js` asocia por IoU y luego por centroide (con tamaño parecido), una decisión por pista,
+  enfriamiento por placa, reapertura solo de pistas sin placa; `carril.js` lee con el OCR **un recorte por cuadro** (el mejor
+  candidato de todas las pistas en lectura) y guarda los 5 mejores recortes por pista. Pruebas: (c) dos carros seguidos, (c′) el
+  segundo no hereda la pista, «cola en la talanquera». No hay prueba con varios vehículos en el mismo cuadro.
+
+### 16.2 Plan
+
+1. `fix(facturacion)`: las tres consultas cuentan solo filas con visitante (`visitante_id IS NOT NULL`), el mismo criterio que
+   valía hasta el Sprint 10; no cambia datos, precios ni planes.
+2. Listado de entradas paginado (`GET /accesos`) con método de captura, placa, confianza, «Verificado por agente» y miniatura de
+   la evidencia (misma autorización que el registro); los listados existentes (panel y CSV) incluyen los accesos ANPR y el
+   origen; pantalla «Entradas» para los tres roles de administración.
+3. Prueba de punta a punta primero (alta por el endpoint → snapshot con versión nueva → decisión de la garita → baja), después la
+   pantalla mínima de placas dentro de la lista de casas sobre `/api/anpr/vehiculos`, formato guatemalteco y duplicados.
+4. Tres vehículos en el mismo cuadro: pruebas del tracker y del carril, lista de pistas activas en la garita, clip sintético nuevo
+   y medición con el script existente.
+5. Documentación, glosario y CI.
+
 ## 14. Deuda técnica encontrada (para el informe)
 
 No hizo falta ningún `refactor(...)` aparte: los cambios a código existente fueron los mínimos de cada tarea. Queda anotado:
