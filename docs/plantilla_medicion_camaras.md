@@ -43,3 +43,38 @@ Complementa `docs/validacion_windows.md` (RNF-03 y RNF-13). Dura unos 15 minutos
 
 ## Referencia (nube, Linux, 4 vCPU, cámaras simuladas; ver `docs/camaras_ip_diseno.md`)
 1 flujo 720p15 → MJPEG: ~5–7 % de un núcleo y ~40–50 MB; 2 flujos: ~10–14 % y ~80–95 MB (solo los procesos ffmpeg del puente).
+
+## ANPR continuo (Sprint 10): reconocimiento de placas por carril
+
+Complementa lo anterior cuando la garita tiene carriles con ANPR (ver `docs/anpr_continuo.md`, «Tarea 7»). Dura unos 20 minutos.
+
+### Procedimiento
+1. **Pipeline sin ventana** (en el mismo equipo, con Rust instalado o desde el CI de Windows): `node desktop/scripts/medir-anpr.mjs pipeline --release`.
+   Mide aparte el proceso de Rust y el del sidecar con los clips sintéticos de `test-fixtures/anpr` (reposo, 1 y 2 carriles), los ms por
+   etapa, la latencia y la exactitud; deja el reporte en `desktop/scripts/reportes/anpr-<fecha>.md`.
+2. **App completa**: `node desktop/scripts/medir-anpr.mjs app --pid <PID de securegate-garita> --segundos 60` y seguir las indicaciones
+   (ANPR en pausa, reposo con carriles activos, 1 carril con tráfico, 2 carriles con tráfico). Incluye WebView2, los sidecars y ffmpeg.
+3. Con tráfico real: anotar, de los eventos del ANPR, los segundos desde la primera lectura legible y si la placa fue la correcta.
+
+### Resultados medidos (nube, Linux, Intel Xeon @ 2,80 GHz × 4 vCPU, 15,7 GB; pipeline sin ventana, Rust release, clips sintéticos 960×540 a 10 fps)
+
+| Escenario | CPU total de la máquina (%) | RAM pico Rust + sidecar (MB) | Latencia p95 (ms) | Exactitud |
+|---|---|---|---|---|
+| Reposo, 2 carriles, calle vacía | 0,7 | 32 + 345 | — | sin eventos falsos |
+| 1 carril con tráfico | 7,2 | 54 + 390 | 1432 | 6/6 vehículos con la decisión correcta, 0 placas equivocadas |
+| 2 carriles con tráfico a la vez | 10,6 | 55 + 402 | 944 | 6/6 vehículos con la decisión correcta, 0 placas equivocadas |
+
+Reporte: `anpr-2026-10-22T21-35-15` (detalle por etapa en `docs/anpr_continuo.md` §12). Sin WebView: la pantalla no está incluida.
+
+### Resultados en el equipo de la garita (llenar; **pendiente, Windows 6–8 GB**)
+
+| Escenario | CPU total (%) | RAM total (MB) | Latencia p95 (ms) | Observaciones |
+|---|---|---|---|---|
+| Pipeline: reposo, 2 carriles | pendiente | pendiente | — | |
+| Pipeline: 1 carril con tráfico | pendiente | pendiente | pendiente | |
+| Pipeline: 2 carriles con tráfico | pendiente | pendiente | pendiente | |
+| App: ANPR en pausa | pendiente | pendiente | — | |
+| App: reposo con carriles activos | pendiente | pendiente | — | |
+| App: 1 carril con tráfico real | pendiente | pendiente | pendiente | |
+| App: 2 carriles con tráfico real | pendiente | pendiente | pendiente | |
+| Cámaras reales: día / noche / lluvia (exactitud) | — | — | pendiente | |
