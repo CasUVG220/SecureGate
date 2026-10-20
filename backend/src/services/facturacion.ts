@@ -17,7 +17,7 @@
 import { APP_TZ } from '../utils/reservas';
 import { enviarEmail } from './email';
 import type { ConfirmacionPago, ProveedorCobro } from './cobros';
-import { mesActual, mesSiguiente, periodoTexto, suscripcionDe, type Consultable, type Mes, type Suscripcion } from './suscripciones';
+import { mesActual, mesSiguiente, periodoTexto, suscripcionDe, VISITA_SQL, type Consultable, type Mes, type Suscripcion } from './suscripciones';
 
 export type Cliente = Consultable & { release(): void };
 export type PoolLike = Consultable & { connect(): Promise<Cliente> };
@@ -187,13 +187,16 @@ export function calcularFactura(plan: PlanParaCalculo, diasMes: number, diasFact
 
 // ── Generación ───────────────────────────────────────────────────────────────────────────────────────────
 
-/** Visitas autorizadas de la empresa entre dos días de Guatemala (inclusive), sin duplicados por `id_cliente`. */
+/**
+ * Visitas autorizadas de la empresa entre dos días de Guatemala (inclusive), sin duplicados por `id_cliente`. Solo de visitantes: las
+ * entradas de residentes (ANPR) no se facturan (`VISITA_SQL`).
+ */
 export async function visitasEnRango(db: Consultable, empresaId: string, desde: string, hasta: string): Promise<number> {
   const r = await db.query(
     `SELECT COUNT(DISTINCT COALESCE(ra.id_cliente, ra.id))::int AS visitas
        FROM registros_acceso ra
        JOIN sucursales s ON s.id = ra.sucursal_id
-      WHERE s.empresa_id = $1 AND ra.autorizado = TRUE
+      WHERE s.empresa_id = $1 AND ${VISITA_SQL}
         AND ra.timestamp_entrada >= ($2::date)::timestamp AT TIME ZONE $4::text
         AND ra.timestamp_entrada <  ($3::date + 1)::timestamp AT TIME ZONE $4::text`,
     [empresaId, desde, hasta, APP_TZ],

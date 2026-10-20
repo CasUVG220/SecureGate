@@ -6,8 +6,11 @@
  *  - Una empresa tiene a lo más una suscripción (estado: prueba / activa / vencida / cancelada). Cada cambio de plan o de estado deja una
  *    fila en `suscripcion_historial` (quién, cuándo, por qué).
  *  - Uso = visitas por empresa y MES CALENDARIO en America/Guatemala. Una visita es una fila de `registros_acceso` (la salida actualiza la
- *    misma fila) autorizada; los registros rechazados (`autorizado = FALSE`) no cuentan y un reenvío idempotente (mismo `id_cliente`) no
- *    suma dos veces. El mes se corta a las 00:00 de Guatemala, no a las 00:00 UTC.
+ *    misma fila) autorizada y DE UN VISITANTE; los registros rechazados (`autorizado = FALSE`) no cuentan y un reenvío idempotente (mismo
+ *    `id_cliente`) no suma dos veces. El mes se corta a las 00:00 de Guatemala, no a las 00:00 UTC.
+ *  - Un acceso de residente (su vehículo autorizado, `visitante_id` NULL: ANPR automático o confirmado por el agente) no es una visita
+ *    y no consume el plan (Sprint 10). Se filtra por `visitante_id IS NOT NULL`, el mismo criterio que valía cuando todo registro tenía
+ *    visitante: los totales anteriores no cambian. Ver `VISITA_SQL`.
  *  - Los límites de sucursales y garitas del plan se hacen cumplir al CREAR una nueva (`reservarCupo`); una empresa sin suscripción no tiene límites
  *    (empresas anteriores a los planes).
  */
@@ -322,6 +325,13 @@ export function proyectarMes(visitas: number, dia: number, diasDelMes: number, i
   return { visitas_proyectadas: proyectadas, excedente_proyectado: excedente, excedente_proyectado_centavos: excedente * precioExtraCentavos };
 }
 
+/**
+ * Condición de «visita» para el plan, la cuota y la factura (alias `ra`): autorizada y de un visitante. Las entradas de residentes
+ * (`visitante_id` NULL) no cuentan, vengan del ANPR automático o confirmadas por el agente; una visita que el agente registró tras
+ * verificar una placa desconocida tiene visitante y sí cuenta.
+ */
+export const VISITA_SQL = 'ra.autorizado = TRUE AND ra.visitante_id IS NOT NULL';
+
 /** Visitas AUTORIZADAS de una empresa en un mes calendario de Guatemala. Un `id_cliente` repetido cuenta una vez. */
 export async function visitasDelMes(db: Consultable, empresaId: string, m: Mes): Promise<number> {
   const sig = mesSiguiente(m);
@@ -330,7 +340,7 @@ export async function visitasDelMes(db: Consultable, empresaId: string, m: Mes):
        FROM registros_acceso ra
        JOIN sucursales s ON s.id = ra.sucursal_id
       WHERE s.empresa_id = $1
-        AND ra.autorizado = TRUE
+        AND ${VISITA_SQL}
         AND ra.timestamp_entrada >= make_timestamptz($2::int, $3::int, 1, 0, 0, 0, $6::text)
         AND ra.timestamp_entrada <  make_timestamptz($4::int, $5::int, 1, 0, 0, 0, $6::text)`,
     [empresaId, m.anio, m.mes, sig.anio, sig.mes, APP_TZ],
@@ -345,7 +355,7 @@ export async function visitasPorEmpresa(db: Consultable, m: Mes): Promise<Map<st
     `SELECT s.empresa_id, COUNT(DISTINCT COALESCE(ra.id_cliente, ra.id))::int AS visitas
        FROM registros_acceso ra
        JOIN sucursales s ON s.id = ra.sucursal_id
-      WHERE ra.autorizado = TRUE
+      WHERE ${VISITA_SQL}
         AND ra.timestamp_entrada >= make_timestamptz($1::int, $2::int, 1, 0, 0, 0, $5::text)
         AND ra.timestamp_entrada <  make_timestamptz($3::int, $4::int, 1, 0, 0, 0, $5::text)
       GROUP BY s.empresa_id`,
