@@ -865,10 +865,16 @@ export interface DashboardData {
   reservas_pendientes?: number;
   accesos_recientes: Array<{
     id: string;
+    /** El visitante o, en una entrada por placas, el residente. */
     nombre_visitante: string;
     numero_casa: string;
     timestamp_entrada: string;
     timestamp_salida: string | null;
+    /** Sprint 10: cómo se capturó (las entradas por placas son `anpr`). Ausentes en un backend anterior. */
+    metodo?: MetodoAcceso;
+    es_residente?: boolean;
+    verificado?: boolean;
+    placa?: string | null;
   }>;
   /** Accesos de hoy por hora (24 posiciones, 0 = medianoche). */
   accesos_por_hora: number[];
@@ -2502,3 +2508,62 @@ export const completarOnboarding = async (token: string): Promise<{ ok: boolean;
 
 export const reenviarInvitacionOnboarding = async (token: string): Promise<{ ok: boolean; mensaje: string }> =>
   publico(await fetch(`${BASE_URL}/api/onboarding/${encodeURIComponent(token)}/reenviar`, { method: 'POST', headers: json, body: '{}' }), 'No se pudo reenviar la invitación');
+
+// ── Entradas: listado de la administración con los accesos del ANPR (Sprint 10, seguimiento) ─────────────────
+
+/** Cómo se capturó una entrada (lo deduce el backend de columnas que ya existían). */
+export type MetodoAcceso = 'manual' | 'clic' | 'qr' | 'anpr';
+
+export interface EntradaAcceso {
+  id: string;
+  timestamp_entrada: string;
+  timestamp_salida: string | null;
+  autorizado: boolean;
+  origen: string;
+  metodo: MetodoAcceso;
+  /** Entrada de un residente con su vehículo autorizado (por placas): no hay visitante. */
+  es_residente: boolean;
+  visitante_nombre: string | null;
+  numero_dpi: string | null;
+  numero_casa: string;
+  residente_nombre: string;
+  /** Placa canónica (`P123ABC`). */
+  placa: string | null;
+  /** Confianza del reconocimiento de placas (0–1); null en las demás. */
+  confianza: number | null;
+  /** Un agente confirmó la entrada por placas con un clic. */
+  verificado: boolean;
+  verificado_por_nombre: string | null;
+  sucursal_id: string;
+  sucursal_nombre: string;
+  /** Para pedir la evidencia; null si no hay. */
+  id_cliente: string | null;
+  evidencia_placa: boolean;
+  evidencia_vehiculo: boolean;
+}
+
+export interface ListadoEntradas { accesos: EntradaAcceso[]; total: number; pagina: number; por_pagina: number }
+
+export const getEntradas = async (params: {
+  metodo?: MetodoAcceso; placa?: string; desde?: string; hasta?: string; pagina?: number; por_pagina?: number;
+}): Promise<ListadoEntradas> => {
+  const url = new URL(`${BASE_URL}/api/accesos`);
+  for (const [k, v] of Object.entries(params)) if (v !== undefined && v !== '') url.searchParams.set(k, String(v));
+  const res = await apiFetch(url.toString(), { headers: authHeaders() });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error((body as { error?: string }).error || 'No se pudieron cargar las entradas');
+  }
+  return res.json() as Promise<ListadoEntradas>;
+};
+
+/** Recorte de la placa o del vehículo de una entrada por placas (con la misma sesión); null si ya no está (se borra a los 7 días). */
+export const getEvidenciaAnpr = async (idCliente: string, tipo: 'placa' | 'vehiculo'): Promise<Blob | null> => {
+  const res = await apiFetch(`${BASE_URL}/api/anpr/evidencias/${encodeURIComponent(idCliente)}/${tipo}`, {
+    headers: { Authorization: `Bearer ${getToken()}` },
+  });
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error('No se pudo cargar la evidencia');
+  return res.blob();
+};
+

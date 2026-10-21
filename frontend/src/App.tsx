@@ -4,6 +4,7 @@ import LoginPage              from './pages/LoginPage';
 import PagosPage              from './pages/PagosPage';
 import PreautPage             from './pages/PreautPage';
 import DashboardPage          from './pages/DashboardPage';
+import EntradasPage           from './pages/EntradasPage';
 import ResidentePage          from './pages/ResidentePage';
 import ConfigCargosPage       from './pages/ConfigCargosPage';
 import ConfiguracionQrPage    from './pages/ConfiguracionQrPage';
@@ -51,7 +52,7 @@ type Page =
   | 'dashboard' | 'residentes' | 'pagos' | 'preaut' | 'reportes' | 'config' | 'config-qr' | 'verificacion' | 'agentes' | 'garitas' | 'blacklist' | 'anuncios' | 'tickets' | 'reservas'
   | 'portal' | 'mis-reservas' | 'mis-anuncios'
   | 'owner-dashboard' | 'owner-empresas' | 'owner-empresa-detail' | 'owner-audit' | 'owner-saas'
-  | 'ae-dashboard' | 'ae-sucursales' | 'ae-plan' | 'cuenta';
+  | 'ae-dashboard' | 'ae-sucursales' | 'ae-plan' | 'cuenta' | 'entradas';
 
 interface NavItem { key: Page; labelKey: string; d: string; }
 interface NavGroup { labelKey: string; items: NavItem[]; }
@@ -75,6 +76,7 @@ const ICON = {
   qr:         'M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3zM14 14h3v3h-3zM18 18h3v3h-3z',
   audit:      'M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M9 5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2M9 5h6M9 12h6M9 16h4',
   account:    'M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z',
+  entries:    'M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4M10 17l5-5-5-5M15 12H3',
 } as const;
 
 /**
@@ -97,6 +99,7 @@ const ADMIN_NAV: NavGroup[] = [
     { key: 'dashboard', labelKey: 'nav.dashboard', d: ICON.dashboard },
   ]},
   { labelKey: 'nav.group.operation', items: [
+    { key: 'entradas',     labelKey: 'nav.entries',      d: ICON.entries },
     { key: 'preaut',       labelKey: 'nav.preauth',      d: ICON.shield },
     { key: 'verificacion', labelKey: 'nav.verification', d: ICON.verify },
     { key: 'blacklist',    labelKey: 'nav.blacklist',    d: ICON.blacklist },
@@ -140,6 +143,7 @@ const OWNER_NAV: NavGroup[] = [
   { labelKey: 'nav.group.global', items: [
     { key: 'owner-dashboard', labelKey: 'nav.ownerDashboard', d: ICON.dashboard },
     { key: 'owner-empresas',  labelKey: 'nav.companies',      d: ICON.home },
+    { key: 'entradas',        labelKey: 'nav.entries',        d: ICON.entries },
     { key: 'owner-saas',      labelKey: 'nav.saas',           d: ICON.payments },
     { key: 'owner-audit',     labelKey: 'nav.auditLogs',      d: ICON.audit },
   ]},
@@ -151,6 +155,7 @@ const ADMIN_EMPRESA_NAV: NavGroup[] = [
   { labelKey: 'nav.group.company', items: [
     { key: 'ae-dashboard',  labelKey: 'nav.aeDashboard', d: ICON.dashboard },
     { key: 'ae-sucursales', labelKey: 'nav.aeBranches',  d: ICON.home },
+    { key: 'entradas',      labelKey: 'nav.entries',     d: ICON.entries },
     { key: 'garitas',       labelKey: 'nav.gates',       d: ICON.gate },
     { key: 'ae-plan',       labelKey: 'nav.myPlan',      d: ICON.payments },
   ]},
@@ -406,6 +411,8 @@ function AppShell() {
     switch (page) {
       case 'dashboard':    return <DashboardPage onNavigate={navigate} />;
       case 'residentes':   return <ResidentesPage />;
+      // El administrador de empresa y el owner ven varias sucursales: la tabla agrega la columna.
+      case 'entradas':     return <EntradasPage mostrarSucursal={userRol === 'owner' || userRol === 'admin_empresa'} />;
       case 'agentes':      return <AgentesPage />;
       case 'garitas':      return <LicenciasPage />;
       case 'pagos':        return <PagosPage />;
