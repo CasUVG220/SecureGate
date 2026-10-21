@@ -10,6 +10,8 @@
 
 pub mod actuador;
 pub mod carriles;
+#[cfg(test)]
+mod contrato_placas;
 pub mod decision;
 pub mod motor;
 #[cfg(test)]

@@ -47,6 +47,7 @@ for p in "${PASOS[@]}"; do
     sidecar)
       correr "sidecar · node --test" desktop/sidecar-ocr npm test ;;
     anpr-e2e)
+      correr "ANPR · contrato placas de residentes (web → sync → garita)" backend env TZ=America/Guatemala SG_CONTRATO_GARITA=1 npx jest -c jest.integration.config.ts --runInBand --testPathPattern anpr.contrato
       correr "ANPR · clip → garita → backend" backend env TZ=America/Guatemala SG_E2E_ANPR=1 npx jest -c jest.integration.config.ts --runInBand --testPathPattern anpr.e2e
       correr "ANPR · barandas con clips reales" desktop/src-tauri cargo test --lib --locked anpr::pruebas_reales::medicion -- --ignored --test-threads 1 ;;
     *) echo "paso desconocido: $p"; FALLO=1 ;;

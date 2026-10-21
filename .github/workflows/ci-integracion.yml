@@ -331,6 +331,14 @@ jobs:
         working-directory: desktop/src-tauri
         run: cargo test --lib --locked --no-run
 
+      # Sprint 10 (seguimiento): la placa que la administración da de alta o de baja en la lista de casas llega a la garita en el
+      # siguiente /sync/garita y cambia la decisión del ANPR (prueba de contrato sin sidecar ni cámara; ver anpr.contrato.int.test.ts).
+      - name: Contrato placas de residentes (web → sync → garita)
+        working-directory: backend
+        env:
+          SG_CONTRATO_GARITA: '1'
+        run: npx jest -c jest.integration.config.ts --runInBand --testPathPattern '__tests__/integration/anpr.contrato'
+
       - name: E2E clip → garita → backend
         working-directory: backend
         env:
