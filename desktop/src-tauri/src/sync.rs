@@ -157,6 +157,13 @@ fn aplicar_snapshot(conn: &Connection, snap: &Value, inicio: &str) -> AppResult<
         if snap["vehiculos"]["modo"].as_str() == Some("completo") {
             db::meta_escribir(&tx, "vehiculos_completo_en", &Utc::now().to_rfc3339())?;
         }
+        // Los vehículos de un residente que ya no está en el padrón (eliminado o dado de baja) salen de la copia en ESTE pull:
+        // al eliminar al residente sus filas se borran en el servidor y el incremental no trae nada de ellas, así que antes
+        // quedaban hasta la siguiente lista completa y, si la placa se reasignaba, la garita podía tomar la fila vieja.
+        let fuera = tx.execute("DELETE FROM vehiculos_autorizados_local WHERE residente_id NOT IN (SELECT id FROM residentes_local)", [])?;
+        if fuera > 0 {
+            log::info!("{fuera} vehículo(s) de residentes que ya no están en el padrón salieron de la copia");
+        }
         log::debug!("vehículos ANPR al día (versión {version})");
     }
     db::meta_escribir(&tx, "qr_snapshot_desde", inicio)?;
@@ -630,6 +637,33 @@ mod tests {
             .unwrap();
         assert_eq!((dpi.as_str(), placa.as_deref()), ("", Some("P123ABC")));
         assert!(db::meta_leer(&c, "ultima_sync_ok").unwrap().is_some());
+    }
+
+    #[test]
+    fn los_vehiculos_de_un_residente_que_salio_del_padron_salen_de_la_copia() {
+        let c = Connection::open_in_memory().unwrap();
+        db::aplicar_esquema(&c).unwrap();
+        let fila = |id: &str, residente: &str, version: &str| json!({
+            "id": id, "placa": "P777RES", "residente_id": residente, "numero_casa": "A-1", "residente_nombre": "R",
+            "vigente_desde": "2026-01-01", "vigente_hasta": null, "activo": true, "en_lista_negra": false, "version": version,
+        });
+        let residente = |id: &str| json!({"id": id, "numero_casa": "A-1", "nombre": "R", "estado_pago": "al_dia", "telefono": null});
+        let snap = |residentes: Vec<Value>, modo: &str, filas: Vec<Value>, version: &str| json!({
+            "residentes": residentes, "blacklist": [], "preautorizaciones": [],
+            "vehiculos": { "modo": modo, "version": version, "filas": filas },
+        });
+        aplicar_snapshot(&c, &snap(vec![residente("r1"), residente("r2")], "completo", vec![fila("v2", "r2", "5")], "5"), "2026-10-27T10:00:00Z").unwrap();
+        // Se elimina al residente r2: el servidor borra su vehículo y el incremental no lo menciona; r2 ya no viene en el padrón.
+        aplicar_snapshot(&c, &snap(vec![residente("r1")], "cambios", vec![], "5"), "2026-10-27T10:01:00Z").unwrap();
+        let n: i64 = c.query_row("SELECT count(*) FROM vehiculos_autorizados_local", [], |r| r.get(0)).unwrap();
+        assert_eq!(n, 0, "la placa del residente eliminado no queda en la copia");
+        // La misma placa para r1: una sola fila, la de r1 (nada heredado).
+        aplicar_snapshot(&c, &snap(vec![residente("r1")], "cambios", vec![fila("v3", "r1", "6")], "6"), "2026-10-27T10:02:00Z").unwrap();
+        let v = crate::anpr::decision::vehiculo_por_placa(&c, "P777RES").unwrap().unwrap();
+        assert_eq!((v.id.as_str(), v.residente_id.as_str()), ("v3", "r1"));
+        // Un servidor viejo que no manda vehículos no toca la copia.
+        aplicar_snapshot(&c, &json!({"residentes": [], "blacklist": [], "preautorizaciones": []}), "2026-10-27T10:03:00Z").unwrap();
+        assert!(crate::anpr::decision::vehiculo_por_placa(&c, "P777RES").unwrap().is_some());
     }
 
     fn snapshot_con_qr() -> Value {
