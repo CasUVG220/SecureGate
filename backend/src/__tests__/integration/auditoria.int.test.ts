@@ -116,7 +116,9 @@ const licenciaAnpr = async () => {
   return tokenLicenciaAnpr!;
 };
 const garita = async (url: string, body: object) => request(app).post(url).set(as('agenteA1')).set('X-Licencia-Token', await licenciaAnpr()).send(body);
-const placaUnica = () => `AUD${Math.floor(Math.random() * 1e8).toString().padStart(8, '0')}`;
+/** Placa guatemalteca única en la corrida (las de residentes la exigen): A + 3 dígitos + 3 letras. */
+let nPlaca = 100;
+const placaUnica = () => `A${++nPlaca}${fx.sufijo.replace(/[^a-z]/g, 'x').slice(0, 3).toUpperCase().padEnd(3, 'X')}`;
 const vehiculoNuevo = async () => {
   const r = await post('adminSucA1', '/api/anpr/vehiculos', { residente_id: fx.residentes.A1, placa: placaUnica() });
   expect(r.status).toBe(201);

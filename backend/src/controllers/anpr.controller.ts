@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 import crypto from 'crypto';
 import pool from '../db/pool';
 import { esUuid, serverError } from '../utils/http';
-import { normalizarPlaca, placaPlausible } from '../utils/placa';
+import { esPlacaGuatemalteca, formatearPlaca, normalizarPlaca, placaPlausible } from '../utils/placa';
 import { APP_TZ } from '../utils/reservas';
 import { ownershipClause, ownershipParams, tenantFilter } from '../utils/tenant';
 import { resolverRegistradoEn } from './accesos.controller';
@@ -76,6 +76,33 @@ const COLUMNAS_VEHICULO = `v.id, v.sucursal_id, v.residente_id, v.placa, v.descr
 const FECHA = /^\d{4}-\d{2}-\d{2}$/;
 const fechaValida = (v: unknown): v is string => typeof v === 'string' && FECHA.test(v) && !Number.isNaN(Date.parse(`${v}T00:00:00Z`));
 
+const PLACA_FORMATO = 'La placa debe tener el formato guatemalteco, por ejemplo P-123ABC: el reconocimiento automático solo lee ese formato';
+
+/**
+ * ¿La placa ya está autorizada (activa) para otro vehículo de la MISMA empresa? Devuelve el mensaje del 409 o null.
+ * - Misma sucursal: se dice para qué casa, para que la administración la dé de baja allí primero (una placa, un residente).
+ * - Otra sucursal de la empresa: se rechaza sin nombrarla (el admin de sucursal no ve las demás); lo revisa la empresa.
+ * - Otra empresa: se permite y no se revela nada (cada condominio decide sobre su propia talanquera).
+ */
+async function placaOcupada(placa: string, sucursalId: string, excluirId: string | null = null): Promise<string | null> {
+  const r = await pool.query<{ misma: boolean; numero_casa: string }>(
+    `SELECT v.sucursal_id = $2 AS misma, r.numero_casa
+       FROM vehiculos_residentes v
+       JOIN residentes r ON r.id = v.residente_id
+       JOIN sucursales s ON s.id = v.sucursal_id
+      WHERE v.activo AND v.placa = $1 AND ($3::uuid IS NULL OR v.id <> $3)
+        AND s.empresa_id = (SELECT empresa_id FROM sucursales WHERE id = $2)
+      ORDER BY (v.sucursal_id = $2) DESC
+      LIMIT 1`,
+    [placa, sucursalId, excluirId],
+  );
+  const f = r.rows[0];
+  if (!f) return null;
+  return f.misma
+    ? `La placa ${formatearPlaca(placa)} ya está autorizada para la casa ${f.numero_casa} de esta sucursal. Dala de baja allí antes de asignarla a otra casa.`
+    : `La placa ${formatearPlaca(placa)} ya está autorizada en otra sucursal de la empresa. Pide a la administración de la empresa que la revise.`;
+}
+
 export const listarVehiculos = async (req: Request, res: Response) => {
   const ts = tenantFilter(req.user!, 'v');
   const params: unknown[] = [...ts.params];
@@ -108,7 +135,8 @@ export const crearVehiculo = async (req: Request, res: Response) => {
   const { residente_id, placa, descripcion, vigente_desde, vigente_hasta } = req.body ?? {};
   if (!esUuid(residente_id)) return res.status(400).json({ error: 'residente_id debe ser un UUID' });
   const p = normalizarPlaca(placa);
-  if (!placaPlausible(p)) return res.status(400).json({ error: 'Placa inválida' });
+  if (!p) return res.status(400).json({ error: 'Escribe la placa' });
+  if (!esPlacaGuatemalteca(p)) return res.status(400).json({ error: PLACA_FORMATO });
   if (descripcion != null && (typeof descripcion !== 'string' || descripcion.length > 100)) return res.status(400).json({ error: 'La descripción admite hasta 100 caracteres' });
   if (vigente_desde != null && !fechaValida(vigente_desde)) return res.status(400).json({ error: 'vigente_desde debe ser AAAA-MM-DD' });
   if (vigente_hasta != null && !fechaValida(vigente_hasta)) return res.status(400).json({ error: 'vigente_hasta debe ser AAAA-MM-DD' });
@@ -119,6 +147,8 @@ export const crearVehiculo = async (req: Request, res: Response) => {
       [residente_id, ...ownershipParams(req.user!)],
     );
     if (residente.rows.length === 0) return res.status(404).json({ error: 'Residente no encontrado' });
+    const ocupada = await placaOcupada(p, residente.rows[0].sucursal_id);
+    if (ocupada) return res.status(409).json({ error: ocupada });
     const r = await pool.query(
       `INSERT INTO vehiculos_residentes (sucursal_id, residente_id, placa, descripcion, vigente_desde, vigente_hasta, creado_por)
        VALUES ($1, $2, $3, $4, COALESCE($5::date, CURRENT_DATE), $6::date, $7)
@@ -147,6 +177,16 @@ export const actualizarVehiculo = async (req: Request, res: Response) => {
   if (vigente_hasta !== undefined && vigente_hasta !== null && !fechaValida(vigente_hasta)) return res.status(400).json({ error: 'vigente_hasta debe ser AAAA-MM-DD' });
   if (activo !== undefined && typeof activo !== 'boolean') return res.status(400).json({ error: 'activo debe ser verdadero o falso' });
   try {
+    if (activo === true) {
+      // Reactivar es volver a autorizar la placa: misma regla que el alta.
+      const actual = await pool.query(
+        `SELECT v.placa, v.sucursal_id FROM vehiculos_residentes v WHERE v.id = $1 AND ${ownershipClause('v', 2)}`,
+        [id, ...ownershipParams(req.user!)],
+      );
+      if (actual.rows.length === 0) return res.status(404).json({ error: 'Vehículo no encontrado' });
+      const ocupada = await placaOcupada(actual.rows[0].placa, actual.rows[0].sucursal_id, id);
+      if (ocupada) return res.status(409).json({ error: ocupada });
+    }
     const r = await pool.query(
       `UPDATE vehiculos_residentes v SET
          descripcion   = CASE WHEN $2::boolean THEN $3 ELSE descripcion END,

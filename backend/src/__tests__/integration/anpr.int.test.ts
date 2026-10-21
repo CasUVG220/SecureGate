@@ -15,7 +15,7 @@ import app from '../../app';
 import { q, uno, cerrarPool } from '../helpers/db';
 import { sembrar, Fixtures } from '../helpers/seed';
 import { login, bearer } from '../helpers/auth';
-import { esperarAuditoriaDe } from '../helpers/audit';
+import { esperarAuditoria, esperarAuditoriaDe } from '../helpers/audit';
 import { purgarEvidenciasAnpr, MAX_EVIDENCIA_BYTES } from '../../controllers/anpr.controller';
 
 let fx: Fixtures;
@@ -90,6 +90,87 @@ describe('vehículos de residentes (administración)', () => {
     const b = await request(app).delete(`/api/anpr/vehiculos/${v.id}`).set(bearer(admin));
     expect(b.status).toBe(200);
     expect((await uno('SELECT activo FROM vehiculos_residentes WHERE id = $1', [v.id])).activo).toBe(false);
+  });
+});
+
+describe('placas de residentes: formato, duplicados, permisos y baja (seguimiento, tarea 3)', () => {
+  const token = async (k: string) => (await login(app, fx.email[k])).token!;
+
+  it('solo la forma guatemalteca (la que lee el ANPR), con un mensaje claro', async () => {
+    for (const mala of ['ABC1234', 'P12ABC', '1234', 'PP123AB']) {
+      const r = await nuevoVehiculo(mala);
+      expect([mala, r.status]).toEqual([mala, 400]);
+      expect(r.body.error).toMatch(/formato guatemalteco, por ejemplo P-123ABC/);
+    }
+    expect((await nuevoVehiculo('')).body.error).toBe('Escribe la placa');
+    // Con guion, espacios o minúsculas se normaliza y entra.
+    const p = placaNueva();
+    expect((await nuevoVehiculo(` ${p.slice(0, 1).toLowerCase()} ${p.slice(1, 4)}-${p.slice(4)} `)).body.placa).toBe(p);
+  });
+
+  it('duplicada: en la sucursal dice la casa; en otra sucursal de la empresa se rechaza sin nombrarla; otra empresa puede', async () => {
+    const p = placaNueva();
+    const fmt = `${p.slice(0, 1)}-${p.slice(1)}`;
+    const original = (await nuevoVehiculo(p)).body;
+    const misma = await nuevoVehiculo(p);
+    expect(misma.status).toBe(409);
+    expect(misma.body.error).toMatch(new RegExp(`La placa ${fmt} ya está autorizada para la casa INT-A1-\\w+ de esta sucursal`));
+
+    const adminA2 = await token('adminSucA2');
+    const otraSucursal = await nuevoVehiculo(p, {}, fx.residentes.A2, adminA2);
+    expect(otraSucursal.status).toBe(409);
+    expect(otraSucursal.body.error).toBe(`La placa ${fmt} ya está autorizada en otra sucursal de la empresa. Pide a la administración de la empresa que la revise.`);
+    expect(otraSucursal.body.error).not.toMatch(/INT-A1|Sucursal/);
+    expect((await nuevoVehiculo(p, {}, fx.residentes.A2, await token('adminEmpA'))).status).toBe(409);
+
+    // Otra empresa decide sobre su propia talanquera: se permite y no se entera de nada.
+    const otraEmpresa = await nuevoVehiculo(p, {}, fx.residentes.B1, adminB);
+    expect(otraEmpresa.status).toBe(201);
+
+    // Dada de baja en A1, ya puede asignarse en A2; reactivar la de A1 vuelve a chocar.
+    expect((await request(app).delete(`/api/anpr/vehiculos/${original.id}`).set(bearer(admin))).status).toBe(200);
+    expect((await nuevoVehiculo(p, {}, fx.residentes.A2, adminA2)).status).toBe(201);
+    const reactivar = await request(app).patch(`/api/anpr/vehiculos/${original.id}`).set(bearer(admin)).send({ activo: true });
+    expect(reactivar.status).toBe(409);
+    expect(reactivar.body.error).toMatch(/otra sucursal de la empresa/);
+    expect((await uno('SELECT activo FROM vehiculos_residentes WHERE id = $1', [original.id])).activo).toBe(false);
+  });
+
+  it('permisos: solo la administración de ese tenant (sucursal, empresa u owner); residente y agente no', async () => {
+    const [residente, adminA2, adminEmpA, adminEmpB, owner] = await Promise.all(
+      ['resA1', 'adminSucA2', 'adminEmpA', 'adminEmpB', 'owner'].map(token));
+    expect((await nuevoVehiculo(placaNueva(), {}, fx.residentes.A1, residente)).status).toBe(403);
+    expect((await nuevoVehiculo(placaNueva(), {}, fx.residentes.A1, agente)).status).toBe(403);
+    expect((await nuevoVehiculo(placaNueva(), {}, fx.residentes.A1, adminA2)).status).toBe(404);
+    expect((await nuevoVehiculo(placaNueva(), {}, fx.residentes.A1, adminEmpB)).status).toBe(404);
+    const deEmpresa = await nuevoVehiculo(placaNueva(), {}, fx.residentes.A1, adminEmpA);
+    expect(deEmpresa.status).toBe(201);
+    const deOwner = await nuevoVehiculo(placaNueva(), {}, fx.residentes.A1, owner);
+    expect(deOwner.status).toBe(201);
+
+    const baja = (id: string, t: string) => request(app).delete(`/api/anpr/vehiculos/${id}`).set(bearer(t));
+    expect((await baja(deEmpresa.body.id, residente)).status).toBe(403);
+    expect((await baja(deEmpresa.body.id, adminA2)).status).toBe(404);
+    expect((await baja(deEmpresa.body.id, adminEmpB)).status).toBe(404);
+    expect((await uno('SELECT activo FROM vehiculos_residentes WHERE id = $1', [deEmpresa.body.id])).activo).toBe(true);
+    expect((await baja(deEmpresa.body.id, adminEmpA)).status).toBe(200);
+    expect((await baja(deOwner.body.id, owner)).status).toBe(200);
+    // La lista por residente (la que usa la pantalla de casas) tampoco se ve desde fuera.
+    const ajena = await request(app).get('/api/anpr/vehiculos').query({ residente_id: fx.residentes.A1 }).set(bearer(adminA2));
+    expect([ajena.status, ajena.body]).toEqual([200, []]);
+  });
+
+  it('baja: sale de la lista del residente (queda con incluir_bajas), y la bitácora guarda quién y qué placa', async () => {
+    const v = (await nuevoVehiculo(placaNueva())).body;
+    const lista = () => request(app).get('/api/anpr/vehiculos').query({ residente_id: fx.residentes.A1 }).set(bearer(admin));
+    expect((await lista()).body.map((x: { id: string }) => x.id)).toContain(v.id);
+    expect((await request(app).delete(`/api/anpr/vehiculos/${v.id}`).set(bearer(admin))).status).toBe(200);
+    expect((await lista()).body.map((x: { id: string }) => x.id)).not.toContain(v.id);
+    const conBajas = await request(app).get('/api/anpr/vehiculos').query({ residente_id: fx.residentes.A1, incluir_bajas: 'true' }).set(bearer(admin));
+    expect(conBajas.body.find((x: { id: string }) => x.id === v.id)).toMatchObject({ activo: false, placa: v.placa });
+    const audit = await esperarAuditoria('VEHICULO_RESIDENTE_DADO_DE_BAJA', v.id, { usuarioId: fx.usuarios.adminSucA1 });
+    expect(audit[0]).toMatchObject({ status_code: 200, tabla_afectada: 'vehiculos_residentes', sucursal_id: fx.sucursales.A1 });
+    expect(audit[0].datos_nuevos.placa).toBe(v.placa);
   });
 });
 

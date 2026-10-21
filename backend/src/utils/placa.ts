@@ -21,6 +21,13 @@ export const placaPlausible = (normalizada: string): boolean =>
 
 const PLACA_GT = /^([A-Z]{1,3})(\d{3})([A-Z]{3})$/;
 
+/**
+ * ¿Tiene la forma guatemalteca (prefijo de 1-3 letras + 3 dígitos + 3 letras, ya normalizada)? Es la única que lee el ANPR
+ * (`desktop/sidecar-ocr/src/anpr/placa.js`): una placa autorizada con otra forma nunca abriría sola, así que los vehículos de
+ * los residentes la exigen. Los visitantes y la captura manual siguen aceptando placas extranjeras (`placaPlausible`).
+ */
+export const esPlacaGuatemalteca = (normalizada: string): boolean => PLACA_GT.test(normalizada);
+
 /** `P123ABC` → `P-123ABC`; si no tiene la forma guatemalteca devuelve la normalizada tal cual. */
 export const formatearPlaca = (valor: unknown): string => {
   const n = normalizarPlaca(valor);
