@@ -10,6 +10,7 @@ import {
   useConfirmacion,
 } from '../components/ui';
 import { Skeleton } from '../components/Skeleton';
+import PlacasResidente from '../components/PlacasResidente';
 import { useTranslation } from '../i18n/useTranslation';
 
 type FormMode = 'none' | 'create' | 'edit';
@@ -20,6 +21,7 @@ const EMPTY_UPDATE: ResidenteUpdate = { numero_casa: '', estado_pago: '', telefo
 const ICON_SEARCH = 'M21 21l-4.35-4.35M11 19a8 8 0 1 1 0-16 8 8 0 0 1 0 16z';
 const ICON_RESIDENTS = 'M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M9 7a4 4 0 1 0 0-8 4 4 0 0 0 0 8z';
 const ICON_EDIT = 'M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z';
+const ICON_PLATES = 'M5 17h14M6 17l1.5-5h9L18 17M7 17v2M17 17v2M3 10l2-5h14l2 5M8 14h.01M16 14h.01';
 const ICON_TRASH = 'M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M10 11v6M14 11v6';
 
 function IconButton({ path, label, tone, onClick }: { path: string; label: string; tone: 'brand' | 'danger'; onClick: () => void }) {
@@ -62,6 +64,7 @@ export default function ResidentesPage() {
   const [updateForm, setUpdateForm] = useState<ResidenteUpdate>(EMPTY_UPDATE);
   const [saving, setSaving]         = useState(false);
   const [formError, setFormError]   = useState<string | null>(null);
+  const [placasDe, setPlacasDe]     = useState<Residente | null>(null);
 
   const cargar = () => {
     setLoading(true);
@@ -176,6 +179,7 @@ export default function ResidentesPage() {
       key: 'acciones', header: t('common.actions'), align: 'right', actions: true,
       cell: r => (
         <div className="flex justify-end gap-1">
+          <IconButton path={ICON_PLATES} label={rellenar(t('plates.openLabel'), { casa: r.numero_casa })} tone="brand" onClick={() => setPlacasDe(r)} />
           <IconButton path={ICON_EDIT} label={t('common.edit')} tone="brand" onClick={() => openEdit(r)} />
           <IconButton path={ICON_TRASH} label={t('common.delete')} tone="danger" onClick={() => handleDelete(r)} />
         </div>
@@ -316,6 +320,7 @@ export default function ResidentesPage() {
           </div>
         </form>
       </Modal>
+      <PlacasResidente residente={placasDe} onClose={() => setPlacasDe(null)} />
       {dialogo}
     </div>
   );

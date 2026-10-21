@@ -1,18 +1,22 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import ResidentesPage from '../pages/ResidentesPage';
-import { getResidentes, createResidente, deleteResidente } from '../services/api';
+import { getResidentes, createResidente, deleteResidente, getPlacasResidente } from '../services/api';
 
 vi.mock('../services/api', () => ({
   getResidentes: vi.fn(),
   createResidente: vi.fn(),
   updateResidente: vi.fn(),
   deleteResidente: vi.fn(),
+  getPlacasResidente: vi.fn(),
+  agregarPlacaResidente: vi.fn(),
+  quitarPlacaResidente: vi.fn(),
 }));
 
 const mockGetResidentes = getResidentes as unknown as ReturnType<typeof vi.fn>;
 const mockCreateResidente = createResidente as unknown as ReturnType<typeof vi.fn>;
 const mockDeleteResidente = deleteResidente as unknown as ReturnType<typeof vi.fn>;
+const mockGetPlacas = getPlacasResidente as unknown as ReturnType<typeof vi.fn>;
 
 const residente = (over: Partial<Record<string, unknown>> = {}) => ({
   id: 'r1',
@@ -95,5 +99,15 @@ describe('ResidentesPage', () => {
 
     await waitFor(() => expect(mockDeleteResidente).toHaveBeenCalledWith('r1'));
     expect(confirmNativo).not.toHaveBeenCalled();
+  });
+  it('placas: cada casa abre sus placas autorizadas (la misma lista que baja la garita)', async () => {
+    mockGetResidentes.mockResolvedValue([residente({ id: 'r1', numero_casa: '101', nombre: 'Juan Pérez' })]);
+    mockGetPlacas.mockResolvedValue([{ id: 'v1', residente_id: 'r1', sucursal_id: 's1', placa: 'P123ABC', descripcion: null,
+      vigente_desde: '2026-10-01', vigente_hasta: null, activo: true }]);
+    render(<ResidentesPage />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Placas autorizadas de la casa 101' }));
+    expect(await screen.findByRole('dialog', { name: 'Placas autorizadas — Casa 101' })).toBeInTheDocument();
+    expect(await screen.findByText('P-123ABC')).toBeInTheDocument();
+    expect(mockGetPlacas).toHaveBeenCalledWith('r1');
   });
 });

@@ -255,6 +255,48 @@ export const deleteResidente = async (id: string): Promise<void> => {
   }
 };
 
+// ── Placas autorizadas de los residentes (ANPR) ─────────────────────────────────────────────────────────────
+// Es la MISMA fuente que baja la garita en /sync/garita: lo que se da de alta o de baja aquí llega en su siguiente sincronización.
+
+export interface VehiculoResidente {
+  id: string;
+  residente_id: string;
+  sucursal_id: string;
+  /** Canónica (P123ABC); se muestra con `formatearPlaca`. */
+  placa: string;
+  descripcion: string | null;
+  vigente_desde: string;
+  vigente_hasta: string | null;
+  activo: boolean;
+}
+
+const errorDe = async (res: Response, porDefecto: string): Promise<Error> => {
+  const body = await res.json().catch(() => ({}));
+  return new Error((body as { error?: string }).error || porDefecto);
+};
+
+export const getPlacasResidente = async (residenteId: string): Promise<VehiculoResidente[]> => {
+  const res = await apiFetch(`${BASE_URL}/api/anpr/vehiculos?residente_id=${encodeURIComponent(residenteId)}`, { headers: authHeaders() });
+  if (!res.ok) throw await errorDe(res, 'No se pudieron cargar las placas');
+  return res.json();
+};
+
+export const agregarPlacaResidente = async (datos: { residente_id: string; placa: string; descripcion?: string }): Promise<VehiculoResidente> => {
+  const res = await apiFetch(`${BASE_URL}/api/anpr/vehiculos`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify(datos),
+  });
+  if (!res.ok) throw await errorDe(res, 'No se pudo agregar la placa');
+  return res.json();
+};
+
+/** Baja suave: la fila queda con su historial y la garita deja de autorizarla en su siguiente sincronización. */
+export const quitarPlacaResidente = async (vehiculoId: string): Promise<void> => {
+  const res = await apiFetch(`${BASE_URL}/api/anpr/vehiculos/${vehiculoId}`, { method: 'DELETE', headers: authHeaders() });
+  if (!res.ok) throw await errorDe(res, 'No se pudo quitar la placa');
+};
+
 export interface LoginResult {
   token: string;
   usuario: { id: string; nombre: string; email: string; rol: string; idioma?: string; tema?: string };
