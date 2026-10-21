@@ -621,13 +621,64 @@ deben verse en la web, las placas autorizadas tienen una sola fuente y se prueba
    y medición con el script existente.
 5. Documentación, glosario y CI.
 
+### 16.3 Tarea 1 — Las entradas de residentes no son visitas del plan
+
+- Criterio único en `VISITA_SQL` (`services/suscripciones.ts`): `autorizado` **y** `visitante_id IS NOT NULL`. Lo usan las tres
+  consultas (uso del mes, resumen del owner y factura). No se tocaron datos, precios, planes ni tablas de facturación.
+- Cuenta: una visita registrada por el agente (también la que llegó por el ANPR como «desconocida» y el agente registró como
+  visitante). No cuenta: la entrada de un residente por placas, por clic o a mano (`vehiculo_residente_id`, sin visitante).
+- Los totales anteriores al sprint no cambian: hasta el Sprint 10 toda fila tenía visitante (prueba (d) de
+  `visitas.residentes.int.test.ts`).
+
+### 16.4 Tarea 2 — Los accesos ANPR en los listados de la web
+
+- `GET /api/accesos` (administración de sucursal, de empresa y owner; cada uno ve lo de su tenant): paginado (25, hasta 100),
+  más reciente primero, filtro por método (`manual`, `clic`, `qr`, `anpr`), búsqueda por placa y rango de días (hora de
+  Guatemala). Cada fila trae el método, si es residente, la placa, la confianza, «verificado por agente» (con quién) y si hay
+  evidencia; la miniatura se pide a `GET /api/anpr/evidencias/:id_cliente/:tipo`, que ya exigía la misma autorización.
+- Pantalla «Entradas» en los tres menús de administración. Etiquetas: «Automático (placas)» y «Verificado por agente».
+- El panel («Accesos recientes»), el CSV de Reportes y `visitas.csv` de «Descargar mis datos» incluyen el método (columnas
+  nuevas al final, para no romper hojas de cálculo existentes).
+
+### 16.5 Tarea 3 — Placas de los residentes: una sola fuente
+
+**Qué se encontró.** La pantalla «lista de casas → asignar placas autorizadas» **no existía**: las placas de residentes solo se
+daban de alta por la API (`/api/anpr/vehiculos`), que escribe en `vehiculos_residentes`, la misma tabla que baja la garita en
+`GET /sync/garita`. Ese camino (alta y baja) **sí estaba conectado**. La prueba de contrato encontró tres huecos:
+
+1. **Residente eliminado**: el servidor borra sus vehículos en cascada y el pull incremental no trae nada de ellos; la placa se
+   quedaba en la copia de la garita hasta la siguiente lista completa (≤ 30 min). No abría (el residente ya no estaba en el padrón
+   → «residente inactivo»), pero si la misma placa se daba de alta para otra casa en ese rato, la garita tomaba la fila vieja y
+   pedía verificación en vez de abrir. **Corregido en la garita**: cada pull quita los vehículos de residentes que ya no vienen en
+   el padrón, en la misma transacción.
+2. **Formato**: el alta aceptaba cualquier texto de 4 a 12 caracteres, pero el ANPR solo lee la forma guatemalteca (prefijo + 3
+   dígitos + 3 letras): una placa con otra forma nunca abriría sola. **Ahora se exige** (`esPlacaGuatemalteca`, misma expresión
+   que el sidecar y la web) con un mensaje claro. Visitantes y captura manual siguen aceptando placas extranjeras.
+3. **Duplicados**: solo se rechazaban dentro de la sucursal (índice único parcial). **Regla nueva**: misma sucursal → 409 que
+   dice la casa; otra sucursal de la misma empresa → 409 sin nombrarla («pide a la administración de la empresa que la
+   revise»); otra empresa → se permite y no se revela nada (cada condominio decide sobre su talanquera). Reactivar una placa
+   sigue la misma regla. Entre sucursales es una comprobación de la aplicación (sin índice): dos altas simultáneas de la misma
+   placa en dos sucursales podrían pasar; es improbable y se ve en la lista.
+
+**Pantalla.** «Residentes» → botón de placas en cada fila → «Placas autorizadas — Casa N»: lista, alta (placa y descripción
+opcional) y baja con confirmación en la misma fila. Solo la ve la administración de sucursal (como la lista de casas); la API
+también la permite a la administración de empresa y al owner de ese tenant. Cada alta y baja queda en `audit_logs`
+(`VEHICULO_RESIDENTE_CREADO` / `VEHICULO_RESIDENTE_DADO_DE_BAJA`, con la placa).
+
+**Prueba de contrato** (`anpr.contrato.int.test.ts` → Rust `anpr::contrato_placas`): la garita de verdad, sin cámara, contra el
+backend de verdad: alta → versión nueva → abre; baja → no abre y sale de la copia; residente eliminado → no abre y su placa no
+queda; la misma placa reasignada → abre para el residente nuevo; usuario desactivado → no abre. Corre en el job `anpr-e2e`
+(`bash scripts/ci-local.sh anpr-e2e`, o solo `SG_CONTRATO_GARITA=1 npx jest -c jest.integration.config.ts --testPathPattern anpr.contrato`).
+
 ## 14. Deuda técnica encontrada (para el informe)
 
 No hizo falta ningún `refactor(...)` aparte: los cambios a código existente fueron los mínimos de cada tarea. Queda anotado:
 
 1. **Facturación**: las entradas ANPR de residentes cuentan como «visitas» (§9.4). Decisión de negocio pendiente; el cambio es una línea.
-2. **Listados web de accesos** con `JOIN visitantes`: no muestran los accesos ANPR (§9.4).
-3. **Sin pantalla web** para los vehículos de residentes: solo la API (con su bitácora y su matriz de roles).
+   *Resuelto en el seguimiento (§16.3).*
+2. **Listados web de accesos** con `JOIN visitantes`: no muestran los accesos ANPR (§9.4). *Resuelto en el seguimiento (§16.4).*
+3. **Sin pantalla web** para los vehículos de residentes: solo la API (con su bitácora y su matriz de roles). *Resuelto en el
+   seguimiento (§16.5).*
 4. `medir-recursos.mjs` (Sprint 9) sigue midiendo la CPU con `ps` (segundos enteros); `medir-anpr.mjs` ya usa `/proc` en Linux.
 5. `--hilos-detector` del sidecar no se puede cambiar desde la app (mitigación de CPU si hiciera falta en Windows).
 6. Las salidas de residentes por el formulario de siempre (no por un carril de salida ANPR) no encuentran el acceso ANPR abierto,
