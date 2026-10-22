@@ -10,7 +10,10 @@
  *
  * Asociación por cuadro: primero por IoU (mayor primero, ≥ `iouMin`); lo que queda, por distancia de centroides (≤ `distanciaMax`
  * de la diagonal del cuadro). En los dos casos el tamaño debe ser parecido: una pista vieja y chica no se pega a un vehículo
- * grande que llega al mismo lugar. Una pista que deja de verse aguanta `framesPerdida` cuadros **y** `perdida_ms` (lo que pase
+ * grande que llega al mismo lugar. Para el centroide, una pista que no se vio en el cuadro anterior o que se ve TAPADA en parte
+ * (su caja se achicó de golpe: otro vehículo le pasa por delante) se compara con su posición PREDICHA a velocidad constante,
+ * medida solo con los cuadros en que se veía completa; así, cuando reaparece del otro lado del que la tapaba, sigue siendo la
+ * misma pista (seguimiento de varios vehículos a la vez, ver docs/anpr_continuo.md §16.6). Una pista que deja de verse aguanta `framesPerdida` cuadros **y** `perdida_ms` (lo que pase
  * primero: en vigilancia el detector corre a 1 fps y 8 cuadros serían 8 s); si la última vez tocaba el borde del cuadro (salió),
  * basta con 2 cuadros sin verla. Después termina, pero
  * durante `ventanaReapertura_ms` una detección en el mismo lugar la **reabre** con el mismo id (oclusión larga de un vehículo
@@ -49,6 +52,8 @@ const POR_DEFECTO = Object.freeze({
   ventanaReapertura_ms: 5000,
   tiempoMaxLectura_ms: 4000,
   enfriamiento_ms: 60_000,
+  /** Una caja con menos de esta fracción del área de la última vista completa se toma como vista TAPADA (no mide velocidad). */
+  areaVistaCompleta: 0.9,
 });
 
 function configurar(cfg = {}) {
@@ -65,6 +70,7 @@ function configurar(cfg = {}) {
   rango('ventanaReapertura_ms', 0, 120_000);
   rango('tiempoMaxLectura_ms', 500, 60_000);
   rango('enfriamiento_ms', 0, 3_600_000);
+  rango('areaVistaCompleta', 0.5, 1);
   return c;
 }
 
@@ -148,13 +154,23 @@ class Tracker {
     pares.sort((a, b) => b[0] - a[0]);
     for (const [, p, i] of pares) if (libresP.has(p.id) && libresD.has(i)) asignar(p, i);
 
-    // 2) Distancia de centroides para lo que quedó (movimiento rápido entre cuadros, caja que cambia de tamaño).
+    // 2) Distancia de centroides para lo que quedó (movimiento rápido entre cuadros, caja que cambia de tamaño). Una pista que
+    //    no se vio o se veía tapada se busca donde DEBERÍA estar (predicción) y vale el tamaño de su última vista completa.
     for (const p of vivas.filter(x => libresP.has(x.id))) {
+      const prevista = this.#prevista(p, ts);
       let mejor = -1;
       let mejorDist = Infinity;
       for (const i of libresD) {
-        const dist = this.#distancia(p.bbox, detecciones[i].bbox);
-        if (dist <= this.cfg.distanciaMax * diag && dist < mejorDist && tamanoParecido(p.bbox, detecciones[i].bbox)) { mejor = i; mejorDist = dist; }
+        const b = detecciones[i].bbox;
+        const cerca = this.#distancia(p.bbox, b) <= this.cfg.distanciaMax * diag && tamanoParecido(p.bbox, b);
+        // Por la predicción, solo si la caja cae casi entera DENTRO de donde debería estar la pista (lo que se ve de un vehículo
+        // que reaparece tapado en parte). Un vehículo que llega cerca de esa zona no basta: si no, la pista tapada se lo quedaría.
+        // El tamaño se mide contra la vista completa: lo visible de un vehículo tapado puede ser mucho menos que su caja entera.
+        const enPrevista = prevista != null && mismaFamilia(p, detecciones[i]) && contencion(b, prevista) >= this.cfg.contencionMax
+          && b.w * b.h <= 2 * prevista.w * prevista.h && b.w * b.h >= 0.2 * prevista.w * prevista.h;
+        if (!cerca && !enPrevista) continue;
+        const dist = cerca ? this.#distancia(p.bbox, b) : this.#distancia(prevista, b);
+        if (dist < mejorDist) { mejor = i; mejorDist = dist; }
       }
       if (mejor >= 0) asignar(p, mejor);
     }
@@ -195,6 +211,9 @@ class Tracker {
         placa: null,
         lectura_inicio_ts: null,
         historial: [centro(d.bbox)],
+        /** Última vista completa (sin tapar) y velocidad medida entre vistas completas, en px/ms (ver `#prevista`). */
+        completa: { bbox: d.bbox, ts },
+        velocidad: null,
       };
       this.pistas.set(p.id, p);
       eventos.push({ tipo: 'pista', evento: 'nueva', id: p.id, estado: p.estado, bbox: p.bbox, clase: p.clase, ts });
@@ -277,6 +296,17 @@ class Tracker {
     p.perdidos = 0;
     p.historial.push(centro(d.bbox));
     if (p.historial.length > 4) p.historial.shift();
+    // Velocidad solo con vistas completas: la caja de un vehículo tapado en parte se achica y su centro no se mueve como él.
+    const completa = p.completa;
+    if (!completa || d.bbox.w * d.bbox.h >= this.cfg.areaVistaCompleta * completa.bbox.w * completa.bbox.h) {
+      if (completa && ts > completa.ts) {
+        const [cx, cy] = centro(d.bbox);
+        const [ax, ay] = centro(completa.bbox);
+        const v = [(cx - ax) / (ts - completa.ts), (cy - ay) / (ts - completa.ts)];
+        p.velocidad = p.velocidad ? [(p.velocidad[0] + v[0]) / 2, (p.velocidad[1] + v[1]) / 2] : v;
+      }
+      p.completa = { bbox: d.bbox, ts };
+    }
     if (p.placa) this.placasVistas.set(p.placa, ts);
     if (p.estado === ESTADOS.DETECTADO && p.seguidos >= this.cfg.framesConfirmar) this.#cambiar(p, ESTADOS.SIGUIENDO, ts, eventos);
   }
@@ -329,6 +359,18 @@ class Tracker {
     const anterior = p.estado;
     p.estado = estado;
     eventos.push({ tipo: 'pista', evento: 'estado', id: p.id, anterior, estado, ts });
+  }
+
+  /**
+   * Dónde debería estar la pista ahora si siguió a la misma velocidad desde su última vista completa (con el tamaño de esa vista),
+   * o null si no hay velocidad medida o si pasó más de `perdida_ms`.
+   */
+  #prevista(p, ts) {
+    if (!p.completa || !p.velocidad) return null;
+    const dt = ts - p.completa.ts;
+    if (dt <= 0 || dt > this.cfg.perdida_ms) return null;
+    const b = p.completa.bbox;
+    return { x: b.x + p.velocidad[0] * dt, y: b.y + p.velocidad[1] * dt, w: b.w, h: b.h };
   }
 
   #distancia(a, b) {

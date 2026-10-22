@@ -330,6 +330,116 @@ test('un vehículo que sale por el borde del cuadro termina a los 2 cuadros sin 
   assert.equal(t.activas()[0].cuadros, 1, 'pista nueva, no reabierta');
 });
 
+/**
+ * Tres vehículos a la vez (seguimiento del Sprint 10, tarea 4). A y B entran al mismo tiempo y se CRUZAN (A de izquierda a
+ * derecha, B al revés, B por delante —más abajo en el cuadro—: A queda tapado en parte y unos cuadros del todo); C llega 3 s después (< 5 s) desde abajo
+ * y se detiene en la talanquera mientras A y B todavía están en el cuadro. Las cajas son las que vería el detector: la parte
+ * visible del vehículo tapado o ninguna. La placa que «lee» cada pista es la del vehículo cuya caja tiene en ESE cuadro: si una
+ * pista saltara de un vehículo a otro, se notaría.
+ */
+function tresALaVez() {
+  const ANCHO = 240;
+  const ALTO = 140;
+  const cuadros = [];
+  for (let i = 0; i < 48; i++) {
+    const dets = [];
+    const xA = 40 + i * 24;
+    const xB = 680 - i * 24;
+    const visibleA = (() => {
+      if (i >= 30) return null; // A ya salió por la derecha
+      const solape = ANCHO - Math.abs(xA - xB);
+      if (i >= 29 || solape <= 0) return { x: xA, w: ANCHO };
+      if (solape > ANCHO * 0.55) return null; // B lo tapa casi entero
+      // B tapa el lado de A que tiene enfrente: queda visible la parte del otro lado.
+      return xA < xB ? { x: xA, w: xB - xA } : { x: xB + ANCHO, w: xA + ANCHO - (xB + ANCHO) };
+    })();
+    if (visibleA && i < 30) dets.push({ vehiculo: 'A', clase: 'carro', confianza: 0.9, bbox: { x: visibleA.x, y: 250, w: visibleA.w, h: ALTO } });
+    if (i < 29) dets.push({ vehiculo: 'B', clase: 'carro', confianza: 0.92, bbox: { x: xB, y: 300, w: ANCHO, h: ALTO } });
+    if (i >= 15) {
+      const k = i - 15;
+      const y = Math.max(150, 390 - k * 24); // sube y se detiene en y=150 (la talanquera)
+      dets.push({ vehiculo: 'C', clase: 'carro', confianza: 0.95, bbox: { x: 360, y, w: 250, h: 150 } });
+    }
+    // El orden de las cajas no debe importar.
+    cuadros.push(i % 2 ? dets.reverse() : dets);
+  }
+  return cuadros;
+}
+
+const PLACAS_TRES = { A: 'P111AAA', B: 'C222BBB', C: 'M333CCC' };
+
+/** Corre `tresALaVez` con el conductor del carril; `lecturasPara[v]` = cuántas lecturas necesita el vehículo v para confirmar. */
+function correrTres(lecturasPara = { A: 3, B: 3, C: 3 }) {
+  const reloj = new RelojFalso();
+  const t = new Tracker({}, reloj, 'c1');
+  const PLACAS = PLACAS_TRES;
+  const cuadros = [...vacios(2), ...tresALaVez(), ...vacios(12)];
+  // Qué vehículo tiene cada pista en cada cuadro (por la caja que le asignó el tracker).
+  const seguidos = new Map();
+  let deEsteCuadro = new Map();
+  const lectura = (p, n) => {
+    const v = deEsteCuadro.get(p.bbox);
+    if (!v) return null;
+    if (!seguidos.has(p.id)) seguidos.set(p.id, new Set());
+    seguidos.get(p.id).add(v);
+    return n >= lecturasPara[v] ? PLACAS[v] : null;
+  };
+  const decisiones = [];
+  const eventos = [];
+  const leidos = new Map();
+  for (const dets of cuadros) {
+    deEsteCuadro = new Map(dets.map(d => [d.bbox, d.vehiculo]));
+    const ev = t.actualizar(dets, W, H);
+    eventos.push(...ev);
+    for (const e of ev) if (e.tipo === 'decision') decisiones.push({ id: e.id, resultado: e.resultado });
+    // Lo que el tracker siguió en este cuadro también cuenta para las pistas que no se leen (ya decididas).
+    for (const p of t.activas()) {
+      const v = deEsteCuadro.get(p.bbox);
+      if (v && p.ultima_ts === reloj.ahora()) { if (!seguidos.has(p.id)) seguidos.set(p.id, new Set()); seguidos.get(p.id).add(v); }
+      if (p.estado === ESTADOS.SIGUIENDO) t.marcarLeyendo(p.id);
+      if (t.obtener(p.id)?.estado === ESTADOS.LEYENDO && p.ultima_ts === reloj.ahora()) {
+        const n = (leidos.get(p.id) ?? 0) + 1;
+        leidos.set(p.id, n);
+        const placa = lectura(t.obtener(p.id), n);
+        if (placa) {
+          const r = t.confirmar(p.id, placa);
+          if (r.emitir) decisiones.push({ id: p.id, resultado: 'confirmada', placa });
+          else eventos.push({ tipo: 'ignorada', id: p.id, motivo: r.motivo });
+        }
+      }
+    }
+    reloj.avanzar(PASO_MS);
+  }
+  return { t, decisiones, eventos, seguidos };
+}
+
+function verificarTres({ t, decisiones, eventos, seguidos }) {
+  const PLACAS = PLACAS_TRES;
+  // Cada pista siguió UN solo vehículo (nunca saltó al que la cruzaba): ninguna decisión heredada.
+  for (const [id, vs] of seguidos) assert.equal(vs.size, 1, `la pista ${id} siguió a ${[...vs].join(' y ')}`);
+  // Un evento por vehículo, cada uno con su placa y su pista; ni duplicados ni lecturas cruzadas.
+  assert.deepEqual(decisiones.map(d => d.placa).sort(), Object.values(PLACAS).sort());
+  assert.equal(new Set(decisiones.map(d => d.id)).size, 3);
+  for (const d of decisiones) assert.deepEqual([...seguidos.get(d.id)], [Object.keys(PLACAS).find(k => PLACAS[k] === d.placa)]);
+  assert.equal(eventos.filter(e => e.tipo === 'ignorada').length, 0);
+  assert.equal(eventos.filter(e => e.evento === 'reabierta').length, 0);
+  // Las tres pistas llegaron a estar vivas a la vez.
+  assert.ok(eventos.filter(e => e.evento === 'nueva').length >= 3);
+  assert.equal(t.activas().length, 0, 'al final todas terminaron');
+  assert.equal(seguidos.size, 3, 'tres pistas, ni una más (el tapado no abre otra al reaparecer)');
+}
+
+test('(f) tres vehículos en el mismo cuadro, cruzándose y tapándose: una pista, una lectura y un evento por vehículo', () => {
+  verificarTres(correrTres());
+});
+
+test('(f′) el vehículo tapado todavía no tenía placa: al reaparecer sigue SU pista y su lectura (sin «ilegible» de más)', () => {
+  // A necesita 12 lecturas: se tapa a la mitad de su lectura y la termina del otro lado del que lo tapaba.
+  const r = correrTres({ A: 12, B: 3, C: 3 });
+  verificarTres(r);
+  assert.equal(r.decisiones.filter(d => d.resultado === 'ilegible').length, 0);
+});
+
 test('configuración inválida y reloj obligatorio', () => {
   assert.throws(() => configurar({ iouMin: 0 }), /iouMin/);
   assert.throws(() => configurar({ tiempoMaxLectura_ms: 100 }), /tiempoMaxLectura_ms/);
