@@ -36,14 +36,34 @@ describe('AnprEventos', () => {
     montar([evento({ apertura: 'simulada' })]);
     expect(screen.getByText('P-123ABC')).toBeInTheDocument();
     expect(screen.getByText(/Casa 12 · Ana Prueba/)).toBeInTheDocument();
-    expect(screen.getByText(/Entrada principal · Entrada · confianza 95 %/)).toBeInTheDocument();
+    expect(screen.getByText(/Entrada principal · Pista 1 · Entrada · confianza 95 %/)).toBeInTheDocument();
     expect(screen.getByText('Entró automático')).toBeInTheDocument();
     expect(screen.getByText('Talanquera abierta (simulada)')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Corregir/ })).not.toBeInTheDocument();
-    // La evidencia se pide solo al abrirla.
-    expect(evidencia).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole('button', { name: 'Ver evidencia' }));
+    // La miniatura de la placa va en la fila; la foto del vehículo se pide solo al abrir la evidencia.
     expect(evidencia).toHaveBeenCalledWith('ev-1', 'placa');
+    expect(evidencia).not.toHaveBeenCalledWith('ev-1', 'vehiculo');
+    fireEvent.click(screen.getByRole('button', { name: 'Ver evidencia' }));
+    expect(evidencia).toHaveBeenCalledWith('ev-1', 'vehiculo');
+  });
+
+  it('varios vehículos: cada evento con su miniatura, su placa, su pista, su confianza y su estado', async () => {
+    montar([
+      evento({ id: 'ev-3', track_id: 'c1-mvr6-6', placa: 'M208RST', placa_probable: 'M208RST', confianza: 0.97 }),
+      evento({ id: 'ev-2', track_id: 'c1-mvr3-1', placa: 'P432HJK', placa_probable: 'P432HJK', confianza: 0.93 }),
+      evento({ id: 'ev-1', track_id: 'c1-mvr3-3', placa: null, placa_probable: null, resultado: 'ilegible', estado: 'verificacion_pendiente', motivo: 'ilegible', confianza: 0, evidencia_placa: false, vehiculo_id: null }),
+    ]);
+    const filas = screen.getAllByRole('listitem');
+    expect(filas).toHaveLength(3);
+    expect(within(filas[0]).getByText('M-208RST')).toBeInTheDocument();
+    expect(within(filas[0]).getByText(/Pista 6 · Entrada · confianza 97 %/)).toBeInTheDocument();
+    expect(await within(filas[0]).findByAltText('Foto de la placa')).toHaveAttribute('src', 'data:image/jpeg;base64,/9j/4AAQSkZJRg==');
+    expect(within(filas[1]).getByText(/Pista 1 · Entrada · confianza 93 %/)).toBeInTheDocument();
+    expect(await within(filas[1]).findByAltText('Foto de la placa')).toBeInTheDocument();
+    // El ilegible espera al agente: sin foto de la placa lo dice, y muestra la del vehículo.
+    expect(within(filas[2]).getByText(/Pista 3/)).toBeInTheDocument();
+    expect(within(filas[2]).getByText('Sin foto')).toBeInTheDocument();
+    expect(evidencia).toHaveBeenCalledWith('ev-1', 'vehiculo');
   });
 
   it('verificación pendiente: muestra el motivo y la foto, y «Autorizar» resuelve con la placa leída', async () => {

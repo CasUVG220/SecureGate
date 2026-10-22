@@ -8,13 +8,16 @@
  * - **Registro manual**: no es un vehículo autorizado (visita, delivery): la placa pasa al formulario de siempre.
  * - **Descartar**: no era nada (falso positivo).
  *
+ * Cada fila lleva la miniatura de la placa (con varios vehículos a la vez, es lo que permite al agente ver de un vistazo cuál
+ * fue cuál), la placa, la confianza y el estado. La foto del vehículo se abre con «Ver evidencia» (o sola si espera al agente).
+ *
  * La lista es una región `aria-live="polite"`: un evento nuevo se anuncia sin interrumpir.
  */
 import { useState, type FormEvent } from 'react';
 import { Button, Card, EmptyState, Input, StatusText, type StatusKind } from '../ui';
 import { horaLocal } from '../../lib/tiempo';
 import { esValida, normalizar } from '../../lib/placa';
-import { ESTADO_EVENTO, pendiente, placaVisible, porcentaje, textoApertura, textoMotivo, type TonoAnpr } from '../../lib/anpr';
+import { ESTADO_EVENTO, numeroPista, pendiente, placaVisible, porcentaje, textoApertura, textoMotivo, type TonoAnpr } from '../../lib/anpr';
 import { mensajeDe, type EventoAnpr, type ResolucionAnpr } from '../../lib/tauri';
 import { EvidenciaAnpr } from './EvidenciaAnpr';
 
@@ -101,17 +104,20 @@ function FilaEvento({ evento: e, carril, onResolver, onRegistroManual }: {
 
   return (
     <div className="space-y-2 px-5 py-3">
-      <div className="grid grid-cols-[1fr_auto] gap-x-3 gap-y-0.5">
-        <p className="truncate text-sm font-semibold text-gray-100">
-          <span className="font-mono">{placaVisible(e)}</span>
-          {e.residente_casa && <span className="font-normal text-gray-400"> · {e.residente_casa}{e.residente_nombre ? ` · ${e.residente_nombre}` : ''}</span>}
-        </p>
-        <p className="text-xs tabular-nums text-gray-400">{horaLocal(e.creado_en)}</p>
-        <p className="truncate text-xs text-gray-400">
-          {carril} · {e.sentido === 'salida' ? 'Salida' : 'Entrada'} · confianza {porcentaje(e.confianza)}
-          {e.ms_desde_legible != null && ` · ${(e.ms_desde_legible / 1000).toFixed(1)} s`}
-        </p>
-        <StatusText kind={KIND[st.tono]} className="justify-self-end">{st.texto}</StatusText>
+      <div className="flex items-start gap-3">
+        {!mostrarFotos && <EvidenciaAnpr eventoId={e.id} tipo="placa" disponible={e.evidencia_placa} className="h-10 w-20" />}
+        <div className="grid min-w-0 flex-1 grid-cols-[1fr_auto] gap-x-3 gap-y-0.5">
+          <p className="truncate text-sm font-semibold text-gray-100">
+            <span className="font-mono">{placaVisible(e)}</span>
+            {e.residente_casa && <span className="font-normal text-gray-400"> · {e.residente_casa}{e.residente_nombre ? ` · ${e.residente_nombre}` : ''}</span>}
+          </p>
+          <p className="text-xs tabular-nums text-gray-400">{horaLocal(e.creado_en)}</p>
+          <p className="truncate text-xs text-gray-400">
+            {carril} · Pista {numeroPista(e.track_id)} · {e.sentido === 'salida' ? 'Salida' : 'Entrada'} · confianza {porcentaje(e.confianza)}
+            {e.ms_desde_legible != null && ` · ${(e.ms_desde_legible / 1000).toFixed(1)} s`}
+          </p>
+          <StatusText kind={KIND[st.tono]} className="justify-self-end">{st.texto}</StatusText>
+        </div>
       </div>
 
       {motivo && <p className={e.estado === 'alerta_lista_negra' ? 'text-xs font-semibold text-danger-400' : 'text-xs text-warning-400'}>{motivo}</p>}
@@ -151,7 +157,7 @@ function FilaEvento({ evento: e, carril, onResolver, onRegistroManual }: {
           <Button size="sm" variant="secondary" loading={ocupado === 'registro_manual'} onClick={() => void registroManual()}>Registro manual</Button>
           <Button size="sm" variant="ghost" loading={ocupado === 'descartar'} onClick={() => void resolver('descartar')}>Descartar</Button>
         </div>
-      ) : !mostrarFotos && (e.evidencia_placa || e.evidencia_vehiculo) && (
+      ) : !mostrarFotos && e.evidencia_vehiculo && (
         <button type="button" className="text-xs font-semibold text-gray-400 underline-offset-4 hover:underline" onClick={() => setVerEvidencia(true)}>
           Ver evidencia
         </button>

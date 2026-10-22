@@ -100,8 +100,21 @@ const ESTADO_PISTA: Record<string, string> = {
   DETECTADO: 'Detectado', SIGUIENDO: 'Siguiendo', LEYENDO: 'Leyendo', CONFIRMADO: 'Confirmado', ILEGIBLE: 'Ilegible',
 };
 
-/** Rótulo de una caja: la placa si ya hay, si no el estado. */
-export const rotuloPista = (p: PistaAnpr): string => (p.placa ? formatear(p.placa) : ESTADO_PISTA[p.estado] ?? p.estado);
+/** Estado de una pista en palabras del agente. */
+export const textoEstadoPista = (estado: string): string => ESTADO_PISTA[estado] ?? estado;
+
+/**
+ * Número de la pista para el agente: el consecutivo con que el sidecar la creó en ese carril (`<carril>-<hora>-<n>`). Con varios
+ * vehículos a la vez, es lo que une la caja de la vista con su fila en la lista y con su evento.
+ */
+export const numeroPista = (id: string): string => /-(\d+)$/.exec(id)?.[1] ?? id;
+
+/** Lo leído de una pista: la placa si ya hay; «leyendo…» mientras no; «sin lectura» si quedó ilegible. */
+export const lecturaPista = (p: Pick<PistaAnpr, 'placa' | 'estado'>): string =>
+  p.placa ? formatear(p.placa) : p.estado === 'ILEGIBLE' ? 'sin lectura' : 'leyendo…';
+
+/** Rótulo de una caja: su número y la placa (o «leyendo…»). */
+export const rotuloPista = (p: PistaAnpr): string => `#${numeroPista(p.id)} ${lecturaPista(p)}`;
 
 /** Caja de una pista en porcentaje del cuadro (para posicionarla sobre la imagen sin importar su tamaño en pantalla). */
 export function cajaRelativa(p: PistaAnpr, tamano: [number, number]): { left: number; top: number; width: number; height: number } {

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { AnprPanel } from '../AnprPanel';
 import { api } from '../../../lib/tauri';
@@ -44,10 +44,35 @@ describe('AnprPanel', () => {
     expect(screen.getByText('Vigilando · 5 fps')).toBeInTheDocument();
     const cajas = screen.getAllByTestId('pista-anpr');
     expect(cajas[0]).toHaveStyle({ left: '25%', top: '25%', width: '50%', height: '50%' });
-    expect(cajas[0]).toHaveTextContent('Leyendo');
-    expect(cajas[1]).toHaveTextContent('P-123ABC');
+    expect(cajas[0]).toHaveTextContent('#1 leyendo…');
+    expect(cajas[1]).toHaveTextContent('#2 P-123ABC');
     expect(document.querySelector('polygon')).toHaveAttribute('points', '10.00,10.00 90.00,10.00 90.00,90.00');
-    expect(screen.getByText('2 vehículo(s): Leyendo, P-123ABC.')).toHaveClass('sr-only');
+  });
+
+  it('varios vehículos a la vez: una caja por cada uno y la lista con su número, lo leído («leyendo…») y su estado', async () => {
+    render(
+      <AnprPanel
+        estado={estadoAnpr()}
+        pistas={{ c1: { tamano: [960, 540], pistas: [
+          { id: 'c1-mvr3-1', estado: 'CONFIRMADO', bbox: { x: 100, y: 200, w: 300, h: 140 }, clase: 'carro', placa: 'P432HJK' },
+          { id: 'c1-mvr3-3', estado: 'LEYENDO', bbox: { x: 480, y: 240, w: 320, h: 150 }, clase: 'carro', placa: null },
+          { id: 'c1-mvr6-6', estado: 'SIGUIENDO', bbox: { x: 200, y: 330, w: 330, h: 160 }, clase: 'carro', placa: null },
+        ] } }}
+        error={null}
+        onConfigurar={vi.fn()}
+      />,
+    );
+    await screen.findByAltText('Vista en vivo de Entrada principal');
+    expect(screen.getAllByTestId('pista-anpr').map(c => c.textContent)).toEqual(['#1 P-432HJK', '#3 leyendo…', '#6 leyendo…']);
+    const lista = screen.getByRole('list', { name: 'Vehículos en Entrada principal' });
+    const filas = within(lista).getAllByTestId('vehiculo-activo');
+    expect(filas.map(f => f.textContent)).toEqual(['Pista 1P-432HJKConfirmado', 'Pista 3leyendo…Leyendo', 'Pista 6leyendo…Siguiendo']);
+  });
+
+  it('carril activo sin vehículos: lo dice con texto (no solo la imagen)', async () => {
+    render(<AnprPanel estado={estadoAnpr()} pistas={{ c1: { tamano: [960, 540], pistas: [] } }} error={null} onConfigurar={vi.fn()} />);
+    expect(await screen.findByText('Sin vehículos en el carril.')).toBeInTheDocument();
+    expect(screen.queryByRole('list', { name: /Vehículos en/ })).not.toBeInTheDocument();
   });
 
   it('en pausa no hay vista en vivo y se dice que ningún carril abre solo; los errores se muestran', async () => {

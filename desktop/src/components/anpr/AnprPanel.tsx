@@ -1,6 +1,7 @@
 /**
  * Panel del ANPR en la columna de cámaras (Sprint 10): estado de cada carril y su vista en vivo con la superposición de lo
- * que el sistema está viendo (área del carril y una caja por vehículo, con su estado o su placa).
+ * que el sistema está viendo (área del carril y una caja por vehículo, con su número de pista y su placa o «leyendo…»). Debajo,
+ * la lista de TODOS los vehículos que se siguen en ese momento (varios a la vez), con su número, lo leído y su estado.
  *
  * La imagen es la del puente local de cámaras (MJPEG, sin credenciales); las cajas llegan por `sg://anpr` en píxeles del
  * cuadro que analizó el sidecar y se dibujan en porcentaje, así coinciden a cualquier tamaño.
@@ -9,8 +10,11 @@ import { useEffect, useState } from 'react';
 import { Button, Card, EmptyState, StatusText, type StatusKind } from '../ui';
 import { Alert } from '../shared/Alert';
 import { urlVista } from '../../lib/camarasRed';
-import { cajaRelativa, colorPista, MODO_TEXTO, puntosSvg, rotuloPista, SENTIDO_TEXTO, textoEstadoCarril, type TonoAnpr } from '../../lib/anpr';
-import { api, type CarrilConEstado, type EstadoAnpr } from '../../lib/tauri';
+import {
+  cajaRelativa, colorPista, lecturaPista, MODO_TEXTO, numeroPista, puntosSvg, rotuloPista, SENTIDO_TEXTO, textoEstadoCarril, textoEstadoPista,
+  type TonoAnpr,
+} from '../../lib/anpr';
+import { api, type CarrilConEstado, type EstadoAnpr, type PistaAnpr } from '../../lib/tauri';
 import type { PistasCarril } from '../../hooks/useAnpr';
 
 const KIND: Record<TonoAnpr, StatusKind> = { ok: 'on', warn: 'warn', bad: 'bad', info: 'off' };
@@ -111,12 +115,28 @@ function CarrilVivo({ carril, pausado, pistas, puente }: {
               </div>
             );
           })}
-          {/* Para lectores de pantalla: qué hay en el carril, sin depender de la imagen. */}
-          <p className="sr-only" aria-live="off">
-            {vistas.length === 0 ? 'Sin vehículos en el carril.' : `${vistas.length} vehículo(s): ${vistas.map(rotuloPista).join(', ')}.`}
-          </p>
         </div>
       )}
+      {(enVivo || vistas.length > 0) && <PistasActivas carril={carril.nombre} pistas={vistas} />}
     </div>
+  );
+}
+
+/** Vehículos que se siguen ahora en el carril: número de pista, placa (o «leyendo…») y estado. Sin depender de la imagen. */
+function PistasActivas({ carril, pistas }: { carril: string; pistas: PistaAnpr[] }) {
+  if (pistas.length === 0) return <p className="text-xs text-gray-400">Sin vehículos en el carril.</p>;
+  return (
+    <ul aria-label={`Vehículos en ${carril}`} className="divide-y divide-gray-700 rounded-lg border border-gray-700 text-xs">
+      {pistas.map(p => (
+        <li key={p.id} data-testid="vehiculo-activo" className="flex items-center justify-between gap-3 px-3 py-1.5">
+          <span className="flex min-w-0 items-center gap-2">
+            <span aria-hidden="true" className="h-2.5 w-2.5 shrink-0 rounded-sm" style={{ background: colorPista(p.estado) }} />
+            <span className="font-semibold text-gray-300">Pista {numeroPista(p.id)}</span>
+            <span className="truncate font-mono text-gray-100">{lecturaPista(p)}</span>
+          </span>
+          <span className="shrink-0 font-semibold" style={{ color: colorPista(p.estado) }}>{textoEstadoPista(p.estado)}</span>
+        </li>
+      ))}
+    </ul>
   );
 }

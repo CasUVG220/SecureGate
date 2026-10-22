@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   cajaRelativa, carrilNuevo, idNuevo, MODO_AL_ACTIVAR, pendiente, placaVisible, porcentaje, problemaRoi, problemaUrlRele,
-  puntoDeClic, puntosSvg, rotuloPista, sonarAlerta, textoApertura, textoEstadoCarril, textoMotivo,
+  lecturaPista, numeroPista, puntoDeClic, puntosSvg, rotuloPista, sonarAlerta, textoApertura, textoEstadoCarril, textoEstadoPista,
+  textoMotivo,
 } from '../anpr';
 
 describe('textos del ANPR', () => {
@@ -52,8 +53,18 @@ describe('superposición y área del carril', () => {
     const p = { id: 'c1-1', estado: 'LEYENDO', clase: 'carro', placa: null, bbox: { x: 320, y: 90, w: 640, h: 360 } };
     expect(cajaRelativa(p, [1280, 720])).toEqual({ left: 25, top: 12.5, width: 50, height: 50 });
     expect(cajaRelativa({ ...p, bbox: { x: -10, y: 0, w: 5000, h: 10 } }, [1280, 720])).toMatchObject({ left: 0, width: 100 });
-    expect(rotuloPista(p)).toBe('Leyendo');
-    expect(rotuloPista({ ...p, placa: 'P123ABC' })).toBe('P-123ABC');
+    expect(rotuloPista(p)).toBe('#1 leyendo…');
+    expect(rotuloPista({ ...p, placa: 'P123ABC' })).toBe('#1 P-123ABC');
+  });
+
+  it('varios vehículos: número de pista, lo leído («leyendo…» mientras no hay placa) y el estado en palabras', () => {
+    expect(numeroPista('entrada-mvr3xbnd-12')).toBe('12');
+    expect(numeroPista('raro')).toBe('raro');
+    expect(lecturaPista({ placa: null, estado: 'DETECTADO' })).toBe('leyendo…');
+    expect(lecturaPista({ placa: null, estado: 'ILEGIBLE' })).toBe('sin lectura');
+    expect(lecturaPista({ placa: 'C615MNP', estado: 'CONFIRMADO' })).toBe('C-615MNP');
+    expect(textoEstadoPista('SIGUIENDO')).toBe('Siguiendo');
+    expect(textoEstadoPista('OTRO')).toBe('OTRO');
   });
 
   it('polígono para el SVG: vacío = todo el cuadro', () => {
