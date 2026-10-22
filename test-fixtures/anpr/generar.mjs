@@ -3,7 +3,8 @@
  * placas 100 % sintéticas. Es determinista: misma salida en cada corrida en la misma máquina (el ruido sale de un PRNG con
  * semilla; la tipografía es DejaVu Sans, si no está se usa la que tenga el sistema y los píxeles pueden variar un poco).
  *
- *   node test-fixtures/anpr/generar.mjs           # regenera clips/, imagenes/ y verdad_terreno.json
+ *   node test-fixtures/anpr/generar.mjs                       # regenera clips/, imagenes/ y verdad_terreno.json
+ *   node test-fixtures/anpr/generar.mjs --solo tres_a_la_vez  # solo ese clip; lo agrega/reemplaza en verdad_terreno.json
  *
  * Necesita: las dependencias del sidecar instaladas (`npm ci` en desktop/sidecar-ocr, por @napi-rs/canvas) y un ffmpeg con
  * libx264 en el PATH. Los clips YA están en el repo: solo hace falta regenerarlos si cambia este script.
@@ -72,13 +73,18 @@ function dibujarPlaca(g, { x, y, w, h }, texto, { borrosa = 0 } = {}) {
   g.restore();
 }
 
-/** Foto del vehículo con la placa sintética y un borde difuminado (para que el recorte de la foto no se note tanto). */
+/**
+ * Foto del vehículo con la placa sintética y un borde difuminado (para que el recorte de la foto no se note tanto).
+ * `escalaPlaca` agranda la placa dibujada alrededor de su centro (para escenas con vehículos más chicos en el cuadro).
+ */
 async function vehiculo(foto, placa, opciones = {}) {
   const img = await loadImage(readFileSync(path.join(AQUI, 'fuentes', foto.archivo)));
   const c = createCanvas(img.width, img.height);
   const g = c.getContext('2d');
   g.drawImage(img, 0, 0);
-  dibujarPlaca(g, foto.placa, placa, opciones);
+  const e = opciones.escalaPlaca ?? 1;
+  const caja = { x: foto.placa.x - foto.placa.w * (e - 1) / 2, y: foto.placa.y - foto.placa.h * (e - 1) / 2, w: foto.placa.w * e, h: foto.placa.h * e };
+  dibujarPlaca(g, caja, placa, opciones);
   const datos = g.getImageData(0, 0, c.width, c.height);
   const borde = 40;
   for (let yy = 0; yy < c.height; yy++) {
@@ -168,6 +174,18 @@ function recorrido({ entrada = 3, parada = 1.5, salida = 1.2 } = {}) {
   return ts;
 }
 
+/** Caja de la foto con el centro horizontal `cx`, el borde de abajo en `base` y el ancho `ancho` (alto según la foto). */
+function cajaEn(foto, cx, base, ancho) {
+  const h = ancho * (foto.height / foto.width);
+  return { x: cx - ancho / 2, y: base - h, w: ancho, h };
+}
+
+/** Interpola dos poses {cx, base, ancho} en `n` cuadros (sin el último). */
+const tramo = (a, b, n) => Array.from({ length: n }, (_, i) => {
+  const t = i / n;
+  return { cx: lerp(a.cx, b.cx, t), base: lerp(a.base, b.base, t), ancho: lerp(a.ancho, b.ancho, t) };
+});
+
 async function renderizar(nombre, cuadros, dir) {
   const fondo = escena();
   const carpeta = mkdtempSync(path.join(os.tmpdir(), `anpr-${nombre}-`));
@@ -176,10 +194,10 @@ async function renderizar(nombre, cuadros, dir) {
       const c = createCanvas(W, H);
       const g = c.getContext('2d');
       g.drawImage(fondo, 0, 0);
-      for (const v of cuadros[i].vehiculos) {
-        const p = v.p ?? pose(v.foto, v.t);
-        g.drawImage(v.foto, p.x, p.y, p.w, p.h);
-      }
+      // Del más lejano al más cercano: el de caja más baja queda delante.
+      const poses = cuadros[i].vehiculos.map(v => ({ foto: v.foto, p: v.p ?? pose(v.foto, v.t) }));
+      poses.sort((a, b) => (a.p.y + a.p.h) - (b.p.y + b.p.h));
+      for (const { foto, p } of poses) g.drawImage(foto, p.x, p.y, p.w, p.h);
       ruido(g, 1000 + i, cuadros[i].brillo ?? 0);
       writeFileSync(path.join(carpeta, `${String(i).padStart(4, '0')}.jpg`), c.toBuffer('image/jpeg', 92));
       if (cuadros[i].guardarComo) writeFileSync(path.join(AQUI, 'imagenes', cuadros[i].guardarComo), c.toBuffer('image/jpeg', 90));
@@ -201,10 +219,14 @@ async function main() {
   mkdirSync(dirClips, { recursive: true });
   mkdirSync(path.join(AQUI, 'imagenes'), { recursive: true });
   const auto = (k, placa, op) => vehiculo(FOTOS[k], placa, op);
+  // `--solo a,b`: solo esos clips (los demás del repo no se tocan; su verdad de terreno se conserva).
+  const iSolo = process.argv.indexOf('--solo');
+  const solo = iSolo > 0 ? new Set(String(process.argv[iSolo + 1] ?? '').split(',').filter(Boolean)) : null;
 
   const clips = [];
   const agregar = async (nombre, descripcion, cuadros, vehiculos) => {
-    const n = await renderizar(nombre, cuadros, dirClips);
+    if (solo && !solo.has(nombre)) return;
+    const n = await renderizar(nombre, solo ? cuadros.map(c => ({ ...c, guardarComo: undefined })) : cuadros, dirClips);
     clips.push({ archivo: `clips/${nombre}.mp4`, fps: FPS, cuadros: n, descripcion, vehiculos });
     process.stdout.write(`✓ ${nombre} (${n} cuadros)\n`);
   };
@@ -252,7 +274,55 @@ async function main() {
   await agregar('ilegible', 'Placa ilegible (texto muy borroso): debe terminar en verificación del agente, nunca en una placa inventada.',
     [...vacios(10), ...cruce(ilegible, { parada: 3 }), ...vacios(15)], [{ placa: null, legible: false }]);
 
-  writeFileSync(path.join(AQUI, 'verdad_terreno.json'), JSON.stringify({
+  // Tres vehículos a la vez (seguimiento del Sprint 10, tarea 4). V1 llega a la talanquera por la izquierda y se detiene; V2 llega
+  // 0,5 s después por la derecha, más cerca de la cámara, y se detiene a su lado tapándole el costado; V3 llega 3 s después de V2
+  // (< 5 s) por abajo y cruza de izquierda a derecha por DELANTE de los dos (los tapa en parte al pasar) y sale por la derecha.
+  // Después salen V1 y V2. Las placas se dibujan más grandes (los vehículos son más chicos en el cuadro que en los otros clips).
+  const v1 = await auto('plata', 'P 432HJK', { escalaPlaca: 1.6 });
+  const v2 = await auto('negro', 'C 615MNP', { escalaPlaca: 1.9 });
+  const v3 = await auto('plata', 'M 208RST', { escalaPlaca: 1.6 });
+  {
+    const N = 190;
+    const ruta = (pasos, desde) => {
+      const out = Array(N).fill(null);
+      let i = desde;
+      for (const [a, b, n] of pasos) for (const q of (b ? tramo(a, b, n) : Array(n).fill(a))) { if (i < N) out[i] = q; i++; }
+      return out;
+    };
+    const R1 = ruta([
+      [{ cx: 300, base: 700, ancho: 540 }, { cx: 330, base: 410, ancho: 400 }, 25], // entra (2,5 s)
+      [{ cx: 330, base: 410, ancho: 400 }, null, 95], //                                    detenido 9,5 s
+      [{ cx: 330, base: 410, ancho: 400 }, { cx: -320, base: 400, ancho: 400 }, 15], //   sale por la izquierda
+    ], 10);
+    const R2 = ruta([
+      [{ cx: 760, base: 720, ancho: 580 }, { cx: 680, base: 450, ancho: 430 }, 25],
+      [{ cx: 680, base: 450, ancho: 430 }, null, 110],
+      [{ cx: 680, base: 450, ancho: 430 }, { cx: 1300, base: 440, ancho: 430 }, 15],
+    ], 15);
+    const R3 = ruta([
+      [{ cx: 120, base: 760, ancho: 500 }, { cx: 300, base: 530, ancho: 440 }, 15], //    entra por abajo a la izquierda
+      [{ cx: 300, base: 530, ancho: 440 }, { cx: 640, base: 525, ancho: 430 }, 25], //    cruza por delante de los dos
+      [{ cx: 640, base: 525, ancho: 430 }, { cx: 1250, base: 530, ancho: 430 }, 20], //   sale por la derecha
+    ], 45);
+    const cuadros = Array.from({ length: N }, (_, i) => ({
+      vehiculos: [[v1, R1[i]], [v2, R2[i]], [v3, R3[i]]].filter(([, q]) => q).map(([foto, q]) => ({ foto, p: cajaEn(foto, q.cx, q.base, q.ancho) })),
+    }));
+    await agregar('tres_a_la_vez', 'Tres vehículos a la vez: dos se detienen lado a lado en la talanquera y un tercero llega 3 s después y cruza por delante de los dos.',
+      [...cuadros, ...vacios(15)], [{ placa: 'P432HJK', legible: true }, { placa: 'C615MNP', legible: true }, { placa: 'M208RST', legible: true }]);
+  }
+
+  const archivoVerdad = path.join(AQUI, 'verdad_terreno.json');
+  if (solo) {
+    const previa = JSON.parse(readFileSync(archivoVerdad, 'utf8'));
+    for (const c of clips) {
+      const k = previa.clips.findIndex(x => x.archivo === c.archivo);
+      if (k >= 0) previa.clips[k] = c; else previa.clips.push(c);
+    }
+    writeFileSync(archivoVerdad, JSON.stringify(previa, null, 2) + '\n');
+    process.stdout.write('verdad_terreno.json actualizado\n');
+    return;
+  }
+  writeFileSync(archivoVerdad, JSON.stringify({
     descripcion: 'Verdad de terreno de los clips sintéticos del ANPR (generados por generar.mjs).',
     resolucion: [W, H],
     roi: ROI,

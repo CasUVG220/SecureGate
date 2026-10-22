@@ -5,7 +5,7 @@
  *
  *   # A) Pipeline real sin ventana (Linux, macOS o Windows con Rust): la prueba `anpr::pruebas_reales` (bucle de Rust + sidecar
  *   #    real + SQLCipher + actuador simulado) con los clips de test-fixtures/anpr reproducidos en tiempo real.
- *   node desktop/scripts/medir-anpr.mjs pipeline [--release] [--escenarios reposo,1,2]
+ *   node desktop/scripts/medir-anpr.mjs pipeline [--release] [--escenarios reposo,1,2,3]
  *
  *   # B) La app completa en el equipo de la garita (Windows, 6–8 GB): muestrea el árbol de procesos de la app (Tauri, WebView2,
  *   #    sidecars, ffmpeg) mientras alguien pasa vehículos por los carriles configurados.
@@ -34,6 +34,7 @@ const ESCENARIOS = {
   reposo: { prueba: 'medicion_reposo', nombre: 'Reposo: 2 carriles, calle vacía' },
   1: { prueba: 'medicion_un_carril', nombre: '1 carril con tráfico (7 clips seguidos)' },
   2: { prueba: 'medicion_dos_carriles', nombre: '2 carriles con tráfico a la vez' },
+  3: { prueba: 'medicion_tres_vehiculos', nombre: '1 carril, 3 vehículos en el mismo cuadro' },
 };
 
 // ── Utilidades puras (con pruebas en medir-anpr.test.mjs) ───────────────────────────────────────────────────────────
@@ -240,7 +241,7 @@ function leerArgs(argv) {
   const g = (k, d) => { const i = resto.indexOf(k); return i >= 0 ? resto[i + 1] : d; };
   return {
     modo, release: resto.includes('--release'), pid: Number(g('--pid', 0)), segundos: Number(g('--segundos', 60)),
-    escenarios: g('--escenarios', 'reposo,1,2').split(',').filter(k => k in ESCENARIOS),
+    escenarios: g('--escenarios', 'reposo,1,2,3').split(',').filter(k => k in ESCENARIOS),
     salida: path.resolve(g('--salida', path.join(aquí, 'reportes'))),
   };
 }
@@ -248,7 +249,7 @@ function leerArgs(argv) {
 async function main() {
   const o = leerArgs(process.argv.slice(2));
   if (!['pipeline', 'app'].includes(o.modo)) {
-    console.error('Uso: medir-anpr.mjs pipeline [--release] [--escenarios reposo,1,2] | app --pid <PID> [--segundos 60]');
+    console.error('Uso: medir-anpr.mjs pipeline [--release] [--escenarios reposo,1,2,3] | app --pid <PID> [--segundos 60]');
     process.exit(2);
   }
   if (o.modo === 'app' && !o.pid) { console.error('Falta --pid <PID de securegate-garita>.'); process.exit(2); }

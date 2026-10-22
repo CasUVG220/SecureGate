@@ -100,6 +100,26 @@
           "legible": false
         }
       ]
+    },
+    {
+      "archivo": "clips/tres_a_la_vez.mp4",
+      "fps": 10,
+      "cuadros": 205,
+      "descripcion": "Tres vehículos a la vez: dos se detienen lado a lado en la talanquera y un tercero llega 3 s después y cruza por delante de los dos.",
+      "vehiculos": [
+        {
+          "placa": "P432HJK",
+          "legible": true
+        },
+        {
+          "placa": "C615MNP",
+          "legible": true
+        },
+        {
+          "placa": "M208RST",
+          "legible": true
+        }
+      ]
     }
   ],
   "imagenes": [

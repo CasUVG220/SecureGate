@@ -267,7 +267,7 @@ impl Sumidero for SumideroMedicion {
 
 // ── Base de la garita con datos sintéticos ──────────────────────────────────────────────────────────────────────
 
-pub const AUTORIZADAS: [&str; 4] = ["P123ABC", "M771KLM", "P555TRK", "C458DFG"];
+pub const AUTORIZADAS: [&str; 7] = ["P123ABC", "M771KLM", "P555TRK", "C458DFG", "P432HJK", "C615MNP", "M208RST"];
 /// En la copia de la lista negra: nunca abre aunque también sea un vehículo autorizado.
 pub const EN_LISTA_NEGRA: &str = "C458DFG";
 /// Se lee bien pero no es de ningún residente: va a verificación.
@@ -530,6 +530,14 @@ async fn medicion_un_carril() {
 #[ignore = "necesita node, ffmpeg y los modelos del ANPR (ver el encabezado del módulo)"]
 async fn medicion_dos_carriles() {
     medir(plan_dos_carriles()).await;
+}
+
+/// Tres vehículos en el mismo cuadro (seguimiento, tarea 4): dos se detienen lado a lado en la talanquera y un tercero llega 3 s
+/// después y cruza por delante de los dos. Una decisión por vehículo, cada una con su placa.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+#[ignore = "necesita node, ffmpeg y los modelos del ANPR (ver el encabezado del módulo)"]
+async fn medicion_tres_vehiculos() {
+    medir(vec![("a", vec!["tres_a_la_vez"])]).await;
 }
 
 /// Reposo: dos carriles mirando la calle vacía (el sidecar a 1 fps, sin detector ni OCR).
