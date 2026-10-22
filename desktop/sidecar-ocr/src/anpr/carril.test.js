@@ -5,7 +5,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { createCanvas, loadImage } = require('@napi-rs/canvas');
 
-const { Carril } = require('./carril');
+const { Carril, tapada } = require('./carril');
 const { RelojFalso } = require('./reloj');
 const { RETENCION_MS, zonaInferior, recortesEvidencia } = require('./evidencia');
 
@@ -228,6 +228,184 @@ test('configuración: id válido, dependencias obligatorias y ROI validado; reco
   assert.ok(carril.tracker.activas().length > 0);
   carril.configurar(CFG);
   assert.equal(carril.tracker.activas().length, 0);
+});
+
+// ── Varios vehículos a la vez (seguimiento del Sprint 10, tarea 4) ────────────────────────────────────────────────────────────
+
+/**
+ * Los tres vehículos sintéticos: color de carrocería, el tinte del fondo de SU placa (así el OCR falso sabe qué placa ve) y la
+ * placa que «lee» en ella.
+ */
+const TRES = {
+  A: { color: [150, 40, 40], tinte: '#ffc8c8', placa: 'P111AAA' },
+  B: { color: [40, 130, 40], tinte: '#c8ffc8', placa: 'C222BBB' },
+  C: { color: [40, 40, 150], tinte: '#c8c8ff', placa: 'M333CCC' },
+};
+
+/** Fotograma con varios vehículos de color (se pintan en orden: el último queda por delante). */
+function fotogramaVarios(cajas, semilla = 0) {
+  const c = createCanvas(W, H);
+  const g = c.getContext('2d');
+  g.fillStyle = '#707070';
+  g.fillRect(0, 0, W, H);
+  g.fillStyle = '#6a6a6a';
+  for (let i = 0; i < 40; i++) g.fillRect((i * 97 + semilla * 13) % W, (i * 53 + semilla * 7) % H, 3, 3);
+  for (const { v, caja } of cajas) {
+    g.fillStyle = `rgb(${TRES[v].color.join(',')})`;
+    g.fillRect(caja.x, caja.y, caja.w, caja.h);
+    g.fillStyle = TRES[v].tinte;
+    g.fillRect(caja.x + caja.w * 0.4, caja.y + caja.h * 0.7, caja.w * 0.2, caja.h * 0.12);
+    g.fillStyle = '#000';
+    for (let x = 0; x < 6; x++) g.fillRect(caja.x + caja.w * (0.41 + x * 0.03), caja.y + caja.h * 0.73, 3, caja.h * 0.06);
+  }
+  return c.toBuffer('image/jpeg', 90);
+}
+
+/**
+ * OCR falso que lee la placa que se VE en el recorte, como uno de verdad: cuenta los píxeles del fondo de cada placa (por su
+ * tinte) y devuelve la que más se ve; si ninguna se ve lo suficiente, no lee nada. Una placa tapada no se lee.
+ */
+function ocrPorPlaca() {
+  const f = async (jpeg) => {
+    f.llamadas++;
+    const img = await loadImage(jpeg);
+    const c = createCanvas(img.width, img.height);
+    const g = c.getContext('2d');
+    g.drawImage(img, 0, 0);
+    const d = g.getImageData(0, 0, img.width, img.height).data;
+    const cuenta = [0, 0, 0];
+    const cajas = [0, 1, 2].map(() => ({ x0: Infinity, y0: Infinity, x1: -1, y1: -1 }));
+    for (let i = 0; i < d.length; i += 4) {
+      const px = [d[i], d[i + 1], d[i + 2]];
+      if (Math.min(...px) < 170 || Math.max(...px) - Math.min(...px) < 25) continue;
+      const k = px.indexOf(Math.max(...px));
+      cuenta[k]++;
+      const x = (i / 4) % img.width;
+      const y = Math.floor(i / 4 / img.width);
+      const b = cajas[k];
+      b.x0 = Math.min(b.x0, x); b.y0 = Math.min(b.y0, y); b.x1 = Math.max(b.x1, x); b.y1 = Math.max(b.y1, y);
+    }
+    const max = Math.max(...cuenta);
+    if (max < 60) { f.leidas.push('-'); return { texto: '', items: [] }; }
+    const k = cuenta.indexOf(max);
+    const v = ['A', 'B', 'C'][k];
+    f.leidas.push(v);
+    const t = TRES[v].placa;
+    // Dónde está la placa en el recorte (como la caja de texto de un OCR de verdad): el carril relee alrededor de ella.
+    const b = cajas[k];
+    const caja = { x: b.x0, y: b.y0, w: b.x1 - b.x0 + 1, h: b.y1 - b.y0 + 1 };
+    return { texto: t, items: [{ texto: t, confianza: 0.97, box: caja }] };
+  };
+  f.llamadas = 0;
+  f.leidas = [];
+  return f;
+}
+
+/**
+ * A y B entran juntos y se cruzan (B, más cerca de la cámara, pasa por delante de A: A se ve en parte y unos cuadros nada); C llega
+ * 3 s después (< 5 s) desde abajo, pasa por detrás de los dos y se detiene en la talanquera mientras siguen en el cuadro. Cajas: lo
+ * que vería el detector.
+ */
+function guionTres() {
+  const AN = 160;
+  const AL = 90;
+  return Array.from({ length: 44 }, (_, i) => {
+    const xA = 20 + i * 16;
+    const xB = 460 - i * 16;
+    const pintar = [];
+    const dets = [];
+    if (i < 28) {
+      pintar.push({ v: 'A', caja: { x: xA, y: 165, w: AN, h: AL } });
+      const solape = AN - Math.abs(xA - xB);
+      const visible = i >= 27 || solape <= 0 ? { x: xA, w: AN } : solape > AN * 0.55 ? null
+        : xA < xB ? { x: xA, w: xB - xA } : { x: xB + AN, w: xA - xB };
+      if (visible) dets.push({ v: 'A', bbox: { x: visible.x, y: 165, w: visible.w, h: AL } });
+    }
+    if (i < 27) {
+      pintar.push({ v: 'B', caja: { x: xB, y: 200, w: AN, h: AL } });
+      dets.push({ v: 'B', bbox: { x: xB, y: 200, w: AN, h: AL } });
+    }
+    if (i >= 15) {
+      const y = Math.max(60, 250 - (i - 15) * 16);
+      const caja = { x: 250, y, w: 170, h: 100 };
+      pintar.push({ v: 'C', caja });
+      dets.push({ v: 'C', bbox: caja });
+    }
+    // Se pinta del más lejano al más cercano (el de caja más baja queda delante), como en la vida real.
+    pintar.sort((a, b) => (a.caja.y + a.caja.h) - (b.caja.y + b.caja.h));
+    return { pintar, dets };
+  });
+}
+
+test('tres vehículos a la vez: cada uno su pista, su consenso y su decisión; nada heredado ni duplicado; el OCR no se recorta', async () => {
+  const reloj = new RelojFalso(1_700_000_000_000);
+  const det = { actual: [], async detectar() { return { cajas: det.actual.map(d => ({ clase: 'carro', confianza: 0.9, bbox: d.bbox, en_roi: 1 })), ms: 1 }; } };
+  const ocr = ocrPorPlaca();
+  const carril = new Carril({ id: 'entrada', config: CFG, reloj, detector: det, ocr });
+  const cuadros = [...Array(3).fill({ pintar: [], dets: [] }), ...guionTres(), ...Array(20).fill({ pintar: [], dets: [] })];
+  const eventos = [];
+  let maxPistas = 0;
+  for (let i = 0; i < cuadros.length; i++) {
+    det.actual = cuadros[i].dets;
+    const r = await carril.procesar(fotogramaVarios(cuadros[i].pintar, i));
+    eventos.push(...r.eventos);
+    maxPistas = Math.max(maxPistas, (r.pistas ?? []).length);
+    reloj.avanzar(200);
+  }
+  const decisiones = eventos.filter(e => e.tipo === 'decision');
+  const nuevas = eventos.filter(e => e.tipo === 'pista' && e.evento === 'nueva');
+  assert.equal(maxPistas, 3, 'las tres pistas vivas en el mismo cuadro');
+  assert.equal(nuevas.length, 3, 'una pista por vehículo (el tapado no abre otra al reaparecer)');
+  assert.deepEqual(decisiones.map(d => [d.resultado, d.placa]).sort(), [['confirmada', 'C222BBB'], ['confirmada', 'M333CCC'], ['confirmada', 'P111AAA']]);
+  assert.equal(new Set(decisiones.map(d => d.track_id)).size, 3);
+  assert.deepEqual(new Set(decisiones.map(d => d.track_id)), new Set(nuevas.map(e => e.track_id)));
+  assert.equal(eventos.filter(e => e.tipo === 'ignorada').length, 0, 'ninguna lectura de otro vehículo se coló como evento');
+  for (const d of decisiones) {
+    assert.equal(d.votos, 3, `${d.placa}: su propio consenso`);
+    assert.equal(d.requiere_verificacion, false);
+    assert.ok(esJpeg(d.evidencia.placa_jpeg) && esJpeg(d.evidencia.vehiculo_jpeg), `${d.placa}: evidencia propia`);
+  }
+  // El OCR no se recorta: corre una vez por cuadro sobre los mejores recortes de cada pista; tres lecturas por vehículo bastan.
+  assert.equal(ocr.llamadas, 9);
+});
+
+test('cola en la talanquera: el de atrás tapado por el de adelante NO se lee con la placa ajena (sale ILEGIBLE; el otro, la suya)', async () => {
+  // A está detenido en la talanquera; B, justo detrás y más cerca de la cámara (su caja termina más abajo), le tapa la placa y
+  // deja la SUYA dentro del recorte de lectura de A. Sin la regla, A se confirmaba con la placa de B y el evento de B se perdía
+  // por el enfriamiento.
+  const reloj = new RelojFalso(1_700_000_000_000);
+  const det = { actual: [], async detectar() { return { cajas: det.actual.map(d => ({ clase: 'carro', confianza: 0.9, bbox: d.bbox, en_roi: 1 })), ms: 1 }; } };
+  const ocr = ocrPorPlaca();
+  const carril = new Carril({ id: 'entrada', config: CFG, reloj, detector: det, ocr });
+  const cuadros = Array.from({ length: 30 }, (_, i) => {
+    const a = { x: 200, y: 100 - Math.min(i, 4), w: 200, h: 120 };
+    const b = { x: 230, y: 124 - Math.min(i, 4), w: 160, h: 105 };
+    return { pintar: [{ v: 'A', caja: a }, { v: 'B', caja: b }], dets: [{ v: 'A', bbox: a }, { v: 'B', bbox: b }] };
+  });
+  const todo = [...Array(3).fill({ pintar: [], dets: [] }), ...cuadros, ...Array(15).fill({ pintar: [], dets: [] })];
+  const eventos = [];
+  for (let i = 0; i < todo.length; i++) {
+    det.actual = todo[i].dets;
+    eventos.push(...(await carril.procesar(fotogramaVarios(todo[i].pintar, i))).eventos);
+    reloj.avanzar(200);
+  }
+  const decisiones = eventos.filter(e => e.tipo === 'decision');
+  assert.equal(decisiones.length, 2);
+  assert.equal(new Set(decisiones.map(d => d.track_id)).size, 2);
+  assert.deepEqual(decisiones.map(d => [d.resultado, d.placa]).sort(), [['confirmada', 'C222BBB'], ['ilegible', null]]);
+  assert.equal(eventos.filter(e => e.tipo === 'ignorada').length, 0, 'el evento de B no se perdió por el enfriamiento');
+});
+
+test('tapada: solo cuenta otro vehículo DELANTE (caja más abajo) que cubre más de la fracción permitida de la zona de la placa', () => {
+  const cfg = { margenVehiculo: 0.12, maxTapado: 0.2 };
+  const a = { id: 'a', bbox: { x: 200, y: 100, w: 200, h: 120 } };
+  const delante = { id: 'b', bbox: { x: 230, y: 124, w: 160, h: 105 } };
+  const detras = { id: 'c', bbox: { x: 230, y: 40, w: 160, h: 100 } };
+  const rozando = { id: 'd', bbox: { x: 380, y: 150, w: 120, h: 90 } };
+  assert.equal(tapada(a, [a, delante], cfg), true);
+  assert.equal(tapada(a, [a, detras], cfg), false, 'el de atrás no tapa (lo tapa él a ese)');
+  assert.equal(tapada(a, [a, rozando], cfg), false, 'un roce en la orilla no descarta el recorte');
+  assert.equal(tapada(a, [a], cfg), false);
 });
 
 test('evidencia: el recorte del vehículo deja fuera la cabina (de 45 % hacia abajo) y se reduce a 480 px', async () => {

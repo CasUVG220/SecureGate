@@ -8,7 +8,8 @@
  *     «vigilancia» (pistas ya decididas, sin movimiento: un carro detenido) corre al fps de REPOSO hasta que esas pistas terminen,
  *     así una pista no queda viva para siempre si el vehículo se fue entre dos cuadros; sin pistas ni movimiento no corre.
  *  3. Seguimiento: de cada cuadro en que se ve una pista (SIGUIENDO o LEYENDO) se guarda el recorte como candidato con su puntaje
- *     de calidad (se conservan los `maxCandidatos` mejores). La pista pasa a LEYENDO —y empieza a correr su tiempo máximo de
+ *     de calidad (se conservan los `maxCandidatos` mejores). Con varios vehículos a la vez, un recorte cuya zona de placa tapa otro
+ *     vehículo que está delante (más abajo en el cuadro) no es candidato: se leería la placa del otro. La pista pasa a LEYENDO —y empieza a correr su tiempo máximo de
  *     lectura— con el primer recorte ÚTIL: un vehículo que entra tocando el borde del cuadro no gasta ese tiempo esperando.
  *  4. OCR: como mucho UNA lectura por cuadro (acota la latencia del cuadro), del mejor candidato aún no leído. La primera lectura de
  *     una pista usa la parte baja del vehículo; cuando ya se ubicó la placa, las siguientes recortan alrededor de ella (más rápido).
@@ -41,6 +42,11 @@ const POR_DEFECTO = Object.freeze({
   minAnchoRelectura: 240,
   /** Margen a los lados de la caja del vehículo para la zona de lectura (ver `evidencia.zonaInferior`). */
   margenVehiculo: 0.12,
+  /**
+   * Fracción de la zona de la placa que puede tapar otro vehículo que está DELANTE (su caja termina más abajo en el cuadro) sin
+   * que se descarte el recorte. Más que eso y el recorte no se lee: tendría la placa del otro (una cola en la talanquera).
+   */
+  maxTapado: 0.2,
 });
 
 const r1 = (v) => Math.round(v * 10) / 10;
@@ -104,9 +110,10 @@ class Carril {
       const t2 = performance.now();
       const evTracker = this.tracker.actualizar(det.cajas, img.width, img.height);
       const ahora = this.reloj.ahora();
-      for (const p of this.tracker.activas()) {
-        if ((p.estado !== ESTADOS.SIGUIENDO && p.estado !== ESTADOS.LEYENDO) || p.ultima_ts !== ahora) continue;
-        if (this.#candidato(p, img) && p.estado === ESTADOS.SIGUIENDO) this.tracker.marcarLeyendo(p.id);
+      const vistas = this.tracker.activas().filter(p => p.ultima_ts === ahora);
+      for (const p of vistas) {
+        if (p.estado !== ESTADOS.SIGUIENDO && p.estado !== ESTADOS.LEYENDO) continue;
+        if (this.#candidato(p, img, vistas) && p.estado === ESTADOS.SIGUIENDO) this.tracker.marcarLeyendo(p.id);
       }
       ms.tracker = r1(performance.now() - t2);
       eventos.push(...(await this.#entregar(evTracker)));
@@ -129,8 +136,11 @@ class Carril {
     };
   }
 
-  /** Guarda el recorte de este cuadro como candidato a lectura si vale la pena. Devuelve si lo guardó (recorte útil). */
-  #candidato(p, img) {
+  /**
+   * Guarda el recorte de este cuadro como candidato a lectura si vale la pena. Devuelve si lo guardó (recorte útil). `vistas` =
+   * las pistas que se ven en este cuadro (para saber si otro vehículo, delante, le tapa la placa).
+   */
+  #candidato(p, img, vistas = []) {
     let l = this.lecturas.get(p.id);
     if (!l) {
       l = { consenso: new Consenso(this.cfgConsenso), candidatos: [], mejorPlaca: null, cajaRel: null, primeraValida: null, mejorVehiculo: null };
@@ -144,6 +154,7 @@ class Carril {
     // El mejor recorte visto (leído o no) sirve de evidencia del vehículo aunque nunca llegue a leerse.
     if (!l.mejorVehiculo || calidad > l.mejorVehiculo.calidad) l.mejorVehiculo = cand;
     if (calidad < this.cfgConsenso.calidadMin) return false;
+    if (tapada(p, vistas, this.cfg)) return false;
     l.candidatos.push(cand);
     l.candidatos.sort((a, b) => b.calidad - a.calidad);
     l.candidatos.length = Math.min(l.candidatos.length, this.cfg.maxCandidatos);
@@ -256,4 +267,21 @@ class Carril {
   }
 }
 
-module.exports = { Carril, POR_DEFECTO };
+/**
+ * ¿Otro vehículo que está delante tapa la zona de la placa de `p`? «Delante» = su caja termina más abajo en el cuadro (más cerca de
+ * la cámara, en una escena vista desde arriba del piso). La zona es la misma que se lee la primera vez (parte baja del vehículo).
+ */
+function tapada(p, vistas, cfg) {
+  const z = zonaInferior(p.bbox, 0.3, cfg.margenVehiculo);
+  const area = z.w * z.h;
+  if (area <= 0) return false;
+  const fondo = p.bbox.y + p.bbox.h;
+  return vistas.some((o) => {
+    if (o.id === p.id || o.bbox.y + o.bbox.h <= fondo) return false;
+    const w = Math.min(z.x + z.w, o.bbox.x + o.bbox.w) - Math.max(z.x, o.bbox.x);
+    const h = Math.min(z.y + z.h, o.bbox.y + o.bbox.h) - Math.max(z.y, o.bbox.y);
+    return w > 0 && h > 0 && (w * h) / area > cfg.maxTapado;
+  });
+}
+
+module.exports = { Carril, POR_DEFECTO, tapada };
