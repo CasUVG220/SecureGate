@@ -440,6 +440,18 @@ test('(f′) el vehículo tapado todavía no tenía placa: al reaparecer sigue S
   assert.equal(r.decisiones.filter(d => d.resultado === 'ilegible').length, 0);
 });
 
+test('un vehículo que entra por el borde y crece de golpe (de una franja a la caja entera) sigue siendo UNA pista y un evento', () => {
+  const reloj = new RelojFalso();
+  const t = new Tracker({}, reloj);
+  // Entra por la esquina de abajo a la izquierda: primero solo se ve una franja de 40 px; el cuadro procesado siguiente ya ve 3×.
+  const entrada = [
+    [caja(0, 500, 290, 40)], [caja(0, 420, 330, 120)], [caja(20, 360, 360, 180)], [caja(60, 340, 360, 180)],
+  ];
+  const { decisiones, eventos } = correr(t, reloj, [...vacios(2), ...entrada, ...cruzando(20, 100, 330), ...vacios(12)], lecturaEn(3));
+  assert.equal(eventos.filter(e => e.evento === 'nueva').length, 1, 'la franja y el vehículo entero son la misma pista');
+  assert.deepEqual(decisiones.map(d => d.resultado), ['confirmada']);
+});
+
 test('configuración inválida y reloj obligatorio', () => {
   assert.throws(() => configurar({ iouMin: 0 }), /iouMin/);
   assert.throws(() => configurar({ tiempoMaxLectura_ms: 100 }), /tiempoMaxLectura_ms/);

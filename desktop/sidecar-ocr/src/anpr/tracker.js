@@ -8,7 +8,8 @@
  *       │                                         │                              └──────▶ ILEGIBLE (4 s sin consenso o se fue)
  *       └──(se pierde)──▶ PERDIDO                 └──(se pierde)──▶ PERDIDO       CONFIRMADO / ILEGIBLE ──(se va)──▶ PASO
  *
- * Asociación por cuadro: primero por IoU (mayor primero, ≥ `iouMin`); lo que queda, por distancia de centroides (≤ `distanciaMax`
+ * Asociación por cuadro: primero por IoU (mayor primero, ≥ `iouMin`); una pista que toca el borde (vehículo entrando) sigue en
+ * la caja que contiene casi toda la suya aunque haya crecido mucho; lo que queda, por distancia de centroides (≤ `distanciaMax`
  * de la diagonal del cuadro). En los dos casos el tamaño debe ser parecido: una pista vieja y chica no se pega a un vehículo
  * grande que llega al mismo lugar. Para el centroide, una pista que no se vio en el cuadro anterior o que se ve TAPADA en parte
  * (su caja se achicó de golpe: otro vehículo le pasa por delante) se compara con su posición PREDICHA a velocidad constante,
@@ -153,6 +154,19 @@ class Tracker {
     }
     pares.sort((a, b) => b[0] - a[0]);
     for (const [, p, i] of pares) if (libresP.has(p.id) && libresD.has(i)) asignar(p, i);
+
+    // 1b) Un vehículo que ENTRA por el borde del cuadro crece más del doble entre dos cuadros procesados (de una franja a la caja
+    //     entera): su pista sigue en la detección que contiene casi toda su caja anterior, sin importar el tamaño. Si no, abría
+    //     otra pista y la de la franja terminaba «ilegible» (dos eventos para un vehículo).
+    for (const p of vivas.filter(x => libresP.has(x.id) && enBorde(x.bbox, ancho, alto))) {
+      let mejor = -1;
+      let mejorC = this.cfg.contencionMax;
+      for (const i of libresD) {
+        const c = contencion(p.bbox, detecciones[i].bbox);
+        if (c >= mejorC && mismaFamilia(p, detecciones[i])) { mejor = i; mejorC = c; }
+      }
+      if (mejor >= 0) asignar(p, mejor);
+    }
 
     // 2) Distancia de centroides para lo que quedó (movimiento rápido entre cuadros, caja que cambia de tamaño). Una pista que
     //    no se vio o se veía tapada se busca donde DEBERÍA estar (predicción) y vale el tamaño de su última vista completa.
