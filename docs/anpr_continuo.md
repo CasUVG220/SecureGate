@@ -670,6 +670,65 @@ backend de verdad: alta → versión nueva → abre; baja → no abre y sale de 
 queda; la misma placa reasignada → abre para el residente nuevo; usuario desactivado → no abre. Corre en el job `anpr-e2e`
 (`bash scripts/ci-local.sh anpr-e2e`, o solo `SG_CONTRATO_GARITA=1 npx jest -c jest.integration.config.ts --testPathPattern anpr.contrato`).
 
+### 16.6 Tarea 4 — Varios vehículos a la vez
+
+**Qué se probó.** Tres vehículos sintéticos en el mismo cuadro: A y B se cruzan (B, más cerca de la cámara, tapa a A en parte y
+0,8 s del todo) y C llega 3 s después (< 5 s) y cruza por detrás o por delante de los dos. En el tracker
+(`tracker.test.js`, casos (f) y (f′)), en el carril completo con un OCR falso que solo lee la placa que se ve
+(`carril.test.js`) y en tiempo real con el sidecar de verdad (clip `tres_a_la_vez`).
+
+**Qué se encontró y se corrigió** (cada cosa con su prueba, que falla sin el cambio):
+
+1. *El tapado abría otra pista al reaparecer.* A reaparecía del otro lado de B, en parte y lejos de su última caja: pista nueva,
+   que volvía a leer; si A no tenía placa cuando se tapó, la pista vieja salía «ilegible» y la nueva confirmaba (dos eventos).
+   Ahora el seguimiento mide la velocidad solo con vistas completas y busca la pista perdida o tapada donde debería estar
+   (velocidad constante); vale una caja que cae casi entera dentro de esa posición (lo visible del vehículo tapado). Un vehículo
+   que solo llega *cerca* no se pega a la pista (era el riesgo: C quedaba con la pista de A).
+2. *Lectura cruzada en una cola.* El recorte de lectura del que está atrás puede tener la placa del que está adelante: se
+   confirmaba con la placa ajena y el evento del de adelante se perdía por el enfriamiento. Ahora un recorte cuya zona de placa
+   cubre más del 20 % otro vehículo que está **delante** (su caja termina más abajo en el cuadro) no se lee.
+3. *El que entra por el borde crecía de golpe.* De una franja a casi el vehículo entero entre dos cuadros procesados: pista
+   nueva y la franja terminaba «ilegible». Lo encontró la medición. Una pista que toca el borde sigue en la caja que contiene
+   casi toda la suya.
+
+**El OCR no se recorta.** Sigue una lectura por cuadro y por carril (un solo hilo de inferencia) sobre los mejores 5 recortes de
+cada pista; el consenso de cada vehículo es suyo (3 lecturas iguales). Con tres vehículos, el último espera a que se lean los
+otros: es la latencia que se mide abajo.
+
+**Medición** (`node desktop/scripts/medir-anpr.mjs pipeline --release --escenarios 3`; 27/10/2026, Linux, Intel Xeon 2,1 GHz × 4,
+15,7 GB; Rust en release, sidecar real, SQLCipher, actuador simulado, clip reproducido en tiempo real):
+
+| Medida | Valor |
+|---|---|
+| CPU del sidecar / de Rust (% de un núcleo) | 43,8 / 0,4 (11,0 % de la máquina) |
+| RAM pico del sidecar / de Rust | 377 MB / 32 MB |
+| ms por cuadro procesado (p50 / p95): detector · OCR · total | 18,6 / 31,1 · 0 / 111,4 (la mayoría de los cuadros no lee) · 25,2 / 137,3 |
+| Latencia desde la primera lectura legible (p50 / p95 / máx) | 375 / 1003 / 1003 ms (+ 5,4 / 10,9 ms de Rust) |
+| Exactitud de esa corrida (3 vehículos) | 2 abrieron con su placa, 1 al agente como ilegible, 0 placas equivocadas, 0 duplicados |
+
+Repetida 6 veces más con la prueba de Rust (`cargo test --release --lib anpr::pruebas_reales::medicion_tres_vehiculos --
+--ignored --nocapture`): 18 de 18 vehículos abrieron con su placa; latencia desde legible entre 293 y 1169 ms. En las 7
+corridas: 20 de 21 abrieron con su placa, 1 fue al agente, **0 placas equivocadas, 0 eventos duplicados, 0 decisiones
+heredadas**. Las demás escenas (reposo, 1 y 2 carriles) se volvieron a medir con estos cambios: sin placas equivocadas ni
+duplicados (reporte en `desktop/scripts/reportes/`, ignorado por git).
+
+**Mitigación: no hizo falta** (máx. 1169 ms < 2 s). Si en el equipo de la garita (Windows, CPU más lenta) pasara de 2 s, la
+siguiente es dar prioridad en el OCR a la pista más cercana a la talanquera: hoy se lee primero el recorte de mejor calidad, que
+suele ser el del vehículo más cercano a la **cámara**; el que está en la talanquera espera unas 3 lecturas (en la medición,
+~1,1 s en el peor caso).
+
+**Regla de la cámara: la placa debe medir unos 100–150 px de ancho** en el cuadro que analiza el ANPR. Ese cuadro es el que
+entrega el puente de cámaras de la app: **960 px de ancho** (ffmpeg reduce la imagen de la cámara, sea de 2 o de 4 MP), así
+que la placa tiene que ocupar ~10–16 % del ancho de la imagen donde se lee (cerca de la talanquera). En la práctica:
+
+- Encuadra **un solo carril** a la altura de la talanquera, no toda la entrada: si la imagen abarca dos carriles o la calle,
+  la placa queda chica, se lee menos veces y más vehículos van al agente.
+- Con varios vehículos a la vez, que el de adelante no tape la placa del de atrás en el punto de lectura: cámara más alta y
+  mirando hacia abajo (la regla del punto 2 descarta los recortes tapados; si siempre lo están, todo va a verificación).
+- Más de ~150 px no mejora la lectura y achica el tiempo en que el vehículo entero está en el cuadro.
+- Los clips sintéticos se leen con placas de ~55–65 px porque están limpias y de frente; con cámaras reales (ángulo,
+  suciedad, noche) no se ha medido: **pendiente** con la plantilla `plantilla_medicion_camaras.md`.
+
 ## 14. Deuda técnica encontrada (para el informe)
 
 No hizo falta ningún `refactor(...)` aparte: los cambios a código existente fueron los mínimos de cada tarea. Queda anotado:
