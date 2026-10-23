@@ -1369,7 +1369,7 @@ export const translations: Record<string, Record<string, string>> = {
     'audit.accion.ANPR_ALERTA_LISTA_NEGRA': 'Alerta: placa en lista negra',
     'audit.accion.ANPR_VERIFICACION_RESUELTA': 'Verificación de placa resuelta',
     'audit.accion.ANPR_ILEGIBLE': 'Vehículo con placa ilegible',
-    'audit.accion.ANPR_ACTUADOR_FALLO': 'Falla al abrir la barrera',
+    'audit.accion.ANPR_ACTUADOR_FALLO': 'Falla al abrir la talanquera',
     'audit.accion.ANPR_EVIDENCIA': 'Evidencia de placa guardada',
     'audit.accion.VEHICULO_RESIDENTE_CREADO': 'Vehículo de residente registrado',
     'audit.accion.VEHICULO_RESIDENTE_ACTUALIZADO': 'Vehículo de residente actualizado',

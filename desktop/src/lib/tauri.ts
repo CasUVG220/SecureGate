@@ -580,6 +580,6 @@ export const api = {
 export const onEstadoSync = (cb: (e: EstadoSync) => void): Promise<UnlistenFn> =>
   listen<EstadoSync>('sg://estado', ev => cb(ev.payload));
 
-/** Pistas, decisiones, estado de los carriles y resultado de la barrera del ANPR. */
+/** Pistas, decisiones, estado de los carriles y resultado de la talanquera del ANPR. */
 export const onAnpr = (cb: (m: MensajeAnpr) => void): Promise<UnlistenFn> =>
   listen<MensajeAnpr>('sg://anpr', ev => cb(ev.payload));
