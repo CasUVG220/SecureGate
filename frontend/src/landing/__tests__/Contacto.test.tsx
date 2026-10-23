@@ -33,7 +33,8 @@ describe('Contacto · formulario', () => {
     expect(fetch).not.toHaveBeenCalled();
     const aviso = await screen.findByRole('alert');
     expect(aviso).toHaveTextContent('Revisá los campos marcados.');
-    expect(aviso).toHaveFocus();
+    // El foco se mueve en un efecto, después de pintar el aviso: se espera (con la suite cargada podía llegar tarde).
+    await waitFor(() => expect(aviso).toHaveFocus());
     expect(campo('nombre')).toHaveAttribute('aria-invalid', 'true');
     expect(campo('nombre')).toHaveAccessibleDescription('Escribí tu nombre (de 2 a 100 caracteres).');
     expect(campo('mensaje')).not.toHaveAttribute('aria-invalid');
@@ -47,7 +48,7 @@ describe('Contacto · formulario', () => {
     expect(within(form()).getByRole('button', { name: 'Enviando…' })).toBeDisabled();
     const exito = await screen.findByText(/Recibimos tu solicitud/);
     expect(exito).toHaveAttribute('role', 'status');
-    expect(exito).toHaveFocus();
+    await waitFor(() => expect(exito).toHaveFocus());
     const [url, init] = fetch.mock.calls[0];
     expect(String(url)).toMatch(/\/api\/contacto$/);
     expect(JSON.parse(String((init as RequestInit).body))).toEqual({ ...VALIDO, mensaje: '', sitio_web: '' });
@@ -61,7 +62,7 @@ describe('Contacto · formulario', () => {
     fireEvent.submit(form());
     await waitFor(() => expect(campo('email')).toHaveAttribute('aria-invalid', 'true'));
     expect(campo('email')).toHaveAccessibleDescription('Escribí un correo válido.');
-    expect(screen.getByRole('alert')).toHaveFocus();
+    await waitFor(() => expect(screen.getByRole('alert')).toHaveFocus());
   });
 
   it('429: explica el límite y ofrece WhatsApp', async () => {
