@@ -729,6 +729,52 @@ que la placa tiene que ocupar ~10–16 % del ancho de la imagen donde se lee (ce
 - Los clips sintéticos se leen con placas de ~55–65 px porque están limpias y de frente; con cámaras reales (ángulo,
   suciedad, noche) no se ha medido: **pendiente** con la plantilla `plantilla_medicion_camaras.md`.
 
+### 16.7 Decisiones y límites conocidos del seguimiento
+
+**Decisiones**
+
+- Visita del plan = acceso autorizado **de un visitante** (`VISITA_SQL`); las entradas de residentes, por placas, clic o a mano,
+  no consumen el plan. Una placa desconocida que el agente registra como visita sí cuenta (porque se registra con visitante).
+- El método de captura se deduce de columnas existentes (sin columna nueva): `anpr` → `origen`, `qr` → invitación, `manual` →
+  captura a mano, `clic` → el resto.
+- Una sola fuente de placas de residentes: `vehiculos_residentes` (lo que escribe la pantalla de placas y lo que baja la
+  garita). Formato guatemalteco obligatorio; una placa en una sola casa de la empresa; entre empresas no se cruza nada.
+- Varios vehículos: el OCR no se recorta ni se paraleliza; se protege el **qué** se lee (recortes tapados fuera) y el **a quién**
+  se le atribuye (seguimiento con predicción y entrada por el borde).
+
+**Límites conocidos**
+
+- La predicción del seguimiento es a velocidad constante y dura `perdida_ms` (2 s): un vehículo tapado más tiempo termina su
+  pista; si reaparece, la pista nueva vuelve a leer (con placa ya confirmada, el enfriamiento evita el segundo evento; sin
+  ella, queda un «ilegible» de más para el agente).
+- «Delante» = caja que termina más abajo en el cuadro: vale para cámaras que miran el piso desde arriba (las de una garita).
+  Con una cámara casi horizontal la regla de recortes tapados puede descartar de más (más verificaciones, nunca una placa ajena).
+- El OCR lee primero el mejor recorte, que suele ser el del vehículo más cercano a la cámara; el de la talanquera espera. En la
+  medición, peor caso 1,2 s; si en Windows pasara de 2 s, la mitigación prevista es la prioridad a la pista más cercana a la
+  talanquera (§16.6).
+- El rechazo de una placa duplicada entre sucursales de la empresa es una comprobación de la aplicación (sin índice único):
+  dos altas simultáneas en dos sucursales podrían pasar.
+- La pantalla de placas está en «Residentes» (administración de sucursal); la administración de empresa y el owner pueden darlas
+  de alta por la API (`/api/anpr/vehiculos`), pero no tienen pantalla.
+- Las miniaturas de la evidencia se purgan a los 7 días: las entradas más viejas dicen «Sin foto».
+
+**Trabajo posterior (no se hizo)**: reconocer **marca y color** del vehículo y compararlos con los del vehículo autorizado, contra
+placas clonadas (una placa copiada en otro carro abriría hoy). Necesita un modelo nuevo y datos para validarlo; queda fuera de
+este seguimiento.
+
+### 16.8 Estado del seguimiento
+
+| Tarea | Estado | Bandera | Pendiente |
+|---|---|---|---|
+| 1 Residentes no son visitas del plan | hecho | — | — |
+| 2 Accesos ANPR en los listados de la web | hecho | — | — |
+| 3 Placas de residentes, una sola fuente | hecho (la pantalla no existía; se creó) | — | — |
+| 4 Varios vehículos a la vez | hecho | — | Medir con 3 vehículos en el equipo Windows de la garita y con cámaras reales (encuadre de 100–150 px) |
+| 5 Documentación y CI | hecho | — | Ver los jobs en GitHub Actions en el primer PR (el contrato de placas corre en `anpr-e2e`) |
+
+Sin banderas nuevas. Fuera de alcance, como se pidió: el relé real de la talanquera, la validación en Windows físico, las cámaras
+reales y el reconocimiento de marca y color.
+
 ## 14. Deuda técnica encontrada (para el informe)
 
 No hizo falta ningún `refactor(...)` aparte: los cambios a código existente fueron los mínimos de cada tarea. Queda anotado:
