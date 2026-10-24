@@ -173,8 +173,11 @@ describe('listados que ya existían', () => {
   });
 
   it('el reporte de entradas (CSV) incluye los accesos ANPR y el método de cada fila, sin mover las columnas de antes', async () => {
-    const hoy = (await uno<{ d: string }>(`SELECT to_char(NOW() AT TIME ZONE 'America/Guatemala', 'YYYY-MM-DD') AS d`))!.d;
-    const r = await request(app).get('/api/reportes/accesos').query({ desde: hoy, hasta: hoy }).set(bearer(token.adminSucA1));
+    // De ayer a mañana: el reporte cuenta los días en la hora de la base (UTC) y de 18:00 a 24:00 en Guatemala ya es «mañana»
+    // allí. Las filas de esta prueba se reconocen por su placa única, así que el rango amplio no mezcla nada.
+    const dias = (await uno<{ desde: string; hasta: string }>(
+      `SELECT to_char(NOW() - INTERVAL '1 day', 'YYYY-MM-DD') AS desde, to_char(NOW() + INTERVAL '1 day', 'YYYY-MM-DD') AS hasta`))!;
+    const r = await request(app).get('/api/reportes/accesos').query(dias).set(bearer(token.adminSucA1));
     expect(r.status).toBe(200);
     const [cab, ...filas] = r.text.split('\n');
     expect(cab).toBe('fecha,hora_entrada,hora_salida,nombre_visitante,numero_dpi,placa,numero_casa,cargo_generado,metodo,persona,residente,verificado_por_agente,confianza');
