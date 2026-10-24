@@ -104,9 +104,6 @@ Dos pruebas mantienen esta lista honesta:
 | `INVITACION_QR_CREADA` | Invitación con QR de un residente | `POST /api/invitaciones-qr/mis` | residente | — |
 | `INVITACION_QR_REVOCADA` | Revoca una invitación con QR | `DELETE /api/invitaciones-qr/mis/:id` | residente | — |
 | `CONFIG_QR_ACTUALIZADA` | Cambia las reglas de validación de los QR | `PUT /api/config-qr` | admin de sucursal | — |
-| `OCR_DPI` | Lectura de la foto de un DPI (datos personales; cuesta dinero por llamada). La imagen no se guarda | `POST /api/ocr/dpi` | personal | 30/min por usuario |
-| `OCR_PLACA` | Lectura de la foto de una placa | `POST /api/ocr/placa` | personal | 30/min por usuario |
-| `OCR_ESCANEO` | Lectura bloqueada por límite (429) | `/api/ocr/*` | — | — |
 | **Dinero** | | | | |
 | `PAGO_TARJETA_SIMULADO` | Intento de pago con tarjeta (aprobado, rechazado, o **422** si el monto supera el saldo). El pago **resta su monto del saldo** (`docs/pagos_saldo.md`) | `POST /api/pagos/tarjeta` | residente | 10/15 min por usuario; los bloqueos se auditan |
 | `PAGO_TRANSFERENCIA_ENVIADA` | El residente sube el comprobante de una transferencia (**422** si el monto supera su saldo) | `POST /api/pagos/transferencia` | residente | 10/15 min por usuario; los bloqueos se auditan |
@@ -169,3 +166,11 @@ Ver `backend/DEUDA_TECNICA.md`, S-10. Resumen de la decisión tomada en el Sprin
 defensa contra fuerza bruta distribuida (muchas IPs contra un correo), y se compensa así: (1) cada bloqueo queda auditado con el correo y la IP; (2) el bloqueo sólo cuenta
 **fallos** (un acceso correcto no lo gasta); (3) los administradores pueden activar la verificación en dos pasos (SCRUM-123, `docs/verificacion_dos_pasos.md`), cuyo bloqueo se cuenta por
 intentos propios del segundo factor —que sólo alcanza quien ya sabe la contraseña— y no por los de cualquiera que conozca el correo. Alternativas descartadas y por qué, en el mismo documento.
+
+## Acciones retiradas
+
+Ya no las produce el código, pero pueden aparecer en filas antiguas de la bitácora (se conservan y el panel las sigue
+mostrando con su nombre):
+
+- **OCR_DPI**, **OCR_PLACA** y **OCR_ESCANEO**: lecturas de DPI y de placa por el OCR remoto del backend (`/api/ocr/*`) y su
+  bloqueo por límite. Se retiraron en el Sprint 10: el OCR es 100 % local en la garita (ver `docs/ocr_local_decision.md`).

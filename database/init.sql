@@ -576,7 +576,8 @@ DO $$ BEGIN
 EXCEPTION WHEN duplicate_column THEN NULL;
 END $$;
 
--- T5: de dónde salió el DPI del visitante (local = OCR del equipo, remoto = Google Vision vía backend, manual = tecleado).
+-- T5: de dónde salió el DPI del visitante (local = OCR del equipo, manual = tecleado). «remoto» solo queda en filas anteriores al
+-- Sprint 10, cuando había un OCR remoto de respaldo (retirado: docs/ocr_local_decision.md); no se migra ni se produce.
 -- NULL en los registros anteriores y en los de la web, que no lo informan.
 DO $$ BEGIN
   ALTER TABLE registros_acceso ADD COLUMN origen_dpi VARCHAR(10) CHECK (origen_dpi IN ('local', 'remoto', 'manual'));

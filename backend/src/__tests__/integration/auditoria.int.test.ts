@@ -390,9 +390,6 @@ const CASOS: Caso[] = [
     },
   },
   { accion: 'CONFIG_QR_ACTUALIZADA', quien: 'adminSucA1', ejecutar: () => put('adminSucA1', '/api/config-qr', { requiere_placa: false, max_intentos_fallidos: 5, bloqueo_minutos: 15 }) },
-  // El OCR llama a Google Vision con una clave que aquí no existe: la lectura termina en error del servicio, pero el intento queda auditado.
-  { accion: 'OCR_DPI', quien: 'agenteA1', exito: false, ejecutar: () => post('agenteA1', '/api/ocr/dpi', { imagen: 'AAAA' }) },
-  { accion: 'OCR_PLACA', quien: 'agenteA1', exito: false, ejecutar: () => post('agenteA1', '/api/ocr/placa', { imagen: 'AAAA' }) },
 
   // ── Dinero ──
   {
@@ -541,7 +538,7 @@ const CASOS: Caso[] = [
 ];
 
 /** Acciones que sólo aparecen como bloqueo por límite de tasa (429): las cubre la sección de abajo. */
-const SOLO_BLOQUEO = ['LIMITE_SESION', 'LIMITE_TASA_GENERAL', 'OCR_ESCANEO', 'LICENCIA_HEARTBEAT'];
+const SOLO_BLOQUEO = ['LIMITE_SESION', 'LIMITE_TASA_GENERAL', 'LICENCIA_HEARTBEAT'];
 
 const SRC = path.resolve(__dirname, '../..');
 const archivos = (dir: string): string[] =>

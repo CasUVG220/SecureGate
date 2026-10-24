@@ -70,8 +70,9 @@ export const registrarAcceso = async (req: Request, res: Response) => {
   }
   const origen: 'web' | 'desktop' = req.licencia ? 'desktop' : 'web';
   const manual = capturado_manualmente === true || capturado_manualmente === 'true';
-  // Origen del DPI (T5): local | remoto | manual. Un valor desconocido se ignora (queda NULL), no rompe el registro;
-  // «capturado_manualmente» sin origen informado cuenta como manual.
+  // Origen del DPI (T5): local | manual. «remoto» ya no lo produce ninguna garita (el OCR es 100 % local desde el Sprint 10),
+  // pero se sigue aceptando para no rechazar un acceso viejo que una garita tenga en su cola sin red. Un valor desconocido se
+  // ignora (queda NULL), no rompe el registro; «capturado_manualmente» sin origen informado cuenta como manual.
   const origenDpi: 'local' | 'remoto' | 'manual' | null =
     origen_dpi === 'local' || origen_dpi === 'remoto' || origen_dpi === 'manual' ? origen_dpi : (manual ? 'manual' : null);
 

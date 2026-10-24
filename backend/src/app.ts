@@ -97,10 +97,10 @@ app.use(generalLimiter);
 
 // Límite de cuerpo: 100 kb por defecto. Antes eran 50 MB para TODA la API y
 // antes de autenticar, lo que permitía tumbar el proceso con unas pocas
-// peticiones. Sólo las rutas que reciben una imagen en base64 (foto del
-// documento para OCR, imagen de un área, comprobante de transferencia) tienen
-// margen mayor.
-const RUTAS_CON_IMAGEN = ['/api/ocr', '/api/areas', '/api/pagos/transferencia'];
+// peticiones. Sólo las rutas que reciben una imagen en base64 (imagen de un
+// área, comprobante de transferencia) tienen margen mayor. Las fotos de los
+// documentos no llegan al servidor: el OCR es local en la garita.
+const RUTAS_CON_IMAGEN = ['/api/areas', '/api/pagos/transferencia'];
 const jsonPequeno = express.json({ limit: '100kb' });
 const jsonConImagen = express.json({ limit: '8mb' });
 // Logo de empresa: una imagen de hasta 200 KB en base64 (~270 KB de texto). Margen propio, mucho menor que el de las fotos.
