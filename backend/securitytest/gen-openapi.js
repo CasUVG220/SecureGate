@@ -86,8 +86,6 @@ const CUERPOS = {
   'PATCH /api/reservas/{id}/rechazar': { motivo: 'zap' },
   'PUT /api/config-qr': { max_intentos_fallidos: 5 },
   'PUT /api/config-reservas': { permite_cancelacion: true },
-  'POST /api/ocr/dpi': { imagen: 'eA==' },
-  'POST /api/ocr/placa': { imagen: 'eA==' },
 };
 const QUERY = {
   '/api/visitantes': ['dpi'], '/api/visitantes/buscar': ['q', 'residente_id'], '/api/preautorizaciones/buscar': ['dpi', 'placa'],
