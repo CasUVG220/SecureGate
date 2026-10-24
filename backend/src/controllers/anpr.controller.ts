@@ -151,9 +151,11 @@ export const crearVehiculo = async (req: Request, res: Response) => {
     if (ocupada) return res.status(409).json({ error: ocupada });
     const r = await pool.query(
       `INSERT INTO vehiculos_residentes (sucursal_id, residente_id, placa, descripcion, vigente_desde, vigente_hasta, creado_por)
-       VALUES ($1, $2, $3, $4, COALESCE($5::date, CURRENT_DATE), $6::date, $7)
+       VALUES ($1, $2, $3, $4, COALESCE($5::date, (NOW() AT TIME ZONE $8)::date), $6::date, $7)
        RETURNING id`,
-      [residente.rows[0].sucursal_id, residente_id, p, descripcion?.trim() || null, vigente_desde ?? null, vigente_hasta ?? null, req.user!.id],
+      // Sin fecha, vale desde HOY en la zona de la app (Guatemala), no en la de la base (UTC): una placa dada de alta de
+      // noche (de 18:00 a 24:00 en Guatemala) quedaba vigente desde «mañana» y la garita no le abría hasta medianoche.
+      [residente.rows[0].sucursal_id, residente_id, p, descripcion?.trim() || null, vigente_desde ?? null, vigente_hasta ?? null, req.user!.id, APP_TZ],
     );
     const fila = await pool.query(`SELECT ${COLUMNAS_VEHICULO} FROM vehiculos_residentes v WHERE v.id = $1`, [r.rows[0].id]);
     res.locals.auditoria = { placa: p, residente_id };

@@ -96,6 +96,12 @@ describe('vehículos de residentes (administración)', () => {
 describe('placas de residentes: formato, duplicados, permisos y baja (seguimiento, tarea 3)', () => {
   const token = async (k: string) => (await login(app, fx.email[k])).token!;
 
+  it('sin fecha, la placa vale desde HOY en Guatemala aunque en la base (UTC) ya sea mañana', async () => {
+    const r = await nuevoVehiculo(placaNueva());
+    const hoy = (await uno<{ d: string }>(`SELECT to_char(NOW() AT TIME ZONE 'America/Guatemala', 'YYYY-MM-DD') AS d`))!.d;
+    expect([r.status, r.body.vigente_desde]).toEqual([201, hoy]);
+  });
+
   it('solo la forma guatemalteca (la que lee el ANPR), con un mensaje claro', async () => {
     for (const mala of ['ABC1234', 'P12ABC', '1234', 'PP123AB']) {
       const r = await nuevoVehiculo(mala);
