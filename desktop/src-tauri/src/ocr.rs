@@ -264,18 +264,19 @@ pub fn ocr_estado(state: State<'_, AppState>) -> EstadoOcr {
     EstadoOcr { disponible: s.child.is_some(), ms_carga: s.ms_carga, error: s.error.clone() }
 }
 
-// ── DPI (T5, SCRUM-121) ─────────────────────────────────────────────────────
+// ── DPI (T5, SCRUM-121; 100 % local desde el Sprint 10) ─────────────────────
 //
-// Local primero: el sidecar lee el DPI en este equipo (`op: "dpi"`, ver sidecar-ocr/src/dpi.js). El OCR remoto
-// (Google Vision, a través del backend `/ocr/dpi`) queda como RESPALDO y solo se usa si el local falla o duda
-// Y hay red Y el equipo lo permite (`Config::dpi_remoto_respaldo`).
+// El sidecar lee el DPI en este equipo (`op: "dpi"`, ver sidecar-ocr/src/dpi.js), también sin internet. No hay ningún
+// OCR remoto: la imagen del DPI nunca sale del equipo (ver docs/ocr_local_decision.md).
+//
+// Una lectura dudosa nunca pasa en silencio: si el sidecar la marca, o si aquí se ve que el CUI no es válido, la
+// confianza del CUI es baja o no salió ningún nombre, va con `revision_obligatoria` y la pantalla pide confirmarla.
 //
 // Privacidad: la imagen del DPI viaja en base64 por memoria (WebView → Rust → pipe del sidecar) y no se escribe a
 // disco en ningún punto. El CUI y los nombres NO se escriben en los logs: `ResultadoDpi` oculta esos campos en su
 // `Debug` y el único log del DPI (`linea_log_dpi`) lleva solo banderas y milisegundos.
 
-/// Debajo de esta confianza del CUI el resultado local se considera dudoso y se intenta el respaldo (igual que el
-/// umbral del extractor, sidecar-ocr/src/dpi.js).
+/// Debajo de esta confianza del CUI la lectura va a revisión (el mismo umbral del extractor, sidecar-ocr/src/dpi.js).
 pub const UMBRAL_CONFIANZA_CUI: f64 = 0.8;
 
 #[derive(Clone, Serialize)]
@@ -287,24 +288,22 @@ pub struct ConfianzaDpi {
 
 #[derive(Clone, Serialize)]
 pub struct ResultadoDpi {
-    /// De dónde salió el dato: `"local"` o `"remoto"`. Viaja hasta el backend junto con el acceso.
+    /// De dónde salió el dato: siempre `"local"` (OCR de este equipo). Viaja hasta el backend junto con el acceso.
     pub origen: String,
     pub cui: String,
     pub nombres: String,
     pub apellidos: String,
-    /// `nombres` + `apellidos` (local) o el `nombre` que devuelve Vision (remoto: no separa los campos).
+    /// `nombres` + `apellidos`.
     pub nombre_completo: String,
     pub confianza: ConfianzaDpi,
     pub cui_valido: bool,
     /// Una persona debe confirmar el dato contra el documento antes de registrar (hubo correcciones, el CUI es
-    /// inválido, la confianza es baja, o es lectura remota, que no informa confianza).
+    /// inválido o falta, la confianza es baja, o no salió ningún nombre).
     pub revision_obligatoria: bool,
     pub motivos: Vec<String>,
     /// Cuántos caracteres corrigió el extractor por posición (O→0, etc.). Solo el conteo, no el contenido.
     pub correcciones: usize,
     pub ms_total: u64,
-    /// Si se usó el respaldo remoto, por qué el local no bastó.
-    pub aviso: Option<String>,
 }
 
 impl std::fmt::Debug for ResultadoDpi {
@@ -335,14 +334,20 @@ fn texto(v: &Value, k: &str) -> String {
     v[k].as_str().unwrap_or_default().trim().to_string()
 }
 
-/// Respuesta `op: "dpi"` del sidecar → `ResultadoDpi`.
+/// ¿La lectura se puede proponer sin revisión? CUI válido, con confianza suficiente, y algún nombre.
+pub fn lectura_confiable(r: &ResultadoDpi) -> bool {
+    r.cui_valido && !r.cui.is_empty() && r.confianza.cui >= UMBRAL_CONFIANZA_CUI && !(r.nombres.is_empty() && r.apellidos.is_empty())
+}
+
+/// Respuesta `op: "dpi"` del sidecar → `ResultadoDpi`. Si el sidecar no la marcó para revisión pero aquí no es confiable,
+/// se marca igual (y se dice por qué): ninguna lectura dudosa llega a la pantalla como buena.
 pub fn parsear_respuesta_dpi_local(v: &Value, ms_roundtrip: u64) -> AppResult<ResultadoDpi> {
     if v["ok"].as_bool() != Some(true) {
         return Err(AppError::new("ocr_error", v["error"].as_str().unwrap_or("error de OCR")));
     }
     let nombres = texto(v, "nombres");
     let apellidos = texto(v, "apellidos");
-    Ok(ResultadoDpi {
+    let mut r = ResultadoDpi {
         origen: "local".into(),
         cui: texto(v, "cui"),
         nombre_completo: format!("{nombres} {apellidos}").trim().to_string(),
@@ -358,136 +363,35 @@ pub fn parsear_respuesta_dpi_local(v: &Value, ms_roundtrip: u64) -> AppResult<Re
         motivos: v["motivos"].as_array().map(|a| a.iter().filter_map(|m| m.as_str().map(String::from)).collect()).unwrap_or_default(),
         correcciones: v["correcciones"].as_array().map_or(0, Vec::len),
         ms_total: ms_roundtrip,
-        aviso: None,
-    })
-}
-
-/// Respuesta del backend `/ocr/dpi` (Vision) → `ResultadoDpi`. Vision no separa nombres/apellidos ni informa confianza:
-/// siempre queda para revisión. Se descarta `texto_completo` (todo el texto del documento): no hace falta y es dato personal.
-pub fn parsear_respuesta_dpi_remota(v: &Value, ms: u64, aviso: Option<String>) -> ResultadoDpi {
-    let cui: String = texto(v, "numero_dpi").chars().filter(char::is_ascii_digit).collect();
-    ResultadoDpi {
-        origen: "remoto".into(),
-        cui_valido: cui.len() == 13,
-        cui,
-        nombres: String::new(),
-        apellidos: String::new(),
-        nombre_completo: texto(v, "nombre"),
-        confianza: ConfianzaDpi { cui: 0.0, nombres: 0.0, apellidos: 0.0 },
-        revision_obligatoria: true,
-        motivos: vec!["lectura_remota_sin_confianza".into()],
-        correcciones: 0,
-        ms_total: ms,
-        aviso,
+    };
+    if !lectura_confiable(&r) {
+        r.revision_obligatoria = true;
+        let mut agregar = |m: &str| if !r.motivos.iter().any(|x| x == m) { r.motivos.push(m.into()) };
+        if r.cui.is_empty() {
+            agregar("cui_no_encontrado");
+        } else if !r.cui_valido {
+            agregar("cui_invalido");
+        } else if r.confianza.cui < UMBRAL_CONFIANZA_CUI {
+            agregar("cui_confianza_baja");
+        }
+        if r.nombres.is_empty() && r.apellidos.is_empty() {
+            agregar("nombres_no_encontrado");
+        }
     }
+    Ok(r)
 }
 
-/// ¿El resultado local alcanza o hay que intentar el respaldo? Alcanza con un CUI válido, con confianza suficiente
-/// y algún nombre. (Una corrección por posición baja la confianza, así que un CUI corregido suele ir al respaldo.)
-pub fn local_es_suficiente(r: &ResultadoDpi) -> bool {
-    r.cui_valido && r.confianza.cui >= UMBRAL_CONFIANZA_CUI && !(r.nombres.is_empty() && r.apellidos.is_empty())
-}
-
-/// Política del respaldo: remoto solo si el local falló o no alcanzó, el equipo lo permite y hay red.
-pub fn debe_usar_respaldo_remoto(local: &AppResult<ResultadoDpi>, remoto_permitido: bool, en_linea: bool) -> bool {
-    if !remoto_permitido || !en_linea {
-        return false;
-    }
-    match local {
-        Ok(r) => !local_es_suficiente(r),
-        Err(_) => true,
-    }
-}
-
-async fn dpi_local(app: &AppHandle, imagen_base64: &str) -> AppResult<ResultadoDpi> {
-    asegurar_arrancado(app).await?;
+/// Lee el DPI con el OCR de este equipo. Funciona sin red. Si el OCR falla, la pantalla ofrece la captura manual.
+#[tauri::command]
+pub async fn ocr_dpi(app: AppHandle, imagen_base64: String) -> AppResult<ResultadoDpi> {
+    asegurar_arrancado(&app).await?;
     let state = app.state::<AppState>();
-    let b64 = imagen_base64.split_once(',').map(|(_, b)| b).unwrap_or(imagen_base64);
+    let b64 = imagen_base64.split_once(',').map(|(_, b)| b).unwrap_or(&imagen_base64);
     let t0 = Instant::now();
     let v = enviar(&state, json!({ "op": "dpi", "image": b64 })).await?;
-    parsear_respuesta_dpi_local(&v, t0.elapsed().as_millis() as u64)
-}
-
-async fn dpi_remoto(state: &AppState, imagen_base64: &str, aviso: Option<String>) -> AppResult<ResultadoDpi> {
-    if !state.config.read().unwrap().dpi_remoto_respaldo {
-        return Err(AppError::new("dpi_remoto_desactivado", "El OCR remoto del DPI está desactivado en este equipo"));
-    }
-    let (jwt, lic) = crate::auth::credenciales(state).await?;
-    let base = state.api_url();
-    let b64 = imagen_base64.split_once(',').map(|(_, b)| b).unwrap_or(imagen_base64).to_string();
-    let t0 = Instant::now();
-    let v = state
-        .api
-        .post(&base, "/ocr/dpi", &json!({ "image": b64 }), &crate::api::Credenciales { jwt: Some(&jwt), licencia: Some(&lic) })
-        .await?;
-    Ok(parsear_respuesta_dpi_remota(&v, t0.elapsed().as_millis() as u64, aviso))
-}
-
-/// Lee el DPI SOLO con el OCR de este equipo. Funciona sin red.
-#[tauri::command]
-pub async fn ocr_dpi_local(app: AppHandle, imagen_base64: String) -> AppResult<ResultadoDpi> {
-    let r = dpi_local(&app, &imagen_base64).await?;
+    let r = parsear_respuesta_dpi_local(&v, t0.elapsed().as_millis() as u64)?;
     log::info!("{}", linea_log_dpi(&r));
     Ok(r)
-}
-
-/// OCR remoto del DPI (Google Vision, vía backend): RESPALDO. Solo funciona con red y si el equipo lo permite.
-#[tauri::command]
-pub async fn ocr_dpi_remoto(state: State<'_, AppState>, imagen_base64: String) -> AppResult<ResultadoDpi> {
-    let r = dpi_remoto(&state, &imagen_base64, None).await?;
-    log::info!("{}", linea_log_dpi(&r));
-    Ok(r)
-}
-
-/// Lectura de DPI de la pantalla: local primero; remoto solo si el local falló o dudó Y hay red Y está permitido.
-/// Si el respaldo también falla se devuelve el resultado local (aunque dudoso) para que la persona lo revise; si no
-/// hubo ninguno, el error del local, y la pantalla ofrece la captura manual.
-#[tauri::command]
-pub async fn ocr_dpi(app: AppHandle, state: State<'_, AppState>, imagen_base64: String) -> AppResult<ResultadoDpi> {
-    let local = dpi_local(&app, &imagen_base64).await;
-    let permitido = state.config.read().unwrap().dpi_remoto_respaldo;
-    let en_linea = state.en_linea.load(std::sync::atomic::Ordering::Relaxed);
-    if !debe_usar_respaldo_remoto(&local, permitido, en_linea) {
-        let r = local?;
-        log::info!("{}", linea_log_dpi(&r));
-        return Ok(r);
-    }
-    let motivo = match &local {
-        Ok(_) => "local_dudoso".to_string(),
-        Err(e) => format!("local_fallo:{}", e.codigo),
-    };
-    match dpi_remoto(&state, &imagen_base64, Some(motivo)).await {
-        Ok(r) => {
-            log::info!("{}", linea_log_dpi(&r));
-            Ok(r)
-        }
-        Err(e) => {
-            log::warn!("OCR DPI: el respaldo remoto falló ({})", e.codigo);
-            let r = local?;
-            log::info!("{}", linea_log_dpi(&r));
-            Ok(r)
-        }
-    }
-}
-
-#[derive(Serialize)]
-pub struct ConfigDpi {
-    pub remoto_respaldo: bool,
-}
-
-#[tauri::command]
-pub fn ocr_dpi_config(state: State<'_, AppState>) -> ConfigDpi {
-    ConfigDpi { remoto_respaldo: state.config.read().unwrap().dpi_remoto_respaldo }
-}
-
-/// Permite o no el respaldo remoto en ESTE equipo (la imagen del DPI solo sale si está permitido).
-#[tauri::command]
-pub fn ocr_dpi_configurar(state: State<'_, AppState>, remoto_respaldo: bool) -> AppResult<ConfigDpi> {
-    let mut cfg = state.config.read().unwrap().clone();
-    cfg.dpi_remoto_respaldo = remoto_respaldo;
-    cfg.guardar(&state.dir_datos)?;
-    *state.config.write().unwrap() = cfg;
-    Ok(ConfigDpi { remoto_respaldo })
 }
 
 #[cfg(test)]
@@ -511,7 +415,7 @@ mod tests_dpi {
         assert_eq!(r.nombre_completo, "ANA MARIA LOPEZ GARCIA");
         assert!(r.cui_valido && !r.revision_obligatoria);
         assert_eq!(r.correcciones, 0);
-        assert!(local_es_suficiente(&r));
+        assert!(lectura_confiable(&r));
     }
 
     #[test]
@@ -520,50 +424,41 @@ mod tests_dpi {
         assert_eq!(e.codigo, "ocr_error");
         // Sin `revision_obligatoria` en la respuesta se asume que SÍ hace falta revisar.
         let r = parsear_respuesta_dpi_local(&json!({ "ok": true, "cui": "1" }), 1).unwrap();
-        assert!(r.revision_obligatoria && !r.cui_valido && !local_es_suficiente(&r));
+        assert!(r.revision_obligatoria && !r.cui_valido && !lectura_confiable(&r));
+    }
+
+    fn con(f: impl FnOnce(&mut Value)) -> ResultadoDpi {
+        let mut v = local_ok();
+        f(&mut v);
+        parsear_respuesta_dpi_local(&v, 500).unwrap()
     }
 
     #[test]
-    fn la_lectura_remota_siempre_queda_para_revision_y_no_trae_el_texto_del_documento() {
-        let r = parsear_respuesta_dpi_remota(
-            &json!({ "nombre": "ANA LOPEZ", "numero_dpi": "1234 56789 0101", "texto_completo": "TODO EL DOCUMENTO" }), 900, Some("local_dudoso".into()),
-        );
-        assert_eq!(r.origen, "remoto");
-        assert_eq!(r.cui, "1234567890101");
-        assert!(r.cui_valido && r.revision_obligatoria);
-        assert_eq!(r.nombre_completo, "ANA LOPEZ");
-        assert!(!serde_json::to_string(&r).unwrap().contains("TODO EL DOCUMENTO"));
-    }
-
-    fn con(f: impl FnOnce(&mut ResultadoDpi)) -> AppResult<ResultadoDpi> {
-        let mut r = parsear_respuesta_dpi_local(&local_ok(), 500).unwrap();
-        f(&mut r);
-        Ok(r)
-    }
-
-    #[test]
-    fn politica_local_primero_sin_respaldo_si_el_local_alcanza() {
-        assert!(!debe_usar_respaldo_remoto(&con(|_| {}), true, true));
-    }
-
-    #[test]
-    fn politica_respaldo_solo_si_el_local_falla_o_duda_y_hay_red_y_esta_permitido() {
-        let dudoso = con(|r| r.confianza.cui = 0.6);
-        let invalido = con(|r| r.cui_valido = false);
-        let sin_nombre = con(|r| { r.nombres.clear(); r.apellidos.clear(); });
-        let falla: AppResult<ResultadoDpi> = Err(AppError::new("ocr_no_disponible", "x"));
-        for local in [&dudoso, &invalido, &sin_nombre, &falla] {
-            assert!(debe_usar_respaldo_remoto(local, true, true), "con red y permiso, un local que no alcanza va al respaldo");
-            assert!(!debe_usar_respaldo_remoto(local, true, false), "sin red nunca");
-            assert!(!debe_usar_respaldo_remoto(local, false, true), "con el respaldo apagado en el equipo nunca");
+    fn una_lectura_dudosa_nunca_llega_como_buena_aunque_el_sidecar_no_la_marque() {
+        // El sidecar dice «sin revisión», pero el CUI no es válido, falta, tiene poca confianza o no salió ningún nombre.
+        for (caso, cambio, motivo) in [
+            ("cui inválido", &(|v: &mut Value| v["cui_valido"] = json!(false)) as &dyn Fn(&mut Value), "cui_invalido"),
+            ("sin cui", &|v: &mut Value| { v["cui"] = json!(""); v["cui_valido"] = json!(false); }, "cui_no_encontrado"),
+            ("confianza baja", &|v: &mut Value| v["confianza"]["cui"] = json!(0.6), "cui_confianza_baja"),
+            ("sin nombres", &|v: &mut Value| { v["nombres"] = json!(""); v["apellidos"] = json!(""); }, "nombres_no_encontrado"),
+        ] {
+            let r = con(|v| cambio(v));
+            assert!(r.revision_obligatoria, "{caso}: debe ir a revisión");
+            assert!(r.motivos.iter().any(|m| m == motivo), "{caso}: motivo {motivo} en {:?}", r.motivos);
+            assert!(!lectura_confiable(&r));
         }
+        // Lo que el sidecar ya marcó se respeta (y sus motivos no se duplican).
+        let r = con(|v| { v["revision_obligatoria"] = json!(true); v["motivos"] = json!(["cui_corregido"]); v["correcciones"] = json!([{}]); });
+        assert!(r.revision_obligatoria);
+        assert_eq!(r.motivos, vec!["cui_corregido".to_string()]);
+        assert_eq!(r.correcciones, 1);
     }
 
     #[test]
-    fn sin_red_el_flujo_completo_funciona_con_el_local() {
-        // Offline: aunque el local dude, no se intenta nada remoto y el resultado local llega a la pantalla (para revisión).
-        let dudoso = con(|r| { r.confianza.cui = 0.5; r.revision_obligatoria = true; });
-        assert!(!debe_usar_respaldo_remoto(&dudoso, true, false));
+    fn una_lectura_confiable_no_pide_revision_y_siempre_es_local() {
+        let r = con(|_| {});
+        assert!(lectura_confiable(&r) && !r.revision_obligatoria && r.motivos.is_empty());
+        assert_eq!(r.origen, "local");
     }
 
     // ── Privacidad ──
@@ -576,6 +471,16 @@ mod tests_dpi {
             assert!(!texto.contains("ANA") && !texto.contains("LOPEZ") && !texto.contains("GARCIA"), "filtró nombres: {texto}");
         }
         assert!(linea_log_dpi(&r).contains("origen=local"));
+    }
+
+    /// Guarda de regresión de código: el módulo de OCR no manda la imagen a ningún servidor (el OCR es 100 % local).
+    #[test]
+    fn el_ocr_no_usa_la_red() {
+        let fuente = include_str!("ocr.rs");
+        let codigo = fuente.split("#[cfg(test)]").next().unwrap();
+        for prohibido in ["state.api", ".post(", "reqwest", "credenciales", "/ocr/", "api_url", "en_linea"] {
+            assert!(!codigo.contains(prohibido), "ocr.rs no debe usar la red: encontró {prohibido}");
+        }
     }
 
     /// Guarda de regresión de código: el módulo de OCR no escribe a disco ni registra el contenido del DPI.

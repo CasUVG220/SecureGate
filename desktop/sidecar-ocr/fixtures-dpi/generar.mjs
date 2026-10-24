@@ -15,7 +15,7 @@
  *
  * Qué NO demuestra: que el extractor acierte con DPI reales. Fotos sintéticas limpias son mucho más fáciles que fotos
  * de garita (reflejos del plástico, fondo, dedos, tipografía real). Sirve para regresiones y para medir tiempos;
- * la decisión de cambiar de Vision a OCR local se toma con el conjunto REAL (docs/ocr_dpi_local.md).
+ * la exactitud con DPI reales se mide con el conjunto REAL, con consentimiento (docs/ocr_dpi_local.md).
  *
  * Reproducibilidad: misma semilla → mismos datos y mismas transformaciones (PRNG mulberry32). El dibujo depende de
  * las fuentes del sistema (se usa DejaVu Sans / Arial / sans-serif), así que los píxeles pueden variar entre

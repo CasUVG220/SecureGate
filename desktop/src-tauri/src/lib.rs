@@ -125,7 +125,7 @@ fn app_configurar_api_url(state: State<'_, AppState>, api_url: String) -> AppRes
             "Este equipo ya tiene una licencia activada: desvincúlalo antes de cambiar el servidor",
         ));
     }
-    // Se conserva el resto de la configuración del equipo (p. ej. el respaldo remoto del DPI).
+    // Se conserva el resto de la configuración del equipo (p. ej. el canal de actualizaciones).
     let cfg = config::Config { api_url: url.clone(), ..state.config.read().unwrap().clone() };
     cfg.guardar(&state.dir_datos)?;
     *state.config.write().unwrap() = cfg;
@@ -257,11 +257,7 @@ pub fn run() {
             ocr::ocr_placa,
             ocr::ocr_precalentar,
             ocr::ocr_estado,
-            ocr::ocr_dpi_remoto,
-            ocr::ocr_dpi_local,
             ocr::ocr_dpi,
-            ocr::ocr_dpi_config,
-            ocr::ocr_dpi_configurar,
             camaras::camaras_listar,
             camaras::camaras_guardar,
             camaras::camaras_eliminar,

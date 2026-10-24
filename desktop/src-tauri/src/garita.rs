@@ -129,7 +129,7 @@ pub struct NuevoAcceso {
     /// intentos fallidos.
     #[serde(default)]
     pub invitacion_qr_id: Option<String>,
-    /// De dónde salió el DPI: `local` (OCR del equipo), `remoto` (Vision) o `manual`. Si no viene, se deduce de
+    /// De dónde salió el DPI: `local` (OCR del equipo) o `manual`. Si no viene, se deduce de
     /// `capturado_manualmente`.
     #[serde(default)]
     pub origen_dpi: Option<String>,
@@ -148,7 +148,7 @@ pub struct AccesoPendiente {
     pub placa: Option<String>,
     pub residente_casa: Option<String>,
     pub capturado_manualmente: bool,
-    /// `local`, `remoto` o `manual` (None en accesos anteriores a T5).
+    /// `local` o `manual` (None en accesos anteriores a T5; `remoto` solo en accesos anteriores al Sprint 10).
     pub origen_dpi: Option<String>,
     /// Id del registro en el servidor, una vez sincronizado: con él se puede dar la
     /// salida desde la lista sin buscar por placa. `None` mientras siga pendiente.
@@ -278,7 +278,8 @@ pub fn encolar_acceso(conn: &Connection, agente_id: &str, a: &NuevoAcceso) -> Ap
     // (nueva, o validada en línea) no se frena aquí: el servidor decide al sincronizar.
     // Origen del DPI: solo los tres valores conocidos; si no viene, «manual» cuando el agente lo tecleó.
     let origen_dpi: Option<&str> = match a.origen_dpi.as_deref().map(str::trim) {
-        Some(o @ ("local" | "remoto" | "manual")) => Some(o),
+        // «remoto» ya no existe (el OCR es 100 % local): un valor así se trata como desconocido.
+        Some(o @ ("local" | "manual")) => Some(o),
         _ if a.capturado_manualmente => Some("manual"),
         _ => None,
     };
@@ -1084,7 +1085,7 @@ mod tests {
             col
         };
         assert_eq!(encolar(Some("local"), false).as_deref(), Some("local"));
-        assert_eq!(encolar(Some("remoto"), false).as_deref(), Some("remoto"));
+        assert_eq!(encolar(Some("remoto"), false), None, "ya no hay OCR remoto: no se produce");
         assert_eq!(encolar(Some("manual"), true).as_deref(), Some("manual"));
         assert_eq!(encolar(None, true).as_deref(), Some("manual"), "tecleado sin origen informado = manual");
         assert_eq!(encolar(None, false), None);
