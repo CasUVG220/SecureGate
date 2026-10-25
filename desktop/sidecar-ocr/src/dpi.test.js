@@ -180,6 +180,39 @@ test('entrada vacía o basura no lanza', () => {
   assert.equal(extraerDpi([{ texto: '', confianza: 1 }, null, { texto: 5 }]).cui, '');
 });
 
+// ── Segunda pasada sobre los nombres (Sprint 10, OCR 100 % local) ──
+const { completarNombres } = require('./dpi');
+
+test('completarNombres: une la segunda palabra que el OCR leyó aparte en la misma línea (antes se perdía sin aviso)', () => {
+  // «REYES» y «ALVARADO» llegan como dos piezas que hasta se tocan; el extractor se quedaba con «REYES».
+  const items = [
+    it('APELLIDOS / SURNAME', 0.99, 429, 296, 217, 24),
+    it('REYES', 0.97, 432, 328, 156, 31), it('ALVARADO', 0.95, 577, 331, 235, 31),
+    it('NOMBRES / GIVEN NAMES', 0.99, 429, 393, 245, 24),
+    it('EDUARDO', 0.99, 431, 425, 216, 31),
+    it('GUATEMALTECA', 0.98, 428, 517, 237, 29),
+  ];
+  const antes = extraerDpi(items);
+  assert.equal(antes.apellidos, 'REYES');
+  const r = completarNombres(antes, items);
+  assert.equal(r.apellidos, 'REYES ALVARADO');
+  assert.equal(r.nombres, 'EDUARDO', 'la línea de abajo no se mezcla');
+  assert.equal(r.confianza.apellidos, 0.95, 'la confianza es la de la pieza más dudosa');
+  assert.equal(r.revision_obligatoria, antes.revision_obligatoria);
+});
+
+test('completarNombres: una pieza corregida o dudosa manda el campo a revisión; lo que ya estaba completo no cambia', () => {
+  const items = [
+    it('APELLIDOS / SURNAME', 0.99, 430, 295, 220, 25), it('LOPEZ', 0.97, 430, 325, 150, 40), it('6ARCIA', 0.97, 600, 325, 180, 40),
+    it('NOMBRES / GIVEN NAMES', 0.98, 430, 392, 250, 25), it('ANA MARIA', 0.97, 430, 423, 260, 40),
+  ];
+  const r = completarNombres(extraerDpi(items), items);
+  assert.equal(r.apellidos, 'LOPEZ GARCIA');
+  assert.ok(r.revision_obligatoria && r.motivos.includes('apellidos_corregido'));
+  const limpio = extraerDpi(base());
+  assert.deepEqual(completarNombres(limpio, base()), limpio);
+});
+
 // ── Punta a punta con el OCR real (se omite sin modelos) ──
 const fs = require('node:fs');
 const path = require('node:path');
