@@ -17,7 +17,6 @@ const MOTIVOS: Record<string, string> = {
   apellidos_por_posicion: 'Los apellidos se adivinaron por su lugar en el documento.',
   nombres_confianza_baja: 'Los nombres se leyeron con poca seguridad.',
   apellidos_confianza_baja: 'Los apellidos se leyeron con poca seguridad.',
-  lectura_remota_sin_confianza: 'La lectura remota no indica qué tan segura es.',
 };
 
 /** Frases para el agente, sin duplicados y sin motivos desconocidos (esos se resumen en una frase general). */
@@ -33,9 +32,19 @@ export function textosRevision(r: Pick<ResultadoDpi, 'motivos'>): string[] {
 
 export const ETIQUETA_ORIGEN: Record<OrigenDpi, string> = {
   local: 'leído en este equipo',
-  remoto: 'leído por el servicio remoto',
   manual: 'capturado manualmente',
 };
+
+/**
+ * Qué campos hay que marcar «Revisar» en una lectura dudosa: los que nombran sus motivos. Si la lectura pide revisión
+ * pero ningún motivo dice qué campo, se marcan los dos (mejor de más que dejar pasar un dato dudoso).
+ */
+export function camposARevisar(r: Pick<ResultadoDpi, 'revision_obligatoria' | 'motivos'>): { cui: boolean; nombre: boolean } {
+  if (!r.revision_obligatoria) return { cui: false, nombre: false };
+  const cui = r.motivos.some(m => m.startsWith('cui_'));
+  const nombre = r.motivos.some(m => m.startsWith('nombres_') || m.startsWith('apellidos_'));
+  return cui || nombre ? { cui, nombre } : { cui: true, nombre: true };
+}
 
 /** Lo que se muestra tras leer un DPI: de dónde salió y si hay que confirmarlo. Nunca incluye el número ni el nombre. */
 export function resumenLectura(r: ResultadoDpi): string {

@@ -5,7 +5,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CameraPanel } from '../CameraPanel';
-import { motivoDeshabilitado } from '../CameraPane';
+import { ACCION, motivoDeshabilitado } from '../CameraPane';
 
 const UUID = '3f1b2c4d-5e6f-4a8b-9c0d-1e2f3a4b5c6d';
 
@@ -72,6 +72,14 @@ describe('sin cámara: Escribir placa y motivos visibles', () => {
     expect(screen.getByRole('button', { name: 'Escribir placa' })).toBeDisabled();
     expect(screen.getAllByText(/Sin conexión|No hay cámara/).length).toBeGreaterThan(0);
     expect(screen.getByText(/Usa «Abrir talanquera»|necesita el servidor/)).toBeInTheDocument();
+  });
+
+  it('dpi sin internet: se lee igual (OCR de este equipo); ningún texto dice que necesite el servidor', () => {
+    const ok = { activa: true, iniciando: false, ocupado: false, ocrDisponible: true, enLinea: false };
+    expect(motivoDeshabilitado(ACCION.dpi, ok)).toBeNull();
+    expect(motivoDeshabilitado(ACCION.dpi, { ...ok, ocrDisponible: false })).toBe('El OCR local no está disponible en este equipo.');
+    expect(ACCION.dpi.pista).toMatch(/sin internet/);
+    expect(ACCION.dpi.pista).not.toMatch(/servidor|nube|remoto/);
   });
 
   it('dpi: el botón de lectura muestra su motivo', async () => {

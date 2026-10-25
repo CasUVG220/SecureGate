@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { resumenLectura, textosRevision } from '../dpi';
+import { camposARevisar, resumenLectura, textosRevision } from '../dpi';
 import type { ResultadoDpi } from '../tauri';
 
 const lectura = (over: Partial<ResultadoDpi> = {}): ResultadoDpi => ({
   origen: 'local', cui: '1234567890101', nombres: 'ANA', apellidos: 'LOPEZ', nombre_completo: 'ANA LOPEZ',
   confianza: { cui: 0.97, nombres: 0.95, apellidos: 0.96 }, cui_valido: true, revision_obligatoria: false,
-  motivos: [], correcciones: 0, ms_total: 500, aviso: null, ...over,
+  motivos: [], correcciones: 0, ms_total: 500, ...over,
 });
 
 describe('textos de la lectura del DPI (T5)', () => {
@@ -23,13 +23,21 @@ describe('textos de la lectura del DPI (T5)', () => {
   });
 
   it('el resumen dice de dónde salió y nunca incluye el número ni el nombre', () => {
-    for (const r of [lectura(), lectura({ origen: 'remoto', revision_obligatoria: true })]) {
+    for (const r of [lectura(), lectura({ revision_obligatoria: true })]) {
       const t = resumenLectura(r);
       expect(t).not.toContain('1234567890101');
       expect(t).not.toContain('ANA');
     }
     expect(resumenLectura(lectura())).toContain('leído en este equipo');
-    expect(resumenLectura(lectura({ origen: 'remoto', revision_obligatoria: true }))).toContain('servicio remoto');
+    expect(resumenLectura(lectura({ revision_obligatoria: true }))).not.toMatch(/remoto|nube|internet/);
     expect(resumenLectura(lectura({ revision_obligatoria: true }))).toContain('confírmalos antes de registrar');
+  });
+
+  it('qué campos se marcan «Revisar»: los que nombran los motivos; sin motivo concreto, los dos; sin revisión, ninguno', () => {
+    expect(camposARevisar(lectura())).toEqual({ cui: false, nombre: false });
+    expect(camposARevisar(lectura({ revision_obligatoria: true, motivos: ['cui_corregido'] }))).toEqual({ cui: true, nombre: false });
+    expect(camposARevisar(lectura({ revision_obligatoria: true, motivos: ['nombres_por_posicion', 'apellidos_confianza_baja'] }))).toEqual({ cui: false, nombre: true });
+    expect(camposARevisar(lectura({ revision_obligatoria: true, motivos: ['cui_invalido', 'nombres_no_encontrado'] }))).toEqual({ cui: true, nombre: true });
+    expect(camposARevisar(lectura({ revision_obligatoria: true, motivos: [] }))).toEqual({ cui: true, nombre: true });
   });
 });

@@ -110,15 +110,16 @@ export function GaritaPage({ estado, refrescar, onLogout }: Props) {
   const capturaDpi = async (jpeg: string) => {
     setAviso(null);
     try {
-      // Local primero (sin red); el servidor remoto solo es respaldo y solo si este equipo lo permite.
+      // Se lee en este equipo (también sin internet); la foto no sale de aquí.
       const r = await api.ocr.dpi(jpeg);
       if (!r.cui && !r.nombre_completo) {
         setAviso({ tone: 'warn', texto: 'No se pudo leer el DPI. Captúralo manualmente.' });
         return;
       }
-      // Los campos quedan en el formulario para revisarlos; el aviso no repite el número ni el nombre.
-      form.current?.setDesdeOcrDpi(r);
-      setAviso({ tone: r.revision_obligatoria ? 'warn' : 'info', texto: `${resumenLectura(r)}${r.aviso ? ' Se usó el respaldo remoto porque la lectura local no alcanzó.' : ''}` });
+      // Los campos quedan en el formulario para revisarlos; si la lectura es dudosa, con la foto al lado. El aviso no
+      // repite el número ni el nombre.
+      form.current?.setDesdeOcrDpi(r, r.revision_obligatoria ? jpeg : null);
+      setAviso({ tone: r.revision_obligatoria ? 'warn' : 'info', texto: resumenLectura(r) });
     } catch (e) {
       setAviso({ tone: 'warn', texto: `Lectura de DPI no disponible (${mensajeDe(e)}). Captúralo manualmente.` });
     }

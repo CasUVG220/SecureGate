@@ -185,19 +185,21 @@ export interface NuevoAcceso {
   capturado_manualmente: boolean;
   /** Invitación QR presentada por el visitante, si entró por ese camino. */
   invitacion_qr_id?: string | null;
-  /** De dónde salió el DPI: OCR de este equipo, OCR remoto de respaldo o tecleado. */
+  /** De dónde salió el DPI: OCR de este equipo o tecleado. */
   origen_dpi?: OrigenDpi | null;
 }
 
-export type OrigenDpi = 'local' | 'remoto' | 'manual';
+/** De dónde salió el DPI de un acceso nuevo. (`remoto` solo existe en accesos anteriores al Sprint 10: ver `AccesoReciente`.) */
+export type OrigenDpi = 'local' | 'manual';
 
 /** Lectura de un DPI (T5). El CUI y los nombres son datos personales: no se guardan ni se registran en logs. */
 export interface ResultadoDpi {
-  origen: 'local' | 'remoto';
+  /** Siempre `local`: el DPI se lee en este equipo, también sin internet. */
+  origen: 'local';
   cui: string;
   nombres: string;
   apellidos: string;
-  /** nombres + apellidos (local) o el nombre completo que devuelve el servicio remoto. */
+  /** nombres + apellidos. */
   nombre_completo: string;
   confianza: { cui: number; nombres: number; apellidos: number };
   cui_valido: boolean;
@@ -206,8 +208,6 @@ export interface ResultadoDpi {
   motivos: string[];
   correcciones: number;
   ms_total: number;
-  /** Si se usó el respaldo remoto, por qué el OCR del equipo no bastó. */
-  aviso: string | null;
 }
 
 /**
@@ -256,8 +256,8 @@ export interface AccesoPendiente {
   placa: string | null;
   residente_casa: string | null;
   capturado_manualmente: boolean;
-  /** `local`, `remoto` o `manual`; vacío en accesos anteriores. */
-  origen_dpi?: OrigenDpi | null;
+  /** `local` o `manual`; vacío en accesos anteriores; `remoto` en accesos anteriores al Sprint 10 (ya no se produce). */
+  origen_dpi?: OrigenDpi | 'remoto' | null;
   /** Id del registro en el servidor; vacío mientras el acceso siga pendiente de enviar. */
   registro_id?: string | null;
   /** `anpr` si lo registró el reconocimiento continuo de placas (Sprint 10); vacío en los de siempre. */
@@ -565,14 +565,8 @@ export const api = {
     placa: (imagenBase64: string) => invoke<ResultadoOcr>('ocr_placa', { imagenBase64 }),
     precalentar: () => invoke<EstadoOcr>('ocr_precalentar'),
     estado: () => invoke<EstadoOcr>('ocr_estado'),
-    /** Local primero; remoto solo si el local falló o dudó, hay red y el equipo lo permite. */
+    /** Lee el DPI con el OCR de este equipo (funciona sin red; la foto no sale del equipo). */
     dpi: (imagenBase64: string) => invoke<ResultadoDpi>('ocr_dpi', { imagenBase64 }),
-    /** Solo el OCR de este equipo (funciona sin red). */
-    dpiLocal: (imagenBase64: string) => invoke<ResultadoDpi>('ocr_dpi_local', { imagenBase64 }),
-    /** Respaldo: Google Vision a través del servidor. */
-    dpiRemoto: (imagenBase64: string) => invoke<ResultadoDpi>('ocr_dpi_remoto', { imagenBase64 }),
-    dpiConfig: () => invoke<{ remoto_respaldo: boolean }>('ocr_dpi_config'),
-    dpiConfigurar: (remotoRespaldo: boolean) => invoke<{ remoto_respaldo: boolean }>('ocr_dpi_configurar', { remotoRespaldo }),
   },
 };
 
