@@ -4,9 +4,6 @@ import {
   getResidentes,
   registrarAcceso,
   decodeTokenPayload,
-  scanDPI,
-  scanPlaca,
-  buscarPreautorizacion,
   buscarVisitantesFrecuentes,
   verificarInvitacionQr,
   getConfigQr,
@@ -50,12 +47,6 @@ export default function GaritaPage() {
   const [loading, setLoading]         = useState(false);
   const [error, setError]             = useState<string | null>(null);
   const [sinSesion, setSinSesion]     = useState(false);
-  const [dpiOcr, setDpiOcr]           = useState(false);
-  const [placaOcr, setPlacaOcr]       = useState(false);
-  const [ocringDpi, setOcringDpi]     = useState(false);
-  const [ocringPlaca, setOcringPlaca] = useState(false);
-  const [ocrDpiMsg, setOcrDpiMsg]     = useState<string | null>(null);
-  const [ocrPlacaMsg, setOcrPlacaMsg] = useState<string | null>(null);
   const [ultimosIngresos, setUltimosIngresos] = useState<UltimoIngreso[]>([]);
   const [preautorizado, setPreautorizado] = useState(false);
   const [casaSearch, setCasaSearch]   = useState('');
@@ -76,11 +67,8 @@ export default function GaritaPage() {
   const [qrError, setQrError]         = useState<string | null>(null);
   const [configQr, setConfigQr]       = useState<ConfigQr | null>(null);
 
-  const dpiVideoRef   = useRef<HTMLVideoElement>(null);
-  const placaVideoRef = useRef<HTMLVideoElement>(null);
   const placaInputRef = useRef<HTMLInputElement>(null);
   const qrVideoRef    = useRef<HTMLVideoElement>(null);
-  const canvasRef     = useRef<HTMLCanvasElement>(null);
   const qrCanvasRef   = useRef<HTMLCanvasElement>(null);
   const streamRef     = useRef<MediaStream | null>(null);
 
@@ -100,8 +88,6 @@ export default function GaritaPage() {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
         streamRef.current = stream;
-        if (dpiVideoRef.current)   dpiVideoRef.current.srcObject = stream;
-        if (placaVideoRef.current) placaVideoRef.current.srcObject = stream;
         if (qrVideoRef.current)    qrVideoRef.current.srcObject = stream;
       } catch (err) {
         console.warn('Cámara no disponible:', err);
@@ -261,88 +247,6 @@ export default function GaritaPage() {
     setQrScanning(true);
   };
 
-  const captureFrame = (videoRef: React.RefObject<HTMLVideoElement | null>): string | null => {
-    const video  = videoRef.current;
-    const canvas = canvasRef.current;
-    if (!video || !canvas) return null;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return null;
-    canvas.width  = video.videoWidth  || 640;
-    canvas.height = video.videoHeight || 480;
-    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-    return canvas.toDataURL('image/jpeg', 0.9).replace(/^data:image\/jpeg;base64,/, '');
-  };
-
-  const handleCaptureDpi = async () => {
-    const base64 = captureFrame(dpiVideoRef);
-    if (!base64) return;
-    setOcringDpi(true);
-    setOcrDpiMsg(null);
-    try {
-      const res = await scanDPI(base64);
-      if (res.nombre || res.numero_dpi) {
-        setForm(prev => ({
-          ...prev,
-          nombre_visitante: res.nombre || prev.nombre_visitante,
-          numero_dpi:       res.numero_dpi || prev.numero_dpi,
-        }));
-        setDpiOcr(true);
-        setDpiHistorial(false);
-        setDpiDropdownOpen(false);
-        if (res.numero_dpi) {
-          const match = await buscarPreautorizacion({ dpi: res.numero_dpi });
-          if (match) {
-            setForm(prev => ({
-              ...prev,
-              nombre_visitante: match.nombre_visitante || prev.nombre_visitante,
-              numero_dpi:       match.numero_dpi || prev.numero_dpi,
-              placa:            match.placa ? placaParaInput(match.placa) : prev.placa,
-              residente_id:     match.residente_id,
-            }));
-            setPreautorizado(true);
-          }
-        }
-      } else {
-        setOcrDpiMsg(t('gate.dpiReadFail'));
-      }
-    } catch {
-      setOcrDpiMsg(t('gate.imageError'));
-    } finally {
-      setOcringDpi(false);
-    }
-  };
-
-  const handleCapturePlaca = async () => {
-    const base64 = captureFrame(placaVideoRef);
-    if (!base64) return;
-    setOcringPlaca(true);
-    setOcrPlacaMsg(null);
-    try {
-      const res = await scanPlaca(base64);
-      if (res.placa) {
-        setForm(prev => ({ ...prev, placa: placaParaInput(res.placa) }));
-        setPlacaOcr(true);
-        const match = await buscarPreautorizacion({ placa: res.placa });
-        if (match) {
-          setForm(prev => ({
-            ...prev,
-            nombre_visitante: match.nombre_visitante || prev.nombre_visitante,
-            numero_dpi:       match.numero_dpi || prev.numero_dpi,
-            placa:            match.placa ? placaParaInput(match.placa) : prev.placa,
-            residente_id:     match.residente_id,
-          }));
-          setPreautorizado(true);
-        }
-      } else {
-        setOcrPlacaMsg(t('gate.plateReadFail'));
-      }
-    } catch {
-      setOcrPlacaMsg(t('gate.imageError'));
-    } finally {
-      setOcringPlaca(false);
-    }
-  };
-
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setForm(prev => ({ ...prev, [e.target.name]: e.target.value }));
   };
@@ -371,12 +275,8 @@ export default function GaritaPage() {
   const resetForm = () => {
     setForm(EMPTY_FORM);
     setCasaSearch('');
-    setDpiOcr(false);
-    setPlacaOcr(false);
     setPreautorizado(false);
     setError(null);
-    setOcrDpiMsg(null);
-    setOcrPlacaMsg(null);
     setBlacklistBlock(null);
     setDpiHistorial(false);
     setDpiSugerencias([]);
@@ -425,7 +325,6 @@ export default function GaritaPage() {
 
   return (
     <div className="flex min-h-full flex-col text-gray-100 lg:flex-row">
-      <canvas ref={canvasRef} className="hidden" />
 
       {/* Blocking blacklist modal — must be dismissed before continuing */}
       {blacklistBlock && (
@@ -511,56 +410,6 @@ export default function GaritaPage() {
           </div>
         ) : (
           <>
-            {/* DPI scanner */}
-            <div className="sg-card flex min-h-64 flex-1 flex-col overflow-hidden">
-              <div className="flex items-center gap-2 px-4 py-2.5 border-b border-gray-700 shrink-0">
-                <span className="text-sm font-semibold text-gray-200">{t('gate.dpiScanner')}</span>
-                {dpiOcr && (
-                  <span className="text-xs bg-success-700 text-white px-2 py-0.5 rounded-full font-medium">OCR</span>
-                )}
-              </div>
-              <div className="flex-1 bg-gray-900 min-h-0 overflow-hidden">
-                <video ref={dpiVideoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
-              </div>
-              {ocrDpiMsg && (
-                <p className="px-4 py-1 text-xs text-danger-400 border-t border-gray-700 shrink-0">{ocrDpiMsg}</p>
-              )}
-              <div className="p-3 border-t border-gray-700 shrink-0">
-                <button
-                  onClick={handleCaptureDpi}
-                  disabled={ocringDpi}
-                  className="w-full bg-success-700 hover:bg-success-600 disabled:opacity-50 text-white font-semibold py-2 rounded-xl transition-colors text-sm"
-                >
-                  {ocringDpi ? t('common.processing') : t('gate.scanDocument')}
-                </button>
-              </div>
-            </div>
-
-            {/* Plate scanner */}
-            <div className="sg-card flex min-h-64 flex-1 flex-col overflow-hidden">
-              <div className="flex items-center gap-2 px-4 py-2.5 border-b border-gray-700 shrink-0">
-                <span className="text-sm font-semibold text-gray-200">{t('gate.plateScanner')}</span>
-                {placaOcr && (
-                  <span className="text-xs bg-success-700 text-white px-2 py-0.5 rounded-full font-medium">OCR</span>
-                )}
-              </div>
-              <div className="flex-1 bg-gray-900 min-h-0 overflow-hidden">
-                <video ref={placaVideoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
-              </div>
-              {ocrPlacaMsg && (
-                <p className="px-4 py-1 text-xs text-danger-400 border-t border-gray-700 shrink-0">{ocrPlacaMsg}</p>
-              )}
-              <div className="p-3 border-t border-gray-700 shrink-0">
-                <button
-                  onClick={handleCapturePlaca}
-                  disabled={ocringPlaca}
-                  className="w-full bg-success-700 hover:bg-success-600 disabled:opacity-50 text-white font-semibold py-2 rounded-xl transition-colors text-sm"
-                >
-                  {ocringPlaca ? t('common.processing') : t('gate.scanPlate')}
-                </button>
-              </div>
-            </div>
-
             {/* QR scanner */}
             <div className="sg-card flex min-h-64 flex-1 flex-col overflow-hidden">
               <div className="flex items-center gap-2 px-4 py-2.5 border-b border-gray-700 shrink-0">
@@ -630,10 +479,7 @@ export default function GaritaPage() {
             <div className="relative">
               <div className="flex items-center gap-1.5 mb-1">
                 <label className="text-xs text-gray-400">{t('gate.dpi')} *</label>
-                {dpiOcr && (
-                  <span className="text-xs bg-success-700 text-white px-1.5 py-0.5 rounded font-medium">OCR</span>
-                )}
-                {dpiHistorial && !dpiOcr && (
+                {dpiHistorial && (
                   <span className="text-xs bg-brand-500 text-brand-ink px-1.5 py-0.5 rounded font-medium">Historial</span>
                 )}
               </div>

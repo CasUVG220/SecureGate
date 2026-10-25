@@ -941,28 +941,6 @@ export const decodeTokenPayload = (token: string): Record<string, unknown> | nul
   }
 };
 
-export const scanDPI = async (
-  base64: string
-): Promise<{ nombre: string; numero_dpi: string }> => {
-  const res = await fetch(`${BASE_URL}/api/ocr/dpi`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ image: base64 }),
-  });
-  return res.json();
-};
-
-export const scanPlaca = async (
-  base64: string
-): Promise<{ placa: string }> => {
-  const res = await fetch(`${BASE_URL}/api/ocr/placa`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ image: base64 }),
-  });
-  return res.json();
-};
-
 /**
  * Descarga un CSV autenticado. Rechaza si el backend responde con error: antes
  * el fallo se tragaba en silencio y la pantalla decía "descargado" sin archivo.
