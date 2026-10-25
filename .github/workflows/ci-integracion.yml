@@ -246,6 +246,12 @@ jobs:
       - name: Pruebas del sidecar
         run: npm test
 
+      # OCR 100 % local (Sprint 10): las métricas del banco de DPI (exactitud, revisión, errores silenciosos, conjunto real
+      # anónimo y fuera del repositorio). Sin modelos ni imágenes.
+      - name: Métricas del banco de DPI
+        working-directory: .
+        run: node --test scripts/eval-dpi/eval.test.mjs
+
   # Sprint 10 (ANPR): de punta a punta con la garita de verdad sin ventana. Un clip sintético → ffmpeg → el sidecar real →
   # el bucle de Rust → decisión contra el SQLCipher → cola offline → el backend de este job (Postgres) → registro `anpr`
   # (prueba de Jest `anpr.e2e.int.test.ts`, que lanza la de Rust `anpr::pruebas_reales::e2e_clip_hasta_el_backend`). Después,

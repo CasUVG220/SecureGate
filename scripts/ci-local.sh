@@ -45,7 +45,8 @@ for p in "${PASOS[@]}"; do
       for b in node ffmpeg; do f="$RAIZ/desktop/src-tauri/binaries/$b-x86_64-unknown-linux-gnu"; [ -e "$f" ] || touch "$f"; done
       correr "desktop · Rust" desktop/src-tauri cargo test --lib --locked ;;
     sidecar)
-      correr "sidecar · node --test" desktop/sidecar-ocr npm test ;;
+      correr "sidecar · node --test" desktop/sidecar-ocr npm test
+      correr "sidecar · métricas del banco de DPI" . node --test scripts/eval-dpi/eval.test.mjs ;;
     anpr-e2e)
       correr "ANPR · contrato placas de residentes (web → sync → garita)" backend env TZ=America/Guatemala SG_CONTRATO_GARITA=1 npx jest -c jest.integration.config.ts --runInBand --testPathPattern anpr.contrato
       correr "ANPR · clip → garita → backend" backend env TZ=America/Guatemala SG_E2E_ANPR=1 npx jest -c jest.integration.config.ts --runInBand --testPathPattern anpr.e2e

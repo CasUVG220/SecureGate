@@ -2,29 +2,26 @@
 /**
  * Evaluador del OCR de DPI (T3, SCRUM-121).
  *
- *   node scripts/eval-dpi/index.mjs --dir <carpeta> [--csv <verdad_terreno.csv>] [--motor local|vision|ambos]
+ *   node scripts/eval-dpi/index.mjs --dir <carpeta> [--csv <verdad_terreno.csv>] [--real]
  *                                   [--out scripts/eval-dpi/reportes] [--limite N]
- *                                   [--backend http://localhost:3000 --token <JWT de un agente>]
  *
  * La carpeta trae las imágenes y un `verdad_terreno.csv` con columnas `archivo,cui,nombres,apellidos[,variante]`
- * (las demás se ignoran). El conjunto sintético sale de `desktop/sidecar-ocr/fixtures-dpi/generar.mjs`; el REAL lo arma
- * el equipo con consentimiento (docs/ocr_dpi_local.md). Este script no busca ni descarga DPI de ninguna parte.
+ * (las demás se ignoran; se acepta `,` o `;` como separador, con o sin comillas). El conjunto sintético sale de
+ * `desktop/sidecar-ocr/fixtures-dpi/generar.mjs`; el REAL lo arma el equipo con consentimiento (docs/ocr_dpi_local.md).
+ * Este script no busca, no descarga y no envía DPI a ninguna parte: el OCR corre en este mismo proceso, sin red.
  *
- * Motores:
- *   local   El extractor del sidecar (desktop/sidecar-ocr), en este mismo proceso. Hoy no hay red de por medio.
- *   vision  Google Vision a través del backend (POST /api/ocr/dpi, el camino real de producción: cuesta por llamada y
- *           necesita --backend y --token). Vision devuelve `nombre` (nombres + apellidos juntos): por campo solo se puede
- *           comparar el CUI y el nombre completo.
- *   ambos   Los dos, con la tabla comparativa al final.
+ * Conjunto REAL (`--real`, o cualquier carpeta que no sea el sintético): la carpeta debe estar FUERA del repositorio (si
+ * no, se niega: las imágenes no pueden terminar en un commit) y el reporte no lleva los nombres de los archivos (pueden
+ * traer el nombre de la persona): cada documento sale como `doc_001`, `doc_002`…
  *
  * Reporta: exactitud del CUI, exactitud por campo, tasa de revisión manual, errores SILENCIOSOS (CUI mal y sin marcar
- * para revisión: lo peligroso) y tiempo por captura (p50 y p95). Escribe `.json` y `.md` en --out.
+ * para revisión: lo peligroso), nombres mal sin marcar y tiempo por captura (p50 y p95). Escribe `.json` y `.md` en --out.
  *
  * Los nombres se comparan en mayúsculas, sin acentos y con espacios colapsados: el modelo de reconocimiento es del alfabeto
  * latino básico y no produce Ñ ni vocales con tilde; la comparación estricta (con tildes) se informa aparte.
  */
 import { createRequire } from 'node:module';
-import { readFileSync, readdirSync, mkdirSync, writeFileSync, existsSync } from 'node:fs';
+import { readFileSync, mkdirSync, writeFileSync, existsSync } from 'node:fs';
 import { performance } from 'node:perf_hooks';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -46,21 +43,34 @@ export function percentil(valores, p) {
   return v[Math.min(v.length - 1, Math.max(0, Math.ceil((p / 100) * v.length) - 1))];
 }
 
-/** CSV simple (sin comillas ni comas dentro de los campos: los datos de prueba no las llevan). */
+/**
+ * CSV de la verdad de terreno. Separador `,` o `;` (el que tenga la cabecera; Excel en español guarda con `;`), campos con
+ * o sin comillas dobles (sin separadores dentro: un nombre no los lleva), con o sin BOM.
+ */
 export function leerCsv(texto) {
   const [cab, ...filas] = texto.replace(/^﻿/, '').split(/\r?\n/).filter(l => l.trim());
-  const cols = cab.split(',').map(c => c.trim());
-  return filas.map(l => Object.fromEntries(l.split(',').map((v, i) => [cols[i], v.trim()])));
+  const sep = (cab.match(/;/g) ?? []).length > (cab.match(/,/g) ?? []).length ? ';' : ',';
+  const limpiar = (v) => v.trim().replace(/^"(.*)"$/, '$1').trim();
+  const cols = cab.split(sep).map(limpiar);
+  return filas.map(l => Object.fromEntries(l.split(sep).map((v, i) => [cols[i], limpiar(v)])));
 }
+
+/** ¿`ruta` está dentro de `raiz`? */
+export const dentroDe = (ruta, raiz) => {
+  const rel = path.relative(path.resolve(raiz), path.resolve(ruta));
+  return rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel));
+};
+
+/** Nombres de archivo anónimos para el reporte de un conjunto real (`doc_001`…): el nombre del archivo puede ser el de la persona. */
+export const anonimizar = (detalle) => detalle.map((d, i) => ({ ...d, archivo: `doc_${String(i + 1).padStart(3, '0')}` }));
 
 // ── argumentos ───────────────────────────────────────────────────────────────────────────────────────────
 function leerArgs(argv) {
   const get = (f, d) => { const i = argv.indexOf(f); return i >= 0 ? argv[i + 1] : d; };
   return {
-    dir: get('--dir'), csv: get('--csv'), motor: get('--motor', 'local'),
+    dir: get('--dir'), csv: get('--csv'), real: argv.includes('--real'),
     out: path.resolve(get('--out', path.join(aquí, 'reportes'))),
     limite: Number(get('--limite', 0)) || 0,
-    backend: get('--backend', process.env.EVAL_DPI_BACKEND), token: get('--token', process.env.EVAL_DPI_TOKEN),
   };
 }
 
@@ -90,26 +100,6 @@ async function motorLocal() {
       return { cui: '', nombres: '', apellidos: '', nombre_completo: '', requiere_revision: true, ms_inferencia: r.ms_inferencia, nota: 'sin extractor de DPI' };
     },
     async cerrar() { await service?.destroy().catch(() => {}); },
-  };
-}
-
-function motorVision({ backend, token }) {
-  if (!backend || !token) throw new Error('El motor «vision» necesita --backend y --token (o EVAL_DPI_BACKEND y EVAL_DPI_TOKEN). Cada imagen cuesta una llamada a Google Vision.');
-  return {
-    nombre: 'vision',
-    extractor: `POST ${backend}/api/ocr/dpi (Google Vision, parser del backend)`,
-    async iniciar() {},
-    async extraer(buffer) {
-      const res = await fetch(`${backend.replace(/\/$/, '')}/api/ocr/dpi`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ image: buffer.toString('base64') }),
-      });
-      const cuerpo = await res.json().catch(() => ({}));
-      if (!res.ok) return { cui: '', nombres: null, apellidos: null, nombre_completo: '', requiere_revision: null, nota: `HTTP ${res.status}: ${cuerpo.error ?? ''}` };
-      return { cui: soloDigitos(cuerpo.numero_dpi), nombres: null, apellidos: null, nombre_completo: cuerpo.nombre ?? '', requiere_revision: null };
-    },
-    async cerrar() {},
   };
 }
 
@@ -157,6 +147,8 @@ export function resumir(detalle) {
     // Lo peligroso: el CUI salió mal y nadie lo marcó para revisión.
     errores_silenciosos: conRev.filter(d => !d.cui_ok && !d.requiere_revision).length,
     errores_silenciosos_pct: pct(conRev.filter(d => !d.cui_ok && !d.requiere_revision).length, conRev.length),
+    // El nombre completo salió mal y no se marcó (la pantalla lo muestra igual para revisarlo, pero sin la marca «Revisar»).
+    nombres_mal_sin_marcar: conRev.filter(d => d.nombre_completo_ok === false && !d.requiere_revision).length,
     revisiones_innecesarias: conRev.filter(d => d.cui_ok && d.requiere_revision).length,
   } : { informada: false, nota: 'El motor no informa revisión: la pantalla siempre muestra los campos para confirmar.' };
   const porVariante = {};
@@ -178,7 +170,8 @@ export function resumir(detalle) {
 export function reporteMarkdown(resultados, meta) {
   const L = [];
   L.push(`# Evaluación del OCR de DPI`, '', `- Fecha: ${meta.fecha}`, `- Conjunto: \`${meta.dir}\` (${meta.n} imágenes)`, `- Origen: **${meta.origen}**`, '');
-  if (meta.sintetico) L.push('> ⚠️ Conjunto SINTÉTICO (DPI ficticios). Sirve para regresiones y tiempos; **NO es evidencia de la precisión con DPI reales**. La decisión de corte se toma con el conjunto real.', '');
+  if (meta.sintetico) L.push('> ⚠️ Conjunto SINTÉTICO (DPI ficticios). Sirve para regresiones y tiempos; **NO es evidencia de la precisión con DPI reales**.', '');
+  else L.push('> Conjunto REAL, con consentimiento. Este reporte no lleva imágenes, nombres de archivo ni datos de las personas: no subas las imágenes al repositorio ni a ningún servicio.', '');
   const celda = (c) => (c && c.n ? `${c.pct} % (${c.aciertos}/${c.n})` : 'n/d');
   L.push('| Métrica | ' + resultados.map(r => r.motor).join(' | ') + ' |', '|---|' + resultados.map(() => '---').join('|') + '|');
   const fila = (nombre, f) => L.push(`| ${nombre} | ${resultados.map(r => f(r.resumen)).join(' | ')} |`);
@@ -190,6 +183,7 @@ export function reporteMarkdown(resultados, meta) {
   fila('Apellidos, comparación estricta (con tildes)', s => celda(s.apellidos_estricto));
   fila('Tasa de revisión manual', s => (s.revision.informada ? `${s.revision.tasa_pct} % (${s.revision.marcadas}/${s.revision.n})` : 'n/d'));
   fila('Errores silenciosos (CUI mal y sin marcar)', s => (s.revision.informada ? `${s.revision.errores_silenciosos_pct} % (${s.revision.errores_silenciosos})` : 'n/d'));
+  fila('Nombre completo mal y sin marcar', s => (s.revision.informada ? `${s.revision.nombres_mal_sin_marcar} de ${s.revision.n}` : 'n/d'));
   fila('Tiempo por captura p50 / p95', s => `${s.tiempo_ms.p50} / ${s.tiempo_ms.p95} ms`);
   fila('Meta RNF-03 (p95 < 5 s)', s => (s.meta_rnf03_5s === null ? 'n/d' : s.meta_rnf03_5s ? 'sí' : 'NO'));
   L.push('');
@@ -204,16 +198,18 @@ export function reporteMarkdown(resultados, meta) {
 // ── main ─────────────────────────────────────────────────────────────────────────────────────────────────
 async function main() {
   const a = leerArgs(process.argv.slice(2));
-  if (!a.dir) { console.error('Uso: node scripts/eval-dpi/index.mjs --dir <carpeta con imágenes y verdad_terreno.csv> [--motor local|vision|ambos]'); process.exit(2); }
+  if (!a.dir) { console.error('Uso: node scripts/eval-dpi/index.mjs --dir <carpeta con imágenes y verdad_terreno.csv> [--real] [--out <carpeta>]'); process.exit(2); }
   const carpeta = path.resolve(a.dir);
   const rutaCsv = a.csv ? path.resolve(a.csv) : path.join(carpeta, 'verdad_terreno.csv');
   if (!existsSync(rutaCsv)) { console.error(`No existe ${rutaCsv}. Genera el conjunto sintético con: node desktop/sidecar-ocr/fixtures-dpi/generar.mjs --out ${a.dir}`); process.exit(2); }
   let filas = leerCsv(readFileSync(rutaCsv, 'utf8'));
   if (a.limite) filas = filas.slice(0, a.limite);
-  const motores = [];
-  if (a.motor === 'local' || a.motor === 'ambos') motores.push(await motorLocal());
-  if (a.motor === 'vision' || a.motor === 'ambos') motores.push(motorVision(a));
-  if (!motores.length) { console.error('--motor debe ser local, vision o ambos'); process.exit(2); }
+  const sintetico = !a.real && (/sint|fixtures-dpi/i.test(carpeta) || filas.every(f => /^img_\d+\.jpg$/.test(f.archivo)));
+  if (!sintetico && dentroDe(carpeta, raíz)) {
+    console.error('Las imágenes de DPI REALES no pueden estar dentro del repositorio (terminarían en un commit). Muévelas a una carpeta fuera de él (ver docs/ocr_dpi_local.md).');
+    process.exit(2);
+  }
+  const motores = [await motorLocal()];
 
   const resultados = [];
   for (const m of motores) {
@@ -221,14 +217,14 @@ async function main() {
     resultados.push(await evaluar(m, filas, carpeta, (i, n) => { if (i % 10 === 0 || i === n) process.stderr.write(`${i}/${n} `); }));
     process.stderr.write('\n');
   }
+  if (!sintetico) for (const r of resultados) r.detalle = anonimizar(r.detalle);
   const meta = {
-    fecha: new Date().toISOString(), dir: path.relative(raíz, carpeta) || carpeta, n: filas.length,
-    sintetico: /sint|fixtures-dpi/i.test(carpeta) || filas.every(f => /^img_\d+\.jpg$/.test(f.archivo)),
-    origen: motores.map(m => m.nombre).join(' + '),
+    fecha: new Date().toISOString(), dir: sintetico ? (path.relative(raíz, carpeta) || carpeta) : '(conjunto real, fuera del repositorio)', n: filas.length,
+    sintetico, origen: motores.map(m => m.nombre).join(' + '),
   };
   mkdirSync(a.out, { recursive: true });
   const sello = meta.fecha.replace(/[:.]/g, '-').slice(0, 19);
-  // El detalle por imagen lleva solo nombres de archivo y aciertos: ningún dato personal ni imagen.
+  // El detalle por imagen lleva solo aciertos (y en el sintético, el nombre del archivo): ningún dato personal ni imagen.
   writeFileSync(path.join(a.out, `eval-dpi-${sello}.json`), JSON.stringify({ meta, resultados }, null, 2));
   const md = reporteMarkdown(resultados, meta);
   writeFileSync(path.join(a.out, `eval-dpi-${sello}.md`), md);
