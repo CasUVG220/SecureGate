@@ -24,7 +24,7 @@ const programar = (tareas?: TareaProgramada[]) => { const r = programarTareas(ta
 
 describe('tareas programadas', () => {
   it('hay cinco y cada expresión es válida para la versión instalada de node-cron', () => {
-    expect(TAREAS.map(t => t.nombre)).toEqual(['mora.job', 'recordatorios.job', 'invitaciones.job', 'facturacion.mensual', 'facturacion.vencidas']);
+    expect(TAREAS.map(t => t.nombre)).toEqual(['mora.job', 'recordatorios.job', 'invitaciones.job', 'facturacion.mensual', 'facturacion.vencidas', 'anpr.evidencias']);
     for (const t of TAREAS) expect([t.nombre, cron.validate(t.expresion)]).toEqual([t.nombre, true]);
   });
 

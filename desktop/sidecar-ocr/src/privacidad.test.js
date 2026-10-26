@@ -10,8 +10,12 @@ const { spawn, execFileSync } = require('node:child_process');
 
 const modelos = path.join(__dirname, '..', 'models', 'SHA256SUMS');
 
+// Los módulos del ANPR (Sprint 10) entran en la misma guarda: la evidencia sale por stdout hacia Rust, que la guarda cifrada.
+const anpr = fs.readdirSync(path.join(__dirname, 'anpr')).filter(f => f.endsWith('.js') && !f.endsWith('.test.js')).map(f => path.join('anpr', f));
+
 test('guarda de código: el sidecar no escribe archivos ni imprime con console.log', () => {
-  for (const f of ['server.js', 'dpi.js', 'enderezar.js']) {
+  assert.ok(anpr.length > 0, 'la guarda encuentra los módulos del ANPR');
+  for (const f of ['server.js', 'dpi.js', 'enderezar.js', ...anpr]) {
     const codigo = fs.readFileSync(path.join(__dirname, f), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
     for (const prohibido of ['writeFile', 'createWriteStream', 'appendFile', 'console.log', 'console.error', 'console.info', 'toFile(', 'mkdtemp']) {
       assert.ok(!codigo.includes(prohibido), `${f} no debe usar ${prohibido}`);

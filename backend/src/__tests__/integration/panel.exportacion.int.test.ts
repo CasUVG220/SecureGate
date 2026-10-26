@@ -147,6 +147,8 @@ describe('I-27 exportación de datos', () => {
     expect(por['sucursales.csv']).toContain('INT Sucursal A2');
     expect(por['sucursales.csv']).not.toContain('INT Sucursal B1');
     expect(por['visitas.csv']).toContain(marcaA);
+    // Sprint 10: cada visita dice cómo se capturó (manual, clic, qr; anpr solo en entradas de residentes, que no son visitas).
+    expect(por['visitas.csv'].replace('\ufeff', '').split('\r\n')[0]).toBe('id,sucursal_id,residente_id,visitante,dpi,tipo,entrada,salida,autorizado,notas,metodo');
     expect(por['usuarios.csv']).toContain(fx.email.adminEmpA);
     expect(por['residentes.csv']).toContain(fx.email.resA1);
     expect(por['garitas.csv'].split('\r\n').length).toBeGreaterThan(2);    // encabezado + la garita sembrada de A1 + línea final vacía
@@ -196,7 +198,8 @@ describe('I-27 exportación de datos', () => {
     const zip = leerZip((await descargar('owner', e)).body as Buffer);
     const lineas = zip.find(x => x.nombre === 'visitas.csv')!.texto.split('\r\n').filter(Boolean);
     expect(lineas).toHaveLength(4501);                                      // encabezado + 4 500
-    const notas = lineas.slice(1).map(l => l.split(',').pop()!);
+    const iNotas = lineas[0].replace('\ufeff', '').split(',').indexOf('notas');          // por nombre: la columna `metodo` va después
+    const notas = lineas.slice(1).map(l => l.split(',')[iNotas]);
     expect(new Set(notas).size).toBe(4500);
     expect(zip.find(x => x.nombre === 'LEEME.txt')!.texto).toContain('visitas.csv: 4500 fila(s)');
   });

@@ -15,6 +15,7 @@ import { translations } from '../translations';
  *   - «2FA» / «MFA» / «OTP» → verificación en dos pasos                                   (SCRUM-123)
  *   - «Logo URL»      → el logo se sube como archivo, no se escribe una URL                 (SCRUM-115 / H12)
  *   - «ingreso(s)»    → entrada(s) para las visitas; el dinero es «cobrado» / «recaudado»  (SCRUM-115 / H11)
+ *   - «barrera»       → talanquera                                                        (Sprint 10, ANPR)
  */
 const entradas = (idioma: 'es' | 'en') => Object.entries(translations[idioma]);
 
@@ -35,6 +36,7 @@ describe('glosario: términos descartados en la interfaz', () => {
     ['es', /\b2fa\b|\bmfa\b|\botp\b|autenticaci[oó]n (de|en) dos factores/i, '2FA / MFA / OTP → verificación en dos pasos'],
     ['en', /\b2fa\b|\bmfa\b|\botp\b|two-factor/i, '2FA / MFA / OTP / two-factor → two-step verification'],
     ['en', /\badmins?\b/i, 'admin → administrator'],
+    ['es', /\bbarreras?\b/i, 'barrera → talanquera'],
   ] as const)('%s: ningún texto usa el término descartado (%s)', (idioma, patron, regla) => {
     const infracciones = entradas(idioma)
       .filter(([, valor]) => patron.test(valor))
@@ -48,6 +50,14 @@ describe('glosario: términos descartados en la interfaz', () => {
       expect(translations.es[k], `es ${k}`).toBeTruthy();
       expect(translations.en[k], `en ${k}`).toBeTruthy();
     }
+  });
+
+  it('accesos por placas (Sprint 10): «Automático (placas)» y «Verificado por agente», en las dos lenguas', () => {
+    expect(translations.es['entradas.method.anpr']).toBe('Automático (placas)');
+    expect(translations.es['entradas.verified']).toBe('Verificado por agente');
+    expect(translations.en['entradas.method.anpr']).toBe('Automatic (plates)');
+    expect(translations.en['entradas.verified']).toBeTruthy();
+    expect(translations.es['plates.listLabel']).toBe('Placas autorizadas');
   });
 
   it('los nombres oficiales del menú son los del glosario', () => {

@@ -4,23 +4,28 @@
  *
  * `capturado_manualmente` = el DPI NO salió del OCR. Se enciende solo al
  * teclear el número y el agente puede forzarlo; viaja hasta el backend para
- * auditoría. T5: además viaja `origen_dpi` (local / remoto / manual). Un DPI leído
- * con correcciones o poca seguridad exige que el agente lo confirme contra el
- * documento antes de registrar; el formulario siempre queda visible y editable.
+ * auditoría. T5: además viaja `origen_dpi` (local / manual). Un DPI leído con
+ * correcciones, poca seguridad, CUI inválido o un campo faltante NUNCA se acepta
+ * en silencio: los campos dudosos se marcan «Revisar», se muestra la foto
+ * capturada (solo en memoria, se descarta al registrar o limpiar) y el agente
+ * confirma, corrige o lo escribe a mano. El formulario siempre queda editable.
  */
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState, type FormEvent } from 'react';
 import { Alert } from '../shared/Alert';
 import { Button, Input, Textarea } from '../ui';
 import { api, mensajeDe, type Evaluacion, type InvitacionQr, type OrigenDpi, type Residente, type ResultadoApertura, type ResultadoDpi } from '../../lib/tauri';
-import { resumenLectura, textosRevision } from '../../lib/dpi';
+import { camposARevisar, resumenLectura, textosRevision } from '../../lib/dpi';
 import { esValida, formatear, normalizar } from '../../lib/placa';
 import { diaCorto } from '../../lib/tiempo';
 
 export interface VisitanteFormHandle {
   /** Rellena la placa (desde el OCR). */
   setPlaca: (placa: string) => void;
-  /** Rellena nombre + DPI desde la lectura del DPI (local o remota). */
-  setDesdeOcrDpi: (lectura: ResultadoDpi) => void;
+  /**
+   * Rellena nombre + DPI desde la lectura del DPI. `foto` (JPEG en base64) se muestra al lado si la lectura pide revisión,
+   * para comparar sin volver a mirar la cámara; nunca se guarda.
+   */
+  setDesdeOcrDpi: (lectura: ResultadoDpi, foto?: string | null) => void;
   /** Rellena el formulario con una invitación QR ya verificada. */
   setDesdeQr: (inv: InvitacionQr) => void;
   /** Lleva el cursor al campo de la placa (alternativa a la cámara: «Escribir placa»). */
@@ -48,6 +53,8 @@ export const VisitanteForm = forwardRef<VisitanteFormHandle, Props>(function Vis
   /** Cómo se obtuvo el DPI que está en pantalla, y la lectura (sin datos personales) que explica qué revisar. */
   const [origenDpi, setOrigenDpi] = useState<OrigenDpi>('manual');
   const [lectura, setLectura] = useState<ResultadoDpi | null>(null);
+  /** Foto del DPI capturada (solo mientras la lectura dudosa espera revisión). */
+  const [fotoDpi, setFotoDpi] = useState<string | null>(null);
   const [confirmado, setConfirmado] = useState(false);
   const [busqueda, setBusqueda] = useState('');
   const [resultados, setResultados] = useState<Residente[]>([]);
@@ -66,13 +73,14 @@ export const VisitanteForm = forwardRef<VisitanteFormHandle, Props>(function Vis
       placaRef.current?.focus();
       placaRef.current?.scrollIntoView?.({ block: 'center', behavior: 'smooth' });
     },
-    setDesdeOcrDpi: r => {
+    setDesdeOcrDpi: (r, foto) => {
       if (r.nombre_completo) setNombre(r.nombre_completo);
       if (r.cui) {
         setDpi(r.cui.slice(0, 13));
         setManual(false);
         setOrigenDpi(r.origen);
         setLectura(r);
+        setFotoDpi(r.revision_obligatoria && foto ? foto : null);
         setConfirmado(!r.revision_obligatoria);
       }
     },
@@ -91,7 +99,7 @@ export const VisitanteForm = forwardRef<VisitanteFormHandle, Props>(function Vis
       setBusqueda('');
       setResultados([]);
       if (inv.nombre_visitante) setNombre(inv.nombre_visitante);
-      if (inv.numero_dpi) { setDpi(inv.numero_dpi); setManual(false); setOrigenDpi('manual'); setLectura(null); }
+      if (inv.numero_dpi) { setDpi(inv.numero_dpi); setManual(false); setOrigenDpi('manual'); setLectura(null); setFotoDpi(null); }
       if (inv.placa) setPlaca(inv.placa);
     },
   }));
@@ -127,7 +135,7 @@ export const VisitanteForm = forwardRef<VisitanteFormHandle, Props>(function Vis
 
   const limpiar = () => {
     setNombre(''); setDpi(''); setPlaca(''); setNotas(''); setManual(true);
-    setOrigenDpi('manual'); setLectura(null); setConfirmado(false);
+    setOrigenDpi('manual'); setLectura(null); setFotoDpi(null); setConfirmado(false);
     setBusqueda(''); setResidente(null); setEvaluacion(null); setError(null);
     setQr(null);
   };
@@ -163,6 +171,11 @@ export const VisitanteForm = forwardRef<VisitanteFormHandle, Props>(function Vis
   };
 
   const bloqueado = evaluacion?.bloqueado ?? false;
+  /** Campos de una lectura dudosa que el agente debe revisar (mientras no la confirme ni la escriba a mano). */
+  const revisar = lectura && !manual && !confirmado ? camposARevisar(lectura) : { cui: false, nombre: false };
+  const marcaRevisar = (
+    <span aria-hidden="true" className="ml-2 rounded bg-warning-500/15 px-1.5 py-0.5 text-2xs font-bold uppercase tracking-wide text-warning-400">Revisar</span>
+  );
 
   return (
     <form onSubmit={submit} className="space-y-4" aria-disabled={!habilitado}>
@@ -170,13 +183,14 @@ export const VisitanteForm = forwardRef<VisitanteFormHandle, Props>(function Vis
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Input
-          label="Número de DPI"
+          label={<>Número de DPI{revisar.cui && marcaRevisar}</>}
           className={CAMPO_GRANDE}
           inputMode="numeric"
           placeholder="13 dígitos"
           value={dpi}
           onChange={e => { setDpi(e.target.value.replace(/\D/g, '').slice(0, 13)); setManual(true); setOrigenDpi('manual'); }}
           error={dpi && !DPI_RE.test(dpi) ? 'Debe tener 13 dígitos' : null}
+          hint={revisar.cui ? 'Revisar: compáralo con el documento.' : undefined}
         />
         <Input
           ref={placaRef}
@@ -193,6 +207,13 @@ export const VisitanteForm = forwardRef<VisitanteFormHandle, Props>(function Vis
 
       {lectura && !manual && (
         <Alert tone={lectura.revision_obligatoria ? 'warn' : 'info'}>
+          {fotoDpi && lectura.revision_obligatoria && (
+            <img
+              src={fotoDpi.startsWith('data:') ? fotoDpi : `data:image/jpeg;base64,${fotoDpi}`}
+              alt="Foto del DPI capturada: compárala con los datos marcados «Revisar»"
+              className="mb-2 max-h-40 w-auto rounded-md border border-warning-500/40 object-contain"
+            />
+          )}
           <p data-testid="lectura-dpi"><strong>{resumenLectura(lectura)}</strong></p>
           {textosRevision(lectura).length > 0 && (
             <ul className="mt-1 list-disc pl-5 text-xs">
@@ -208,7 +229,14 @@ export const VisitanteForm = forwardRef<VisitanteFormHandle, Props>(function Vis
         </Alert>
       )}
 
-      <Input label="Nombre del visitante" value={nombre} onChange={e => setNombre(e.target.value)} required maxLength={150} />
+      <Input
+        label={<>Nombre del visitante{revisar.nombre && marcaRevisar}</>}
+        value={nombre}
+        onChange={e => setNombre(e.target.value)}
+        required
+        maxLength={150}
+        hint={revisar.nombre ? 'Revisar: compáralo con el documento.' : undefined}
+      />
 
       {qr && (
         <Alert tone="ok">

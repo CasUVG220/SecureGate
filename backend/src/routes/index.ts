@@ -1,7 +1,6 @@
 import { Router } from 'express';
 import pool from '../db/pool';
 import { auditLog } from '../middleware/audit.middleware';
-import { crearLimitador } from '../middleware/limitadores';
 import authRouter from './auth.routes';
 import residentesRouter from './residentes.routes';
 import accesosRouter from './accesos.routes';
@@ -10,7 +9,6 @@ import pagosRouter from './pagos.routes';
 import preautorizacionesRouter from './preautorizaciones.routes';
 import invitacionesQrRouter from './invitacionesQr.routes';
 import configQrRouter from './configQr.routes';
-import ocrRouter from './ocr.routes';
 import reportesRouter from './reportes.routes';
 import configuracionCargosRouter from './configuracion-cargos.routes';
 import empresasRouter from './empresas.routes';
@@ -31,6 +29,7 @@ import licenciasRouter from './licencias.routes';
 import syncRouter from './sync.routes';
 import invitacionesRouter from './invitaciones.routes';
 import contactoRouter from './contacto.routes';
+import anprRouter from './anpr.routes';
 import { verifyToken, requireOwner, requireAdminEmpresa, requireAdminSucursal, requireStaff } from '../middleware/auth.middleware';
 import { getDashboard } from '../controllers/dashboard.controller';
 import { getAuditLogs, getAuditAcciones } from '../controllers/audit.controller';
@@ -56,23 +55,15 @@ router.use('/usuarios',   verifyToken, usuariosRouter);
 // rol ruta por ruta (hay rutas /me y /mis abiertas al residente).
 router.use('/residentes', residentesRouter);
 router.use('/accesos', accesosRouter);
+// ANPR continuo (Sprint 10): vehículos de residentes y lo que la garita registra sola. Guards ruta por ruta.
+router.use('/anpr', anprRouter);
 // Configuración de cargos por sucursal: sólo administración. Antes /cargos no
 // tenía NINGÚN middleware de autenticación.
 router.use('/cargos', verifyToken, requireAdminSucursal, cargosRouter);
 router.use('/pagos', pagosRouter);
 router.use('/preautorizaciones', preautorizacionesRouter);
-// Proxy hacia Google Vision con nuestra API key: sólo personal autenticado y
-// con límite propio (cuesta dinero por llamada). Antes era anónimo.
-const ocrLimiter = crearLimitador({
-  nombre: 'ocr-usuario',
-  windowMs: 60 * 1000,
-  max: parseInt(process.env.RATE_LIMIT_OCR_MAX || '30', 10),
-  // Por usuario (antes por IP): varios agentes detrás del mismo NAT no se agotan el cupo entre sí. Los bloqueos quedan auditados.
-  porUsuario: true,
-  accion: 'OCR_ESCANEO',
-  mensaje: 'Demasiadas lecturas de documento, espera un momento',
-});
-router.use('/ocr', verifyToken, requireStaff, ocrLimiter, ocrRouter);
+// El OCR (DPI y placa) es 100 % local en la app de la garita desde el Sprint 10: el backend no recibe imágenes de documentos
+// ni llama a ningún servicio de OCR (ver docs/ocr_local_decision.md).
 // Los CSV traen DPI y nombre de todos los visitantes: administración.
 router.use('/reportes', verifyToken, requireAdminSucursal, reportesRouter);
 router.use('/configuracion-cargos', verifyToken, requireAdminSucursal, configuracionCargosRouter);

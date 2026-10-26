@@ -20,13 +20,16 @@ const registrar = api.garita.registrarAcceso as unknown as ReturnType<typeof vi.
 const lectura = (over: Partial<ResultadoDpi> = {}): ResultadoDpi => ({
   origen: 'local', cui: '1234567890101', nombres: 'ANA MARIA', apellidos: 'LOPEZ GARCIA', nombre_completo: 'ANA MARIA LOPEZ GARCIA',
   confianza: { cui: 0.97, nombres: 0.95, apellidos: 0.96 }, cui_valido: true, revision_obligatoria: false,
-  motivos: [], correcciones: 0, ms_total: 500, aviso: null, ...over,
+  motivos: [], correcciones: 0, ms_total: 500, ...over,
 });
 
-const montar = (r: ResultadoDpi) => {
+/** JPEG mínimo (cabecera) en base64: la «foto» capturada. */
+const FOTO = '/9j/4AAQSkZJRg==';
+
+const montar = (r: ResultadoDpi, foto: string | null = null) => {
   const ref = createRef<VisitanteFormHandle>();
   render(<VisitanteForm ref={ref} habilitado onRegistrado={vi.fn()} />);
-  act(() => ref.current!.setDesdeOcrDpi(r));
+  act(() => ref.current!.setDesdeOcrDpi(r, foto));
 };
 
 const elegirCasa = async () => {
@@ -67,18 +70,43 @@ describe('VisitanteForm — DPI leído por OCR (T5)', () => {
     await waitFor(() => expect(registrar).toHaveBeenCalledWith(expect.objectContaining({ origen_dpi: 'local' })));
   });
 
-  it('lectura remota (respaldo): queda marcada como remota y siempre pide confirmación', async () => {
-    montar(lectura({ origen: 'remoto', revision_obligatoria: true, motivos: ['lectura_remota_sin_confianza'], nombres: '', apellidos: '', nombre_completo: 'ANA LOPEZ' }));
-    expect(screen.getByTestId('lectura-dpi')).toHaveTextContent('servicio remoto');
-    await elegirCasa();
+  it('lectura dudosa: muestra la foto capturada y marca «Revisar» solo el campo dudoso; al confirmar se quitan las marcas', async () => {
+    montar(lectura({ revision_obligatoria: true, motivos: ['cui_confianza_baja'] }), FOTO);
+    expect(screen.getByRole('img', { name: /Foto del DPI capturada/ })).toHaveAttribute('src', `data:image/jpeg;base64,${FOTO}`);
+    // El CUI va marcado (texto visible y descripción accesible del campo); el nombre no.
+    expect(screen.getByRole('textbox', { name: 'Número de DPI' })).toHaveAccessibleDescription('Revisar: compáralo con el documento.');
+    expect(screen.getByRole('textbox', { name: /Nombre del visitante/ })).not.toHaveAccessibleDescription('Revisar: compáralo con el documento.');
+    expect(screen.getAllByText('Revisar')).toHaveLength(1);
+    // Los datos ya están puestos: el agente solo compara.
+    expect(screen.getByRole('textbox', { name: 'Número de DPI' })).toHaveValue('1234567890101');
+
     fireEvent.click(screen.getByLabelText(/Revisé el DPI y el nombre contra el documento/));
+    expect(screen.queryByText('Revisar')).toBeNull();
+    await elegirCasa();
     fireEvent.click(screen.getByRole('button', { name: 'Registrar entrada' }));
-    await waitFor(() => expect(registrar).toHaveBeenCalledWith(expect.objectContaining({ origen_dpi: 'remoto', capturado_manualmente: false })));
+    await waitFor(() => expect(registrar).toHaveBeenCalledWith(expect.objectContaining({ origen_dpi: 'local', capturado_manualmente: false })));
+    // Registrado: la foto no se queda en pantalla.
+    await waitFor(() => expect(screen.queryByRole('img', { name: /Foto del DPI/ })).toBeNull());
   });
 
-  it('si el agente corrige el número a mano, el origen pasa a manual (la lectura ya no vale)', async () => {
-    montar(lectura());
-    fireEvent.change(screen.getByLabelText('Número de DPI'), { target: { value: '1234567890102' } });
+  it('CUI inválido o un campo que falta: se marcan los dos campos y no se registra sin confirmar', async () => {
+    montar(lectura({ revision_obligatoria: true, cui_valido: false, motivos: [] }), FOTO);
+    expect(screen.getAllByText('Revisar')).toHaveLength(2);
+    await elegirCasa();
+    fireEvent.click(screen.getByRole('button', { name: 'Registrar entrada' }));
+    expect(await screen.findByText('Confirma que revisaste el DPI y el nombre contra el documento.')).toBeInTheDocument();
+    expect(registrar).not.toHaveBeenCalled();
+  });
+
+  it('una lectura confiable no muestra la foto ni marcas (no hace falta)', () => {
+    montar(lectura(), FOTO);
+    expect(screen.queryByRole('img', { name: /Foto del DPI/ })).toBeNull();
+    expect(screen.queryByText('Revisar')).toBeNull();
+  });
+
+  it('si el agente corrige el número a mano, el origen pasa a manual (la lectura ya no vale) y queda registrado así', async () => {
+    montar(lectura({ revision_obligatoria: true, motivos: ['cui_corregido'] }), FOTO);
+    fireEvent.change(screen.getByRole('textbox', { name: 'Número de DPI' }), { target: { value: '1234567890102' } });
     expect(screen.queryByTestId('lectura-dpi')).toBeNull();
     expect(screen.getByRole('checkbox', { name: /DPI capturado manualmente/ })).toBeChecked();
     await elegirCasa();

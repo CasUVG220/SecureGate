@@ -58,10 +58,10 @@ console.log(`▶ Sidecar OCR para ${key} (${t.triple})`);
 
 // ── 1. Modelos ─────────────────────────────────────────────────────────────
 const modelsDir = path.join(SIDECAR_SRC, 'models');
-if (!existsSync(path.join(modelsDir, 'SHA256SUMS'))) {
-  console.log('  descargando modelos…');
-  execSync('node scripts/fetch-models.mjs', { cwd: SIDECAR_SRC, stdio: 'inherit' });
-}
+// Siempre: fetch-models no vuelve a bajar lo que ya está con el hash correcto, y así una carpeta de modelos de antes del
+// Sprint 10 (sin el detector de vehículos del ANPR) se completa sola en vez de empaquetarse incompleta.
+console.log('  verificando modelos…');
+execSync('node scripts/fetch-models.mjs', { cwd: SIDECAR_SRC, stdio: 'inherit' });
 
 // ── 2. Recursos: server.js + node_modules de producción para la plataforma ─
 rmSync(RES_OUT, { recursive: true, force: true });

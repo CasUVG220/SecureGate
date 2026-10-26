@@ -62,8 +62,6 @@ services:
       # Un salto de proxy (nginx): req.ip toma la IP real del cliente para el
       # rate limit y la auditoría, y X-Forwarded-For del cliente ya no se cree.
       TRUST_PROXY: "1"
-      # Clave de Google Vision (OCR de respaldo). Opcional.
-      GOOGLE_CLOUD_API_KEY: ${GOOGLE_CLOUD_API_KEY:-}
       # OJO: aquí NO se define PAGOS_TARJETA_SIMULADA ni SEED_DEMO, y no deben
       # definirse: la pasarela de tarjeta es un mock que liquida deudas.
       # Cloud SQL vía el proxy: postgresql://USUARIO:PASSWORD@cloud-sql-proxy:5432/securegate

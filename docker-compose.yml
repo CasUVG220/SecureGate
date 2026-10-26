@@ -64,7 +64,6 @@ services:
       TWOFA_KEY: ${TWOFA_KEY:-}
       # Opcional. Vacío: en desarrollo el CORS refleja el origen del navegador.
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-}
-      GOOGLE_CLOUD_API_KEY: ${GOOGLE_CLOUD_API_KEY:-}
       TZ: America/Guatemala
       APP_TZ: America/Guatemala
       # Overrides sólo para pruebas de carga (ver backend/loadtest/). Sin

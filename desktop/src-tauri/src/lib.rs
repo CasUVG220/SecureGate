@@ -11,11 +11,13 @@
 //! - `ocr`           sidecar de OCR de placas (local, sin red)
 //! - `camera`        permisos de cámara del WebView (WebView2 / Info.plist)
 //! - `hardware`      apertura física de la talanquera (relé USB/Ethernet), por trait
+//! - `anpr`          reconocimiento continuo de placas por carril (Sprint 10)
 //!
 //! La captura de cámara no pasa por Rust: `getUserMedia` corre en el WebView
 //! y la imagen capturada llega a `ocr` ya codificada.
 
 mod actualizador;
+mod anpr;
 mod api;
 mod auth;
 mod camaras;
@@ -63,6 +65,8 @@ pub struct AppState {
     pub hardware: RwLock<std::sync::Arc<dyn hardware::TalanqueraDriver>>,
     /// Puente de video local y cámaras IP/celular encendidas (T7).
     pub camaras: camaras::Gestor,
+    /// Proceso y carriles del ANPR continuo (Sprint 10).
+    pub anpr: anpr::Anpr,
 }
 
 impl AppState {
@@ -121,7 +125,7 @@ fn app_configurar_api_url(state: State<'_, AppState>, api_url: String) -> AppRes
             "Este equipo ya tiene una licencia activada: desvincúlalo antes de cambiar el servidor",
         ));
     }
-    // Se conserva el resto de la configuración del equipo (p. ej. el respaldo remoto del DPI).
+    // Se conserva el resto de la configuración del equipo (p. ej. el canal de actualizaciones).
     let cfg = config::Config { api_url: url.clone(), ..state.config.read().unwrap().clone() };
     cfg.guardar(&state.dir_datos)?;
     *state.config.write().unwrap() = cfg;
@@ -169,6 +173,7 @@ pub fn construir_estado_en(dir_datos: PathBuf) -> AppState {
         ultimo_error: RwLock::new(None),
         hardware: RwLock::new(std::sync::Arc::new(hardware::SinDriver)),
         camaras: camaras::Gestor::default(),
+        anpr: anpr::Anpr::default(),
     }
 }
 
@@ -220,6 +225,7 @@ pub fn run() {
         })
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::Destroyed = event {
+                window.state::<AppState>().anpr.detener();
                 window.state::<AppState>().camaras.detener_todas();
                 ocr::detener(&window.state::<AppState>());
             }
@@ -251,11 +257,7 @@ pub fn run() {
             ocr::ocr_placa,
             ocr::ocr_precalentar,
             ocr::ocr_estado,
-            ocr::ocr_dpi_remoto,
-            ocr::ocr_dpi_local,
             ocr::ocr_dpi,
-            ocr::ocr_dpi_config,
-            ocr::ocr_dpi_configurar,
             camaras::camaras_listar,
             camaras::camaras_guardar,
             camaras::camaras_eliminar,
@@ -267,6 +269,17 @@ pub fn run() {
             camaras::camaras_apagar,
             camaras::camaras_estado,
             camaras::camara_ip_fotograma,
+            anpr::anpr_estado,
+            anpr::anpr_iniciar,
+            anpr::anpr_detener,
+            anpr::anpr_pausar,
+            anpr::anpr_carriles,
+            anpr::anpr_carril_guardar,
+            anpr::anpr_carril_eliminar,
+            anpr::anpr_eventos,
+            anpr::anpr_evidencia,
+            anpr::anpr_resolver,
+            anpr::anpr_probar_actuador,
             actualizador::actualizacion_estado,
             actualizador::actualizacion_buscar,
             actualizador::actualizacion_instalar,

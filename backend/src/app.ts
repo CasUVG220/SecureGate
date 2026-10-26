@@ -97,17 +97,19 @@ app.use(generalLimiter);
 
 // Límite de cuerpo: 100 kb por defecto. Antes eran 50 MB para TODA la API y
 // antes de autenticar, lo que permitía tumbar el proceso con unas pocas
-// peticiones. Sólo las rutas que reciben una imagen en base64 (foto del
-// documento para OCR, imagen de un área, comprobante de transferencia) tienen
-// margen mayor.
-const RUTAS_CON_IMAGEN = ['/api/ocr', '/api/areas', '/api/pagos/transferencia'];
+// peticiones. Sólo las rutas que reciben una imagen en base64 (imagen de un
+// área, comprobante de transferencia) tienen margen mayor. Las fotos de los
+// documentos no llegan al servidor: el OCR es local en la garita.
+const RUTAS_CON_IMAGEN = ['/api/areas', '/api/pagos/transferencia'];
 const jsonPequeno = express.json({ limit: '100kb' });
 const jsonConImagen = express.json({ limit: '8mb' });
 // Logo de empresa: una imagen de hasta 200 KB en base64 (~270 KB de texto). Margen propio, mucho menor que el de las fotos.
 const jsonConLogo = express.json({ limit: '400kb' });
+// Evidencia del ANPR (Sprint 10): un JPEG de hasta 256 KB en base64 (~342 KB de texto). Mismo margen que el logo.
+const RUTA_EVIDENCIA_ANPR = '/api/anpr/evidencias';
 app.use((req, res, next) => {
   const conImagen = RUTAS_CON_IMAGEN.some(p => req.path === p || req.path.startsWith(`${p}/`));
-  const conLogo = req.path === '/api/empresas' || /^\/api\/empresas\/[^/]+$/.test(req.path);
+  const conLogo = req.path === '/api/empresas' || /^\/api\/empresas\/[^/]+$/.test(req.path) || req.path === RUTA_EVIDENCIA_ANPR;
   return (conImagen ? jsonConImagen : conLogo ? jsonConLogo : jsonPequeno)(req, res, next);
 });
 app.use(express.urlencoded({ limit: '100kb', extended: false }));

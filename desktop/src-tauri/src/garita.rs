@@ -129,7 +129,7 @@ pub struct NuevoAcceso {
     /// intentos fallidos.
     #[serde(default)]
     pub invitacion_qr_id: Option<String>,
-    /// De dónde salió el DPI: `local` (OCR del equipo), `remoto` (Vision) o `manual`. Si no viene, se deduce de
+    /// De dónde salió el DPI: `local` (OCR del equipo) o `manual`. Si no viene, se deduce de
     /// `capturado_manualmente`.
     #[serde(default)]
     pub origen_dpi: Option<String>,
@@ -148,11 +148,13 @@ pub struct AccesoPendiente {
     pub placa: Option<String>,
     pub residente_casa: Option<String>,
     pub capturado_manualmente: bool,
-    /// `local`, `remoto` o `manual` (None en accesos anteriores a T5).
+    /// `local` o `manual` (None en accesos anteriores a T5; `remoto` solo en accesos anteriores al Sprint 10).
     pub origen_dpi: Option<String>,
     /// Id del registro en el servidor, una vez sincronizado: con él se puede dar la
     /// salida desde la lista sin buscar por placa. `None` mientras siga pendiente.
     pub registro_id: Option<String>,
+    /// `anpr` si lo registró el reconocimiento de placas (Sprint 10); `None` en los de siempre.
+    pub origen: Option<String>,
 }
 
 // ── Consultas ───────────────────────────────────────────────────────────────
@@ -236,7 +238,8 @@ pub fn evaluar_visitante(
 
     let conocido: Option<String> = conn
         .query_row(
-            "SELECT nombre_visitante FROM accesos_pendientes WHERE numero_dpi = ?1 ORDER BY registrado_en DESC LIMIT 1",
+            // Las filas del ANPR (vehículos de residentes) no llevan DPI: un DPI vacío nunca «conoce» a nadie.
+            "SELECT nombre_visitante FROM accesos_pendientes WHERE numero_dpi = ?1 AND numero_dpi <> '' ORDER BY registrado_en DESC LIMIT 1",
             [dpi],
             |r| r.get(0),
         )
@@ -275,7 +278,8 @@ pub fn encolar_acceso(conn: &Connection, agente_id: &str, a: &NuevoAcceso) -> Ap
     // (nueva, o validada en línea) no se frena aquí: el servidor decide al sincronizar.
     // Origen del DPI: solo los tres valores conocidos; si no viene, «manual» cuando el agente lo tecleó.
     let origen_dpi: Option<&str> = match a.origen_dpi.as_deref().map(str::trim) {
-        Some(o @ ("local" | "remoto" | "manual")) => Some(o),
+        // «remoto» ya no existe (el OCR es 100 % local): un valor así se trata como desconocido.
+        Some(o @ ("local" | "manual")) => Some(o),
         _ if a.capturado_manualmente => Some("manual"),
         _ => None,
     };
@@ -331,8 +335,8 @@ pub fn encolar_acceso(conn: &Connection, agente_id: &str, a: &NuevoAcceso) -> Ap
 pub fn listar_recientes(conn: &Connection, limite: usize) -> AppResult<Vec<AccesoPendiente>> {
     let mut st = conn.prepare(
         "SELECT id_cliente, registrado_en, estado, intentos, ultimo_error, sincronizado_en,
-                nombre_visitante, numero_dpi, placa, residente_casa, capturado_manualmente, registro_id, origen_dpi
-         FROM accesos_pendientes ORDER BY registrado_en DESC LIMIT ?1",
+                nombre_visitante, numero_dpi, placa, residente_casa, capturado_manualmente, registro_id, origen_dpi, origen
+         FROM accesos_pendientes WHERE visible = 1 ORDER BY registrado_en DESC LIMIT ?1",
     )?;
     let rows = st.query_map([limite as i64], |r| {
         Ok(AccesoPendiente {
@@ -349,6 +353,7 @@ pub fn listar_recientes(conn: &Connection, limite: usize) -> AppResult<Vec<Acces
             capturado_manualmente: r.get::<_, i64>(10)? != 0,
             registro_id: r.get(11)?,
             origen_dpi: r.get(12)?,
+            origen: r.get(13)?,
         })
     })?;
     Ok(rows.collect::<Result<_, _>>()?)
@@ -1080,7 +1085,7 @@ mod tests {
             col
         };
         assert_eq!(encolar(Some("local"), false).as_deref(), Some("local"));
-        assert_eq!(encolar(Some("remoto"), false).as_deref(), Some("remoto"));
+        assert_eq!(encolar(Some("remoto"), false), None, "ya no hay OCR remoto: no se produce");
         assert_eq!(encolar(Some("manual"), true).as_deref(), Some("manual"));
         assert_eq!(encolar(None, true).as_deref(), Some("manual"), "tecleado sin origen informado = manual");
         assert_eq!(encolar(None, false), None);

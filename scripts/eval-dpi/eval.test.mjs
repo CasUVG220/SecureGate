@@ -1,7 +1,7 @@
 // T3: lógica de métricas del evaluador de DPI (sin OCR ni red). Correr con: node --test scripts/eval-dpi/
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { normalizar, estricto, soloDigitos, percentil, leerCsv, resumir, reporteMarkdown } from './index.mjs';
+import { normalizar, estricto, soloDigitos, percentil, leerCsv, resumir, reporteMarkdown, dentroDe, anonimizar } from './index.mjs';
 
 test('percentil por rango más cercano', () => {
   assert.equal(percentil([], 50), null);
@@ -44,7 +44,26 @@ test('resumir: exactitud, revisión, errores silenciosos y tiempos', () => {
   assert.equal(r.meta_rnf03_5s, true);
 });
 
-test('resumir: un motor que no informa nombres ni revisión (Vision) queda en n/d, sin inventar', () => {
+test('leerCsv de un conjunto real: separador ; (Excel en español), comillas, BOM y CRLF', () => {
+  const filas = leerCsv('\uFEFFarchivo;cui;nombres;apellidos\r\n"foto 1.jpeg";"1234 56789 0101";"ANA MARÍA";"LÓPEZ GARCÍA"\r\n');
+  assert.deepEqual(filas, [{ archivo: 'foto 1.jpeg', cui: '1234 56789 0101', nombres: 'ANA MARÍA', apellidos: 'LÓPEZ GARCÍA' }]);
+});
+
+test('conjunto real: la carpeta dentro del repositorio se reconoce y los nombres de archivo se anonimizan', () => {
+  assert.equal(dentroDe('/repo/scripts/x', '/repo'), true);
+  assert.equal(dentroDe('/repo', '/repo'), true);
+  assert.equal(dentroDe('/datos/dpi-reales', '/repo'), false);
+  assert.equal(dentroDe('/repo-otro/x', '/repo'), false);
+  assert.deepEqual(anonimizar([{ archivo: 'juan_perez.jpg', cui_ok: true }, { archivo: 'b.jpg', cui_ok: false }]).map(d => d.archivo), ['doc_001', 'doc_002']);
+});
+
+test('resumir: nombres mal y sin marcar se cuentan aparte de los errores silenciosos del CUI', () => {
+  const r = resumir([d({ nombre_completo_ok: false }), d({ nombre_completo_ok: false, requiere_revision: true }), d({})]);
+  assert.equal(r.revision.nombres_mal_sin_marcar, 1);
+  assert.equal(r.revision.errores_silenciosos, 0);
+});
+
+test('resumir: un motor que no informa nombres ni revisión queda en n/d, sin inventar', () => {
   const r = resumir([d({ nombres_ok: null, apellidos_ok: null, nombres_estricto: null, apellidos_estricto: null, requiere_revision: null })]);
   assert.equal(r.nombres.n, 0);
   assert.equal(r.revision.informada, false);
@@ -59,4 +78,7 @@ test('el reporte advierte que un conjunto sintético no es evidencia', () => {
   assert.match(md, /SINTÉTICO/);
   assert.match(md, /NO es evidencia/);
   assert.match(md, /Exactitud del CUI/);
+  const real = reporteMarkdown([{ motor: 'local', extractor: 'x', resumen: resumir([d({})]) }], { fecha: 'hoy', dir: '(real)', n: 1, origen: 'local', sintetico: false });
+  assert.match(real, /Conjunto REAL, con consentimiento/);
+  assert.match(real, /no subas las imágenes/);
 });

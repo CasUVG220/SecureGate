@@ -1,0 +1,2138 @@
+{
+ "descripcion": "Caracterización del camino LOCAL del DPI: DPI sintéticos (ficticios), líneas del OCR local y lo que hoy extraen las reglas. Ver docs/ocr_local_decision.md.",
+ "semilla": 2026,
+ "documentos": 12,
+ "grabado": "2026-10-27",
+ "punta_a_punta": {
+  "documentos": 12,
+  "cui_exactos": 11,
+  "a_revision": 1,
+  "errores_silenciosos": 0
+ },
+ "casos": [
+  {
+   "archivo": "img_0001.jpg",
+   "verdad": {
+    "cui": "0063113491805",
+    "nombres": "PEDRO",
+    "apellidos": "RODRIGUEZ SOTO",
+    "variante": "limpia"
+   },
+   "items": [
+    {
+     "texto": "REPUBLICA DE GUATEMALA",
+     "confianza": 0.9522,
+     "box": {
+      "x": 171,
+      "y": 65,
+      "w": 471,
+      "h": 35
+     }
+    },
+    {
+     "texto": "DOCUMENTO PERSONAL DE IDENTIFICACIÓN",
+     "confianza": 0.992,
+     "box": {
+      "x": 169,
+      "y": 107,
+      "w": 505,
+      "h": 25
+     }
+    },
+    {
+     "texto": "EJEMPLO FICTICIO - SOLO PRUEBAS",
+     "confianza": 0.9601,
+     "box": {
+      "x": 172,
+      "y": 140,
+      "w": 413,
+      "h": 23
+     }
+    },
+    {
+     "texto": "CUI",
+     "confianza": 0.9672,
+     "box": {
+      "x": 428,
+      "y": 187,
+      "w": 45,
+      "h": 24
+     }
+    },
+    {
+     "texto": "0063",
+     "confianza": 0.9998,
+     "box": {
+      "x": 431,
+      "y": 219,
+      "w": 136,
+      "h": 43
+     }
+    },
+    {
+     "texto": "11349",
+     "confianza": 0.9998,
+     "box": {
+      "x": 587,
+      "y": 217,
+      "w": 167,
+      "h": 47
+     }
+    },
+    {
+     "texto": "1805",
+     "confianza": 0.9998,
+     "box": {
+      "x": 773,
+      "y": 220,
+      "w": 135,
+      "h": 43
+     }
+    },
+    {
+     "texto": "APELLIDOS / SURNAME",
+     "confianza": 0.9497,
+     "box": {
+      "x": 429,
+      "y": 296,
+      "w": 217,
+      "h": 24
+     }
+    },
+    {
+     "texto": "FOTO",
+     "confianza": 0.9931,
+     "box": {
+      "x": 248,
+      "y": 315,
+      "w": 68,
+      "h": 24
+     }
+    },
+    {
+     "texto": "RODRIGUEZ",
+     "confianza": 0.9911,
+     "box": {
+      "x": 433,
+      "y": 331,
+      "w": 263,
+      "h": 29
+     }
+    },
+    {
+     "texto": "SOTO",
+     "confianza": 0.9911,
+     "box": {
+      "x": 677,
+      "y": 328,
+      "w": 143,
+      "h": 35
+     }
+    },
+    {
+     "texto": "NOMBRES / GIVEN NAMES",
+     "confianza": 0.999,
+     "box": {
+      "x": 431,
+      "y": 395,
+      "w": 243,
+      "h": 23
+     }
+    },
+    {
+     "texto": "PEDRO",
+     "confianza": 0.9905,
+     "box": {
+      "x": 431,
+      "y": 427,
+      "w": 155,
+      "h": 31
+     }
+    },
+    {
+     "texto": "FECHA DE NACIMIENTO",
+     "confianza": 0.9966,
+     "box": {
+      "x": 169,
+      "y": 493,
+      "w": 219,
+      "h": 19
+     }
+    },
+    {
+     "texto": "NACIONALIDAD / NATIONALITY",
+     "confianza": 0.9966,
+     "box": {
+      "x": 431,
+      "y": 495,
+      "w": 280,
+      "h": 19
+     }
+    },
+    {
+     "texto": "01 ENE 1961",
+     "confianza": 0.9895,
+     "box": {
+      "x": 168,
+      "y": 517,
+      "w": 193,
+      "h": 29
+     }
+    },
+    {
+     "texto": "GUATEMALTECA",
+     "confianza": 0.9895,
+     "box": {
+      "x": 429,
+      "y": 520,
+      "w": 239,
+      "h": 25
+     }
+    },
+    {
+     "texto": "<<<<<<<<<<<<<FICTICIO",
+     "confianza": 0.9395,
+     "box": {
+      "x": 168,
+      "y": 615,
+      "w": 224,
+      "h": 19
+     }
+    },
+    {
+     "texto": "<<<<<<<<",
+     "confianza": 0.9395,
+     "box": {
+      "x": 392,
+      "y": 619,
+      "w": 84,
+      "h": 11
+     }
+    }
+   ],
+   "esperado": {
+    "cui": "0063113491805",
+    "cui_valido": true,
+    "nombres": "PEDRO",
+    "apellidos": "RODRIGUEZ",
+    "revision_obligatoria": false,
+    "motivos": [],
+    "correcciones": 0
+   }
+  },
+  {
+   "archivo": "img_0002.jpg",
+   "verdad": {
+    "cui": "6636150590111",
+    "nombres": "ANDRES",
+    "apellidos": "CASTAÑEDA JIMENEZ",
+    "variante": "luz_baja"
+   },
+   "items": [
+    {
+     "texto": "REPUBLICA DE GUATEMALA",
+     "confianza": 0.9838,
+     "box": {
+      "x": 161,
+      "y": 68,
+      "w": 477,
+      "h": 43
+     }
+    },
+    {
+     "texto": "DOCUMENTO PERSONAL DE IDENTIFICACION",
+     "confianza": 0.9622,
+     "box": {
+      "x": 160,
+      "y": 104,
+      "w": 513,
+      "h": 41
+     }
+    },
+    {
+     "texto": "EJEMPLO FICTICIO - SOLO PRUEBAS",
+     "confianza": 0.9697,
+     "box": {
+      "x": 161,
+      "y": 139,
+      "w": 425,
+      "h": 37
+     }
+    },
+    {
+     "texto": "CUI",
+     "confianza": 0.5516,
+     "box": {
+      "x": 425,
+      "y": 191,
+      "w": 45,
+      "h": 25
+     }
+    },
+    {
+     "texto": "6636 15059 0111",
+     "confianza": 0.9906,
+     "box": {
+      "x": 425,
+      "y": 213,
+      "w": 483,
+      "h": 55
+     }
+    },
+    {
+     "texto": "APELLIDOS /SURNAME",
+     "confianza": 0.9835,
+     "box": {
+      "x": 428,
+      "y": 296,
+      "w": 219,
+      "h": 29
+     }
+    },
+    {
+     "texto": "FOTO",
+     "confianza": 0.9948,
+     "box": {
+      "x": 247,
+      "y": 320,
+      "w": 73,
+      "h": 31
+     }
+    },
+    {
+     "texto": "CASTANEDA JIMENEZ",
+     "confianza": 0.9948,
+     "box": {
+      "x": 429,
+      "y": 323,
+      "w": 457,
+      "h": 47
+     }
+    },
+    {
+     "texto": "NOMBRES / GIVEN NAMES",
+     "confianza": 0.9808,
+     "box": {
+      "x": 429,
+      "y": 393,
+      "w": 247,
+      "h": 29
+     }
+    },
+    {
+     "texto": "ANDRES",
+     "confianza": 0.9998,
+     "box": {
+      "x": 431,
+      "y": 427,
+      "w": 187,
+      "h": 37
+     }
+    },
+    {
+     "texto": "FECHA DE NACIMIENTO",
+     "confianza": 0.9977,
+     "box": {
+      "x": 171,
+      "y": 499,
+      "w": 224,
+      "h": 25
+     }
+    },
+    {
+     "texto": "NACIONALIDAD / NATIONALITY",
+     "confianza": 0.9977,
+     "box": {
+      "x": 432,
+      "y": 491,
+      "w": 283,
+      "h": 29
+     }
+    },
+    {
+     "texto": "14ENE1988",
+     "confianza": 0.9774,
+     "box": {
+      "x": 175,
+      "y": 525,
+      "w": 192,
+      "h": 31
+     }
+    },
+    {
+     "texto": "GUATEMALTECA",
+     "confianza": 0.9774,
+     "box": {
+      "x": 433,
+      "y": 519,
+      "w": 240,
+      "h": 31
+     }
+    },
+    {
+     "texto": "2<",
+     "confianza": 0.8626,
+     "box": {
+      "x": 261,
+      "y": 628,
+      "w": 23,
+      "h": 7
+     }
+    },
+    {
+     "texto": "FICTICIO",
+     "confianza": 0.8626,
+     "box": {
+      "x": 309,
+      "y": 624,
+      "w": 85,
+      "h": 13
+     }
+    }
+   ],
+   "esperado": {
+    "cui": "6636150590111",
+    "cui_valido": true,
+    "nombres": "ANDRES",
+    "apellidos": "CASTANEDA JIMENEZ",
+    "revision_obligatoria": false,
+    "motivos": [],
+    "correcciones": 0
+   }
+  },
+  {
+   "archivo": "img_0003.jpg",
+   "verdad": {
+    "cui": "5858401051901",
+    "nombres": "ROSA ROSA",
+    "apellidos": "IBÁÑEZ ALVARADO",
+    "variante": "luz_alta"
+   },
+   "items": [
+    {
+     "texto": "REPUBLICA DE GUATEMALA",
+     "confianza": 0.8944,
+     "box": {
+      "x": 164,
+      "y": 69,
+      "w": 475,
+      "h": 37
+     }
+    },
+    {
+     "texto": "DOCUMENTO PERSONAL DE IDENTIFICACION",
+     "confianza": 0.9884,
+     "box": {
+      "x": 165,
+      "y": 105,
+      "w": 507,
+      "h": 35
+     }
+    },
+    {
+     "texto": "EJEMPLO FICTICIO - SOLO PRUEBAS",
+     "confianza": 0.9679,
+     "box": {
+      "x": 165,
+      "y": 140,
+      "w": 421,
+      "h": 31
+     }
+    },
+    {
+     "texto": "CUI",
+     "confianza": 0.984,
+     "box": {
+      "x": 424,
+      "y": 188,
+      "w": 48,
+      "h": 25
+     }
+    },
+    {
+     "texto": "5858",
+     "confianza": 0.9698,
+     "box": {
+      "x": 428,
+      "y": 220,
+      "w": 137,
+      "h": 47
+     }
+    },
+    {
+     "texto": "40105",
+     "confianza": 0.9698,
+     "box": {
+      "x": 584,
+      "y": 219,
+      "w": 168,
+      "h": 43
+     }
+    },
+    {
+     "texto": "1901",
+     "confianza": 0.9698,
+     "box": {
+      "x": 772,
+      "y": 216,
+      "w": 135,
+      "h": 47
+     }
+    },
+    {
+     "texto": "APELLIDOS / SURNAME",
+     "confianza": 0.9836,
+     "box": {
+      "x": 428,
+      "y": 297,
+      "w": 219,
+      "h": 25
+     }
+    },
+    {
+     "texto": "FOTO",
+     "confianza": 0.9126,
+     "box": {
+      "x": 248,
+      "y": 321,
+      "w": 67,
+      "h": 24
+     }
+    },
+    {
+     "texto": "IBÁNEZALVARADO",
+     "confianza": 0.9126,
+     "box": {
+      "x": 428,
+      "y": 327,
+      "w": 408,
+      "h": 37
+     }
+    },
+    {
+     "texto": "NOMBRES / GIVEN NAMES",
+     "confianza": 0.9997,
+     "box": {
+      "x": 432,
+      "y": 396,
+      "w": 243,
+      "h": 23
+     }
+    },
+    {
+     "texto": "ROSAROSA",
+     "confianza": 0.9815,
+     "box": {
+      "x": 433,
+      "y": 427,
+      "w": 257,
+      "h": 35
+     }
+    },
+    {
+     "texto": "FECHA DE NACIMIENTO",
+     "confianza": 0.9973,
+     "box": {
+      "x": 171,
+      "y": 497,
+      "w": 223,
+      "h": 24
+     }
+    },
+    {
+     "texto": "NACIONALIDAD / NATIONALITY",
+     "confianza": 0.9973,
+     "box": {
+      "x": 431,
+      "y": 493,
+      "w": 284,
+      "h": 24
+     }
+    },
+    {
+     "texto": "23 ENE 1966",
+     "confianza": 0.9605,
+     "box": {
+      "x": 172,
+      "y": 524,
+      "w": 193,
+      "h": 29
+     }
+    },
+    {
+     "texto": "GUATEMALTECA",
+     "confianza": 0.9605,
+     "box": {
+      "x": 432,
+      "y": 520,
+      "w": 239,
+      "h": 29
+     }
+    },
+    {
+     "texto": "<<<<",
+     "confianza": 0.9847,
+     "box": {
+      "x": 176,
+      "y": 625,
+      "w": 40,
+      "h": 12
+     }
+    },
+    {
+     "texto": "FICTICIO",
+     "confianza": 0.9847,
+     "box": {
+      "x": 309,
+      "y": 620,
+      "w": 85,
+      "h": 17
+     }
+    }
+   ],
+   "esperado": {
+    "cui": "5858401051901",
+    "cui_valido": true,
+    "nombres": "ROSAROSA",
+    "apellidos": "IBÁNEZALVARADO",
+    "revision_obligatoria": false,
+    "motivos": [],
+    "correcciones": 0
+   }
+  },
+  {
+   "archivo": "img_0004.jpg",
+   "verdad": {
+    "cui": "8153367182015",
+    "nombres": "DANIELA SOFIA",
+    "apellidos": "LOPEZ LEMUS",
+    "variante": "angulo"
+   },
+   "items": [
+    {
+     "texto": "RPULICAE GA",
+     "confianza": 0.4352,
+     "box": {
+      "x": 87,
+      "y": 77,
+      "w": 593,
+      "h": 169
+     }
+    },
+    {
+     "texto": "EPUBIAD GA",
+     "confianza": 0.4352,
+     "box": {
+      "x": 88,
+      "y": 49,
+      "w": 548,
+      "h": 161
+     }
+    },
+    {
+     "texto": "RPBLIA",
+     "confianza": 0.4352,
+     "box": {
+      "x": 103,
+      "y": 129,
+      "w": 488,
+      "h": 143
+     }
+    },
+    {
+     "texto": "1",
+     "confianza": 0.4352,
+     "box": {
+      "x": 403,
+      "y": 232,
+      "w": 153,
+      "h": 72
+     }
+    },
+    {
+     "texto": "I",
+     "confianza": 0.4352,
+     "box": {
+      "x": 404,
+      "y": 221,
+      "w": 44,
+      "h": 25
+     }
+    },
+    {
+     "texto": "67",
+     "confianza": 0.4352,
+     "box": {
+      "x": 555,
+      "y": 200,
+      "w": 192,
+      "h": 77
+     }
+    },
+    {
+     "texto": "015",
+     "confianza": 0.4352,
+     "box": {
+      "x": 739,
+      "y": 173,
+      "w": 153,
+      "h": 71
+     }
+    },
+    {
+     "texto": "APELIDOS S. LE",
+     "confianza": 0.711,
+     "box": {
+      "x": 405,
+      "y": 288,
+      "w": 251,
+      "h": 79
+     }
+    },
+    {
+     "texto": "LOPEZ LEMUS",
+     "confianza": 0.711,
+     "box": {
+      "x": 405,
+      "y": 299,
+      "w": 351,
+      "h": 113
+     }
+    },
+    {
+     "texto": "FOTO",
+     "confianza": 0.818,
+     "box": {
+      "x": 245,
+      "y": 373,
+      "w": 75,
+      "h": 36
+     }
+    },
+    {
+     "texto": "DANIELA SOFIA",
+     "confianza": 0.818,
+     "box": {
+      "x": 417,
+      "y": 385,
+      "w": 395,
+      "h": 127
+     }
+    },
+    {
+     "texto": "NOMERS/GVENA SO",
+     "confianza": 0.818,
+     "box": {
+      "x": 419,
+      "y": 377,
+      "w": 284,
+      "h": 85
+     }
+    },
+    {
+     "texto": "EA",
+     "confianza": 0.4496,
+     "box": {
+      "x": 431,
+      "y": 465,
+      "w": 331,
+      "h": 97
+     }
+    },
+    {
+     "texto": "ECHA DE NA",
+     "confianza": 0.4496,
+     "box": {
+      "x": 183,
+      "y": 525,
+      "w": 256,
+      "h": 79
+     }
+    },
+    {
+     "texto": "UAT ALTEA",
+     "confianza": 0.4496,
+     "box": {
+      "x": 443,
+      "y": 504,
+      "w": 276,
+      "h": 85
+     }
+    },
+    {
+     "texto": "N",
+     "confianza": 0.4496,
+     "box": {
+      "x": 191,
+      "y": 559,
+      "w": 221,
+      "h": 73
+     }
+    },
+    {
+     "texto": "<<<<<<",
+     "confianza": 0.922,
+     "box": {
+      "x": 608,
+      "y": 616,
+      "w": 69,
+      "h": 24
+     }
+    },
+    {
+     "texto": "FICTICIO",
+     "confianza": 0.954,
+     "box": {
+      "x": 349,
+      "y": 656,
+      "w": 99,
+      "h": 31
+     }
+    },
+    {
+     "texto": "<<<",
+     "confianza": 0.954,
+     "box": {
+      "x": 441,
+      "y": 655,
+      "w": 41,
+      "h": 13
+     }
+    }
+   ],
+   "esperado": {
+    "cui": "",
+    "cui_valido": false,
+    "nombres": "EPUBIAD GA",
+    "apellidos": "LOPEZ LEMUS",
+    "revision_obligatoria": true,
+    "motivos": [
+     "cui_no_encontrado",
+     "nombres_por_posicion",
+     "nombres_confianza_baja"
+    ],
+    "correcciones": 0
+   }
+  },
+  {
+   "archivo": "img_0005.jpg",
+   "verdad": {
+    "cui": "0911059341312",
+    "nombres": "JESÚS",
+    "apellidos": "RODRIGUEZ SOTO",
+    "variante": "ruido"
+   },
+   "items": [
+    {
+     "texto": "REPUBLICA DE GUATEMALA",
+     "confianza": 0.986,
+     "box": {
+      "x": 171,
+      "y": 64,
+      "w": 472,
+      "h": 36
+     }
+    },
+    {
+     "texto": "DOCUMENTO PERSONAL DE IDENTIFICACION",
+     "confianza": 0.9888,
+     "box": {
+      "x": 171,
+      "y": 101,
+      "w": 508,
+      "h": 35
+     }
+    },
+    {
+     "texto": "EJEMPLO FICTICIO - SOLO PRUEBAS",
+     "confianza": 0.9645,
+     "box": {
+      "x": 171,
+      "y": 136,
+      "w": 419,
+      "h": 25
+     }
+    },
+    {
+     "texto": "0911059341312",
+     "confianza": 0.9964,
+     "box": {
+      "x": 429,
+      "y": 217,
+      "w": 480,
+      "h": 49
+     }
+    },
+    {
+     "texto": "APELLIDOS/SURNAME",
+     "confianza": 0.999,
+     "box": {
+      "x": 432,
+      "y": 295,
+      "w": 213,
+      "h": 25
+     }
+    },
+    {
+     "texto": "RODRIGUEZ SOTO",
+     "confianza": 0.9672,
+     "box": {
+      "x": 431,
+      "y": 327,
+      "w": 392,
+      "h": 37
+     }
+    },
+    {
+     "texto": "NOMBRES /GIVEN NAMES",
+     "confianza": 0.9791,
+     "box": {
+      "x": 429,
+      "y": 392,
+      "w": 241,
+      "h": 25
+     }
+    },
+    {
+     "texto": "JESUS",
+     "confianza": 0.9926,
+     "box": {
+      "x": 427,
+      "y": 421,
+      "w": 140,
+      "h": 41
+     }
+    },
+    {
+     "texto": "FECHA DE NACIMIENTO",
+     "confianza": 0.9815,
+     "box": {
+      "x": 169,
+      "y": 488,
+      "w": 219,
+      "h": 24
+     }
+    },
+    {
+     "texto": "NACIONALIDAD / NATIONALITY",
+     "confianza": 0.9815,
+     "box": {
+      "x": 429,
+      "y": 491,
+      "w": 283,
+      "h": 25
+     }
+    },
+    {
+     "texto": "07ENE1996",
+     "confianza": 0.9952,
+     "box": {
+      "x": 169,
+      "y": 515,
+      "w": 193,
+      "h": 29
+     }
+    },
+    {
+     "texto": "GUATEMALTECA",
+     "confianza": 0.9952,
+     "box": {
+      "x": 428,
+      "y": 515,
+      "w": 237,
+      "h": 35
+     }
+    }
+   ],
+   "esperado": {
+    "cui": "0911059341312",
+    "cui_valido": true,
+    "nombres": "JESUS",
+    "apellidos": "RODRIGUEZ SOTO",
+    "revision_obligatoria": false,
+    "motivos": [],
+    "correcciones": 0
+   }
+  },
+  {
+   "archivo": "img_0006.jpg",
+   "verdad": {
+    "cui": "7485069850605",
+    "nombres": "CARLOS",
+    "apellidos": "GONZALEZ CASTILLO",
+    "variante": "desenfoque"
+   },
+   "items": [
+    {
+     "texto": "REPUBLICA DE GUATEMALA",
+     "confianza": 0.9974,
+     "box": {
+      "x": 153,
+      "y": 63,
+      "w": 485,
+      "h": 59
+     }
+    },
+    {
+     "texto": "DOCUMENTO PERSONAL DE IDENTIFICACION",
+     "confianza": 0.9845,
+     "box": {
+      "x": 152,
+      "y": 101,
+      "w": 521,
+      "h": 55
+     }
+    },
+    {
+     "texto": "EJEMPLO FICTICIO - SOLO PRUEBAS",
+     "confianza": 0.9523,
+     "box": {
+      "x": 157,
+      "y": 137,
+      "w": 429,
+      "h": 48
+     }
+    },
+    {
+     "texto": "7485 06985 0605",
+     "confianza": 0.9636,
+     "box": {
+      "x": 419,
+      "y": 204,
+      "w": 492,
+      "h": 71
+     }
+    },
+    {
+     "texto": "CU",
+     "confianza": 0.9636,
+     "box": {
+      "x": 421,
+      "y": 193,
+      "w": 47,
+      "h": 25
+     }
+    },
+    {
+     "texto": "FOTO",
+     "confianza": 0.9207,
+     "box": {
+      "x": 245,
+      "y": 325,
+      "w": 73,
+      "h": 31
+     }
+    },
+    {
+     "texto": "GONZALEZ CASTILLO",
+     "confianza": 0.9207,
+     "box": {
+      "x": 423,
+      "y": 313,
+      "w": 471,
+      "h": 61
+     }
+    },
+    {
+     "texto": "APELLIDOS",
+     "confianza": 0.9207,
+     "box": {
+      "x": 429,
+      "y": 303,
+      "w": 116,
+      "h": 24
+     }
+    },
+    {
+     "texto": "AME",
+     "confianza": 0.9207,
+     "box": {
+      "x": 603,
+      "y": 301,
+      "w": 37,
+      "h": 17
+     }
+    },
+    {
+     "texto": "NOMBRES / GIVEN NAMES",
+     "confianza": 0.9445,
+     "box": {
+      "x": 437,
+      "y": 392,
+      "w": 241,
+      "h": 31
+     }
+    },
+    {
+     "texto": "CARLOS",
+     "confianza": 0.9995,
+     "box": {
+      "x": 432,
+      "y": 425,
+      "w": 181,
+      "h": 41
+     }
+    },
+    {
+     "texto": "FECHA DE NACIMENTO",
+     "confianza": 0.9683,
+     "box": {
+      "x": 172,
+      "y": 500,
+      "w": 227,
+      "h": 35
+     }
+    },
+    {
+     "texto": "NACIONALIDAD / NATIONALITY",
+     "confianza": 0.9683,
+     "box": {
+      "x": 433,
+      "y": 488,
+      "w": 285,
+      "h": 35
+     }
+    },
+    {
+     "texto": "15 ENE 1997",
+     "confianza": 0.9683,
+     "box": {
+      "x": 173,
+      "y": 528,
+      "w": 199,
+      "h": 37
+     }
+    },
+    {
+     "texto": "GUATEMALTECA",
+     "confianza": 0.9683,
+     "box": {
+      "x": 432,
+      "y": 517,
+      "w": 247,
+      "h": 37
+     }
+    },
+    {
+     "texto": "F1CT1C39",
+     "confianza": 0.4354,
+     "box": {
+      "x": 315,
+      "y": 627,
+      "w": 84,
+      "h": 17
+     }
+    }
+   ],
+   "esperado": {
+    "cui": "7485069850605",
+    "cui_valido": true,
+    "nombres": "CARLOS",
+    "apellidos": "GONZALEZ CASTILLO",
+    "revision_obligatoria": false,
+    "motivos": [],
+    "correcciones": 0
+   }
+  },
+  {
+   "archivo": "img_0007.jpg",
+   "verdad": {
+    "cui": "7481583430804",
+    "nombres": "GLORIA JOSÉ",
+    "apellidos": "MENDOZA MORALES",
+    "variante": "mixta"
+   },
+   "items": [
+    {
+     "texto": "PUBLICA ATALA",
+     "confianza": 0.5179,
+     "box": {
+      "x": 121,
+      "y": 56,
+      "w": 517,
+      "h": 103
+     }
+    },
+    {
+     "texto": "LCA",
+     "confianza": 0.5179,
+     "box": {
+      "x": 124,
+      "y": 91,
+      "w": 552,
+      "h": 103
+     }
+    },
+    {
+     "texto": "7481 58343 0804",
+     "confianza": 0.9233,
+     "box": {
+      "x": 397,
+      "y": 184,
+      "w": 520,
+      "h": 109
+     }
+    },
+    {
+     "texto": "CUI",
+     "confianza": 0.9233,
+     "box": {
+      "x": 420,
+      "y": 209,
+      "w": 35,
+      "h": 17
+     }
+    },
+    {
+     "texto": "MENDOZA MORALES",
+     "confianza": 0.8709,
+     "box": {
+      "x": 409,
+      "y": 296,
+      "w": 483,
+      "h": 97
+     }
+    },
+    {
+     "texto": "APELLIDOS/SURNAME",
+     "confianza": 0.8709,
+     "box": {
+      "x": 419,
+      "y": 292,
+      "w": 231,
+      "h": 53
+     }
+    },
+    {
+     "texto": "NGLORIA JOSEb",
+     "confianza": 0.8003,
+     "box": {
+      "x": 427,
+      "y": 409,
+      "w": 305,
+      "h": 77
+     }
+    },
+    {
+     "texto": "NOMBRES/GIVEN NAMES",
+     "confianza": 0.8003,
+     "box": {
+      "x": 429,
+      "y": 387,
+      "w": 260,
+      "h": 55
+     }
+    },
+    {
+     "texto": "NACIONALID / NATIONALTY",
+     "confianza": 0.8294,
+     "box": {
+      "x": 431,
+      "y": 477,
+      "w": 307,
+      "h": 65
+     }
+    },
+    {
+     "texto": "FECHA DE NACIMENTO",
+     "confianza": 0.6993,
+     "box": {
+      "x": 177,
+      "y": 511,
+      "w": 236,
+      "h": 53
+     }
+    },
+    {
+     "texto": "NGUATEMALTECA",
+     "confianza": 0.6993,
+     "box": {
+      "x": 437,
+      "y": 511,
+      "w": 257,
+      "h": 60
+     }
+    },
+    {
+     "texto": "27 ENE 1963",
+     "confianza": 0.5773,
+     "box": {
+      "x": 180,
+      "y": 540,
+      "w": 209,
+      "h": 55
+     }
+    }
+   ],
+   "esperado": {
+    "cui": "7481583430804",
+    "cui_valido": true,
+    "nombres": "NGLORIA JOSEB",
+    "apellidos": "MENDOZA MORALES",
+    "revision_obligatoria": false,
+    "motivos": [],
+    "correcciones": 0
+   }
+  },
+  {
+   "archivo": "img_0008.jpg",
+   "verdad": {
+    "cui": "9397205411506",
+    "nombres": "FERNANDO DIEGO",
+    "apellidos": "BARRIOS PEÑA",
+    "variante": "limpia"
+   },
+   "items": [
+    {
+     "texto": "REPUBLICA DE GUATEMALA",
+     "confianza": 0.9796,
+     "box": {
+      "x": 171,
+      "y": 65,
+      "w": 471,
+      "h": 35
+     }
+    },
+    {
+     "texto": "DOCUMENTO PERSONAL DE IDENTIFICACIÓN",
+     "confianza": 0.9949,
+     "box": {
+      "x": 169,
+      "y": 107,
+      "w": 505,
+      "h": 25
+     }
+    },
+    {
+     "texto": "EJEMPLO FICTICIO-SOLO PRUEBAS",
+     "confianza": 0.9884,
+     "box": {
+      "x": 173,
+      "y": 141,
+      "w": 413,
+      "h": 19
+     }
+    },
+    {
+     "texto": "CUI",
+     "confianza": 0.9825,
+     "box": {
+      "x": 429,
+      "y": 187,
+      "w": 44,
+      "h": 24
+     }
+    },
+    {
+     "texto": "9397b",
+     "confianza": 0.9554,
+     "box": {
+      "x": 429,
+      "y": 217,
+      "w": 136,
+      "h": 47
+     }
+    },
+    {
+     "texto": "20541",
+     "confianza": 0.9554,
+     "box": {
+      "x": 587,
+      "y": 217,
+      "w": 167,
+      "h": 47
+     }
+    },
+    {
+     "texto": "1506",
+     "confianza": 0.9554,
+     "box": {
+      "x": 773,
+      "y": 219,
+      "w": 136,
+      "h": 47
+     }
+    },
+    {
+     "texto": "APELLIDOS / SURNAME",
+     "confianza": 0.9843,
+     "box": {
+      "x": 429,
+      "y": 296,
+      "w": 217,
+      "h": 24
+     }
+    },
+    {
+     "texto": "FOTO",
+     "confianza": 0.9921,
+     "box": {
+      "x": 248,
+      "y": 315,
+      "w": 68,
+      "h": 24
+     }
+    },
+    {
+     "texto": "BARRIOS PENA",
+     "confianza": 0.9921,
+     "box": {
+      "x": 432,
+      "y": 327,
+      "w": 324,
+      "h": 35
+     }
+    },
+    {
+     "texto": "NOMBRES / GIVEN NAMES",
+     "confianza": 0.9685,
+     "box": {
+      "x": 431,
+      "y": 395,
+      "w": 243,
+      "h": 23
+     }
+    },
+    {
+     "texto": "FERNANDO",
+     "confianza": 0.9997,
+     "box": {
+      "x": 432,
+      "y": 427,
+      "w": 245,
+      "h": 29
+     }
+    },
+    {
+     "texto": "DIEGO",
+     "confianza": 0.9997,
+     "box": {
+      "x": 680,
+      "y": 427,
+      "w": 143,
+      "h": 31
+     }
+    },
+    {
+     "texto": "FECHA DE NACIMIENTO",
+     "confianza": 0.9935,
+     "box": {
+      "x": 169,
+      "y": 493,
+      "w": 219,
+      "h": 19
+     }
+    },
+    {
+     "texto": "NACIONALIDAD / NATIONALITY",
+     "confianza": 0.9935,
+     "box": {
+      "x": 431,
+      "y": 492,
+      "w": 280,
+      "h": 23
+     }
+    },
+    {
+     "texto": "04 ENE 1970",
+     "confianza": 0.9562,
+     "box": {
+      "x": 169,
+      "y": 517,
+      "w": 193,
+      "h": 29
+     }
+    },
+    {
+     "texto": "GUATEMALTECA",
+     "confianza": 0.9562,
+     "box": {
+      "x": 429,
+      "y": 520,
+      "w": 237,
+      "h": 25
+     }
+    },
+    {
+     "texto": "<<<<<<<<<<<<<FICTICIO",
+     "confianza": 0.9667,
+     "box": {
+      "x": 171,
+      "y": 615,
+      "w": 220,
+      "h": 17
+     }
+    },
+    {
+     "texto": "<<<<<<<<",
+     "confianza": 0.9667,
+     "box": {
+      "x": 392,
+      "y": 619,
+      "w": 84,
+      "h": 11
+     }
+    }
+   ],
+   "esperado": {
+    "cui": "93978205411506",
+    "cui_valido": false,
+    "nombres": "FERNANDO",
+    "apellidos": "BARRIOS PENA",
+    "revision_obligatoria": true,
+    "motivos": [
+     "cui_corregido",
+     "cui_invalido",
+     "cui_confianza_baja"
+    ],
+    "correcciones": 1
+   }
+  },
+  {
+   "archivo": "img_0009.jpg",
+   "verdad": {
+    "cui": "8869005581116",
+    "nombres": "LUIS",
+    "apellidos": "GARCIA CIFUENTES",
+    "variante": "luz_baja"
+   },
+   "items": [
+    {
+     "texto": "REPUBLICA DE GUATEMALA",
+     "confianza": 0.9973,
+     "box": {
+      "x": 148,
+      "y": 65,
+      "w": 489,
+      "h": 61
+     }
+    },
+    {
+     "texto": "DOCUMENTO PERSONAL DE IDENTIFICACION",
+     "confianza": 0.8756,
+     "box": {
+      "x": 147,
+      "y": 99,
+      "w": 528,
+      "h": 65
+     }
+    },
+    {
+     "texto": "JEMPLO FICTICIO LO PRUEBAS",
+     "confianza": 0.6368,
+     "box": {
+      "x": 149,
+      "y": 137,
+      "w": 439,
+      "h": 55
+     }
+    },
+    {
+     "texto": "8869 00558 1116",
+     "confianza": 0.9348,
+     "box": {
+      "x": 416,
+      "y": 201,
+      "w": 496,
+      "h": 77
+     }
+    },
+    {
+     "texto": "CUI",
+     "confianza": 0.9348,
+     "box": {
+      "x": 425,
+      "y": 197,
+      "w": 37,
+      "h": 23
+     }
+    },
+    {
+     "texto": "APELLIDOS / SURNAME",
+     "confianza": 0.9671,
+     "box": {
+      "x": 423,
+      "y": 295,
+      "w": 227,
+      "h": 37
+     }
+    },
+    {
+     "texto": "FOTO",
+     "confianza": 0.9712,
+     "box": {
+      "x": 245,
+      "y": 331,
+      "w": 72,
+      "h": 29
+     }
+    },
+    {
+     "texto": "GARCIA CIFUENTES",
+     "confianza": 0.9712,
+     "box": {
+      "x": 421,
+      "y": 315,
+      "w": 435,
+      "h": 61
+     }
+    },
+    {
+     "texto": "NOMBRES / GIVEN NAMES",
+     "confianza": 0.9866,
+     "box": {
+      "x": 427,
+      "y": 391,
+      "w": 255,
+      "h": 37
+     }
+    },
+    {
+     "texto": "LUIS",
+     "confianza": 0.8736,
+     "box": {
+      "x": 432,
+      "y": 429,
+      "w": 108,
+      "h": 41
+     }
+    },
+    {
+     "texto": "FECHA DE NACIMIENTOb",
+     "confianza": 0.9666,
+     "box": {
+      "x": 173,
+      "y": 503,
+      "w": 227,
+      "h": 36
+     }
+    },
+    {
+     "texto": "NACIONALIDAD / NATIONALITYb",
+     "confianza": 0.9666,
+     "box": {
+      "x": 429,
+      "y": 485,
+      "w": 296,
+      "h": 43
+     }
+    },
+    {
+     "texto": "13 ENE 1975 b",
+     "confianza": 0.9666,
+     "box": {
+      "x": 176,
+      "y": 532,
+      "w": 199,
+      "h": 37
+     }
+    },
+    {
+     "texto": "GUATEMALTECA",
+     "confianza": 0.9666,
+     "box": {
+      "x": 435,
+      "y": 516,
+      "w": 245,
+      "h": 41
+     }
+    },
+    {
+     "texto": "FICTICIO",
+     "confianza": 0.9987,
+     "box": {
+      "x": 315,
+      "y": 629,
+      "w": 88,
+      "h": 17
+     }
+    }
+   ],
+   "esperado": {
+    "cui": "8869005581116",
+    "cui_valido": true,
+    "nombres": "LUIS",
+    "apellidos": "GARCIA CIFUENTES",
+    "revision_obligatoria": false,
+    "motivos": [],
+    "correcciones": 0
+   }
+  },
+  {
+   "archivo": "img_0010.jpg",
+   "verdad": {
+    "cui": "6528453410110",
+    "nombres": "MARÍA ANDRES",
+    "apellidos": "BARRIOS VASQUEZ",
+    "variante": "luz_alta"
+   },
+   "items": [
+    {
+     "texto": "REPUBLICA DE GUATEMALA",
+     "confianza": 0.9782,
+     "box": {
+      "x": 175,
+      "y": 44,
+      "w": 488,
+      "h": 60
+     }
+    },
+    {
+     "texto": "BEMPLENTO PERSONALDE IDENTIFICACION",
+     "confianza": 0.8567,
+     "box": {
+      "x": 169,
+      "y": 80,
+      "w": 528,
+      "h": 61
+     }
+    },
+    {
+     "texto": "EJEMPLO FICTICIO SOLO PRUEBAS",
+     "confianza": 0.8982,
+     "box": {
+      "x": 172,
+      "y": 115,
+      "w": 433,
+      "h": 49
+     }
+    },
+    {
+     "texto": "CUI",
+     "confianza": 0.9711,
+     "box": {
+      "x": 435,
+      "y": 177,
+      "w": 47,
+      "h": 25
+     }
+    },
+    {
+     "texto": "FOTO",
+     "confianza": 0.9763,
+     "box": {
+      "x": 248,
+      "y": 300,
+      "w": 72,
+      "h": 25
+     }
+    },
+    {
+     "texto": "APELLIDOS / SURNAME",
+     "confianza": 0.9763,
+     "box": {
+      "x": 427,
+      "y": 285,
+      "w": 227,
+      "h": 36
+     }
+    },
+    {
+     "texto": "BARRIOS VASQUEZ",
+     "confianza": 0.9763,
+     "box": {
+      "x": 424,
+      "y": 315,
+      "w": 429,
+      "h": 61
+     }
+    },
+    {
+     "texto": "NOMBRES / GIVEN NAMES",
+     "confianza": 0.9362,
+     "box": {
+      "x": 423,
+      "y": 381,
+      "w": 256,
+      "h": 41
+     }
+    },
+    {
+     "texto": "MARIA ANDRES",
+     "confianza": 0.962,
+     "box": {
+      "x": 421,
+      "y": 412,
+      "w": 348,
+      "h": 55
+     }
+    },
+    {
+     "texto": "FECHA DE NACIMIENTO",
+     "confianza": 0.959,
+     "box": {
+      "x": 159,
+      "y": 469,
+      "w": 229,
+      "h": 36
+     }
+    },
+    {
+     "texto": "26 ENE 1954",
+     "confianza": 0.959,
+     "box": {
+      "x": 160,
+      "y": 497,
+      "w": 197,
+      "h": 36
+     }
+    },
+    {
+     "texto": "NACIONALIDAD / NATIONALITY",
+     "confianza": 0.959,
+     "box": {
+      "x": 417,
+      "y": 480,
+      "w": 295,
+      "h": 41
+     }
+    },
+    {
+     "texto": "GUATEMALTECA",
+     "confianza": 0.959,
+     "box": {
+      "x": 419,
+      "y": 508,
+      "w": 244,
+      "h": 41
+     }
+    },
+    {
+     "texto": "I",
+     "confianza": 0.3853,
+     "box": {
+      "x": 300,
+      "y": 604,
+      "w": 29,
+      "h": 12
+     }
+    },
+    {
+     "texto": "<xx<<xcxx<<<<<<",
+     "confianza": 0.4753,
+     "box": {
+      "x": 447,
+      "y": 611,
+      "w": 173,
+      "h": 23
+     }
+    }
+   ],
+   "esperado": {
+    "cui": "",
+    "cui_valido": false,
+    "nombres": "MARIA ANDRES",
+    "apellidos": "BARRIOS VASQUEZ",
+    "revision_obligatoria": true,
+    "motivos": [
+     "cui_no_encontrado"
+    ],
+    "correcciones": 0
+   }
+  },
+  {
+   "archivo": "img_0011.jpg",
+   "verdad": {
+    "cui": "3795507090402",
+    "nombres": "ELENA KARLA",
+    "apellidos": "ESTRADA REYES",
+    "variante": "angulo"
+   },
+   "items": [
+    {
+     "texto": "AA",
+     "confianza": 0.3329,
+     "box": {
+      "x": 175,
+      "y": 0,
+      "w": 620,
+      "h": 185
+     }
+    },
+    {
+     "texto": "A",
+     "confianza": 0.3329,
+     "box": {
+      "x": 181,
+      "y": 3,
+      "w": 511,
+      "h": 185
+     }
+    },
+    {
+     "texto": "DDE AMAA",
+     "confianza": 0.3329,
+     "box": {
+      "x": 392,
+      "y": 9,
+      "w": 339,
+      "h": 109
+     }
+    },
+    {
+     "texto": "CUI",
+     "confianza": 0.7334,
+     "box": {
+      "x": 471,
+      "y": 145,
+      "w": 47,
+      "h": 25
+     }
+    },
+    {
+     "texto": "3795",
+     "confianza": 0.6761,
+     "box": {
+      "x": 451,
+      "y": 171,
+      "w": 159,
+      "h": 79
+     }
+    },
+    {
+     "texto": "FOTO",
+     "confianza": 0.6761,
+     "box": {
+      "x": 263,
+      "y": 223,
+      "w": 76,
+      "h": 41
+     }
+    },
+    {
+     "texto": "ESTRADAREYES",
+     "confianza": 0.6761,
+     "box": {
+      "x": 396,
+      "y": 255,
+      "w": 432,
+      "h": 167
+     }
+    },
+    {
+     "texto": "APSLTDO SURNAME",
+     "confianza": 0.6761,
+     "box": {
+      "x": 420,
+      "y": 237,
+      "w": 263,
+      "h": 97
+     }
+    },
+    {
+     "texto": "0709",
+     "confianza": 0.6761,
+     "box": {
+      "x": 600,
+      "y": 204,
+      "w": 195,
+      "h": 95
+     }
+    },
+    {
+     "texto": "0402",
+     "confianza": 0.6761,
+     "box": {
+      "x": 784,
+      "y": 251,
+      "w": 159,
+      "h": 84
+     }
+    },
+    {
+     "texto": "NE",
+     "confianza": 0.426,
+     "box": {
+      "x": 120,
+      "y": 393,
+      "w": 232,
+      "h": 91
+     }
+    },
+    {
+     "texto": "AE",
+     "confianza": 0.426,
+     "box": {
+      "x": 123,
+      "y": 363,
+      "w": 267,
+      "h": 101
+     }
+    },
+    {
+     "texto": "LEN KARLA",
+     "confianza": 0.426,
+     "box": {
+      "x": 380,
+      "y": 355,
+      "w": 361,
+      "h": 143
+     }
+    },
+    {
+     "texto": "UAEMALCA",
+     "confianza": 0.426,
+     "box": {
+      "x": 367,
+      "y": 452,
+      "w": 285,
+      "h": 109
+     }
+    }
+   ],
+   "esperado": {
+    "cui": "",
+    "cui_valido": false,
+    "nombres": "DDE AMAA",
+    "apellidos": "ESTRADAREYES",
+    "revision_obligatoria": true,
+    "motivos": [
+     "cui_no_encontrado",
+     "nombres_por_posicion",
+     "nombres_confianza_baja"
+    ],
+    "correcciones": 0
+   }
+  },
+  {
+   "archivo": "img_0012.jpg",
+   "verdad": {
+    "cui": "8765690550312",
+    "nombres": "LUIS DANIELA",
+    "apellidos": "MENDOZA FLORES",
+    "variante": "ruido"
+   },
+   "items": [
+    {
+     "texto": "REPUBLICA DE GUATEMALA",
+     "confianza": 0.9986,
+     "box": {
+      "x": 175,
+      "y": 55,
+      "w": 476,
+      "h": 47
+     }
+    },
+    {
+     "texto": "DOCUMENTO PERSONAL DE IDENTIFICACION",
+     "confianza": 0.9927,
+     "box": {
+      "x": 171,
+      "y": 92,
+      "w": 513,
+      "h": 47
+     }
+    },
+    {
+     "texto": "EJEMPLO FICTICIO SOLO PRUEBAS",
+     "confianza": 0.9723,
+     "box": {
+      "x": 171,
+      "y": 127,
+      "w": 427,
+      "h": 37
+     }
+    },
+    {
+     "texto": "8765 69055 0312",
+     "confianza": 0.9432,
+     "box": {
+      "x": 425,
+      "y": 208,
+      "w": 491,
+      "h": 67
+     }
+    },
+    {
+     "texto": "APELLIDOS /SURNAME",
+     "confianza": 0.993,
+     "box": {
+      "x": 429,
+      "y": 288,
+      "w": 223,
+      "h": 37
+     }
+    },
+    {
+     "texto": "MENDOZA FLORES",
+     "confianza": 0.9993,
+     "box": {
+      "x": 427,
+      "y": 319,
+      "w": 409,
+      "h": 53
+     }
+    },
+    {
+     "texto": "NOMBRES / GIVEN NAMES",
+     "confianza": 0.9706,
+     "box": {
+      "x": 431,
+      "y": 385,
+      "w": 241,
+      "h": 35
+     }
+    },
+    {
+     "texto": "LUIS DANIELA",
+     "confianza": 0.9992,
+     "box": {
+      "x": 425,
+      "y": 420,
+      "w": 311,
+      "h": 43
+     }
+    },
+    {
+     "texto": "FECHA DE NACIMIENTO",
+     "confianza": 0.9831,
+     "box": {
+      "x": 165,
+      "y": 479,
+      "w": 221,
+      "h": 31
+     }
+    },
+    {
+     "texto": "NACIONALIDAD / NATIONALITY",
+     "confianza": 0.9831,
+     "box": {
+      "x": 424,
+      "y": 484,
+      "w": 291,
+      "h": 36
+     }
+    },
+    {
+     "texto": "11 ENE 1975",
+     "confianza": 0.9858,
+     "box": {
+      "x": 165,
+      "y": 507,
+      "w": 195,
+      "h": 35
+     }
+    },
+    {
+     "texto": "GUATEMALTECA",
+     "confianza": 0.9858,
+     "box": {
+      "x": 424,
+      "y": 512,
+      "w": 240,
+      "h": 36
+     }
+    }
+   ],
+   "esperado": {
+    "cui": "8765690550312",
+    "cui_valido": true,
+    "nombres": "LUIS DANIELA",
+    "apellidos": "MENDOZA FLORES",
+    "revision_obligatoria": false,
+    "motivos": [],
+    "correcciones": 0
+   }
+  }
+ ]
+}

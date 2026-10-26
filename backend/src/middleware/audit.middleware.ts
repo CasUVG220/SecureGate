@@ -24,6 +24,8 @@ export interface AuditOptions {
  *   que cambió (qué campos, rol anterior/nuevo…); se guarda en `datos_nuevos`.
  *   Jamás debe llevar contraseñas ni tokens: solo nombres de campos y valores no
  *   sensibles.
+ * - Un handler puede dejar en `res.locals.auditoriaAccion` una acción más precisa que la de la ruta (la del ANPR depende del
+ *   modo o del tipo de evento). Esa acción también tiene que estar en docs/acciones_sensibles.md (lo vigila la prueba).
  * - Rutas SIN sesión de usuario (login, logout, activar una licencia): el handler deja en
  *   `res.locals.auditoriaUsuarioId` / `auditoriaSucursalId` a quién corresponde la acción, para que la fila
  *   no quede sin usuario cuando se sabe quién es (RNF-10: usuario, fecha e IP en cada acción sensible).
@@ -78,9 +80,13 @@ export interface MarcaAuditoria { esAuditoria: true; accion: string; tabla?: str
 
 export const auditLog = (opts: AuditOptions) => {
   const mw = (req: Request, res: Response, next: NextFunction): void => {
-    res.on('finish', () => registrarAuditoria(req, opts, res.statusCode, res.locals?.auditoria, {
-      usuarioId: res.locals?.auditoriaUsuarioId, sucursalId: res.locals?.auditoriaSucursalId,
-    }));
+    res.on('finish', () => {
+      // Un controlador puede precisar la acción según lo que pasó (p. ej. ANPR: acceso automático o verificado, tipo de evento).
+      const accion = typeof res.locals?.auditoriaAccion === 'string' ? res.locals.auditoriaAccion : opts.accion;
+      registrarAuditoria(req, { ...opts, accion }, res.statusCode, res.locals?.auditoria, {
+        usuarioId: res.locals?.auditoriaUsuarioId, sucursalId: res.locals?.auditoriaSucursalId,
+      });
+    });
 
     next();
   };

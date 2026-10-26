@@ -103,7 +103,6 @@ const ENDPOINTS = [
   ['residentes-id',           'GET',    `/api/residentes/${F.residentes.A1}`, undefined, 'agente'],
   ['tickets-GET',             'GET',    '/api/tickets', undefined, 'agente'],
   ['tickets-cerrar',          'PUT',    `/api/tickets/${A1.ticket}/cerrar`, {}, 'agente'],
-  ['ocr-dpi',                 'POST',   '/api/ocr/dpi', { imagen: 'x' }, 'agente'],
   ['sync-garita',             'GET',    '/api/sync/garita', undefined, 'agente'],
 ];
 

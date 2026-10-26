@@ -1,11 +1,13 @@
 import { Router } from 'express';
-import { verifyToken, requireStaff } from '../middleware/auth.middleware';
-import { registrarAcceso, registrarSalida, registrarSalidaPut, getAccesoActivo, getAccesosActivos, getMisAccesos } from '../controllers/accesos.controller';
+import { verifyToken, requireStaff, requireAdminSucursal } from '../middleware/auth.middleware';
+import { registrarAcceso, registrarSalida, registrarSalidaPut, getAccesoActivo, getAccesosActivos, getMisAccesos, listarAccesos } from '../controllers/accesos.controller';
 import { auditLog } from '../middleware/audit.middleware';
 import { licenciaOpcional } from '../middleware/licencia.middleware';
 
 const router = Router();
 
+// Listado de entradas para la administración (visitantes y residentes por placas), con filtros y paginación.
+router.get('/', verifyToken, requireAdminSucursal, listarAccesos);
 router.get('/activos', verifyToken, requireStaff, getAccesosActivos);
 router.get('/activo',  verifyToken, requireStaff, getAccesoActivo);
 router.get('/mis',     verifyToken, getMisAccesos);

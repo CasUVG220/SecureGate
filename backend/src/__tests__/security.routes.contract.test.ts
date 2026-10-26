@@ -121,7 +121,7 @@ afterAll(async () => { await new Promise(r => server.close(r)); });
 describe('inventario de rutas', () => {
   it('encuentra las rutas reales (si esto falla, el recorrido está ciego y los demás tests no prueban nada)', () => {
     expect(RUTAS.length).toBeGreaterThan(90);
-    expect(RUTAS.some(r => r.path === '/ocr/dpi')).toBe(true);
+    expect(RUTAS.some(r => r.path === '/anpr/vehiculos')).toBe(true);
     expect(RUTAS.some(r => r.path === '/cargos/configuracion')).toBe(true);
   });
 
@@ -148,7 +148,7 @@ describe('tokens que no son una sesión de usuario', () => {
       process.env.JWT_SECRET as string,
     );
     expect(await llamar('GET', RUTA_PROTEGIDA, licencia)).toBe(403);
-    expect(await llamar('POST', '/api/ocr/dpi', licencia)).toBe(403);
+    expect(await llamar('GET', '/api/visitantes', licencia)).toBe(403);
     expect(await llamar('GET', '/api/residentes', licencia)).toBe(403);
   });
 
@@ -186,6 +186,16 @@ const SOLO_OWNER = ['residente', 'agente', 'admin_sucursal', 'admin_empresa'];
 
 const MATRIZ: Array<[string, string, string[]]> = [
   // Autenticadas pero de personal: un residente no debe verlas
+  ['POST', '/api/anpr/accesos', RESIDENTE],
+  ['POST', '/api/anpr/salidas', RESIDENTE],
+  ['POST', '/api/anpr/eventos', RESIDENTE],
+  ['POST', '/api/anpr/evidencias', RESIDENTE],
+  ['GET', `/api/anpr/evidencias/${UUID}/${UUID}`, RESIDENTE],
+  ['GET', '/api/anpr/vehiculos', SOLO_ADMIN_SUC_ARRIBA],
+  ['GET', '/api/accesos', SOLO_ADMIN_SUC_ARRIBA],
+  ['POST', '/api/anpr/vehiculos', SOLO_ADMIN_SUC_ARRIBA],
+  ['PATCH', `/api/anpr/vehiculos/${UUID}`, SOLO_ADMIN_SUC_ARRIBA],
+  ['DELETE', `/api/anpr/vehiculos/${UUID}`, SOLO_ADMIN_SUC_ARRIBA],
   ['GET', '/api/dashboard', RESIDENTE],
   ['GET', '/api/blacklist', RESIDENTE],
   ['GET', '/api/residentes', RESIDENTE],
@@ -201,8 +211,6 @@ const MATRIZ: Array<[string, string, string[]]> = [
   ['GET', '/api/visitantes', RESIDENTE],
   ['GET', '/api/visitantes/buscar', RESIDENTE],
   ['GET', `/api/invitaciones-qr/verificar/${UUID}`, RESIDENTE],
-  ['POST', '/api/ocr/dpi', RESIDENTE],
-  ['POST', '/api/ocr/placa', RESIDENTE],
   ['GET', '/api/sync/garita', RESIDENTE],
 
   // Administración de sucursal en adelante: ni residente ni agente

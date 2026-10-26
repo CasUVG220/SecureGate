@@ -82,10 +82,11 @@ export function RecientesList({ accesos, enLinea = true, onSalida }: Props) {
               <p className="truncate text-sm font-semibold text-gray-100">{a.nombre_visitante}</p>
               <p className="text-xs tabular-nums text-gray-400">{horaLocal(a.registrado_en)}</p>
               <p className="truncate text-xs text-gray-400">
-                {a.residente_casa ?? '—'} · DPI {a.numero_dpi}{a.placa ? ` · ${formatear(a.placa)}` : ''}
-                {a.capturado_manualmente && <span className="text-warning-400"> · manual</span>}
+                {a.origen === 'anpr'
+                  ? <>{a.residente_casa ?? '—'} · Vehículo de residente{a.placa ? ` · ${formatear(a.placa)}` : ''} · <span className="text-gray-300">ANPR{a.capturado_manualmente ? ', confirmado por el agente' : ''}</span></>
+                  : <>{a.residente_casa ?? '—'} · DPI {a.numero_dpi}{a.placa ? ` · ${formatear(a.placa)}` : ''}</>}
+                {a.origen !== 'anpr' && a.capturado_manualmente && <span className="text-warning-400"> · manual</span>}
                 {!a.capturado_manualmente && a.origen_dpi === 'local' && <span className="text-gray-400"> · DPI leído en el equipo</span>}
-                {!a.capturado_manualmente && a.origen_dpi === 'remoto' && <span className="text-gray-400"> · DPI leído por el servicio remoto</span>}
               </p>
               <StatusText kind={KIND[a.estado]} className="justify-self-end">
                 {TEXTO[a.estado]}{a.estado === 'pendiente' && a.intentos > 0 ? ` (${a.intentos})` : ''}
@@ -93,7 +94,8 @@ export function RecientesList({ accesos, enLinea = true, onSalida }: Props) {
               {a.estado === 'rechazado' && a.ultimo_error && (
                 <p className="col-span-2 text-xs text-danger-400">{a.ultimo_error}</p>
               )}
-              {onSalida && a.estado !== 'rechazado' && (
+              {/* Los del ANPR son vehículos de residentes: su salida la registra el carril de salida, no este botón. */}
+              {onSalida && a.estado !== 'rechazado' && a.origen !== 'anpr' && (
                 <div className="col-span-2 mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1">
                   <Button
                     size="sm"

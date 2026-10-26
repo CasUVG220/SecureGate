@@ -206,7 +206,12 @@ export default function DashboardPage({ onNavigate }: { onNavigate?: (pagina: st
                       </span>
 
                       <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-semibold text-gray-100" title={a.nombre_visitante}>{a.nombre_visitante}</p>
+                        <p className="flex min-w-0 items-center gap-1.5 text-sm font-semibold text-gray-100">
+                          <span className="truncate" title={a.nombre_visitante}>{a.nombre_visitante}</span>
+                          {/* Sprint 10: lo que el sistema abrió solo se distingue de un vistazo. */}
+                          {a.metodo === 'anpr' && <Badge tone="info" className="shrink-0">{t('dashboard.byPlates')}</Badge>}
+                          {a.verificado && <Badge tone="success" className="shrink-0">{t('entradas.verified')}</Badge>}
+                        </p>
                         <p className="mt-0.5 text-xs text-gray-400">
                           {t('dashboard.unit')} <span className="font-semibold text-gray-300">{a.numero_casa}</span>
                           {' · '}

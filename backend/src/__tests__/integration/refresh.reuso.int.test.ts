@@ -110,7 +110,7 @@ describe('I-18 reutilizar un token ya rotado cierra la sesión', () => {
     expect(f.datos_nuevos).toMatchObject({ motivo: 'token_reutilizado', sesiones_cerradas: 1 });
     // …pero eso no es otro evento de robo: una sola fila REFRESH_REUTILIZADO, y el intento con T2 es un rechazo normal con su motivo.
     expect((await q(`SELECT 1 FROM audit_logs WHERE accion = 'REFRESH_REUTILIZADO' AND usuario_id = $1`, [a.id])).length).toBe(1);
-    const rechazos = await q(`SELECT datos_nuevos FROM audit_logs WHERE accion = 'REFRESH_RECHAZADO' AND usuario_id = $1`, [a.id]);
+    const rechazos = await auditoria('REFRESH_RECHAZADO', a.id);   // la auditoría se escribe sin esperar: hay que darle tiempo
     expect(rechazos.map((r: any) => r.datos_nuevos.motivo)).toContain('sesion_cerrada_por_reuso');
   });
 

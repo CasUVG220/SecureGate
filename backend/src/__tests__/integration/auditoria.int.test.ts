@@ -104,6 +104,36 @@ const licenciaNueva = async () => {
 };
 const hex64 = () => randomUUID().replace(/-/g, '') + randomUUID().replace(/-/g, '');
 
+// ANPR (Sprint 10): la garita sube con sesión de agente + licencia del equipo; la licencia se activa una vez para todos los casos.
+let tokenLicenciaAnpr: string | null = null;
+const licenciaAnpr = async () => {
+  if (!tokenLicenciaAnpr) {
+    const l = await licenciaNueva();
+    const r = await request(app).post('/api/licencias/activar').send({ codigo: l.codigo, fingerprint: hex64(), nombre_dispositivo: 'PC AUD ANPR' });
+    expect(r.status).toBe(200);
+    tokenLicenciaAnpr = r.body.token_licencia as string;
+  }
+  return tokenLicenciaAnpr!;
+};
+const garita = async (url: string, body: object) => request(app).post(url).set(as('agenteA1')).set('X-Licencia-Token', await licenciaAnpr()).send(body);
+/** Placa guatemalteca única en la corrida (las de residentes la exigen): A + 3 dígitos + 3 letras. */
+let nPlaca = 100;
+const placaUnica = () => `A${++nPlaca}${fx.sufijo.replace(/[^a-z]/g, 'x').slice(0, 3).toUpperCase().padEnd(3, 'X')}`;
+const vehiculoNuevo = async () => {
+  const r = await post('adminSucA1', '/api/anpr/vehiculos', { residente_id: fx.residentes.A1, placa: placaUnica() });
+  expect(r.status).toBe(201);
+  return r.body as { id: string; placa: string };
+};
+/** Un acceso ANPR ya registrado (para la salida y la evidencia); devuelve su id_cliente y la placa. */
+const accesoAnprNuevo = async () => {
+  const v = await vehiculoNuevo();
+  const id = randomUUID();
+  const r = await garita('/api/anpr/accesos', { id_cliente: id, vehiculo_id: v.id, placa: v.placa });
+  expect(r.status).toBe(201);
+  return { id, placa: v.placa };
+};
+const JPEG_AUD = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3, 4, 0xff, 0xd9]);
+
 // ── la tabla de casos ───────────────────────────────────────────────────────────────────────────
 type Resp = request.Response;
 interface Caso {
@@ -360,9 +390,6 @@ const CASOS: Caso[] = [
     },
   },
   { accion: 'CONFIG_QR_ACTUALIZADA', quien: 'adminSucA1', ejecutar: () => put('adminSucA1', '/api/config-qr', { requiere_placa: false, max_intentos_fallidos: 5, bloqueo_minutos: 15 }) },
-  // El OCR llama a Google Vision con una clave que aquí no existe: la lectura termina en error del servicio, pero el intento queda auditado.
-  { accion: 'OCR_DPI', quien: 'agenteA1', exito: false, ejecutar: () => post('agenteA1', '/api/ocr/dpi', { imagen: 'AAAA' }) },
-  { accion: 'OCR_PLACA', quien: 'agenteA1', exito: false, ejecutar: () => post('agenteA1', '/api/ocr/placa', { imagen: 'AAAA' }) },
 
   // ── Dinero ──
   {
@@ -485,10 +512,33 @@ const CASOS: Caso[] = [
   { accion: 'JOB_MORA_EJECUTADO', quien: 'owner', ejecutar: () => post('owner', '/api/admin/ejecutar-revision-mora') },
   { accion: 'JOB_RECORDATORIOS_EJECUTADO', quien: 'owner', ejecutar: () => post('owner', '/api/admin/ejecutar-recordatorios-reservas') },
   { accion: 'JOB_INVITACIONES_EJECUTADO', quien: 'owner', ejecutar: () => post('owner', '/api/admin/ejecutar-expiracion-invitaciones') },
+
+  // ── ANPR continuo (Sprint 10) ──
+  { accion: 'VEHICULO_RESIDENTE_CREADO', quien: 'adminSucA1', ejecutar: () => post('adminSucA1', '/api/anpr/vehiculos', { residente_id: fx.residentes.A1, placa: placaUnica() }) },
+  { accion: 'VEHICULO_RESIDENTE_ACTUALIZADO', quien: 'adminSucA1', ejecutar: async () => patch('adminSucA1', `/api/anpr/vehiculos/${(await vehiculoNuevo()).id}`, { descripcion: 'AUD' }) },
+  { accion: 'VEHICULO_RESIDENTE_DADO_DE_BAJA', quien: 'adminSucA1', ejecutar: async () => del('adminSucA1', `/api/anpr/vehiculos/${(await vehiculoNuevo()).id}`) },
+  {
+    accion: 'ANPR_ACCESO_AUTOMATICO', quien: 'agenteA1',
+    ejecutar: async () => { const v = await vehiculoNuevo(); return garita('/api/anpr/accesos', { id_cliente: randomUUID(), vehiculo_id: v.id, placa: v.placa, modo: 'automatico', confianza: 0.97 }); },
+  },
+  {
+    accion: 'ANPR_ACCESO_VERIFICADO', quien: 'agenteA1',
+    ejecutar: async () => { const v = await vehiculoNuevo(); return garita('/api/anpr/accesos', { id_cliente: randomUUID(), vehiculo_id: v.id, placa: v.placa, modo: 'verificacion' }); },
+  },
+  { accion: 'ANPR_SALIDA', quien: 'agenteA1', ejecutar: async () => garita('/api/anpr/salidas', { id_cliente: randomUUID(), placa: (await accesoAnprNuevo()).placa }) },
+  { accion: 'ANPR_EVENTO', quien: 'agenteA1', exito: false, ejecutar: () => garita('/api/anpr/eventos', { id_cliente: randomUUID(), tipo: 'desconocido' }) },
+  { accion: 'ANPR_ALERTA_LISTA_NEGRA', quien: 'agenteA1', ejecutar: () => garita('/api/anpr/eventos', { id_cliente: randomUUID(), tipo: 'alerta_lista_negra', placa: 'P999AUD' }) },
+  { accion: 'ANPR_VERIFICACION_RESUELTA', quien: 'agenteA1', ejecutar: () => garita('/api/anpr/eventos', { id_cliente: randomUUID(), tipo: 'verificacion_resuelta', detalle: { resolucion: 'descartado' } }) },
+  { accion: 'ANPR_ILEGIBLE', quien: 'agenteA1', ejecutar: () => garita('/api/anpr/eventos', { id_cliente: randomUUID(), tipo: 'ilegible' }) },
+  { accion: 'ANPR_ACTUADOR_FALLO', quien: 'agenteA1', ejecutar: () => garita('/api/anpr/eventos', { id_cliente: randomUUID(), tipo: 'actuador_fallo', detalle: { error: 'timeout' } }) },
+  {
+    accion: 'ANPR_EVIDENCIA', quien: 'agenteA1',
+    ejecutar: async () => garita('/api/anpr/evidencias', { id_cliente: (await accesoAnprNuevo()).id, tipo: 'placa', jpeg: JPEG_AUD.toString('base64') }),
+  },
 ];
 
 /** Acciones que sólo aparecen como bloqueo por límite de tasa (429): las cubre la sección de abajo. */
-const SOLO_BLOQUEO = ['LIMITE_SESION', 'LIMITE_TASA_GENERAL', 'OCR_ESCANEO', 'LICENCIA_HEARTBEAT'];
+const SOLO_BLOQUEO = ['LIMITE_SESION', 'LIMITE_TASA_GENERAL', 'LICENCIA_HEARTBEAT'];
 
 const SRC = path.resolve(__dirname, '../..');
 const archivos = (dir: string): string[] =>

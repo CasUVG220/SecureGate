@@ -95,8 +95,6 @@
   "POST /api/licencias",
   "POST /api/licencias/activar",
   "POST /api/licencias/heartbeat",
-  "POST /api/ocr/dpi",
-  "POST /api/ocr/placa",
   "POST /api/pagos",
   "POST /api/pagos/tarjeta",
   "POST /api/pagos/transferencia",

@@ -36,11 +36,12 @@ export const Icono = ({ d, size = 18 }: { d: string; size?: number }) => (
 );
 
 /** Qué necesita cada tarea para poder pulsar su botón. */
-const ACCION: Record<Proposito, { rotulo: string; requiere: 'ocr' | 'red' | null; pista: string }> = {
+export const ACCION: Record<Proposito, { rotulo: string; requiere: 'ocr' | 'red' | null; pista: string }> = {
   // Sin red se valida contra la copia local de las invitaciones (SCRUM-126): ya no necesita el servidor.
   qr: { rotulo: '', requiere: null, pista: 'Se lee solo: muestra el QR a la cámara.' },
   placa: { rotulo: 'Leer placa', requiere: 'ocr', pista: 'Se lee en este equipo, sin internet.' },
-  dpi: { rotulo: 'Leer DPI', requiere: 'red', pista: 'La foto se procesa en memoria y se descarta.' },
+  // El DPI se lee en este equipo (OCR local, sin internet); la foto se procesa en memoria y no sale del equipo.
+  dpi: { rotulo: 'Leer DPI', requiere: 'ocr', pista: 'Se lee en este equipo, sin internet. La foto no se guarda.' },
   salida: { rotulo: 'Dar salida', requiere: 'red', pista: 'Lee la placa y cierra el acceso abierto.' },
 };
 

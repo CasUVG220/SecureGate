@@ -576,7 +576,8 @@ DO $$ BEGIN
 EXCEPTION WHEN duplicate_column THEN NULL;
 END $$;
 
--- T5: de dónde salió el DPI del visitante (local = OCR del equipo, remoto = Google Vision vía backend, manual = tecleado).
+-- T5: de dónde salió el DPI del visitante (local = OCR del equipo, manual = tecleado). «remoto» solo queda en filas anteriores al
+-- Sprint 10, cuando había un OCR remoto de respaldo (retirado: docs/ocr_local_decision.md); no se migra ni se produce.
 -- NULL en los registros anteriores y en los de la web, que no lo informan.
 DO $$ BEGIN
   ALTER TABLE registros_acceso ADD COLUMN origen_dpi VARCHAR(10) CHECK (origen_dpi IN ('local', 'remoto', 'manual'));
@@ -983,5 +984,173 @@ CREATE TABLE IF NOT EXISTS contactos (
 );
 
 CREATE INDEX IF NOT EXISTS idx_contactos_created ON contactos(created_at);
+
+-- ── Sprint 10 · ANPR continuo: vehículos de residentes, registros automáticos y evidencia ───────────────────────────────
+-- Ver docs/anpr_continuo.md. Todo idempotente: corre en cada arranque como el resto de este archivo. Fechas y horas con zona
+-- (TIMESTAMPTZ), como pide S-17.
+
+-- Vehículos AUTORIZADOS de los residentes: los únicos que el ANPR deja entrar solos. La placa se guarda NORMALIZADA (P123ABC).
+-- `version` sale de una secuencia y sube con cada cambio de la fila (y cuando cambia algo que la afecta: un bloqueo por placa
+-- en la lista negra, o la baja del usuario del residente): la garita baja solo lo que cambió desde su última versión. Una baja
+-- es `activo = FALSE` (nunca DELETE) para que la garita se entere. Si se ELIMINA al residente sus vehículos se van con él
+-- (CASCADE): la garita igual deja de abrirles porque exige que el residente siga en su copia completa de residentes, y cada
+-- tanto vuelve a pedir la lista completa de vehículos.
+CREATE SEQUENCE IF NOT EXISTS vehiculos_residentes_version_seq;
+
+CREATE TABLE IF NOT EXISTS vehiculos_residentes (
+  id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  sucursal_id   UUID NOT NULL REFERENCES sucursales(id) ON DELETE RESTRICT,
+  residente_id  UUID NOT NULL REFERENCES residentes(id) ON DELETE CASCADE,
+  placa         VARCHAR(20) NOT NULL CHECK (placa ~ '^[A-Z0-9]{3,20}$'),
+  descripcion   VARCHAR(100),
+  vigente_desde DATE NOT NULL DEFAULT CURRENT_DATE,
+  vigente_hasta DATE,
+  activo        BOOLEAN NOT NULL DEFAULT TRUE,
+  version       BIGINT NOT NULL DEFAULT nextval('vehiculos_residentes_version_seq'),
+  creado_por    UUID REFERENCES usuarios(id) ON DELETE SET NULL,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT vehiculos_residentes_vigencia_chk CHECK (vigente_hasta IS NULL OR vigente_hasta >= vigente_desde)
+);
+
+-- Una placa activa por sucursal (no puede ser de dos residentes a la vez).
+CREATE UNIQUE INDEX IF NOT EXISTS idx_vehiculos_residentes_placa_activa ON vehiculos_residentes(sucursal_id, placa) WHERE activo;
+CREATE INDEX IF NOT EXISTS idx_vehiculos_residentes_version ON vehiculos_residentes(sucursal_id, version);
+CREATE INDEX IF NOT EXISTS idx_vehiculos_residentes_residente ON vehiculos_residentes(residente_id);
+
+CREATE OR REPLACE FUNCTION vehiculos_residentes_nueva_version() RETURNS trigger AS $$
+BEGIN
+  NEW.version := nextval('vehiculos_residentes_version_seq');
+  NEW.updated_at := NOW();
+  RETURN NEW;
+END $$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_vehiculos_residentes_version ON vehiculos_residentes;
+CREATE TRIGGER trg_vehiculos_residentes_version BEFORE UPDATE ON vehiculos_residentes
+  FOR EACH ROW EXECUTE FUNCTION vehiculos_residentes_nueva_version();
+
+-- Un bloqueo por PLACA (alta, cambio o baja) cambia el estado de lista negra de los vehículos con esa placa en esa sucursal:
+-- se les sube la versión para que la garita lo baje en el siguiente pull aunque sea incremental.
+CREATE OR REPLACE FUNCTION vehiculos_residentes_por_bloqueo() RETURNS trigger AS $$
+BEGIN
+  UPDATE vehiculos_residentes SET activo = activo
+   WHERE (TG_OP <> 'DELETE' AND NEW.placa IS NOT NULL AND sucursal_id = NEW.sucursal_id AND placa = NEW.placa)
+      OR (TG_OP <> 'INSERT' AND OLD.placa IS NOT NULL AND sucursal_id = OLD.sucursal_id AND placa = OLD.placa);
+  RETURN NULL;
+END $$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_vehiculos_residentes_por_bloqueo ON visitante_blacklist;
+CREATE TRIGGER trg_vehiculos_residentes_por_bloqueo AFTER INSERT OR UPDATE OR DELETE ON visitante_blacklist
+  FOR EACH ROW EXECUTE FUNCTION vehiculos_residentes_por_bloqueo();
+
+-- La baja (o el regreso) del usuario de un residente cambia si sus vehículos pueden entrar solos.
+CREATE OR REPLACE FUNCTION vehiculos_residentes_por_usuario() RETURNS trigger AS $$
+BEGIN
+  IF NEW.activo IS DISTINCT FROM OLD.activo THEN
+    UPDATE vehiculos_residentes v SET activo = v.activo
+      FROM residentes r WHERE r.id = v.residente_id AND r.usuario_id = NEW.id;
+  END IF;
+  RETURN NULL;
+END $$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_vehiculos_residentes_por_usuario ON usuarios;
+CREATE TRIGGER trg_vehiculos_residentes_por_usuario AFTER UPDATE OF activo ON usuarios
+  FOR EACH ROW EXECUTE FUNCTION vehiculos_residentes_por_usuario();
+
+-- registros_acceso: el ANPR registra accesos de VEHÍCULOS DE RESIDENTES (sin visitante). `visitante_id` admite NULL solo en ese
+-- caso (CHECK). `confianza` = confianza agregada del consenso de lecturas; `track_id` = pista del seguimiento; `evidencia_ref`
+-- = referencia a la evidencia (`anpr:<id_cliente>`); `verificado_por` = agente que confirmó con un toque (modo verificación).
+-- `id_cliente_salida` hace idempotente la salida automática (un reintento no cierra dos veces).
+DO $$ BEGIN
+  ALTER TABLE registros_acceso ADD COLUMN confianza NUMERIC(5,4) CHECK (confianza IS NULL OR (confianza >= 0 AND confianza <= 1));
+EXCEPTION WHEN duplicate_column THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  ALTER TABLE registros_acceso ADD COLUMN track_id VARCHAR(64);
+EXCEPTION WHEN duplicate_column THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  ALTER TABLE registros_acceso ADD COLUMN evidencia_ref VARCHAR(200);
+EXCEPTION WHEN duplicate_column THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  ALTER TABLE registros_acceso ADD COLUMN vehiculo_residente_id UUID REFERENCES vehiculos_residentes(id) ON DELETE RESTRICT;
+EXCEPTION WHEN duplicate_column THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  ALTER TABLE registros_acceso ADD COLUMN verificado_por UUID REFERENCES usuarios(id) ON DELETE SET NULL;
+EXCEPTION WHEN duplicate_column THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  ALTER TABLE registros_acceso ADD COLUMN id_cliente_salida UUID;
+EXCEPTION WHEN duplicate_column THEN NULL;
+END $$;
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_registros_acceso_id_cliente_salida
+  ON registros_acceso(id_cliente_salida) WHERE id_cliente_salida IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_registros_acceso_vehiculo_residente
+  ON registros_acceso(vehiculo_residente_id) WHERE vehiculo_residente_id IS NOT NULL;
+
+ALTER TABLE registros_acceso ALTER COLUMN visitante_id DROP NOT NULL;
+
+DO $$ BEGIN
+  ALTER TABLE registros_acceso ADD CONSTRAINT registros_acceso_visitante_o_vehiculo_chk
+    CHECK (visitante_id IS NOT NULL OR vehiculo_residente_id IS NOT NULL);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+-- origen: se suma 'anpr'. Solo se rehace la restricción si todavía no lo admite (rehacerla en cada arranque revisaría la
+-- tabla entera cada vez).
+DO $$ BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+     WHERE conrelid = 'registros_acceso'::regclass AND conname = 'registros_acceso_origen_check'
+       AND pg_get_constraintdef(oid) LIKE '%anpr%'
+  ) THEN
+    ALTER TABLE registros_acceso DROP CONSTRAINT IF EXISTS registros_acceso_origen_check;
+    ALTER TABLE registros_acceso ADD CONSTRAINT registros_acceso_origen_check CHECK (origen IN ('web', 'desktop', 'anpr'));
+  END IF;
+END $$;
+
+-- Eventos del ANPR que NO son un acceso (alerta de lista negra, verificación resuelta sin registro, ilegible): quedan aquí y en
+-- la bitácora. `id_cliente` = UUID que generó la garita: hace idempotente el reenvío desde la cola offline.
+CREATE TABLE IF NOT EXISTS anpr_eventos (
+  id_cliente    UUID PRIMARY KEY,
+  sucursal_id   UUID NOT NULL REFERENCES sucursales(id) ON DELETE RESTRICT,
+  licencia_id   UUID REFERENCES licencias_dispositivo(id) ON DELETE SET NULL,
+  agente_id     UUID REFERENCES usuarios(id) ON DELETE SET NULL,
+  tipo          VARCHAR(30) NOT NULL CHECK (tipo IN ('alerta_lista_negra', 'verificacion_resuelta', 'ilegible', 'actuador_fallo')),
+  placa         VARCHAR(20),
+  carril        VARCHAR(64),
+  track_id      VARCHAR(64),
+  detalle       JSONB,
+  registrado_en TIMESTAMPTZ,
+  recibido_en   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_anpr_eventos_sucursal ON anpr_eventos(sucursal_id, recibido_en);
+
+-- Evidencia del ANPR (recorte de la placa y de la parte baja del vehículo, JPEG). Se purga a los 7 días (tarea `anpr.evidencias`).
+-- Una por `id_cliente` (del acceso o del evento) y tipo: un reenvío no la duplica.
+CREATE TABLE IF NOT EXISTS evidencias_anpr (
+  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  sucursal_id UUID NOT NULL REFERENCES sucursales(id) ON DELETE RESTRICT,
+  id_cliente  UUID NOT NULL,
+  tipo        VARCHAR(10) NOT NULL CHECK (tipo IN ('placa', 'vehiculo')),
+  sha256      CHAR(64) NOT NULL,
+  imagen      BYTEA NOT NULL,
+  tamano      INTEGER NOT NULL CHECK (tamano > 0 AND tamano <= 262144),
+  licencia_id UUID REFERENCES licencias_dispositivo(id) ON DELETE SET NULL,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  expira_en   TIMESTAMPTZ NOT NULL,
+  CONSTRAINT evidencias_anpr_unica UNIQUE (id_cliente, tipo)
+);
+
+CREATE INDEX IF NOT EXISTS idx_evidencias_anpr_expira ON evidencias_anpr(expira_en);
 
 SELECT 'SecureGate DB inicializada correctamente' AS mensaje;

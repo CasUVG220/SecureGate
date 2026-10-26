@@ -101,14 +101,10 @@ const primero = (a, s) => a.indexOf(s) + 1;
     request: { method: 'POST', path: '/api/auth/refresh', actor: 'anónimo' }, real: { status: rf.status, body: `${resumen(rfs)}; primer 429 en el intento ${primero(rfs, 429)}` },
     resultado: primero(rfs, 429) === 121 ? 'OK' : 'FALLA', severidad: 'baja' });
 
-  // ── /api/ocr : 30 / min (proxy que cuesta dinero) ─────────────────────────
+  // Tokens para la última comprobación del límite general, con el backend recién reiniciado (las secciones de arriba
+  // agotaron el login); el límite general se mide después con otro reinicio, para que estos logins no cuenten.
   await L.reiniciarBackend();
   const T = await L.tokens(true);
-  let oc;
-  const ocrs = await secuencia(32, async () => { oc = await L.call('POST', '/api/ocr/dpi', { token: T.agenteA1, body: { imagen: 'x' } }); return oc.status; });
-  S.registrar({ id: 'RL-ocr', titulo: '32 llamadas al proxy OCR (Google Vision) con un agente', esperado: '429 desde la 31',
-    request: { method: 'POST', path: '/api/ocr/dpi', actor: 'agenteA1' }, real: { status: oc.status, body: `${resumen(ocrs)}; primer 429 en el intento ${primero(ocrs, 429)}` },
-    resultado: primero(ocrs, 429) === 31 ? 'OK' : 'FALLA', severidad: 'media' });
 
   // ── Límite general : 1000 / 15 min por IP ─────────────────────────────────
   await L.reiniciarBackend();

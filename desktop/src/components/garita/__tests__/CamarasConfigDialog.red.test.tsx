@@ -5,7 +5,7 @@ import { api, type CamaraRed } from '../../../lib/tauri';
 
 vi.mock('../../../lib/tauri', async importOriginal => ({
   ...(await importOriginal<typeof import('../../../lib/tauri')>()),
-  api: { ocr: { dpiConfig: vi.fn().mockRejectedValue(new Error('x')), dpiConfigurar: vi.fn() }, camaras: { eliminar: vi.fn(), descubrir: vi.fn(), probar: vi.fn(), guardar: vi.fn() } },
+  api: { camaras: { eliminar: vi.fn(), descubrir: vi.fn(), probar: vi.fn(), guardar: vi.fn() } },
 }));
 const eliminar = api.camaras.eliminar as unknown as ReturnType<typeof vi.fn>;
 

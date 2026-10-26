@@ -293,7 +293,52 @@ function extraerDpi(itemsCrudos) {
   };
 }
 
+// ── Segunda pasada sobre los nombres (Sprint 10, OCR 100 % local) ──────────────────────────────────────────
+/**
+ * Completa y blinda los nombres que dio `extraerDpi`, con las mismas líneas del OCR. Se aplica DESPUÉS de la extracción
+ * (en `reconocerDpi`), sin cambiar `extraerDpi`, cuyas reglas fija la prueba de caracterización.
+ *
+ * Une al nombre las piezas que el OCR leyó por separado en la MISMA línea, a su derecha («REYES» + «ALVARADO»): antes se
+ * quedaba solo con la primera y el apellido salía incompleto sin aviso. Si una pieza necesitó corrección o tiene poca
+ * confianza, el campo va a revisión como cualquier otro.
+ *
+ * Lo que NO hace: separar dos nombres que el OCR leyó pegados («RICARDODANIELA»): no se adivina dónde va el espacio. Marcarlos
+ * para revisión (apellidos de una palabra, palabras de 11 letras o más) se midió y no se activó: ver docs/ocr_dpi_local.md.
+ *
+ * @returns el mismo resultado con `nombres`/`apellidos`, `confianza`, `motivos` y `revision_obligatoria` al día.
+ */
+function completarNombres(campos, itemsCrudos) {
+  const items = (itemsCrudos || []).filter((i) => i && typeof i.texto === 'string' && i.texto.trim() && i.box);
+  const r = { ...campos, confianza: { ...campos.confianza }, motivos: [...campos.motivos], correcciones: [...campos.correcciones] };
+  const agregar = (m) => { if (!r.motivos.includes(m)) r.motivos.push(m); };
+  for (const campo of ['apellidos', 'nombres']) {
+    const valor = r[campo];
+    if (!valor) continue;
+    const base = items.find((i) => corregirNombre(i.texto).texto === valor);
+    if (!base) continue;
+    const derecha = items
+      .filter((i) => i !== base && izq(i) >= izq(base) && pareceNombre(i.texto))
+      .sort((a, b) => izq(a) - izq(b));
+    const piezas = [];
+    let ult = base;
+    for (const i of derecha) {
+      const h = Math.max(i.box.h, ult.box.h);
+      if (Math.abs(cy(i) - cy(ult)) < h * 0.5 && izq(i) - (ult.box.x + ult.box.w) < h * 2.5) { piezas.push(i); ult = i; }
+    }
+    if (!piezas.length) continue;
+    const textos = piezas.map((i) => corregirNombre(i.texto));
+    r[campo] = [valor, ...textos.map((t) => t.texto)].filter(Boolean).join(' ');
+    r.confianza[campo] = Number(Math.min(r.confianza[campo], ...piezas.map((i) => i.confianza)).toFixed(4));
+    const corregidas = textos.flatMap((t) => t.correcciones.map((x) => ({ ...x, campo })));
+    if (corregidas.length) { r.correcciones.push(...corregidas); agregar(`${campo}_corregido`); }
+  }
+  if (r.nombres && r.confianza.nombres < UMBRAL_CONFIANZA_NOMBRE) agregar('nombres_confianza_baja');
+  if (r.apellidos && r.confianza.apellidos < UMBRAL_CONFIANZA_NOMBRE) agregar('apellidos_confianza_baja');
+  r.revision_obligatoria = r.revision_obligatoria || r.motivos.length > 0;
+  return r;
+}
+
 module.exports = {
-  extraerDpi, agruparLineas, corregirCui, validarCui, corregirNombre, esEtiqueta, pareceNombre, distanciaSubcadena, formato454,
+  extraerDpi, completarNombres, agruparLineas, corregirCui, validarCui, corregirNombre, esEtiqueta, pareceNombre, distanciaSubcadena, formato454,
   UMBRAL_CONFIANZA_CUI, UMBRAL_CONFIANZA_NOMBRE, LETRA_A_DIGITO, DIGITO_A_LETRA,
 };

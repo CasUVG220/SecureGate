@@ -32,6 +32,21 @@ describe('DashboardPage', () => {
     expect(within(resumen).getByRole('group', { name: /Accesos de hoy por hora/ })).toBeInTheDocument();
   });
 
+  it('Sprint 10: una entrada por placas se marca «Automático (placas)» y, si la confirmó un agente, «Verificado por agente»', async () => {
+    const ahora = new Date().toISOString();
+    mockGet.mockResolvedValue(datos({ accesos_recientes: [
+      { id: 'r1', nombre_visitante: 'Ana Residente', numero_casa: 'B-3', timestamp_entrada: ahora, timestamp_salida: null, metodo: 'anpr', es_residente: true, verificado: false, placa: 'P333ANP' },
+      { id: 'r2', nombre_visitante: 'Beto Residente', numero_casa: 'B-4', timestamp_entrada: ahora, timestamp_salida: null, metodo: 'anpr', es_residente: true, verificado: true, placa: 'P444VER' },
+      { id: 'v1', nombre_visitante: 'Luis Pérez', numero_casa: 'A-12', timestamp_entrada: ahora, timestamp_salida: null, metodo: 'clic' },
+    ] }));
+    render(<DashboardPage />);
+    const ana = (await screen.findByText('Ana Residente')).closest('li')!;
+    expect(within(ana).getByText('Automático (placas)')).toBeInTheDocument();
+    expect(within(ana).queryByText('Verificado por agente')).toBeNull();
+    expect(within(screen.getByText('Beto Residente').closest('li')!).getByText('Verificado por agente')).toBeInTheDocument();
+    expect(within(screen.getByText('Luis Pérez').closest('li')!).queryByText('Automático (placas)')).toBeNull();
+  });
+
   it('"visitantes dentro" viene del servidor, no de la lista de 10 recientes', async () => {
     mockGet.mockResolvedValue(datos());
     render(<DashboardPage />);

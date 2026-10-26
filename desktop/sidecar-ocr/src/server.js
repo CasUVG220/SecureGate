@@ -29,7 +29,7 @@ const fs = require('node:fs');
 const { performance } = require('node:perf_hooks');
 
 const { PaddleOcrService } = require('ppu-paddle-ocr');
-const { extraerDpi } = require('./dpi');
+const { extraerDpi, completarNombres } = require('./dpi');
 const { estimarInclinacion, rotar } = require('./enderezar');
 
 const args = process.argv.slice(2);
@@ -114,13 +114,14 @@ async function reconocerDpi(service, imageBase64) {
   // Sin spaceRecovery: en el conjunto sintético acierta más campos que con él (que parte «GLORIA» en «G LO RIA»);
   // lo que sí pierde son los espacios entre dos nombres («LUISLUCIA»), y por eso la pantalla muestra siempre los campos para revisar.
   let r = await recognize(service, entrada.toString('base64'), { spaceRecovery: false });
-  let campos = extraerDpi(r.items);
+  // Reglas del DPI (`extraerDpi`) y la segunda pasada sobre los nombres (une piezas de la misma línea y marca lo dudoso).
+  let campos = completarNombres(extraerDpi(r.items), r.items);
   let intentos = 1;
   let msInferencia = r.ms_inferencia;
   // 2) Si no salió un CUI válido y se había girado la imagen, se prueba también sin girar y se queda el mejor resultado.
   if (!campos.cui_valido && grados) {
     const r2 = await recognize(service, original.toString('base64'), { spaceRecovery: false });
-    const c2 = extraerDpi(r2.items);
+    const c2 = completarNombres(extraerDpi(r2.items), r2.items);
     intentos = 2;
     msInferencia += r2.ms_inferencia;
     if (c2.cui_valido || c2.confianza.cui > campos.confianza.cui) campos = c2;

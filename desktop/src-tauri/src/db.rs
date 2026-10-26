@@ -183,9 +183,31 @@ pub fn aplicar_esquema(conn: &Connection) -> AppResult<()> {
     )?;
     // T7: cámaras IP y celular (sin credenciales: esas van al llavero del sistema).
     conn.execute_batch(crate::camaras::modelo::ESQUEMA)?;
+    // Sprint 10: carriles, vehículos autorizados, eventos y evidencia del ANPR.
+    conn.execute_batch(&crate::anpr::esquema())?;
     migrar_blacklist_placa(conn)?;
     migrar_pendientes_invitacion_qr(conn)?;
     migrar_pendientes_origen_dpi(conn)?;
+    migrar_pendientes_anpr(conn)?;
+    Ok(())
+}
+
+/// Sprint 10 (ANPR): la cola lleva a qué ruta va cada fila (`/accesos` como siempre, o `/anpr/accesos`, `/anpr/salidas`,
+/// `/anpr/eventos`), si se muestra en «Registrados en este equipo» (las alertas y verificaciones resueltas no) y su origen. En
+/// una cola anterior las columnas no existen: se agregan con el valor de siempre (`/accesos`, visible) sin tocar nada más.
+fn migrar_pendientes_anpr(conn: &Connection) -> AppResult<()> {
+    let tiene = |col: &str| -> AppResult<bool> {
+        Ok(conn.prepare("SELECT 1 FROM pragma_table_info('accesos_pendientes') WHERE name = ?1")?.exists([col])?)
+    };
+    if !tiene("ruta")? {
+        conn.execute("ALTER TABLE accesos_pendientes ADD COLUMN ruta TEXT NOT NULL DEFAULT '/accesos'", [])?;
+    }
+    if !tiene("visible")? {
+        conn.execute("ALTER TABLE accesos_pendientes ADD COLUMN visible INTEGER NOT NULL DEFAULT 1", [])?;
+    }
+    if !tiene("origen")? {
+        conn.execute("ALTER TABLE accesos_pendientes ADD COLUMN origen TEXT", [])?;
+    }
     Ok(())
 }
 
@@ -394,6 +416,26 @@ mod tests {
     }
 
     #[test]
+    fn una_cola_anterior_sin_ruta_se_migra_a_la_de_siempre() {
+        let c = Connection::open_in_memory().unwrap();
+        c.execute_batch(
+            "CREATE TABLE accesos_pendientes (
+               id_cliente TEXT PRIMARY KEY, payload TEXT NOT NULL, registrado_en TEXT NOT NULL,
+               estado TEXT NOT NULL DEFAULT 'pendiente', intentos INTEGER NOT NULL DEFAULT 0, proximo_intento_en TEXT,
+               ultimo_error TEXT, sincronizado_en TEXT, registro_id TEXT, nombre_visitante TEXT NOT NULL,
+               numero_dpi TEXT NOT NULL, placa TEXT, residente_casa TEXT, capturado_manualmente INTEGER NOT NULL DEFAULT 0,
+               invitacion_qr_id TEXT, origen_dpi TEXT);
+             INSERT INTO accesos_pendientes (id_cliente, payload, registrado_en, nombre_visitante, numero_dpi)
+               VALUES ('a', '{}', '2026-10-10T10:00:00Z', 'V', '1');",
+        ).unwrap();
+        aplicar_esquema(&c).unwrap();
+        aplicar_esquema(&c).unwrap();
+        let (ruta, visible, origen): (String, i64, Option<String>) =
+            c.query_row("SELECT ruta, visible, origen FROM accesos_pendientes WHERE id_cliente = 'a'", [], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?))).unwrap();
+        assert_eq!((ruta.as_str(), visible, origen), ("/accesos", 1, None));
+    }
+
+    #[test]
     fn el_esquema_es_idempotente() {
         let conn = Connection::open_in_memory().unwrap();
         aplicar_esquema(&conn).unwrap();
@@ -401,6 +443,7 @@ mod tests {
         let n: i64 = conn
             .query_row("SELECT count(*) FROM sqlite_master WHERE type='table'", [], |r| r.get(0))
             .unwrap();
-        assert_eq!(n, 8, "meta, residentes, blacklist, preautorizaciones, invitaciones_qr, accesos_pendientes, config_hardware, camaras");
+        assert_eq!(n, 12, "meta, residentes, blacklist, preautorizaciones, invitaciones_qr, accesos_pendientes, config_hardware, camaras, \
+                           carriles_anpr, vehiculos_autorizados_local, anpr_eventos_local, anpr_evidencias");
     }
 }

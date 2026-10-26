@@ -21,7 +21,7 @@ reales** (ataques entre empresas, sesiones, CSV, cuentas demo en modo producció
 |---|---|---|
 | C1 | ✅ | Seeds demo movidos a `database/seed-dev.sql` (sólo con `SEED_DEMO=true` y fuera de producción). En producción el arranque **desactiva** las cuentas demo que conserven su contraseña pública. Nuevo `npm run owner:crear` para el primer owner. |
 | C2 | ✅ | Sin `JWT_SECRET` por defecto: en producción el backend **no arranca** si falta, es < 32 caracteres o es un valor público (`config/env.ts`); en desarrollo genera uno aleatorio. `deploy.sh` crea uno persistente en `.env`. Postgres dev sólo en `127.0.0.1`. CORS sin allowlist ya no se acepta en producción. **Acción manual: rotar el secreto en la VM (invalida sesiones y licencias).** |
-| C3 | ✅ | `/ocr` (auth + staff + rate limit, clave de Google en header), `/cargos` y `/configuracion-cargos` (auth + admin + filtro de tenant). |
+| C3 | ✅ | `/ocr` (auth + staff + rate limit, clave del proveedor en header; en el Sprint 10 se retiró el OCR remoto: `docs/ocr_local_decision.md`), `/cargos` y `/configuracion-cargos` (auth + admin + filtro de tenant). |
 | C4 | ✅ | `POST /pagos/tarjeta` responde 501 salvo `PAGOS_TARJETA_SIMULADA=true` (sólo en el compose de desarrollo). `aprobarPago` con `FOR UPDATE` y sin resucitar pagos rechazados; `createPago` con alcance. |
 | A1 | ✅ | `deleteUsuario` con jerarquía + alcance; cierra refresh tokens **y el access token al instante**; `refresh` exige `activo = TRUE`. |
 | A2 | ✅ | `updateSucursal`/`deleteSucursal`/`assignAdminSucursal`/`getEmpresaStats`/`assignAdminEmpresa` con alcance y roles permitidos. |
@@ -119,9 +119,9 @@ emitidas; hay que reactivar las garitas) — hacerlo ya si la VM corre el compos
 ### C3 — Rutas sin autenticación
 `backend/src/routes/index.ts:56,59` monta `/cargos` y `/ocr` **sin** `verifyToken`, y sus routers tampoco lo
 aplican (`cargos.routes.ts`, `ocr.routes.ts`):
-- `POST /api/ocr/dpi|placa` → proxy anónimo hacia Google Vision con **tu** API key (consumo de cuota/costo; límite
-  del body 50 MB). Además la key viaja en la query string (`ocr.controller.ts:35`) y termina en logs; Google acepta
-  el header `x-goog-api-key`.
+- `POST /api/ocr/dpi|placa` → proxy anónimo hacia el OCR remoto del proveedor con **tu** API key (consumo de cuota/costo; límite
+  del body 50 MB). Además la key viaja en la query string (`ocr.controller.ts:35`) y termina en logs; el proveedor acepta
+  la clave en un header. *(Sprint 10: el OCR remoto se retiró por completo; ver `docs/ocr_local_decision.md`.)*
 - `GET/POST/PUT /api/cargos/configuracion*` → cualquiera lee **todas** las configuraciones de cargos de todos los
   tenants, crea otras y edita las existentes por id.
 - `PATCH /api/cargos/:id/aplicar` → cualquiera aplica cargos automáticos y **sube el saldo** de un residente.

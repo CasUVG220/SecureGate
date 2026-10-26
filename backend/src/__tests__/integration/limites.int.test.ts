@@ -5,7 +5,7 @@
  * Condición: los topes se bajan por variables de entorno ANTES de cargar la app, para poder agotarlos en una prueba.
  * Resultado esperado:
  *   - login: 429 por cuenta y por IP, con el correo intentado, la IP y el nombre del límite en `datos_nuevos`;
- *   - los límites nuevos por usuario (solicitudes, chat, tarjeta, comprobantes) y el del OCR: 429 con la acción de la ruta, la
+ *   - los límites nuevos por usuario (solicitudes, chat, tarjeta, comprobantes): 429 con la acción de la ruta, la
  *     persona y la IP; el cupo es de la PERSONA (otro residente desde la misma IP no se ve afectado);
  *   - todas las filas llevan `status_code = 429`.
  */
@@ -15,7 +15,6 @@ process.env.RATE_LIMIT_TICKET_CREAR_MAX = '2';
 process.env.RATE_LIMIT_TICKET_MENSAJE_MAX = '3';
 process.env.RATE_LIMIT_PAGO_TARJETA_MAX = '2';
 process.env.RATE_LIMIT_PAGO_TRANSFERENCIA_MAX = '2';
-process.env.RATE_LIMIT_OCR_MAX = '2';
 
 import request from 'supertest';
 import { randomUUID } from 'crypto';
@@ -90,7 +89,7 @@ describe('I-12 login: los bloqueos por límite quedan auditados', () => {
   });
 });
 
-describe('I-12 límites por usuario nuevos (solicitudes, chat, tarjeta, comprobantes, OCR)', () => {
+describe('I-12 límites por usuario nuevos (solicitudes, chat, tarjeta, comprobantes)', () => {
   const bloqueos = (accion: string, usuarioId: string) =>
     filas(`SELECT usuario_id, ip_address, status_code, datos_nuevos FROM audit_logs WHERE accion = $1 AND usuario_id = $2 AND status_code = 429`, [accion, usuarioId]);
 
@@ -138,16 +137,6 @@ describe('I-12 límites por usuario nuevos (solicitudes, chat, tarjeta, comproba
     expect([(await trf()).status, (await trf()).status]).toEqual([201, 201]);
     expect((await trf()).status).toBe(429);
     expect((await bloqueos('PAGO_TRANSFERENCIA_ENVIADA', fx.usuarios.resA1))[0].datos_nuevos).toMatchObject({ limite: 'pago-transferencia-usuario' });
-  });
-
-  it('OCR: el cupo es del agente; el bloqueo queda como OCR_ESCANEO con su persona', async () => {
-    const agente = { token: tokens.agenteA1 };
-    const escanear = () => request(app).post('/api/ocr/placa').set(bearer(agente.token)).send({ imagen: 'AAAA' });
-    await escanear(); await escanear();                       // consumen el cupo (terminan en error del servicio externo; da igual)
-    expect((await escanear()).status).toBe(429);
-    const f = await bloqueos('OCR_ESCANEO', fx.usuarios.agenteA1);
-    expect(f).toHaveLength(1);
-    expect(f[0].datos_nuevos).toMatchObject({ limite: 'ocr-usuario' });
   });
 
   it('todos los bloqueos de esta prueba tienen status 429 y IP (la migración no dejó filas a medias)', async () => {

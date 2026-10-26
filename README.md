@@ -14,7 +14,7 @@
 
 SecureGate es un sistema de software disenado para automatizar el control de accesos en residenciales, condominios y edificios administrados por empresas inmobiliarias en Guatemala.
 
-El sistema digitaliza y automatiza el proceso de registro de visitantes en garitas de seguridad mediante reconocimiento optico de documentos de identidad (DPI) a traves de Google Cloud Vision API, eliminando los errores humanos y los conflictos operativos derivados de pagos atrasados.
+El sistema digitaliza y automatiza el proceso de registro de visitantes en garitas de seguridad mediante reconocimiento optico (OCR) del documento de identidad (DPI) y de la placa **en el propio equipo de la garita**, sin enviar imagenes a terceros, eliminando los errores humanos y los conflictos operativos derivados de pagos atrasados.
 
 ### Problema que resuelve
 
@@ -26,8 +26,8 @@ Los procesos manuales en garitas de seguridad generan:
 
 ### Solucion SecureGate
 
-- OCR automatico de DPI via Google Cloud Vision API
-- OCR automatico de placa vehicular via Google Cloud Vision API
+- OCR de DPI y de placa 100 % local: corre en el equipo de la garita, tambien sin internet; la foto del DPI nunca sale del equipo, sin costo por lectura ni cuentas externas
+- Lectura continua de placas en el carril (ANPR) con la talanquera bajo control del agente
 - Verificacion instantanea del estado de pago del residente
 - Generacion automatica de cargos por mora (sin bloquear el acceso)
 - Trazabilidad completa de todos los accesos
@@ -53,9 +53,9 @@ SecureGate sigue el patron **MVC (Modelo-Vista-Controlador)** con separacion en 
              |                      |
 +------------v----------+  +--------v----------------+
 |         model         |  |        external         |
-|   Visitante           |  |   GoogleCloudVisionAPI  |
-|   Residente           |  +-------------------------+
-|   RegistroAcceso      |
+|   Visitante           |  |   OCR local (garita)    |
+|   Residente           |  |   PP-OCRv5 sobre ONNX   |
+|   RegistroAcceso      |  +-------------------------+
 |   Pago                |
 |   CargoAutomatico     |
 +-----------------------+
@@ -70,7 +70,7 @@ SecureGate sigue el patron **MVC (Modelo-Vista-Controlador)** con separacion en 
 | Backend | Node.js + TypeScript | I/O no bloqueante para operaciones concurrentes |
 | Frontend | React + Tailwind CSS | Componentes reutilizables, UI reactiva |
 | Base de datos | PostgreSQL 15 | ACID + UUID nativo + FK estrictas |
-| OCR DPI + Placa | Google Cloud Vision API | Alta precision en documentos y placas guatemaltecas |
+| OCR DPI + Placa | PP-OCRv5 (`ppu-paddle-ocr`) sobre ONNX, en el equipo de la garita | Funciona sin internet, la imagen no sale del equipo, sin costo por lectura |
 | Contenedores | Docker + Docker Compose | Entorno reproducible en cualquier maquina |
 | Despliegue | Railway | PostgreSQL gestionado con backups automaticos |
 
@@ -170,9 +170,10 @@ Editar `.env` (no se sube a git):
 ```env
 # Mínimo 32 caracteres. Genera uno con:  openssl rand -hex 48
 JWT_SECRET=
-# Opcional (OCR de respaldo con Google Vision)
-GOOGLE_CLOUD_API_KEY=
 ```
+
+El OCR del DPI y de la placa no necesita ninguna variable ni cuenta externa: corre en la app de
+escritorio de la garita (ver `docs/ocr_dpi_local.md`).
 
 > **`JWT_SECRET` ya no tiene un valor por defecto.** El que estaba escrito en el
 > compose era público (vivía en el repositorio) y con él cualquiera fabricaba un
@@ -336,8 +337,8 @@ docker compose exec db psql -U sguser -d securegate
 ### Flujo principal de garita
 
 1. Visitante llega a la garita
-2. Agente activa el escaner de DPI — Google Cloud Vision extrae nombre y numero de DPI automaticamente
-3. Agente activa el reconocimiento de placa — Google Cloud Vision lee la placa del vehiculo automaticamente
+2. Agente pulsa **Leer DPI** — el propio equipo extrae nombre y numero de DPI (sin internet); si la lectura es dudosa, los campos quedan marcados **Revisar** junto a la foto capturada
+3. La placa la lee la camara del carril (ANPR continuo) o el agente con **Leer placa**, tambien en el propio equipo
 4. Agente selecciona o confirma el numero de casa destino
 5. Sistema verifica estado de pago del residente
 6. Si hay mora — genera cargo automatico (sin bloquear la entrada)
@@ -368,19 +369,19 @@ docker compose exec db psql -U sguser -d securegate
 | Atributo | Detalle |
 |----------|---------|
 | Actor | Agente de garita |
-| Disparador | Agente presiona "Escanear DPI" en la Terminal de Garita |
-| Proceso | La camara captura el frente del DPI guatemalteco y lo envia a Google Cloud Vision API |
+| Disparador | Agente pulsa "Leer DPI" en la app de escritorio de la garita |
+| Proceso | La camara captura el frente del DPI guatemalteco y el OCR local del equipo lo lee (sin red; la foto se queda en memoria y no se guarda) |
 | Extraccion | El sistema extrae y autocompleta: **Nombre completo** y **Numero de DPI** |
 | Salida esperada | Campos "Nombre del Visitante" y "Numero de DPI" se rellenan automaticamente en el formulario |
-| Fallback | Si Vision API no puede leer el documento, los campos quedan editables para ingreso manual |
+| Lectura dudosa | CUI invalido o ausente, confianza baja o nombre faltante: los campos se marcan **Revisar**, se muestra la foto capturada y no se registra sin que el agente confirme, corrija o escriba a mano |
 
 ### RF-OCR-02: Reconocimiento automatico de placa vehicular
 
 | Atributo | Detalle |
 |----------|---------|
 | Actor | Agente de garita |
-| Disparador | Agente activa el modulo de "Reconocimiento de Placa" en la Terminal de Garita |
-| Proceso | La camara apunta a la placa del vehiculo y envia la imagen a Google Cloud Vision API |
+| Disparador | Agente pulsa "Leer placa", o la camara del carril la lee sola (reconocimiento de placas continuo) |
+| Proceso | La camara apunta a la placa del vehiculo y el OCR local del equipo la lee (sin red) |
 | Extraccion | El sistema extrae el numero de placa guatemalteca (formato P-XXXXXX o letras+numeros) |
 | Salida esperada | Campo "Numero de Placa" se rellena automaticamente |
 | Fallback | Si la lectura falla (mala iluminacion, angulo), el agente puede ingresar la placa manualmente |
@@ -388,25 +389,24 @@ docker compose exec db psql -U sguser -d securegate
 ### RF-OCR-03: Pantalla de garita orientada al agente
 
 La Terminal de Garita presenta:
-- **Panel izquierdo:** vista de camara en tiempo real para escaneo de DPI + boton "Escanear DPI", y seccion separada para reconocimiento de placa
+- **Panel izquierdo:** vista de camara en tiempo real para el DPI + boton "Leer DPI", y seccion separada para la placa
 - **Panel derecho:** formulario con datos del visitante autocompletados (Nombre, DPI, Placa, Casa/Unidad)
 - **Acciones:** boton **AUTORIZAR ENTRADA** (verde) y boton **DENEGAR ENTRADA** (rojo)
 - **Historial:** tabla "Ultimos Ingresos" con columnas Hora, Visitante, Placa, Unidad, Estado
 
 ---
 
-## API Externa
+## OCR local (sin API externa)
 
-### Google Cloud Vision API
+El DPI y la placa se leen con **PP-OCRv5** (`ppu-paddle-ocr`, modelos ONNX en CPU) dentro de un proceso auxiliar
+de la app de escritorio de la garita (`desktop/sidecar-ocr`). No hay servicio de OCR en el backend ni llamadas a
+terceros:
 
-| Caso de uso | Endpoint Vision | Descripcion |
-|-------------|----------------|-------------|
-| Escaneo de DPI | `DOCUMENT_TEXT_DETECTION` | Extrae texto estructurado del documento de identidad guatemalteco |
-| Reconocimiento de placa | `TEXT_DETECTION` | Lee la cadena alfanumerica de la placa vehicular |
-
-- **Precio:** Primeras 1,000 llamadas/mes gratuitas, luego $1.50/1,000
-- **Latencia tipica:** 300–800 ms por imagen
-- **Requisito:** Variable de entorno `GOOGLE_CLOUD_API_KEY` configurada en `.env`
+- **Privacidad:** la imagen del DPI viaja solo en memoria dentro del equipo y nunca sale de el.
+- **Sin internet:** "Leer DPI" y "Leer placa" funcionan igual sin conexion.
+- **Sin costo por lectura** ni cuentas externas que configurar.
+- **Reglas del DPI** (CUI de 13 digitos, departamento/municipio, correcciones de caracteres, umbral de confianza) y
+  banco de prueba sintetico: `docs/ocr_dpi_local.md`. Por que se retiro el OCR remoto: `docs/ocr_local_decision.md`.
 
 ---
 

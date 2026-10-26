@@ -14,7 +14,7 @@ vi.mock('../services/api', async () => {
   return {
     getResidentes: vi.fn(), getConfigQr: vi.fn(), verificarInvitacionQr: vi.fn(),
     registrarAcceso: vi.fn(), decodeTokenPayload: () => ({ rol: 'agente' }),
-    scanDPI: vi.fn(), scanPlaca: vi.fn(), buscarPreautorizacion: vi.fn(), buscarVisitantesFrecuentes: vi.fn().mockResolvedValue([]),
+    buscarPreautorizacion: vi.fn(), buscarVisitantesFrecuentes: vi.fn().mockResolvedValue([]),
     BlacklistDenialError,
   };
 });

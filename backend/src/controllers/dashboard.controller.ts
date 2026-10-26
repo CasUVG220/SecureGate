@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import pool from '../db/pool';
 import { JwtPayload } from '../middleware/auth.middleware';
 import { serverError } from '../utils/http';
+import { JOINS_ACCESO, METODO_SQL, PLACA_ACCESO_SQL } from '../utils/accesos';
 
 interface TenantCondition {
   accesos: string;
@@ -62,15 +63,19 @@ export const getDashboard = async (req: Request, res: Response) => {
            AND ${cond.pagos}`,
         cond.params
       ),
+      // Visitantes y residentes (sus entradas por placas, Sprint 10): el administrador también ve lo que el sistema abrió solo.
       pool.query(
         `SELECT ra.id,
-                v.nombre  AS nombre_visitante,
+                COALESCE(v.nombre, ur.nombre) AS nombre_visitante,
                 r.numero_casa,
                 ra.timestamp_entrada,
-                ra.timestamp_salida
+                ra.timestamp_salida,
+                (${METODO_SQL}) AS metodo,
+                (ra.visitante_id IS NULL) AS es_residente,
+                (ra.verificado_por IS NOT NULL) AS verificado,
+                ${PLACA_ACCESO_SQL} AS placa
          FROM registros_acceso ra
-         JOIN visitantes v ON ra.visitante_id = v.id
-         JOIN residentes r ON ra.residente_id = r.id
+         ${JOINS_ACCESO}
          WHERE ${cond.accesos}
          ORDER BY ra.timestamp_entrada DESC
          LIMIT 10`,
