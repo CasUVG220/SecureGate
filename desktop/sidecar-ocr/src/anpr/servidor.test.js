@@ -81,6 +81,9 @@ function lanzar() {
   return { enListo, pedir, cerrar, stderr: () => err };
 }
 
+// Va en tiempo real (los cuadros se envían al ritmo del clip), así que la CPU tiene que ser la de una garita: `npm test`
+// corre este archivo DESPUÉS del resto, no en paralelo con las pruebas del DPI que cargan los modelos (con la suite entera
+// en paralelo `dos_seguidos` terminó una vez en «ilegible»).
 test('corrida real: clips sintéticos en tiempo real → una decisión correcta por vehículo, ninguna sin vehículo', { skip: faltante, timeout: 240_000 }, async (t) => {
   const anpr = lanzar();
   const listo = await anpr.enListo;

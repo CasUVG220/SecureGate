@@ -250,6 +250,9 @@ ilegible: la placa del sedán negro quedaba en el borde del recorte (caja de YOL
 ~90 px y las lecturas vacías gastaban el cupo. Tras los cuatro ajustes de arriba (margen lateral, ampliar relecturas, cupos
 separados, reloj de lectura desde el primer recorte útil) la corrida real pasa 3 de 3 veces con la suite en paralelo y también
 con 3 procesos quemando CPU a la vez (latencias de 321 a 1 536 ms desde la primera lectura legible; objetivo < 2 s).
+Con las pruebas del DPI del Sprint 10 en paralelo (la caracterización carga los modelos y lee 12 documentos) volvió a terminar una vez en
+ilegible —a la verificación del agente, nunca con otra placa—, así que `npm test` del sidecar corre ahora `servidor.test.js`
+**después** del resto y no a la vez (unos 45 s más de CI: los clips se reproducen a su velocidad real).
 
 **Fallo encontrado y corregido** durante esta tarea (commit `fix(anpr)` aparte): en `dos_seguidos` el segundo vehículo
 **heredaba la pista ya decidida del primero** (la pista vieja seguía viva a 1 fps y se asoció por IoU 0,23 a una caja 2,6 veces
