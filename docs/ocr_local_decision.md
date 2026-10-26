@@ -78,6 +78,8 @@ los nombres del servicio y de la variable.
 
 Una búsqueda de «vision» como **palabra** (`git grep -wi vision`) solo encuentra este documento y esa evidencia generada;
 buscada como trozo de palabra encuentra también «revisión», «provisional» o «aprovisionamiento».
+Las dos búsquedas encuentran además `desktop/src/lib/__tests__/textos.ocr.test.ts`: es la prueba que vigila que ningún texto
+de la app de escritorio vuelva a nombrar el OCR remoto, así que lleva el término como regla.
 
 ## Garantía: pruebas de caracterización
 
