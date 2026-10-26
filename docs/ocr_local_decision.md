@@ -66,10 +66,17 @@ partes y no es parte de esta decisión:
 - **Infraestructura del servidor en Google Cloud**: respaldos a Cloud Storage (`scripts/backup-postgres.sh`,
   `GOOGLE_APPLICATION_CREDENTIALS` en el README), migración a Cloud SQL (`scripts/migrate-to-cloudsql.sh`) y la nota de NTP de
   la VM. Es el hospedaje del backend, no el OCR.
-- **Registros históricos** que no se reescriben: `SECURITY_REVIEW.md`, informes de sprints anteriores en `docs/`, resultados ya
-  guardados de `backend/securitytest/results/` y el historial de `gitleaks`.
+- **Evidencia generada por herramientas**, que no se edita a mano: los resultados ya guardados de
+  `backend/securitytest/results/` (`09-ratelimit.json` y su copia en `antes/` registran la prueba de límite del proxy de OCR
+  del 29/09/2026) y `gitleaks-historial.json` (copia de mensajes de commits viejos). Editarlos falsearía la evidencia; se
+  regeneran solos la próxima vez que se corra `npm run securitytest` (que ya no tiene esa prueba). El historial de git tampoco
+  se reescribe.
 
-Una búsqueda de «vision» como **palabra** (`git grep -wi vision`) solo encuentra este documento y esos registros históricos;
+Los informes históricos escritos a mano (`SECURITY_REVIEW.md`, `docs/qa_backlog_s9.md`, `docs/sprint9_continuacion.md`)
+conservan lo que pasó, pero ahora nombran «el OCR remoto del proveedor» y remiten a este documento, que es el único que guarda
+los nombres del servicio y de la variable.
+
+Una búsqueda de «vision» como **palabra** (`git grep -wi vision`) solo encuentra este documento y esa evidencia generada;
 buscada como trozo de palabra encuentra también «revisión», «provisional» o «aprovisionamiento».
 
 ## Garantía: pruebas de caracterización

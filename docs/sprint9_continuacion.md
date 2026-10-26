@@ -77,8 +77,8 @@ Regla, casos, concurrencia y datos históricos: **`docs/pagos_saldo.md`**.
 ## T3 — Conjunto sintético y evaluador del DPI · **HECHO**
 - `desktop/sidecar-ocr/fixtures-dpi/generar.mjs`: genera imágenes de DPI **ficticios** (tarjeta dibujada con `@napi-rs/canvas`, ya presente como dependencia de `ppu-paddle-ocr`) en
   escenas de webcam con 7 variantes (limpia, luz baja/alta, ángulo, ruido, desenfoque, mixta) + `verdad_terreno.csv`, con semilla. Sin imágenes versionadas (`salida/` está en `.gitignore`).
-- `scripts/eval-dpi/index.mjs`: evaluador (motores `local`, `vision`, `ambos`). Métricas: exactitud del CUI y por campo (sin tildes y estricta), tasa de revisión manual, **errores silenciosos**,
-  tiempo p50/p95 por captura y meta RNF-03. Vision se invoca por el backend real (`/api/ocr/dpi`, necesita `--backend` y `--token`; **no se ejecutó aquí**: no hay clave de Google ni backend desplegado).
+- `scripts/eval-dpi/index.mjs`: evaluador (motores `local`, remoto y `ambos`; el remoto se retiró en el Sprint 10, ver `docs/ocr_local_decision.md`). Métricas: exactitud del CUI y por campo (sin tildes y estricta), tasa de revisión manual, **errores silenciosos**,
+  tiempo p50/p95 por captura y meta RNF-03. El remoto se invocaba por el backend real (`/api/ocr/dpi`, necesitaba `--backend` y `--token`; **no se ejecutó aquí**: no había clave del proveedor ni backend desplegado).
 - Corrida de extremo a extremo con el sidecar actual (que aún no extrae DPI): 60 imágenes, 0 % de exactitud esperado, 100 % a revisión, p50 421 ms / p95 536 ms. **Los modelos sí se pudieron descargar**
   (el espejo de GitHub funciona; Hugging Face no) y el sidecar corre aquí de verdad: la T4 se mide con OCR real.
 - Pruebas: 7 del evaluador (`node --test scripts/eval-dpi/`) y 3 del generador (`npm --prefix desktop/sidecar-ocr test`). Se arregló el script de pruebas del sidecar: `node --test src/` no

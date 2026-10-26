@@ -103,7 +103,7 @@ Esto no es un problema hoy con poco volumen de datos, pero escalará mal a medid
 - `backend/src/controllers/auth.controller.ts:9-10` — `REFRESH_TTL_MS` (7 días) y `ACCESS_EXPIRES` (`'1h'`) fijos en código; cambiar la política de expiración de sesión exige redeploy.
 - `backend/src/index.ts:69-78` — rate limiter general (`windowMs: 15*60*1000, max: 1000`) hardcodeado.
 - `backend/src/index.ts:81-82` — límite de payload `50mb` fijo en `express.json`/`urlencoded`.
-- `backend/.env.example` desactualizado: solo documenta `NODE_ENV, PORT, DATABASE_URL, JWT_SECRET, ALLOWED_ORIGINS`, pero el código también lee `APP_TZ`, `INIT_SQL_PATH` y `GOOGLE_CLOUD_API_KEY` sin documentar — quien clona el repo no sabe que existen sin leer el código fuente.
+- `backend/.env.example` desactualizado: solo documenta `NODE_ENV, PORT, DATABASE_URL, JWT_SECRET, ALLOWED_ORIGINS`, pero el código también lee `APP_TZ` e `INIT_SQL_PATH` sin documentar — quien clona el repo no sabe que existen sin leer el código fuente. (La llave del OCR remoto que figuraba en esta lista ya no existe: desde el Sprint 10 el OCR es 100 % local, ver `docs/ocr_local_decision.md`.)
 
 ---
 

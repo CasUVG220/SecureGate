@@ -137,7 +137,7 @@ Recuento: PARCIAL = 1, 2, 4, 6, 7, 10, 17, 20 (8). NO HECHO = 3, 5, 8, 11, 12, 1
 
 ### 13. OCR local del DPI — NO HECHO
 
-- Confirmado: `desktop/src-tauri/src/ocr.rs:267-277` (`ocr_dpi_remoto`) envía a `/ocr/dpi`, y `backend/src/controllers/ocr.controller.ts:3,31` llama a `vision.googleapis.com` con `GOOGLE_CLOUD_API_KEY`. El sidecar local (`desktop/sidecar-ocr`, `ppu-paddle-ocr`) lee solo placas. Existe captura manual de DPI como alternativa (commit `cc39528`).
+- Confirmado: `desktop/src-tauri/src/ocr.rs:267-277` (`ocr_dpi_remoto`) envía a `/ocr/dpi`, y `backend/src/controllers/ocr.controller.ts:3,31` llama al OCR remoto del proveedor con su clave de API (todo eso se retiró en el Sprint 10: `docs/ocr_local_decision.md`). El sidecar local (`desktop/sidecar-ocr`, `ppu-paddle-ocr`) lee solo placas. Existe captura manual de DPI como alternativa (commit `cc39528`).
 
 ### 14. Actualizaciones firmadas de Tauri — NO HECHO
 
