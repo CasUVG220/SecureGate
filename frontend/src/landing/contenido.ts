@@ -129,7 +129,7 @@ export const QUE_HACE = {
     },
     {
       nombre: 'Placa y DPI leídos en la garita',
-      detalle: 'Reconocimiento de texto (OCR) en el propio equipo. Si la lectura local no alcanza, hay respaldo remoto, que se puede apagar por equipo para que la foto del DPI no salga de la garita.',
+      detalle: 'Lectura de documentos en el propio equipo, sin enviar imágenes a terceros. Si una lectura sale dudosa, el agente la compara con el documento antes de registrar.',
       tecnica: 'OCR local',
     },
     {
