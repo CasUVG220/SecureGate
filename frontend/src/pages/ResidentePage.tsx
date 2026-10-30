@@ -51,7 +51,7 @@ const EMPTY_TRF  = { monto: '', referencia: '', banco: '', fecha_transferencia: 
 export type PortalTab = 'pagos' | 'invitados' | 'qr' | 'solicitudes';
 
 interface ResidentePageProps {
-  /** Pestaña pedida desde el shell (barra inferior en móvil). */
+  /** Sección pedida desde el menú lateral o la barra inferior. */
   requestedTab?: PortalTab;
   /** Cambia en cada pulsación para reabrir la misma pestaña aunque ya esté activa. */
   tabNonce?: number;
@@ -449,10 +449,10 @@ export default function ResidentePage({ requestedTab, tabNonce = 0 }: ResidenteP
         </div>
       </div>
 
-      {/* Barra de pestañas: sólo en escritorio (ver `enMano`). */}
-      {!enMano && (
+      {/* QR tiene acceso propio en el menú lateral y en la barra inferior. */}
+      {!enMano && requestedTab !== 'qr' && (
       <div className="sg-tabbar" role="tablist" aria-label="Secciones del portal">
-        {(['pagos', 'invitados', 'qr', 'solicitudes'] as const).map(tabKey => (
+        {(['pagos', 'invitados', 'solicitudes'] as const).map(tabKey => (
           <button
             key={tabKey}
             onClick={() => handleTabChange(tabKey)}
@@ -464,8 +464,6 @@ export default function ResidentePage({ requestedTab, tabNonce = 0 }: ResidenteP
               ? t('portal.payments')
               : tabKey === 'invitados'
               ? t('portal.visitors')
-              : tabKey === 'qr'
-              ? t('qr.tabTitle')
               : t('tickets.myTickets')}
             {tabKey === 'solicitudes' && ticketsUnread > 0 && (
               <span className="absolute top-1.5 right-2 min-w-[16px] h-4 px-1 flex items-center justify-center rounded-full bg-danger-600 text-white text-[10px] font-bold leading-none">

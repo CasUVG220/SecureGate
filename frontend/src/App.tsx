@@ -50,7 +50,7 @@ const EstadisticasPage = lazy(() => import('./pages/EstadisticasPage'));
 
 type Page =
   | 'dashboard' | 'residentes' | 'pagos' | 'preaut' | 'reportes' | 'config' | 'config-qr' | 'verificacion' | 'agentes' | 'garitas' | 'blacklist' | 'anuncios' | 'tickets' | 'reservas'
-  | 'portal' | 'mis-reservas' | 'mis-anuncios'
+  | 'portal' | 'mis-qr' | 'mis-reservas' | 'mis-anuncios'
   | 'owner-dashboard' | 'owner-empresas' | 'owner-empresa-detail' | 'owner-audit' | 'owner-saas'
   | 'ae-dashboard' | 'ae-sucursales' | 'ae-plan' | 'cuenta' | 'entradas';
 
@@ -134,6 +134,7 @@ const ROL_SOLO_ESCRITORIO = 'agente';
 const RESIDENTE_NAV: NavGroup[] = [
   { labelKey: 'nav.group.portal', items: [
     { key: 'portal',       labelKey: 'nav.portal',       d: ICON.home },
+    { key: 'mis-qr',       labelKey: 'qr.title',         d: ICON.qr },
     { key: 'mis-reservas', labelKey: 'nav.reservations', d: ICON.calendar },
     { key: 'mis-anuncios',  labelKey: 'nav.announcements', d: ICON.announce },
   ]},
@@ -174,7 +175,7 @@ const ADMIN_EMPRESA_NAV: NavGroup[] = [
 const RESIDENTE_BOTTOM_NAV: Array<{ id: string; page: Page; tab?: PortalTab; labelKey: string; d: string }> = [
   { id: 'pagos',       page: 'portal',       tab: 'pagos',       labelKey: 'nav.short.payments',     d: ICON.payments },
   { id: 'visitantes',  page: 'portal',       tab: 'invitados',   labelKey: 'nav.short.visitors',     d: ICON.residents },
-  { id: 'qr',          page: 'portal',       tab: 'qr',          labelKey: 'nav.short.qr',           d: ICON.qr },
+  { id: 'qr',          page: 'mis-qr',                          labelKey: 'nav.short.qr',           d: ICON.qr },
   { id: 'reservas',    page: 'mis-reservas',                     labelKey: 'nav.short.reservations', d: ICON.calendar },
   { id: 'solicitudes', page: 'portal',       tab: 'solicitudes', labelKey: 'nav.short.tickets',      d: ICON.tickets },
 ];
@@ -432,6 +433,7 @@ function AppShell() {
       case 'reservas':     return <ReservasAdminPage />;
       case 'mis-reservas': return <ReservasPage />;
       case 'mis-anuncios': return <MisAnunciosPage />;
+      case 'mis-qr':       return <ResidentePage requestedTab="qr" />;
       case 'portal':       return <ResidentePage requestedTab={portalTab} tabNonce={portalTabNonce} />;
       case 'ae-dashboard':   return <AdminEmpresaDashboard />;
       case 'ae-sucursales':  return <GestionSucursales />;
